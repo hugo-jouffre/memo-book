@@ -1854,6 +1854,17 @@ public final class ChatModel {
         callToActionMemory.remember(state, for: messageId)
     }
 
+    /// « Compléter l'étape manquante » — le seul bouton de bulle qui **parle**
+    /// au lieu d'ouvrir un écran (19/10/2026).
+    ///
+    /// Il part comme une puce, avec l'identifiant que le catalogue serveur
+    /// connaît : c'est ce qui en fait une commande — gratuite, jamais un
+    /// souvenir — et non un texte libre. MEMO répond en nommant la journée, et
+    /// le souvenir qui suit se datera sur elle.
+    public func fillMissingDay() {
+        send(.text(ChatCopy.CallToAction.fillMissingDay, suggestionId: ChatCopy.CallToAction.fillMissingDayId))
+    }
+
     // MARK: - Supprimer un tour qui attend l'illimité
 
     /// « Supprimer », sous une bulle « Trop long pour une journée », une fois

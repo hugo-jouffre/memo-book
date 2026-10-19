@@ -32,6 +32,13 @@ export const CALL_TO_ACTION_KINDS = [
   "import_photos",
   /** Ouvrir la page de MemoBook dans les Réglages d'iOS (accès aux photos). */
   "open_photo_settings",
+  /**
+   * **La seule action qui n'ouvre rien** : elle renvoie une commande dans le
+   * fil (« Compléter l'étape manquante ») et MEMO enchaîne. Le bouton est ici
+   * parce que c'est le dessin de la carte « ✦ Suggestions », pas parce qu'il
+   * mène ailleurs.
+   */
+  "fill_missing_day",
 ] as const;
 
 export type CallToActionKind = (typeof CALL_TO_ACTION_KINDS)[number];
@@ -91,6 +98,19 @@ export const CALLS_TO_ACTION = {
     eyebrow: "Suggestions",
     dismissible: true,
     allowedForModel: true,
+  },
+  /**
+   * **L'étape manquante** (19/10/2026) — posée par le code seul, et jamais par
+   * le modèle : un trou se calcule sur des dates (`conversationGaps.ts`), il
+   * ne s'invente pas. Son libellé est aussi celui de la puce
+   * `fill-missing-day`, parce que c'est lui qui part comme message.
+   */
+  fill_missing_day: {
+    kind: "fill_missing_day",
+    label: "Compléter l’étape manquante",
+    eyebrow: "Suggestions",
+    dismissible: true,
+    allowedForModel: false,
   },
   /**
    * L'accès aux photos est limité : seule l'app le sait, c'est donc elle qui

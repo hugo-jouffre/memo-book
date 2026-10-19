@@ -106,6 +106,140 @@ function romeDate(iso: string): Date {
   return new Date(Date.parse(iso) + ROME_SHIFT_MS);
 }
 
+/**
+ * **Le voyage troué** — celui qui montre la carte « ✦ Suggestions » de l'étape
+ * manquante sans rien faire (19/10/2026).
+ *
+ * Trois récits — J-5, J-4, J-2 — et rien le J-3 : un trou **refermé**, le seul
+ * que le produit relève. Le rythme est « tous les jours », sans quoi le code se
+ * tairait (`conversationGaps.ts`). Les dates sont relatives au jour où l'on
+ * sème : figées, le voyage serait passé la semaine suivante, et la carte ne
+ * tomberait plus.
+ */
+async function seedHoledTrip(prisma: PrismaClient, accountId: string, codeSuffix: string) {
+  const noon = (back: number) => {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - back);
+    date.setUTCHours(10, 0, 0, 0);
+    return date;
+  };
+  const missing = localDate(noon(3), DEFAULT_TIME_ZONE);
+
+  const trip = await prisma.memo.create({
+    data: {
+      ownerAccountId: accountId,
+      title: "Porto, au fil des jours",
+      accessCode: `PORT26${codeSuffix}`,
+      subtitle: "Une semaine à descendre vers le fleuve",
+      theme: "City trip & découvertes",
+      stage: "ongoing",
+      destinationName: "Portugal",
+      destinationCountryCode: "PT",
+      destinationCity: "Porto",
+      startDate: noon(6),
+      narrationPace: "daily",
+      prompt: "Qu'est-ce que tu as vu aujourd'hui à Porto ?",
+    },
+  });
+
+  const RECITS: Record<number, { placeLabel: string; transcript: string }> = {
+    5: {
+      placeLabel: "Ribeira, Porto",
+      transcript:
+        "On descend jusqu'au fleuve par des ruelles en escalier, entre des façades couvertes d'azulejos ébréchés. En bas, les terrasses se touchent et tout le monde regarde le pont.",
+    },
+    4: {
+      placeLabel: "Vila Nova de Gaia, Porto",
+      transcript:
+        "Traversée du pont à pied, sur le tablier du haut. De l'autre côté, les caves à porto sentent le bois mouillé et le sucre. On goûte trois verres debout, à onze heures du matin.",
+    },
+    2: {
+      placeLabel: "Foz do Douro, Porto",
+      transcript:
+        "Le tram jusqu'à l'océan, assis sur une banquette en bois qui grince. L'Atlantique est gris, le vent coupe, et on mange des pastéis brûlants en regardant les surfeurs.",
+    },
+  };
+
+  for (const [back, recit] of Object.entries(RECITS)) {
+    const capturedAt = noon(Number(back));
+    const entry = await prisma.entry.create({
+      data: {
+        memoId: trip.id,
+        kind: "text",
+        status: "ready",
+        redactionStatus: "pending",
+        transcript: recit.transcript,
+        placeLabel: recit.placeLabel,
+        capturedAt,
+        // Validés : une étape non terminée a sa propre relance, et elle passe
+        // avant la carte — jamais deux dans le même tour.
+        validatedAt: capturedAt,
+      },
+    });
+    await prisma.chatMessage.create({
+      data: {
+        memoId: trip.id,
+        author: "traveller",
+        kind: "text",
+        text: recit.transcript,
+        accountId,
+        entryId: entry.id,
+        disposition: "memory",
+        repliedAt: capturedAt,
+        createdAt: capturedAt,
+      },
+    });
+  }
+
+  // La carte, telle que le job l'écrit : une bulle de MEMO sans puces, qui
+  // porte le bouton — et la proposition en vol, que son bouton viendra lire.
+  await prisma.chatMessage.create({
+    data: {
+      memoId: trip.id,
+      author: "memo",
+      kind: "text",
+      text:
+        `Entre ton récit du ${shortSeedDay(localDate(noon(4), DEFAULT_TIME_ZONE))} et celui du ` +
+        `${shortSeedDay(localDate(noon(2), DEFAULT_TIME_ZONE))}, il me manque le ${longSeedDay(missing)}. ` +
+        "Si tu veux me le raconter, touche « Compléter l’étape manquante » juste en dessous — sinon on le laisse comme ça.",
+      payload: { callToAction: { id: "fill_missing_day" } },
+    },
+  });
+
+  await prisma.memo.update({
+    where: { id: trip.id },
+    data: {
+      memoryCount: 3,
+      pageCount: 6,
+      conversationState: {
+        roseEpineGraineAskedFor: [],
+        closingAskedFor: [],
+        gapAskedFor: [],
+        gapOffered: { days: [missing], askedAt: new Date().toISOString() },
+        gapDeclines: 0,
+        gapLastAskedAt: new Date().toISOString(),
+        tellingDay: null,
+      },
+    },
+  });
+}
+
+/** « mardi 14 » — repris de `conversationCopy.ts`, que le seed ne charge pas. */
+function shortSeedDay(day: string): string {
+  return new Intl.DateTimeFormat("fr-FR", { timeZone: "UTC", weekday: "long", day: "numeric" }).format(
+    new Date(`${day}T12:00:00Z`),
+  );
+}
+
+function longSeedDay(day: string): string {
+  return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "UTC",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(`${day}T12:00:00Z`));
+}
+
 /** « 26 août », pour la phrase des dates du contexte du voyage. */
 function frenchDay(date: Date): string {
   return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" }).format(date);
@@ -356,6 +490,17 @@ async function seedTraveller(
       },
     },
   });
+
+  // ---------------------------------------------------------------------
+  // **Un voyage troué**, pour voir la carte « ✦ Suggestions » de l'étape
+  // manquante (19/10/2026) — `services/conversationGaps.ts`.
+  //
+  // Ses dates sont **relatives à aujourd'hui**, seule façon d'avoir un trou
+  // refermé dans un voyage en cours quel que soit le jour où l'on sème : le
+  // récit porte J-5, J-4 et J-2, et il manque J-3. La carte est posée telle
+  // que le job l'écrirait, avec la proposition en vol dans
+  // `conversationState` — sans quoi son bouton n'ouvrirait aucune journée.
+  await seedHoledTrip(prisma, account.id, seed.codeSuffix);
 
   await prisma.memo.create({
     data: {

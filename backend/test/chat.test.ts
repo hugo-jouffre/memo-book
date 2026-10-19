@@ -36,6 +36,8 @@ import {
 import { FakeTranscriber } from "../src/services/transcription.js";
 import { DAILY_CREDIT_LIMIT_MS, TEXT_MS_PER_CHARACTER } from "../src/services/dailyCredit.js";
 import { localDate } from "../src/services/localCalendar.js";
+import { parseConversationState } from "../src/services/conversation.js";
+import { longDay, missingDayListening } from "../src/services/conversationCopy.js";
 import {
   VOICE_FIXTURES,
   createHarness,
@@ -83,6 +85,7 @@ interface ChatMessageJson {
   entryId: string | null;
   disposition: string | null;
   pauseMilliseconds: number | null;
+  callToAction?: { id: string; kind: string; label: string } | null;
 }
 
 interface ChatThreadJson {
@@ -1107,5 +1110,132 @@ describe("le renvoi d'un tour dont le job n'est jamais parti", () => {
     } finally {
       publish.mockRestore();
     }
+  });
+});
+
+describe("l'étape manquante", () => {
+  /** Un voyage troué : raconté J-5, J-4 et J-2, rien le J-3. */
+  async function seedHoledTrip() {
+    const memo = await seedTrip(owner.accountId);
+    const day = (back: number) => {
+      const date = new Date();
+      date.setUTCDate(date.getUTCDate() - back);
+      date.setUTCHours(10, 0, 0, 0);
+      return date;
+    };
+    await harness.prisma.memo.update({
+      where: { id: memo.id },
+      data: { startDate: day(6), narrationPace: "daily" },
+    });
+    // Les souvenirs passent par le fil, puis on les **redate** : un souvenir
+    // posé en base sans son tour laisserait un message sans réponse, que le
+    // tour suivant attendrait vingt secondes (`waitForOlderUnansweredTurns`).
+    for (const back of [5, 4, 2]) {
+      const { id } = await say(memo.id, `Le récit du jour J-${back}, à Rome.`);
+      const turn = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+      // Validés : une étape non terminée a sa propre relance (`stepToClose`),
+      // et elle passe avant — jamais deux dans le même tour.
+      await harness.prisma.entry.update({
+        where: { id: turn.entryId! },
+        data: { capturedAt: day(back), validatedAt: day(back) },
+      });
+    }
+    return { memo, missing: localDate(day(3), "Europe/Paris") };
+  }
+
+  /** « Je valide mes photos » — le seul moment où la carte peut tomber. */
+  async function validatePhotos(memoId: string) {
+    const { payload, contentType } = await multipartPhotos(randomUUID(), 1);
+    await harness.app.inject({
+      method: "POST",
+      url: `/v1/trips/${memoId}/chat`,
+      headers: { authorization: owner.authorization, "content-type": contentType },
+      payload,
+    });
+    await say(memoId, SUGGESTIONS["photos-ok"].label, { suggestionId: "photos-ok" });
+  }
+
+  const stateOf = async (memoId: string) =>
+    parseConversationState(
+      (await harness.prisma.memo.findUniqueOrThrow({ where: { id: memoId } })).conversationState,
+    );
+
+  it("pose la carte après les photos, sans voler les puces de la bulle d'avant", async () => {
+    const { memo, missing } = await seedHoledTrip();
+    await validatePhotos(memo.id);
+
+    const thread = await readThread(memo.id);
+    const last = memoBubbles(thread).at(-1);
+    expect(last?.callToAction?.id).toBe("fill_missing_day");
+    expect(last?.body.kind === "text" && last.body.text).toContain(longDay(missing));
+    // ⚠️ Le bouton **est** la question : la bulle n'en pose aucune.
+    expect(last?.body.kind === "text" && last.body.text).not.toContain("?");
+    // La carte ne porte pas de puces : celles de « Je valide mes photos »
+    // restent en place, et c'est ce qui casserait en silence.
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["preview", "dictate", "write"]);
+
+    const state = await stateOf(memo.id);
+    expect(state.gapOffered?.days).toEqual([missing]);
+  });
+
+  it("le bouton est une commande : aucun souvenir, et la journée s'ouvre", async () => {
+    const { memo, missing } = await seedHoledTrip();
+    await validatePhotos(memo.id);
+
+    const before = await harness.prisma.entry.count({ where: { memoId: memo.id, kind: "text" } });
+    const { id } = await say(memo.id, SUGGESTIONS["fill-missing-day"].label, {
+      suggestionId: "fill-missing-day",
+    });
+
+    const sent = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+    expect(sent.disposition).toBe("command");
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id, kind: "text" } })).toBe(before);
+
+    const thread = await readThread(memo.id);
+    expect(memoBubbles(thread).at(-1)?.body).toEqual({ kind: "text", text: missingDayListening(missing) });
+
+    const state = await stateOf(memo.id);
+    expect(state.tellingDay?.day).toBe(missing);
+    expect(state.gapOffered).toBeNull();
+    expect(state.gapAskedFor).toEqual([missing]);
+  });
+
+  it("date le souvenir suivant sur la journée du trou, puis referme le mode", async () => {
+    const { memo, missing } = await seedHoledTrip();
+    await validatePhotos(memo.id);
+    await say(memo.id, SUGGESTIONS["fill-missing-day"].label, { suggestionId: "fill-missing-day" });
+
+    await say(memo.id, "On a passé la journée à marcher dans le Trastevere, sans plan.");
+
+    const entry = await harness.prisma.entry.findFirstOrThrow({
+      where: { memoId: memo.id, kind: "text" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(localDate(entry.capturedAt, "Europe/Paris")).toBe(missing);
+    expect((await stateOf(memo.id)).tellingDay).toBeNull();
+  });
+
+  it("compte un refus quand la proposition reste sans suite, et se tait au deuxième", async () => {
+    const { memo } = await seedHoledTrip();
+    await validatePhotos(memo.id);
+
+    // Le silence vaut refus : on continue à raconter, sans toucher la carte.
+    await say(memo.id, "Et le lendemain, on a pris le train pour Naples.");
+    expect((await stateOf(memo.id)).gapDeclines).toBe(1);
+    expect((await stateOf(memo.id)).gapOffered).toBeNull();
+
+    // Le registre a retenu la journée : elle n'est jamais reproposée.
+    await validatePhotos(memo.id);
+    const thread = await readThread(memo.id);
+    expect(memoBubbles(thread).at(-1)?.callToAction?.id).toBeUndefined();
+  });
+
+  it("ne dit rien quand le voyageur raconte à son rythme", async () => {
+    const { memo } = await seedHoledTrip();
+    await harness.prisma.memo.update({ where: { id: memo.id }, data: { narrationPace: "weekly" } });
+    await validatePhotos(memo.id);
+
+    const thread = await readThread(memo.id);
+    expect(memoBubbles(thread).at(-1)?.callToAction?.id).toBeUndefined();
   });
 });

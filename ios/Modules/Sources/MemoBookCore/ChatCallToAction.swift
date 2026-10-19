@@ -10,9 +10,14 @@ import Foundation
 /// décide que de ce qu'elle fait au toucher, d'après ``Kind``.
 ///
 /// Distinct d'une ``ChatSuggestion`` : une puce **dit** quelque chose à MEMO,
-/// elle part comme message ; un appel à l'action **ouvre** un écran et
-/// n'envoie rien. Et il appartient à une bulle, là où les puces appartiennent
-/// au fil.
+/// elle part comme message ; un appel à l'action **ouvre** un écran. Et il
+/// appartient à une bulle, là où les puces appartiennent au fil.
+///
+/// ⚠️ **Une exception, et une seule** : ``Kind/fillMissingDay`` (19/10/2026)
+/// n'ouvre rien — il renvoie une commande dans le fil. Il est un bouton parce
+/// que c'est le dessin de la carte « ✦ Suggestions », pas parce qu'il mène
+/// ailleurs ; le catalogue des puces porte son jumeau, `fill-missing-day`,
+/// dont le libellé est le même au caractère près.
 public struct ChatCallToAction: Codable, Sendable, Hashable, Identifiable {
     /// Ce que l'app fait au toucher.
     public enum Kind: Sendable, Hashable {
@@ -30,6 +35,11 @@ public struct ChatCallToAction: Codable, Sendable, Hashable, Identifiable {
         /// les Réglages. **Posé par l'app, jamais par le serveur** : seul le
         /// téléphone sait ce qu'iOS a répondu (T246).
         case enableNotifications
+        /// Combler la journée qui manque au récit : **n'ouvre aucun écran**,
+        /// envoie la commande `fill-missing-day` et MEMO enchaîne. Posé par
+        /// le serveur seul, qui calcule le trou sur des dates
+        /// (`services/conversationGaps.ts`) — jamais par le modèle.
+        case fillMissingDay
         /// Une action que le serveur connaît et pas cette version de l'app :
         /// **le bouton ne s'affiche pas**, le texte de la bulle reste. Même
         /// parti pris que ``ChatSuggestion/Intent/unknown(_:)``, mais à
@@ -45,6 +55,7 @@ public struct ChatCallToAction: Codable, Sendable, Hashable, Identifiable {
             case .importPhotos: "import_photos"
             case .openPhotoSettings: "open_photo_settings"
             case .enableNotifications: "enable_notifications"
+            case .fillMissingDay: "fill_missing_day"
             case .unknown(let raw): raw
             }
         }
@@ -58,6 +69,7 @@ public struct ChatCallToAction: Codable, Sendable, Hashable, Identifiable {
                 case "import_photos": .importPhotos
                 case "open_photo_settings": .openPhotoSettings
                 case "enable_notifications": .enableNotifications
+                case "fill_missing_day": .fillMissingDay
                 default: .unknown(rawValue)
                 }
         }

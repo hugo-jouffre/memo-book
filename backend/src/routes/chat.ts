@@ -21,7 +21,12 @@ import {
   type DailyCredit,
 } from "../services/dailyCredit.js";
 import { pauseBeforeTranscript, scriptedReply } from "../services/conversation.js";
-import { FLOW_COMMANDS, isSilentCommand, isSuggestionId, suggestionIdForLabel } from "../services/conversationCopy.js";
+import {
+  FLOW_COMMANDS,
+  isCommandId,
+  isGapDayId,
+  suggestionIdForLabel,
+} from "../services/conversationCopy.js";
 import {
   activeStepOf,
   chatMessageInclude,
@@ -155,7 +160,13 @@ async function hasReadyRender(context: AppContext, memoId: string): Promise<bool
 /** Une puce ou une commande silencieuse que le catalogue sait traiter sans modèle. */
 function isCommand(suggestionId: string | null): boolean {
   if (suggestionId === null) return false;
-  return scriptedReply(suggestionId, "") !== null || (FLOW_COMMANDS as readonly string[]).includes(suggestionId);
+  return (
+    scriptedReply(suggestionId, "") !== null ||
+    (FLOW_COMMANDS as readonly string[]).includes(suggestionId) ||
+    // La journée qu'on choisit de raconter : son identifiant porte sa date,
+    // le catalogue ne peut donc pas la contenir d'avance.
+    isGapDayId(suggestionId)
+  );
 }
 
 /**
@@ -484,7 +495,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       // Une puce arrive avec son identifiant ; un client qui n'envoie que le
       // libellé est reconnu au caractère près.
       const suggestionId =
-        body.suggestionId && (isSuggestionId(body.suggestionId) || isSilentCommand(body.suggestionId))
+        body.suggestionId && isCommandId(body.suggestionId)
           ? body.suggestionId
           : suggestionIdForLabel(text);
       const command = isCommand(suggestionId);

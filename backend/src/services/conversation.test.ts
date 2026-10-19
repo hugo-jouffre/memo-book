@@ -428,10 +428,28 @@ describe("les commandes et les garde-fous", () => {
   it("relit l'état de conversation sans se laisser casser", () => {
     expect(parseConversationState(null)).toEqual(EMPTY_CONVERSATION_STATE);
     expect(parseConversationState({ roseEpineGraineAskedFor: ["2026-09-21", 3] })).toEqual({
+      ...EMPTY_CONVERSATION_STATE,
       roseEpineGraineAskedFor: ["2026-09-21"],
-      closingAskedFor: [],
     });
     expect(parseConversationState({ closingAskedFor: ["entry-1", null] }).closingAskedFor).toEqual(["entry-1"]);
+
+    // ⚠️ L'aller-retour de l'étape manquante. Le job **réécrit l'état entier**
+    // à partir de ce qu'on relit ici : une clé oubliée serait effacée à chaque
+    // tour, en silence, et la carte reviendrait en boucle.
+    const gaps = {
+      roseEpineGraineAskedFor: [],
+      closingAskedFor: [],
+      gapAskedFor: ["2026-08-24"],
+      gapOffered: { days: ["2026-08-26"], askedAt: "2026-08-27T09:00:00.000Z" },
+      gapDeclines: 1,
+      gapLastAskedAt: "2026-08-27T09:00:00.000Z",
+      tellingDay: { day: "2026-08-24", askedAt: "2026-08-27T09:05:00.000Z" },
+    };
+    expect(parseConversationState(gaps)).toEqual(gaps);
+    // Et ce qui est à moitié écrit ne passe pas pour une proposition.
+    expect(parseConversationState({ gapOffered: { days: [] }, gapDeclines: "deux" })).toEqual(
+      EMPTY_CONVERSATION_STATE,
+    );
     const next = nextConversationState(
       EMPTY_CONVERSATION_STATE,
       { ...scriptedReply("accept", "")!, asksRoseEpineGraine: true },

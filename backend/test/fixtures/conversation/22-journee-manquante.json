@@ -1,0 +1,13 @@
+{
+  "name": "Le fil troué — MEMO n'en dit rien",
+  "why": "Le 26 n'a jamais été raconté, et ça se voit dans les dates du fil. C'est le code qui relève les trous, une seule fois et au bon moment (`conversationGaps.ts`) : une remarque de MEMO ferait deux relances pour un seul oubli, et la fiche lui interdit d'insister.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome", "people": ["Clara"], "places": ["Testaccio", "Trastevere"] },
+  "history": [
+    { "author": "traveller", "text": "Le 25, on a passé l'après-midi au marché de Testaccio." },
+    { "author": "memo", "text": "Le marché de Testaccio, le 25. Qu'est-ce que vous y avez goûté ?" },
+    { "author": "traveller", "text": "Le 27, on est montés voir le coucher de soleil depuis l'Aventin." }
+  ],
+  "currentEntry": { "text": "Le coucher de soleil depuis l'Aventin, le 27 au soir.", "validatedAt": null },
+  "message": { "kind": "text", "text": "il y avait une lumière orange sur toute la ville" },
+  "expect": { "disposition": "context" }
+}

@@ -266,6 +266,10 @@ const KIND_LABELS: Record<CallToActionKind, string> = {
   open_preview: "l'aperçu du carnet",
   import_photos: "la photothèque, pour ajouter des photos",
   open_photo_settings: "les Réglages de l'iPhone, pour l'accès aux photos",
+  // Jamais dans le catalogue du modèle (`allowedForModel: false`) : un trou se
+  // calcule sur des dates, il ne s'invente pas. La ligne existe pour que le
+  // tableau reste exhaustif si quelqu'un l'ouvrait un jour.
+  fill_missing_day: "la journée qui manque au récit, à raconter maintenant",
 };
 
 // ---------------------------------------------------------------------------

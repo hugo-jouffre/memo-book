@@ -481,6 +481,29 @@ final class ChatThreadDecodingTests: XCTestCase {
         XCTAssertEqual(roundTrip.callToAction, .dailyCreditSubscribe)
     }
 
+    /// L'étape manquante (19/10/2026) : le seul bouton qui **parle** au lieu
+    /// d'ouvrir un écran. Son libellé doit rester au caractère près celui du
+    /// catalogue serveur — c'est sur cette égalité que le serveur reconnaît
+    /// une commande, et ne la décompte pas du crédit du jour.
+    func testDecodesTheMissingDayButton() throws {
+        let json = Data(
+            """
+            [
+              { "id": "a", "seq": 1, "author": "memo", "body": { "kind": "text", "text": "Il me manque le mercredi 26 août." },
+                "sentAt": "2026-10-19T09:00:00.000Z",
+                "callToAction": { "id": "fill_missing_day", "kind": "fill_missing_day",
+                                  "label": "Compléter l’étape manquante", "eyebrow": "Suggestions",
+                                  "dismissible": true } }
+            ]
+            """.utf8)
+        let messages = try JSONDecoder.memoBook.decode([ChatMessage].self, from: json)
+
+        XCTAssertEqual(messages[0].callToAction?.kind, .fillMissingDay)
+        XCTAssertTrue(messages[0].callToAction?.kind.isSupported ?? false)
+        XCTAssertEqual(messages[0].callToAction?.label, ChatCopy.CallToAction.fillMissingDay)
+        XCTAssertEqual(ChatCallToAction.Kind.fillMissingDay.rawValue, "fill_missing_day")
+    }
+
     /// « Ça me convient » ne rend plus que le souvenir : les étapes offertes
     /// d'un ancien serveur sont ignorées.
     func testAValidationIgnoresTheOldOfferedSteps() throws {

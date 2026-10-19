@@ -902,9 +902,11 @@ public struct ChatView: View {
     // MARK: - Actions
 
     /// Ce que le bouton d'une bulle de MEMO ouvre — ``ChatCallToAction/Kind``.
-    /// Rien ne part dans le fil : un bouton ouvre un écran, il ne dit rien à
-    /// MEMO. Chaque destination passe par le chemin qui l'ouvre déjà d'ici —
+    /// Chaque destination passe par le chemin qui l'ouvre déjà d'ici —
     /// l'en-tête pour les réglages et l'aperçu, la puce pour les photos.
+    ///
+    /// ⚠️ ``ChatCallToAction/Kind/fillMissingDay`` est le seul qui n'ouvre
+    /// rien : il **parle**, comme une puce, et MEMO enchaîne dans le fil.
     private func perform(_ callToAction: ChatCallToAction) {
         switch callToAction.kind {
         case .subscribe:
@@ -922,6 +924,8 @@ public struct ChatView: View {
             // elle-même ; venu du serveur, la page de MemoBook dans les
             // Réglages, où se trouvent les notifications.
             openSettings()
+        case .fillMissingDay:
+            model.fillMissingDay()
         case .unknown:
             // Jamais affiché (``ChatModel/showsCallToAction(_:)``) : un bouton
             // inconnu ne mènerait nulle part.
@@ -1013,6 +1017,12 @@ private enum RecordingErrorCopy {
 #Preview("Chat — crédit du jour épuisé") {
     NavigationStack {
         ChatView(model: .preview(thread: .creditExhaustedFixture(tripId: "trip-rome")))
+    }
+}
+
+#Preview("Chat — une journée manquante") {
+    NavigationStack {
+        ChatView(model: .preview(thread: .missingDayFixture(tripId: "trip-rome")))
     }
 }
 

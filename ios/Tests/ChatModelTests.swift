@@ -292,6 +292,23 @@ final class ChatModelTests: XCTestCase {
         XCTAssertEqual(entryId, "e2")
     }
 
+    /// « Compléter l'étape manquante » part comme une **commande**, avec
+    /// l'identifiant du catalogue — et non comme un texte libre, qui
+    /// deviendrait un souvenir facturé parti en rédaction (19/10/2026).
+    func testFillingAMissingDaySendsACommandAndNotAFreeText() async throws {
+        let script = Script(thread: thread())
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        model.fillMissingDay()
+
+        try await until("l'envoi") { await script.sent.count == 1 }
+        let sent = await script.sent
+        guard case .text(let text, let suggestionId, _) = sent[0].body else { return XCTFail("un texte") }
+        XCTAssertEqual(text, ChatCopy.CallToAction.fillMissingDay)
+        XCTAssertEqual(suggestionId, "fill-missing-day")
+    }
+
     /// La bande de suggestions garde sa place pendant le tour : ses puces
     /// s'effacent, sa hauteur reste — sinon le fil se tassait sous le message
     /// qu'on venait de poser (T207, 30/09/2026).

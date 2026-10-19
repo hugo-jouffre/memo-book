@@ -487,6 +487,21 @@ export const SUGGESTIONS = {
     symbol: "⏭️",
     intent: "send",
   },
+  /**
+   * **L'étape manquante** — ce que le bouton de la carte « ✦ Suggestions »
+   * envoie (`fill_missing_day` dans `callsToAction.ts`, même chose sous son
+   * autre nom : un bouton de bulle d'un côté, une commande de l'autre).
+   *
+   * Le libellé doit rester **au caractère près** celui du bouton : c'est lui
+   * qui part comme message, et c'est sur cette égalité que `isFreeChatText`
+   * reconnaît une commande et ne la décompte pas du crédit du jour.
+   */
+  "fill-missing-day": {
+    id: "fill-missing-day",
+    label: "Compléter l’étape manquante",
+    symbol: null,
+    intent: "send",
+  },
 } as const satisfies Record<string, Suggestion>;
 
 export type SuggestionId = keyof typeof SUGGESTIONS;
@@ -504,7 +519,7 @@ export function isSuggestionId(value: string): value is SuggestionId {
  * dans le catalogue qu'on lui donnait et dans l'enum de sa sortie : rien
  * n'empêchait MEMO de la tendre à un vrai voyageur (03/10/2026).
  */
-const CODE_ONLY_SUGGESTIONS: readonly SuggestionId[] = ["photos-sample"];
+const CODE_ONLY_SUGGESTIONS: readonly SuggestionId[] = ["photos-sample", "fill-missing-day"];
 
 /** Les puces qu'un répondeur — modèle, moteur de règles ou simulé — a le droit de proposer. */
 export const MODEL_SUGGESTION_IDS = SUGGESTION_IDS.filter((id) => !CODE_ONLY_SUGGESTIONS.includes(id));
@@ -527,12 +542,116 @@ export function suggestionsFor(ids: readonly string[]): Suggestion[] {
   const seen = new Set<string>();
   const result: Suggestion[] = [];
   for (const id of ids) {
-    if (!isSuggestionId(id) || seen.has(id)) continue;
+    if (seen.has(id)) continue;
+    const suggestion = isGapDayId(id)
+      ? gapDaySuggestion(dayOfGapDayId(id)!)
+      : isSuggestionId(id)
+        ? SUGGESTIONS[id]
+        : null;
+    if (!suggestion) continue;
     seen.add(id);
-    result.push(SUGGESTIONS[id]);
+    result.push(suggestion);
     if (result.length === 3) break;
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Les puces d'une journée manquante — le seul libellé que le code écrit
+// ---------------------------------------------------------------------------
+
+/**
+ * **La seule puce du produit dont le libellé n'est pas dans le catalogue** :
+ * elle porte une date, et une date ne s'écrit pas d'avance.
+ *
+ * L'identifiant porte donc la journée — `gap-day:2026-08-26` — plutôt que de
+ * la ranger ailleurs : le tour qui revient dit à lui seul de quelle journée on
+ * parle, sans qu'on ait à retrouver un état. Le préfixe la rend reconnaissable
+ * partout où un identifiant de puce est attendu (commande gratuite, jamais un
+ * souvenir), et le libellé se recompose de la date — donc il correspond
+ * toujours, ce dont `isFreeChatText` a besoin.
+ *
+ * Elle n'apparaît que lorsqu'il manque **deux** journées : avec une seule,
+ * MEMO la nomme et écoute — il ne pose pas une question dont le code connaît
+ * déjà la réponse.
+ */
+const GAP_DAY_PREFIX = "gap-day:";
+
+export function isGapDayId(value: string): boolean {
+  return dayOfGapDayId(value) !== null;
+}
+
+/** La journée d'un identifiant de puce, ou `null` si ce n'en est pas un. */
+export function dayOfGapDayId(value: string): string | null {
+  if (!value.startsWith(GAP_DAY_PREFIX)) return null;
+  const day = value.slice(GAP_DAY_PREFIX.length);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(`${day}T12:00:00Z`))
+    ? day
+    : null;
+}
+
+export function gapDayId(day: string): string {
+  return `${GAP_DAY_PREFIX}${day}`;
+}
+
+export function gapDaySuggestion(day: string): Suggestion {
+  return { id: gapDayId(day), label: gapDayLabel(day), symbol: null, intent: "send" };
+}
+
+/** « Mercredi 26 août » — le libellé d'une puce, en tête de phrase. */
+export function gapDayLabel(day: string): string {
+  const written = longDay(day);
+  return written.charAt(0).toUpperCase() + written.slice(1);
+}
+
+/** « mercredi 26 août » — la journée telle que MEMO la dit dans une phrase. */
+export function longDay(day: string): string {
+  return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "UTC",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(`${day}T12:00:00Z`));
+}
+
+/** « mardi 25 » — une borne, dont le mois se lit sur l'autre. */
+function shortDay(day: string): string {
+  return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "UTC",
+    weekday: "long",
+    day: "numeric",
+  }).format(new Date(`${day}T12:00:00Z`));
+}
+
+/**
+ * La bulle de la carte « ✦ Suggestions ».
+ *
+ * Trois exigences, et elles tiennent toutes les trois dans ces deux phrases :
+ * **aucun point d'interrogation** — le bouton est la question, et MEMO n'en
+ * pose jamais deux ; **elle se suffit sans son bouton**, pour une app plus
+ * ancienne qui ignore un `kind` qu'elle ne connaît pas ; et elle **n'insiste
+ * pas** — « sinon on le laisse comme ça » est la porte de sortie, écrite noir
+ * sur blanc.
+ */
+export function missingDayNotice(days: readonly string[], before: string, after: string): string {
+  const missing =
+    days.length > 1
+      ? `le ${shortDay(days[0]!)} et le ${longDay(days[1]!)}`
+      : `le ${longDay(days[0]!)}`;
+  const ending = days.length > 1 ? "on les laisse comme ça" : "on le laisse comme ça";
+  return (
+    `Entre ton récit du ${shortDay(before)} et celui du ${shortDay(after)}, il me manque ${missing}. ` +
+    `Si tu veux me ${days.length > 1 ? "en raconter une" : "le raconter"}, touche « ${SUGGESTIONS["fill-missing-day"].label} » ` +
+    `juste en dessous — sinon ${ending}.`
+  );
+}
+
+/** Deux journées manquent : la seule question du tour, et elle a ses deux puces. */
+export const MISSING_DAY_WHICH = "Tu peux m’en raconter une des deux. Laquelle ?";
+
+/** La journée est choisie : MEMO la nomme, et se tait. */
+export function missingDayListening(day: string): string {
+  return `Je t’écoute : raconte-moi ta journée du ${longDay(day)}, à l’oral ou au clavier.`;
 }
 
 /**
@@ -617,7 +736,20 @@ export type SilentCommandId = keyof typeof SILENT_COMMANDS;
  * restent des commandes — gratuites, jamais un souvenir — même si
  * `SCRIPTED_ANSWERS` ne les connaît pas.
  */
-export const FLOW_COMMANDS: readonly SuggestionId[] = ["photos-sample"];
+export const FLOW_COMMANDS: readonly SuggestionId[] = ["photos-sample", "fill-missing-day"];
+
+/**
+ * Un identifiant que le serveur reconnaît comme **une commande** : une puce du
+ * catalogue, une commande silencieuse, ou une journée manquante (dont
+ * l'identifiant porte sa date).
+ *
+ * Tout passe par ici, et c'est voulu : un identifiant qu'un seul des trois
+ * appelants ignorerait ferait du libellé d'un bouton un **souvenir facturé**,
+ * envoyé en rédaction. Ça ne se voit nulle part avant le carnet.
+ */
+export function isCommandId(value: string): boolean {
+  return isSuggestionId(value) || isSilentCommand(value) || isGapDayId(value);
+}
 
 export function isSilentCommand(value: string): value is SilentCommandId {
   return Object.prototype.hasOwnProperty.call(SILENT_COMMANDS, value);

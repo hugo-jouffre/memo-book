@@ -462,7 +462,24 @@ public enum ChatCopy {
         public static let dismiss = "Ignorer"
         /// Ce que VoiceOver dit d'un bouton déjà touché, passé au bleu.
         public static let followed = "Déjà ouvert"
+
+        /// Ce que « Compléter l'étape manquante » **envoie** — le seul bouton
+        /// qui parle au lieu d'ouvrir un écran (19/10/2026).
+        ///
+        /// ⚠️ Au caractère près le libellé du catalogue serveur
+        /// (`fill-missing-day`, `services/conversationCopy.ts`) : c'est sur
+        /// cette égalité que le serveur reconnaît une commande et ne la
+        /// décompte pas du crédit du jour.
+        public static let fillMissingDayId = "fill-missing-day"
+        public static let fillMissingDay = "Compléter l’étape manquante"
     }
+
+    /// Ce que MEMO répond quand on accepte de combler une journée — dans le
+    /// **bac à sable** seulement. En vrai, c'est le serveur qui nomme la
+    /// journée qu'il a trouvée (`missingDayListening`,
+    /// `services/conversationCopy.ts`) ; ici, celle du jeu d'essai.
+    public static let missingDayListening =
+        "Je t’écoute : raconte-moi ta journée du mercredi 26 août, à l’oral ou au clavier."
 
     // MARK: - Les photos
 
@@ -491,6 +508,43 @@ public enum ChatCopy {
             MemoBook a besoin de l’appareil photo pour prendre une photo. \
             Autorise l’accès dans Réglages.
             """
+    }
+
+    // MARK: - Regarder une photo
+
+    /// La visionneuse plein écran d'une photo du fil, et ce qu'on peut en
+    /// faire (Hugo, 15/10/2026 : « on ne peut pas enregistrer les photos ni
+    /// les partager en dehors de l'application »).
+    public enum PhotoViewer {
+        public static let close = "Fermer"
+        public static let save = "Enregistrer"
+        public static let share = "Partager"
+        public static let copy = "Copier"
+
+        /// Ce que VoiceOver annonce du compteur « 2 sur 5 ».
+        public static func position(_ index: Int, of total: Int) -> String {
+            "Photo \(index) sur \(total)"
+        }
+
+        /// La photo est dans la photothèque. Un mot, le temps d'un passage :
+        /// une alerte à congédier pour un geste réussi serait de trop.
+        public static let saved = "Enregistrée dans tes photos"
+        public static let copied = "Copiée"
+
+        /// iOS a refusé l'écriture. Comme pour le micro, il ne redemande
+        /// pas : le seul recours est l'app Réglages.
+        public static let saveDenied = """
+            MemoBook a besoin d’ajouter à tes photos pour enregistrer celle-ci. \
+            Autorise l’accès dans Réglages.
+            """
+
+        /// L'écriture a échoué pour une autre raison — disque plein.
+        public static let saveFailed =
+            "Je n’ai pas réussi à l’enregistrer. Réessaie dans un moment."
+
+        /// La photo n'est pas encore arrivée : rien à enregistrer ni à
+        /// partager tant qu'elle n'est pas là.
+        public static let notReady = "Cette photo n’est pas encore chargée."
     }
 
     // MARK: - Les échecs
@@ -587,5 +641,9 @@ public enum ChatCopy {
         public static func photos(count: Int) -> String {
             count == 1 ? "Une photo" : "\(count) photos"
         }
+
+        /// Ce qu'une bulle de photos promet à VoiceOver : la toucher les
+        /// ouvre en grand (Hugo, 15/10/2026).
+        public static let openPhoto = "Voir en grand"
     }
 }

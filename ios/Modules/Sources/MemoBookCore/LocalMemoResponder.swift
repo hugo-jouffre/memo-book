@@ -411,6 +411,10 @@ public struct LocalMemoResponder: MemoResponder {
         ChatCopy.Suggest.start: (ChatCopy.openingWithoutPrompt, Suggestions.afterAccept),
         ChatCopy.Suggest.dictate: (ChatCopy.listening, []),
         ChatCopy.Suggest.tellContext: (ChatCopy.contextInvitation, []),
+        // « Compléter l'étape manquante » : une commande, pas un souvenir.
+        // Le bac à sable n'a pas de trou à calculer — il nomme la journée du
+        // jeu d'essai, là où le serveur nomme celle qu'il a trouvée.
+        ChatCopy.CallToAction.fillMissingDay: (ChatCopy.missingDayListening, []),
     ]
 
     private static func answer(for subject: ChatSignals.Subject?) -> String {

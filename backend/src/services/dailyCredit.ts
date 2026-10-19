@@ -7,6 +7,8 @@ import { pauseBeforeSaying } from "./conversation.js";
 import {
   DAILY_CREDIT_EXHAUSTED_MESSAGE,
   SUGGESTIONS,
+  dayOfGapDayId,
+  gapDayLabel,
   isSilentCommand,
   isSuggestionId,
 } from "./conversationCopy.js";
@@ -270,6 +272,20 @@ export function localMidnightAfter(day: LocalDate, timeZone: string): Date {
   return new Date(naive - utcOffsetMs(first, timeZone));
 }
 
+/**
+ * **Midi** d'une journée, dans ce fuseau — l'horodatage d'un souvenir raconté
+ * après coup (`conversationGaps.ts`).
+ *
+ * Midi, et non minuit : c'est la seule heure qui retombe sur la bonne journée
+ * quel que soit le fuseau depuis lequel on relira le souvenir, et c'est
+ * `localDate()` qui regroupe les souvenirs par journée partout ailleurs.
+ */
+export function localNoonOn(day: LocalDate, timeZone: string): Date {
+  const naive = Date.parse(`${day}T12:00:00Z`);
+  const first = naive - utcOffsetMs(naive, timeZone);
+  return new Date(naive - utcOffsetMs(first, timeZone));
+}
+
 /** Une date de calendrier, telle qu'une colonne `DATE` l'attend : minuit UTC. */
 function dateColumn(day: LocalDate): Date {
   return new Date(`${day}T00:00:00Z`);
@@ -407,6 +423,11 @@ export function exceedsWholeDailyCredit(charge: DailyCharge): boolean {
 export function isFreeChatText(text: string, suggestionId: string | null): boolean {
   if (suggestionId === null) return false;
   if (isSilentCommand(suggestionId)) return countCharacters(text) <= SILENT_COMMAND_FREE_CHARACTERS;
+  // La puce d'une journée manquante porte sa date : son libellé se recompose
+  // au lieu de se lire dans le catalogue, mais la règle ne change pas — il
+  // doit correspondre au caractère près.
+  const day = dayOfGapDayId(suggestionId);
+  if (day !== null) return gapDayLabel(day) === text;
   return isSuggestionId(suggestionId) && SUGGESTIONS[suggestionId].label === text;
 }
 
