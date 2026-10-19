@@ -108,6 +108,28 @@ export const EXHAUSTION_SLACK_MS = 1_000;
  */
 export const SILENT_COMMAND_FREE_CHARACTERS = 120;
 
+/**
+ * Ce qu'une fiche offre de **corrections au clavier** : 200 caractères
+ * modifiés, cumulés sur la vie de la fiche (Hugo, 19/10/2026, QA D8 b).
+ * Corriger l'orthographe d'un nom propre, remplacer un mot, retourner une
+ * phrase : c'est le moment naturel pour corriger, et il tombe souvent juste
+ * après le vocal qui a vidé le pot. Au-delà, la correction paie comme un texte
+ * (75 ms par caractère modifié) — pot vide, elle attend l'illimité : on ne
+ * réécrit pas un récit entier par ce biais. Servi avec le solde
+ * (`serializeDailyCredit`) et, par fiche, ce qu'il en reste
+ * (`freeCorrectionCharactersLeft`).
+ */
+export const CORRECTION_FREE_CHARACTERS = 200;
+
+/**
+ * Ce qu'il reste des 200 caractères offerts à une fiche — servi avec elle
+ * (`serializeEntry`, la fiche du fil), pour que l'app sache avant l'envoi si
+ * une correction passera pot vide.
+ */
+export function freeCorrectionCharactersLeft(entry: { correctionFreeCharacters: number }): number {
+  return Math.max(0, CORRECTION_FREE_CHARACTERS - entry.correctionFreeCharacters);
+}
+
 /** Le code du refus : le tour passera demain, quand le crédit se recharge. */
 export const DAILY_CREDIT_EXHAUSTED = "daily_credit_exhausted";
 
@@ -137,9 +159,21 @@ export const DAILY_CREDIT_REFUSAL_MESSAGE =
 export const DAILY_CREDIT_SHORT_MESSAGE =
   "Ce tour dépasse le crédit qui reste aujourd’hui pour ce voyage : il partira demain.";
 
-/** Le même, pour une correction à la main : elle n'attend dans aucune file. */
+/**
+ * Le même, pour une correction à la main : elle n'attend dans aucune file. Ce
+ * qui dépasse, c'est la part **au-delà des 200 caractères offerts** par fiche
+ * (`CORRECTION_FREE_CHARACTERS`).
+ */
 export const CORRECTION_SHORT_MESSAGE =
-  "Cette correction dépasse le crédit qui reste aujourd’hui pour ce voyage : réessaie demain, ou passe en illimité.";
+  "Cette correction dépasse les 200 caractères offerts par fiche et le crédit qui reste aujourd’hui pour ce voyage : réessaie demain, ou passe en illimité.";
+
+/**
+ * Une correction au-delà des 200 caractères offerts, **pot vide** (Hugo,
+ * 19/10/2026, QA D8) : les 200 premiers sont passés gratuitement, le reste
+ * demande l'abonnement.
+ */
+export const CORRECTION_BEYOND_FREE_MESSAGE =
+  "Au-delà de 200 caractères modifiés, la correction passe par l’illimité.";
 
 /** Un vocal plus long qu'une journée entière de crédit (`DAILY_CREDIT_TOO_LONG`). */
 export const VOICE_TOO_LONG_MESSAGE =
@@ -215,6 +249,7 @@ export function serializeDailyCredit(credit: DailyCredit) {
     warningRemainingMs: WARNING_REMAINING_MS,
     urgentRemainingMs: URGENT_REMAINING_MS,
     exhaustionSlackMs: EXHAUSTION_SLACK_MS,
+    correctionFreeCharacters: CORRECTION_FREE_CHARACTERS,
     day: credit.day,
     resetsAt: credit.resetsAt.toISOString(),
   };
@@ -349,8 +384,9 @@ export async function readDailyCredit(
 
 /**
  * Ce qu'un tour demande au crédit. `correction` : ce sont les caractères
- * qu'une correction à la main ajoute (`PATCH /v1/entries/:id`) — ils paient
- * comme un texte, seul le message d'un refus change.
+ * qu'une correction à la main modifie **au-delà des 200 offerts à la fiche**
+ * (`PATCH /v1/entries/:id`, `CORRECTION_FREE_CHARACTERS`) — ils paient comme
+ * un texte, seul le message d'un refus change.
  */
 export type DailyCharge =
   | { kind: "voice"; durationMs: number }
@@ -363,6 +399,83 @@ export type DailyCharge =
  */
 export function countCharacters(text: string): number {
   return [...text].length;
+}
+
+/**
+ * Les blancs qui séparent deux mots, pour `correctionCharacters` — une liste
+ * fermée, **la même que l'app** (`CorrectionMeasure.swift`) : `\s` en
+ * JavaScript et `isWhitespace` en Swift ne s'accordent pas sur chaque
+ * scalaire, et les deux côtés doivent tomber sur le même nombre.
+ */
+const CORRECTION_BLANKS = new Set([" ", "\t", "\n", "\r", " ", " ", " ", " "]);
+
+/**
+ * Au-delà de ce produit de mots, l'alignement mot à mot (quadratique) cède la
+ * place à la longueur du passage modifié : une réécriture de 4 000 mots par
+ * 4 000 autres n'est plus une correction, et la mesurer au plus large ne fait
+ * de tort à personne.
+ */
+const CORRECTION_ALIGNMENT_LIMIT = 4_000_000;
+
+/** Coupe en mots et en blancs, chacun d'un seul tenant. */
+function correctionTokens(scalars: readonly string[]): string[][] {
+  const tokens: string[][] = [];
+  for (const scalar of scalars) {
+    const last = tokens.at(-1);
+    if (last && CORRECTION_BLANKS.has(last[0]!) === CORRECTION_BLANKS.has(scalar)) last.push(scalar);
+    else tokens.push([scalar]);
+  }
+  return tokens;
+}
+
+/**
+ * **Ce qu'une correction modifie**, en caractères (Hugo, 19/10/2026, QA D8) :
+ * ceux du nouveau texte qui n'étaient pas dans l'ancien. Corriger « Famine »
+ * en « Fanny » en compte 3 (« nny »), remplacer un mot compte le nouveau mot,
+ * retourner une phrase compte ce qui a bougé ; retirer ne compte rien.
+ *
+ * La mesure : on écarte le début et la fin communs, au caractère près, puis on
+ * aligne le milieu **mot à mot** (plus longue sous-suite commune, pondérée par
+ * la longueur des mots) — deux fautes corrigées aux deux bouts d'un long récit
+ * ne comptent pas tout le récit qui les sépare. Les caractères en scalaires
+ * Unicode, comme `countCharacters`. L'app mesure de même
+ * (`CorrectionMeasure.changedCharacters`), au caractère près.
+ */
+export function correctionCharacters(before: string, after: string): number {
+  const a = [...before];
+  const b = [...after];
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start += 1;
+  let endA = a.length;
+  let endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    endA -= 1;
+    endB -= 1;
+  }
+  const inserted = endB - start;
+  if (inserted === 0 || endA === start) return inserted;
+
+  const left = correctionTokens(a.slice(start, endA));
+  const right = correctionTokens(b.slice(start, endB));
+  if (left.length * right.length > CORRECTION_ALIGNMENT_LIMIT) return inserted;
+
+  // La plus longue sous-suite commune de mots, pondérée par leurs caractères :
+  // ce qui en reste dans le nouveau texte est ce qui a été écrit.
+  const keys = (tokens: string[][]) => tokens.map((token) => token.join(""));
+  const leftKeys = keys(left);
+  const rightKeys = keys(right);
+  let previous = new Array<number>(rightKeys.length + 1).fill(0);
+  for (let i = 1; i <= leftKeys.length; i += 1) {
+    const row = new Array<number>(rightKeys.length + 1).fill(0);
+    for (let j = 1; j <= rightKeys.length; j += 1) {
+      row[j] =
+        leftKeys[i - 1] === rightKeys[j - 1]
+          ? previous[j - 1]! + right[j - 1]!.length
+          : Math.max(previous[j]!, row[j - 1]!);
+    }
+    previous = row;
+  }
+  return inserted - previous[rightKeys.length]!;
 }
 
 /** Ce qu'un tour coûte, en millisecondes de crédit. */
@@ -484,7 +597,9 @@ export function shortRefusalForLostTurn(credit: DailyCredit, charge: DailyCharge
  *   `daily_credit_too_long`, il n'attend pas demain mais l'illimité ;
  * - il reste du crédit, mais pas assez : `daily_credit_exhausted`, « il
  *   partira demain » — sans dire « épuisé » ;
- * - le pot est vide : `daily_credit_exhausted`, « épuisé ».
+ * - le pot est vide : `daily_credit_exhausted`, « épuisé » — et pour une
+ *   correction, qui a déjà eu ses 200 caractères offerts, « au-delà de 200
+ *   caractères modifiés, la correction passe par l’illimité » (19/10/2026).
  *
  * `holdsTurn` dit si le client garde le tour refusé (`holdsRefusedTurns`).
  * Sans lui, « il partira demain » et « dès que tu passes en illimité » sont
@@ -508,7 +623,9 @@ export function dailyCreditRefusal(credit: DailyCredit, charge: DailyCharge, hol
         : holdsTurn
           ? DAILY_CREDIT_SHORT_MESSAGE
           : shortRefusalForLostTurn(credit, charge)
-      : DAILY_CREDIT_REFUSAL_MESSAGE;
+      : correction
+        ? CORRECTION_BEYOND_FREE_MESSAGE
+        : DAILY_CREDIT_REFUSAL_MESSAGE;
 
   return new HttpError(429, message, tooLong ? DAILY_CREDIT_TOO_LONG : DAILY_CREDIT_EXHAUSTED, {
     dailyCredit: serializeDailyCredit(credit),
@@ -536,6 +653,18 @@ export interface DailyChargeResult {
   credit: DailyCredit;
   /** La bulle « reviens demain », quand ce tour vient de vider le pot. */
   notice: ChatMessage | null;
+  /**
+   * Ce que ce tour a **réellement pris** au pot, et sur quelle journée : 0
+   * pour un abonné, la limite moins ce qui restait pour un dernier vocal
+   * toléré. C'est ce qu'un vocal muet se fait rendre (`refundSilentVoice`).
+   */
+  charged: VoiceCharge;
+}
+
+/** Ce qu'un vocal a pris au pot, gardé sur sa bulle (`payload.dailyCharge`). */
+export interface VoiceCharge {
+  day: LocalDate;
+  chargedMs: number;
 }
 
 /**
@@ -602,7 +731,7 @@ export async function chargeDailyCredit(
   const exhaustedNow = !input.isUnlimited && usedMs < DAILY_CREDIT_LIMIT_MS && nextUsedMs >= DAILY_CREDIT_LIMIT_MS;
   const notice = exhaustedNow ? await postExhaustedNotice(tx, { memoId: input.memoId, day, now }) : null;
 
-  return { credit: { ...before, usedMs: nextUsedMs }, notice };
+  return { credit: { ...before, usedMs: nextUsedMs }, notice, charged: { day, chargedMs: nextUsedMs - usedMs } };
 }
 
 /**
@@ -763,6 +892,105 @@ export async function chargeTranscriptOverrun(
     });
     return { isUnlimited: false, usedMs, day, resetsAt: localMidnightAfter(day, timeZone) };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Le vocal muet
+// ---------------------------------------------------------------------------
+
+/** Ce qu'un vocal a pris au pot, tel que sa bulle le garde — ou `null`. */
+export function voiceChargeOf(payload: Prisma.JsonValue | null): (VoiceCharge & { refundedAt: string | null }) | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const charge = payload.dailyCharge;
+  if (!charge || typeof charge !== "object" || Array.isArray(charge)) return null;
+  const { day, chargedMs, refundedAt } = charge;
+  if (typeof day !== "string" || typeof chargedMs !== "number") return null;
+  return { day, chargedMs, refundedAt: typeof refundedAt === "string" ? refundedAt : null };
+}
+
+/**
+ * La trace du décompte d'un vocal, à poser sur sa bulle **dans la transaction
+ * du tour** : c'est elle qui dira, si la transcription revient vide, quoi
+ * rendre et à quelle journée. Rien pour un tour qui n'a rien pris.
+ */
+export async function recordVoiceCharge(
+  tx: Prisma.TransactionClient,
+  message: { id: string; payload: Prisma.JsonValue | null },
+  charged: VoiceCharge,
+): Promise<void> {
+  if (charged.chargedMs <= 0) return;
+  const base = message.payload && typeof message.payload === "object" && !Array.isArray(message.payload) ? message.payload : {};
+  await tx.chatMessage.update({
+    where: { id: message.id },
+    data: { payload: { ...base, dailyCharge: { day: charged.day, chargedMs: charged.chargedMs } } },
+  });
+}
+
+export interface SilentVoiceRefund {
+  /** Ce que le pot a récupéré — 0 pour un vocal qui n'avait rien pris (un abonné). */
+  refundedMs: number;
+  /** La charge utile de la bulle, la trace du remboursement comprise. */
+  payload: Prisma.JsonValue | null;
+}
+
+/**
+ * **Un vocal muet ne se décompte pas** (Hugo, 19/10/2026, QA D9) : téléphone
+ * en poche, silence — la transcription revient vide, et sa durée revient au
+ * pot de la journée où elle avait été prise. MEMO le dit
+ * (`silentVoiceLines`), et le prochain solde servi — le fil, sa mise à jour —
+ * porte le crédit rendu : l'app n'a rien à recompter.
+ *
+ * **Une fois** : la trace `refundedAt` se pose sur la bulle dans la même
+ * transaction, sous le verrou du voyage ; un job rejoué ne rend rien de plus.
+ * Le pot ne descend jamais sous zéro. La bulle « reviens demain », si ce
+ * vocal l'avait posée, reste dans le fil : elle est déjà lue, et la poser
+ * une seconde fois le même jour serait pire.
+ */
+export async function refundSilentVoice(
+  prisma: PrismaClient,
+  input: { messageId: string; memoId: string; now?: Date },
+): Promise<SilentVoiceRefund> {
+  const now = input.now ?? new Date();
+  return prisma.$transaction(async (tx) => {
+    await lockThread(tx, input.memoId);
+    const message = await tx.chatMessage.findUniqueOrThrow({
+      where: { id: input.messageId },
+      select: { payload: true },
+    });
+    const charge = voiceChargeOf(message.payload);
+    if (!charge) return { refundedMs: 0, payload: message.payload };
+    if (charge.refundedAt) return { refundedMs: charge.chargedMs, payload: message.payload };
+
+    const day = dateColumn(charge.day);
+    const row = await tx.tripDailyUsage.findUnique({
+      where: { memoId_day: { memoId: input.memoId, day } },
+      select: { usedMs: true },
+    });
+    if (row) {
+      await tx.tripDailyUsage.update({
+        where: { memoId_day: { memoId: input.memoId, day } },
+        data: { usedMs: Math.max(0, row.usedMs - charge.chargedMs) },
+      });
+    }
+    const base = message.payload as Prisma.JsonObject;
+    const payload = {
+      ...base,
+      dailyCharge: { day: charge.day, chargedMs: charge.chargedMs, refundedAt: now.toISOString() },
+    };
+    await tx.chatMessage.update({ where: { id: input.messageId }, data: { payload } });
+    return { refundedMs: charge.chargedMs, payload };
+  });
+}
+
+/**
+ * Ce que MEMO dit d'un vocal muet : la phrase de Hugo quand sa durée vient
+ * d'être rendue au pot, une phrase sans crédit quand il n'avait rien pris — un
+ * abonné n'a pas de « 5 min gratuites » à qui on rende quoi que ce soit.
+ */
+export function silentVoiceLine(refundedMs: number): string {
+  return refundedMs > 0
+    ? `Ce vocal était silencieux, sa durée n’est pas déduite de tes ${formatCreditDuration(DAILY_CREDIT_LIMIT_MS)} d’enregistrement gratuit par jour.`
+    : "Ce vocal était silencieux : je n’ai rien entendu.";
 }
 
 /** Le compte qui raconte, et s'il raconte sans limite — lus avant la transaction. */

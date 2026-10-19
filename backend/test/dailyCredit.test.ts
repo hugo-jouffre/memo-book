@@ -10,6 +10,8 @@ import {
 } from "../src/services/conversation.js";
 import { DAILY_CREDIT_EXHAUSTED_MESSAGE, SUGGESTIONS } from "../src/services/conversationCopy.js";
 import {
+  CORRECTION_BEYOND_FREE_MESSAGE,
+  CORRECTION_FREE_CHARACTERS,
   CORRECTION_SHORT_MESSAGE,
   DAILY_CREDIT_LIMIT_MS,
   DAILY_CREDIT_REFUSAL_MESSAGE,
@@ -24,10 +26,12 @@ import {
   URGENT_REMAINING_MS,
   VOICE_TOLERANCE_MS,
   WARNING_REMAINING_MS,
+  correctionCharacters,
   countCharacters,
   formatCreditDuration,
   isFreeChatText,
   localMidnightAfter,
+  silentVoiceLine,
   type SerializedDailyCredit,
 } from "../src/services/dailyCredit.js";
 import { addDays, localDate } from "../src/services/localCalendar.js";
@@ -320,6 +324,7 @@ describe("un texte", () => {
       warningRemainingMs: WARNING_REMAINING_MS,
       urgentRemainingMs: URGENT_REMAINING_MS,
       exhaustionSlackMs: EXHAUSTION_SLACK_MS,
+      correctionFreeCharacters: CORRECTION_FREE_CHARACTERS,
       day,
       resetsAt: localMidnightAfter(day, PARIS).toISOString(),
     });
@@ -730,7 +735,7 @@ describe("les autres portes", () => {
     expect(refused.statusCode).toBe(429);
   });
 
-  it("une correction à la main paie ce qu'elle ajoute, rien de plus", async () => {
+  it("une correction à la main paie ce qu'elle modifie au-delà des 200 offerts, rien de plus", async () => {
     const memo = await tripOf(owner.accountId);
     const entry = await harness.prisma.entry.create({
       data: { memoId: memo.id, kind: "text", status: "ready", transcript: "d".repeat(100), capturedAt: new Date() },
@@ -743,13 +748,14 @@ describe("les autres portes", () => {
         payload: { editedText },
       });
 
+    // 300 caractères écrits : 200 offerts, 100 payés.
     expect((await patch("e".repeat(300))).statusCode).toBe(200);
-    expect((await usage(memo.id))?.usedMs).toBe(200 * TEXT_MS_PER_CHARACTER);
+    expect((await usage(memo.id))?.usedMs).toBe(100 * TEXT_MS_PER_CHARACTER);
 
     // Raccourcir, revenir à la version proposée : gratuit.
     expect((await patch("e".repeat(50))).statusCode).toBe(200);
     expect((await patch(null)).statusCode).toBe(200);
-    expect((await usage(memo.id))?.usedMs).toBe(200 * TEXT_MS_PER_CHARACTER);
+    expect((await usage(memo.id))?.usedMs).toBe(100 * TEXT_MS_PER_CHARACTER);
   });
 
   it("valider rend le souvenir, et plus d'étapes", async () => {
@@ -992,7 +998,7 @@ describe("une correction à la main", () => {
     const entry = await entryOf(memo.id, "h".repeat(10));
     await spend(memo.id, DAILY_CREDIT_LIMIT_MS - 120_000);
 
-    // 2 000 caractères ajoutés : 2:30, quand il reste 2:00.
+    // 2 000 caractères ajoutés : 200 offerts, 1 800 à payer — 2:15, quand il reste 2:00.
     const response = await patch(entry.id, "h".repeat(2_010));
 
     expect(response.statusCode).toBe(429);
@@ -1004,7 +1010,7 @@ describe("une correction à la main", () => {
     expect((await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } })).editedText).toBeNull();
   });
 
-  it("envoyée deux fois au même instant ne paie qu'une fois ce qu'elle ajoute", async () => {
+  it("envoyée deux fois au même instant ne paie qu'une fois ce qu'elle modifie", async () => {
     const memo = await tripOf(owner.accountId);
     const entry = await entryOf(memo.id, "i".repeat(10));
     const edited = "i".repeat(1_010);
@@ -1012,8 +1018,78 @@ describe("une correction à la main", () => {
     const responses = await Promise.all([patch(entry.id, edited), patch(entry.id, edited)]);
 
     expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
-    // La croissance se mesure sous le verrou : la seconde ne trouve plus rien à ajouter.
-    expect(await usage(memo.id)).toMatchObject({ textCharacters: 1_000, usedMs: 1_000 * TEXT_MS_PER_CHARACTER });
+    // La mesure se fait sous le verrou : la seconde ne trouve plus rien à
+    // modifier. 1 000 écrits, 200 offerts une seule fois, 800 payés.
+    expect(await usage(memo.id)).toMatchObject({ textCharacters: 800, usedMs: 800 * TEXT_MS_PER_CHARACTER });
+    expect(
+      (await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } })).correctionFreeCharacters,
+    ).toBe(CORRECTION_FREE_CHARACTERS);
+  });
+
+  it("mesure ce qui change, pas la longueur : un mot corrigé, un mot remplacé, deux bouts d'un récit", () => {
+    expect(correctionCharacters("On a vu Famine.", "On a vu Fanny.")).toBe(3);
+    expect(correctionCharacters("Le chat dort.", "Le chien dort.")).toBe(3);
+    expect(correctionCharacters("Une phrase de trop. La suite.", "La suite.")).toBe(0);
+    // Deux corrections aux deux bouts : le milieu, inchangé, ne compte pas.
+    const middle = " au milieu".repeat(200);
+    expect(correctionCharacters(`Famine${middle} Rome`, `Fanny${middle} Roma`)).toBe(3 + 4);
+    expect(correctionCharacters("", "Écrit 🙂")).toBe(countCharacters("Écrit 🙂"));
+  });
+
+  it("pot vide, passe dans la limite des 200 offerts par fiche, puis attend l'illimité", async () => {
+    const memo = await tripOf(owner.accountId);
+    const entry = await entryOf(memo.id, "Nous avons dîné avec Famine sur la piazza Navona.");
+    await spend(memo.id, DAILY_CREDIT_LIMIT_MS);
+
+    // Un nom propre corrigé : gratuit, pot vide.
+    const fixed = await patch(entry.id, "Nous avons dîné avec Fanny sur la piazza Navona.");
+    expect(fixed.statusCode).toBe(200);
+    expect(fixed.json<{ freeCorrectionCharactersLeft: number }>().freeCorrectionCharactersLeft).toBe(
+      CORRECTION_FREE_CHARACTERS - 3,
+    );
+
+    // 196 de plus : 199 en tout, ça passe encore.
+    const longer = `Nous avons dîné avec Fanny sur la piazza Navona.${"x".repeat(196)}`;
+    expect((await patch(entry.id, longer)).statusCode).toBe(200);
+
+    // Deux de plus : le 201ᵉ caractère demande l'illimité, et rien n'est écrit.
+    const refused = await patch(entry.id, `${longer}yy`);
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json<RefusalJson>()).toMatchObject({
+      error: "daily_credit_exhausted",
+      message: CORRECTION_BEYOND_FREE_MESSAGE,
+    });
+    const after = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } });
+    expect(after).toMatchObject({ editedText: longer, correctionFreeCharacters: 199 });
+    expect((await usage(memo.id))?.usedMs).toBe(DAILY_CREDIT_LIMIT_MS);
+
+    // La fiche du fil dit ce qui reste des 200.
+    await harness.prisma.chatMessage.create({
+      data: { memoId: memo.id, author: "memo", kind: "transcript", entryId: entry.id },
+    });
+    const thread = await harness.app.inject({
+      method: "GET",
+      url: `/v1/trips/${memo.id}/chat`,
+      headers: { authorization: owner.authorization },
+    });
+    const card = thread
+      .json<{ messages: { body: { kind: string; transcript?: { freeCorrectionCharactersLeft: number } } }[] }>()
+      .messages.find((message) => message.body.kind === "transcript");
+    expect(card?.body.transcript?.freeCorrectionCharactersLeft).toBe(1);
+  });
+
+  it("d'un abonné, ne compte rien et n'entame pas les 200 de ses co-voyageurs", async () => {
+    const memo = await tripOf(owner.accountId);
+    const entry = await entryOf(memo.id, "a".repeat(10));
+    await subscribe(owner.accountId);
+    await spend(memo.id, DAILY_CREDIT_LIMIT_MS);
+
+    expect((await patch(entry.id, "b".repeat(1_000))).statusCode).toBe(200);
+
+    expect((await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } })).correctionFreeCharacters).toBe(
+      0,
+    );
+    expect((await usage(memo.id))?.usedMs).toBe(DAILY_CREDIT_LIMIT_MS);
   });
 });
 
@@ -1262,9 +1338,14 @@ describe("le tour de MEMO après un vocal", () => {
 
     await converseTurn(harness.context, { messageId: message.id });
 
-    const input = responder.inputs.at(-1);
-    expect(input?.message.id).toBe(message.id);
-    expect(input?.message.transcriptFailed).toBe(true);
+    // Sans modèle : la phrase est fixée (QA D9). Ce vocal n'avait rien pris
+    // au pot — posé sans décompte —, MEMO ne parle donc pas de crédit.
+    expect(responder.inputs).toHaveLength(0);
+    const said = await harness.prisma.chatMessage.findMany({
+      where: { memoId: memo.id, author: "memo", replyToId: message.id },
+      orderBy: { seq: "asc" },
+    });
+    expect(said[0]?.text).toBe(silentVoiceLine(0));
   });
 
   it("republie la rédaction restée en attente quand le tour est rejoué après sa réponse", async () => {
@@ -1279,5 +1360,61 @@ describe("le tour de MEMO après un vocal", () => {
 
     expect(publish).toHaveBeenCalledWith(JOB_NAMES.redact, { entryId: message.entryId });
     publish.mockRestore();
+  });
+});
+
+/**
+ * **Un vocal muet ne se décompte pas** (Hugo, 19/10/2026, QA D9) : la
+ * transcription revient vide, sa durée revient au pot, et MEMO le dit.
+ */
+describe("un vocal muet", () => {
+  async function silently<T>(run: () => Promise<T>): Promise<T> {
+    const original = harness.context.transcriber;
+    harness.context.transcriber = new FakeTranscriber([""]);
+    try {
+      return await run();
+    } finally {
+      harness.context.transcriber = original;
+    }
+  }
+
+  it("rend sa durée au pot, une fois, et MEMO dit qu'elle n'est pas déduite", async () => {
+    const memo = await tripOf(owner.accountId);
+    await spend(memo.id, 60_000);
+
+    const { id, response } = await silently(() => speak(memo.id, VOICE_FIXTURES.long, NEW_APP));
+
+    expect(response.statusCode).toBe(201);
+    // Le reçu du tour comptait le vocal ; le fil relu ne le compte plus.
+    expect(response.json<ReceiptJson>().dailyCredit.usedMs).toBe(60_000 + LONG_VOICE_MS);
+    expect(await usage(memo.id)).toMatchObject({ usedMs: 60_000, voiceMs: LONG_VOICE_MS });
+    const thread = await readThread(memo.id);
+    expect(thread.dailyCredit.usedMs).toBe(60_000);
+    expect(thread.messages.map((message) => message.body.text)).toContain(
+      "Ce vocal était silencieux, sa durée n’est pas déduite de tes 5 min d’enregistrement gratuit par jour.",
+    );
+
+    // Rejoué : rien de plus n'est rendu.
+    const message = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+    await harness.prisma.chatMessage.update({ where: { id }, data: { repliedAt: null } });
+    await converseTurn(harness.context, { messageId: message.id });
+    expect((await usage(memo.id))?.usedMs).toBe(60_000);
+  });
+
+  it("d'un abonné, ne parle pas de crédit : il n'avait rien pris", async () => {
+    const memo = await tripOf(owner.accountId);
+    await subscribe(owner.accountId);
+
+    await silently(() => speak(memo.id, VOICE_FIXTURES.short, NEW_APP));
+
+    const thread = await readThread(memo.id);
+    expect(thread.messages.map((message) => message.body.text)).toContain(silentVoiceLine(0));
+    expect((await usage(memo.id))?.usedMs ?? 0).toBe(0);
+  });
+
+  it("un vocal entendu reste compté", async () => {
+    const memo = await tripOf(owner.accountId);
+    await speak(memo.id, VOICE_FIXTURES.short, NEW_APP);
+    expect((await usage(memo.id))?.usedMs).toBe(SHORT_VOICE_MS);
   });
 });

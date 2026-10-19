@@ -1055,6 +1055,13 @@ model Entry {
   /// il fait autorité : la mise en page le reprend **au mot près**.
   editedText String?
   editedAt   DateTime?
+  /// Les caractères de correction au clavier **déjà offerts** à cette fiche,
+  /// cumulés : 200 au plus (`CORRECTION_FREE_CHARACTERS`, Hugo, 19/10/2026,
+  /// QA D8). Une correction prend d'abord ici, puis au crédit du jour ; pot
+  /// vide, ce qui dépasse attend l'illimité. Revenir à la version proposée ne
+  /// le remet pas à zéro — sinon l'aller-retour rouvrirait les 200. Un abonné
+  /// ne l'entame pas : il ne le prendrait qu'à ses co-voyageurs.
+  correctionFreeCharacters Int @default(0)
 
   /// Propositions de l'agent de rédaction, que la mise en page consomme.
   suggestedTitle String?

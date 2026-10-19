@@ -147,7 +147,9 @@ C'est pourtant le moment naturel pour corriger.
 **Reco : b** — on corrige sans payer, on ne peut pas écrire un récit entier par
 ce biais.
 
-Réponse :
+Réponse : **b** (Hugo, 19/10/2026) — 200 caractères modifiés offerts par
+fiche, cumulés, pot vide compris ; au-delà, la correction passe par
+l'illimité.
 
 ### D9 — Un vocal muet consomme-t-il le crédit ?
 
@@ -159,7 +161,9 @@ Depuis cette QA, MEMO dit qu'il n'a rien entendu au lieu de se taire.
 
 **Reco : b.** À revoir si des voyageurs s'en plaignent.
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — rendu au pot, et MEMO dit « Ce vocal
+était silencieux, sa durée n’est pas déduite de tes 5 min d’enregistrement
+gratuit par jour. »
 
 ### D10 — Le texte « hors ligne » de la FAQ
 
@@ -207,7 +211,8 @@ elle, efface tout.
 
 **Reco : a** — c'est ce qu'on attend d'un « supprimer » au sens du RGPD.
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — le fichier part après la suppression
+(`deleteEntryAndMedia`).
 
 ### D13 — Couper les notifications d'un voyage coupe celles de tout le monde
 
