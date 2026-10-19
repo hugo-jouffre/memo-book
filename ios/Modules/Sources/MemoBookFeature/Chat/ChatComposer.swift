@@ -356,11 +356,17 @@ struct ChatSendingBar: View {
     /// rond. Le champ de saisie la prend aussi, à une ligne.
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = MemoBookSpacing.controlHeight
 
+    /// La hauteur du champ à une ligne : **celle du texte**, et la cible de
+    /// l'avion au plus bas (Hugo, 19/10/2026). Le champ prenait les 50 pt
+    /// des boutons ronds, et la ligne écrite flottait au bas d'une barre trop
+    /// haute au-dessus du clavier.
+    @ScaledMetric(relativeTo: .body) private var fieldHeight: CGFloat = MemoBookSpacing.minimumTapTarget
+
     /// Ce qui sépare la cible de l'avion du bord droit du champ, pour que son
     /// rond soit **aussi loin du bord que du haut et du bas** : il se pose
     /// dans le champ comme dans une capsule.
     private var sendInset: CGFloat {
-        let margin = (barHeight - MemoBookSpacing.contentIcon) / 2
+        let margin = (fieldHeight - MemoBookSpacing.contentIcon) / 2
         let targetPadding = (MemoBookSpacing.minimumTapTarget - MemoBookSpacing.contentIcon) / 2
         return max(0, margin - targetPadding)
     }
@@ -622,15 +628,16 @@ struct ChatSendingBar: View {
                 // fallait encore le toucher pour écrire dedans.
                 .onAppear(perform: focusField)
                 // La marge du texte, et **elle seule** : c'est elle qui fait
-                // grandir le champ ligne après ligne.
-                .padding(.vertical, MemoBookSpacing.xs)
-                .frame(minHeight: barHeight)
+                // grandir le champ ligne après ligne. Quatre points, pas huit :
+                // le champ épouse la ligne écrite, il ne l'encadre pas.
+                .padding(.vertical, MemoBookSpacing.xs / 2)
+                .frame(minHeight: fieldHeight)
 
             // L'avion garde sa cible de 2.75 rem en largeur, et prend la
             // hauteur d'une ligne du champ : son rond se centre sur la
             // première ligne, puis reste en bas quand le texte grandit.
             sendButton
-                .frame(height: barHeight)
+                .frame(height: fieldHeight)
         }
         .padding(.leading, MemoBookSpacing.s)
         .padding(.trailing, sendInset)
@@ -643,7 +650,9 @@ struct ChatSendingBar: View {
         // **autour** d'un avion haut de 44 : 60 pt, plus haut que le micro
         // d'à côté (50), sans rien de plus à montrer. La marge ne borde plus
         // que le texte, et le champ ne grandit que s'il y a des lignes.
-        .frame(minHeight: barHeight)
+        // Depuis le 19/10/2026, il ne prend même plus la hauteur des boutons
+        // ronds : celle de sa ligne, voir ``fieldHeight``.
+        .frame(minHeight: fieldHeight)
         .background(MemoBookColor.surface, in: Self.fieldShape)
         .overlay { Self.fieldShape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
         .brandShadow(.raised)
@@ -678,8 +687,11 @@ struct ChatSendingBar: View {
     /// comme une capsule à la hauteur d'origine, et cesse de gonfler ensuite.
     /// C'est aussi ce qui rapproche le champ du rayon 25 que la maquette donne à
     /// l'état « modification d'une retranscription ».
+    ///
+    /// Le rayon suit la hauteur du champ à une ligne (19/10/2026) : celui des
+    /// boutons ronds, plus grand, ne se courbait plus en capsule.
     private static let fieldShape = RoundedRectangle(
-        cornerRadius: MemoBookSpacing.controlHeight / 2,
+        cornerRadius: MemoBookSpacing.minimumTapTarget / 2,
         style: .continuous
     )
 
