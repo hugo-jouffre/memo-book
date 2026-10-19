@@ -217,6 +217,11 @@ export interface PlannerTrip {
   /** `memos.stage`, le repli d'un voyage qui n'a aucune date. */
   storedStage: "upcoming" | "ongoing" | "past";
   narrationPace: string | null;
+  /**
+   * Les alertes de ce voyage **pour ce compte-ci** — les siennes, pas celles
+   * du voyage (D13, 19/10/2026) : un co-voyageur qui coupe la relance
+   * d'écriture ne la coupe que chez lui. Voir `services/notificationPreferences.ts`.
+   */
   notificationsEnabled: boolean;
   notifyWritingReminder: boolean;
   notifyNewStory: boolean;
@@ -284,6 +289,15 @@ export interface PlannerAccount {
   hasEmail: boolean;
   /** A-t-il écrit à MEMO ces quatorze derniers jours ? */
   usedRecently: boolean;
+  /**
+   * Les notifications du compte, celles qui ne parlent d'aucun voyage — la
+   * feuille « Notifications » du profil (D13, 19/10/2026). Coupée, une
+   * notification ne devient même pas candidate.
+   */
+  notifyRenewalReminder: boolean;
+  notifySchoolHolidays: boolean;
+  notifyLearnedPeriod: boolean;
+  notifyBirthday: boolean;
   /** Ses voyages : ceux qu'il possède et ceux où il est co-voyageur. */
   trips: PlannerTrip[];
   /** Ce qu'on lui a envoyé ces soixante derniers jours. */
@@ -475,7 +489,7 @@ export function planNotifications(
   // renouvellement compris, puisqu'un voyage qui part ce jour-là s'en sert.
   // **Une fois par période** : la clé porte la date du renouvellement — et
   // jamais deux à moins de `RENEWAL_REMINDER_MIN_GAP_DAYS`.
-  if (account.renewsAtApple && account.renewsOn) {
+  if (account.notifyRenewalReminder && account.renewsAtApple && account.renewsOn) {
     const daysBefore = daysBetween(today, account.renewsOn);
     const tripEndJustSaidIt =
       account.deliveries.some(
@@ -623,7 +637,7 @@ export function planNotifications(
 
   // --- Vacances -----------------------------------------------------------
 
-  if (allowed("school_holidays") && account.schoolCalendar) {
+  if (account.notifySchoolHolidays && allowed("school_holidays") && account.schoolCalendar) {
     for (const period of periodsOf(account.schoolCalendar, holidays)) {
       const daysBefore = SCHOOL_HOLIDAY_DAYS_BEFORE.find((days) => addDays(period.startsOn, -days) === today);
       if (daysBefore === undefined) continue;
@@ -646,7 +660,7 @@ export function planNotifications(
     }
   }
 
-  if (allowed("learned_period")) {
+  if (account.notifyLearnedPeriod && allowed("learned_period")) {
     // Le seuil d'historique tranché par la feuille : **un voyage** suffit.
     const thisYear = yearOf(today);
     const matches = account.trips
@@ -678,7 +692,7 @@ export function planNotifications(
     }
   }
 
-  if (allowed("birthday") && account.birthDate) {
+  if (account.notifyBirthday && allowed("birthday") && account.birthDate) {
     const thisYear = yearOf(today);
     for (const year of [thisYear, thisYear + 1]) {
       const birthday = sameDayInYear(account.birthDate, year);

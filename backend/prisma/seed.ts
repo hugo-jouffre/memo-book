@@ -198,6 +198,13 @@ async function seedTraveller(
     // avec son nom, et la commande le lit tel quel.
     addressCountry: "FR",
     wantsNewsletter: true,
+    // La feuille « Notifications » du profil (D13, 19/10/2026) : trois
+    // allumées, une coupée — l'anniversaire —, pour voir les deux états sans
+    // rien toucher. Réécrites à chaque passage, comme le reste de l'identité.
+    notifyRenewalReminder: true,
+    notifySchoolHolidays: true,
+    notifyLearnedPeriod: true,
+    notifyBirthday: false,
   };
 
   const account = await prisma.account.upsert({
@@ -265,6 +272,13 @@ async function seedTraveller(
         awaiting: null,
       },
     },
+  });
+
+  // **Chacun ses alertes** (D13, 19/10/2026) : Clara a coupé « Nouveau
+  // récit » sur Rome, chez elle seulement. Le compte de test, lui, n'a pas de
+  // ligne — tout allumé —, et sa feuille du voyage le montre.
+  await prisma.memoNotificationPreference.create({
+    data: { memoId: rome.id, accountId: clara.id, notifyNewStory: false },
   });
 
   let memoryCount = 0;
