@@ -270,6 +270,10 @@ const KIND_LABELS: Record<CallToActionKind, string> = {
   // tours (et mis en cache). Le nom des réglages du téléphone, lui, dépend du
   // tour — `platformLines`.
   open_photo_settings: "les réglages du téléphone, pour l'accès aux photos",
+  // Jamais dans le catalogue du modèle (`allowedForModel: false`) : un trou se
+  // calcule sur des dates, il ne s'invente pas. La ligne existe pour que le
+  // tableau reste exhaustif si quelqu'un l'ouvrait un jour.
+  fill_missing_day: "la journée qui manque au récit, à raconter maintenant",
 };
 
 /**

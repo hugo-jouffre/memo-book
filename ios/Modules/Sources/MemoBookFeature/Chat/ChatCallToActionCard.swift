@@ -36,6 +36,7 @@ struct ChatCallToActionCard: View {
     let onDismiss: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = 20
 
     var body: some View {
@@ -89,18 +90,27 @@ struct ChatCallToActionCard: View {
     }
 
     /// La ligne d'action : verte tant qu'elle n'a pas servi, bleue ensuite.
+    ///
+    /// Aux tailles de texte accessibles, **le pictogramme s'en va** : il est
+    /// décoratif (VoiceOver ne le lit pas), et les 40 pt qu'il prend alors
+    /// faisaient couper « Compléter » au milieu du mot. Le libellé peut aussi
+    /// rétrécir d'un cheveu plutôt que de se casser en deux.
     private var actionRow: some View {
         Button(action: onFollow) {
             HStack(spacing: MemoBookSpacing.xs) {
-                Image(brand: Self.icon(for: callToAction.kind))
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: iconSide, height: iconSide)
-                    .accessibilityHidden(true)
+                if !typeSize.isAccessibilitySize {
+                    Image(brand: Self.icon(for: callToAction.kind))
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .frame(width: iconSide, height: iconSide)
+                        .accessibilityHidden(true)
+                }
                 Text(callToAction.label)
                     .font(MemoBookFont.bubbleAction)
                     .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(state == .followed ? MemoBookColor.blueText : MemoBookColor.action)
             .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
@@ -134,6 +144,7 @@ struct ChatCallToActionCard: View {
         case .importPhotos: "IconLucideCamera"
         case .openPhotoSettings: "IconPictureFrame"
         case .enableNotifications: "IconRingtone"
+        case .fillMissingDay: "IconLucideCalendar"
         case .unknown: "IconArrowRight"
         }
     }
