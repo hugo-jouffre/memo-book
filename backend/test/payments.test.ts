@@ -37,6 +37,7 @@ async function printableTrip() {
       bookTitle: "Rome et la Dolce Vita",
       accessCode: `PAY${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
       stage: "past",
+      // Le prix suit le carnet composé, 58 pages, pas la cible (18/10/2026).
       pageCount: 58,
       targetPageCount: 60,
       isPrintable: true,
@@ -130,7 +131,7 @@ describe("payer une commande par carte", () => {
     expect(body.status).toBe("draft");
     expect(body.payment.paidFromWallet).toBe(false);
     expect(body.payment.clientSecret).toMatch(/^pi_fake_/);
-    expect(body.payment.amountCents).toBe(expectedTotal(60, 2));
+    expect(body.payment.amountCents).toBe(expectedTotal(58, 2));
 
     const stored = await harness.prisma.printOrder.findUniqueOrThrow({ where: { id: body.id } });
     expect(stored.stripePaymentIntentId).toBe(body.payment.clientSecret!.split("_secret")[0]);
@@ -275,20 +276,20 @@ describe("la cagnotte retirée (06/10/2026)", () => {
 
   it("ne déduit plus un ancien solde : tout se paie par Stripe", async () => {
     const { memo, renderId } = await printableTrip();
-    await creditWallet(expectedTotal(60, 1) + 5_000);
+    await creditWallet(expectedTotal(58, 1) + 5_000);
 
     const body = (await placeOrder(memo.id, renderId)).json<OrderBody>();
 
     expect(body.status).toBe("draft");
     expect(body.payment.paidFromWallet).toBe(false);
-    expect(body.payment.amountCents).toBe(expectedTotal(60, 1));
+    expect(body.payment.amountCents).toBe(expectedTotal(58, 1));
     // Le solde ancien ne bouge pas : il n'est plus un moyen de paiement.
-    expect(await balance()).toBe(expectedTotal(60, 1) + 5_000);
+    expect(await balance()).toBe(expectedTotal(58, 1) + 5_000);
     expect(await harness.prisma.walletEntry.count({ where: { accountId, kind: "order_payment" } })).toBe(0);
 
     const stored = await harness.prisma.printOrder.findUniqueOrThrow({ where: { id: body.id } });
     expect(stored.walletAppliedCents).toBe(0);
-    expect(stored.amountCents).toBe(expectedTotal(60, 1));
+    expect(stored.amountCents).toBe(expectedTotal(58, 1));
   });
 
   it("inscrit encore au registre une recharge ouverte avant, une seule fois", async () => {
