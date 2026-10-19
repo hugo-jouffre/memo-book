@@ -524,6 +524,15 @@ public enum BookCopy {
             "Active ou désactive les alertes d’écriture du voyage à « \(trip) » pour ne rien rater sans être dérangé non plus."
         }
 
+        /// Le second paragraphe du chapeau, sur un voyage partagé : ces
+        /// alertes ne valent que pour qui les règle (D13, Hugo, 19/10/2026).
+        /// Elles valaient pour tout le monde, et couper la sienne coupait
+        /// celle des autres sans qu'ils le sachent.
+        ///
+        /// ⚠️ **Pas dans la maquette** — texte à relire par Clara.
+        public static let personalNote =
+            "Ces réglages ne valent que pour toi : tes co-voyageurs choisissent les leurs."
+
         public static let writingReminder = "Rappel d’écriture"
         public static let writingReminderDetail = "Alerte selon le rythme du récit choisi"
         public static let newStory = "Nouveau récit"

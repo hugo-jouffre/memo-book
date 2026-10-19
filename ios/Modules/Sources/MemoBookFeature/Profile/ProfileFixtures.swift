@@ -27,6 +27,9 @@ extension TravellerProfile {
         ),
         shippingCountries: ShippingCountry.fixtures,
         wantsNewsletter: true,
+        // Une coupée sur quatre, comme le seed : la ligne dit « 3 sur 4 » et
+        // la feuille montre les deux états (D13, 19/10/2026).
+        notifications: AccountNotificationPreferences(birthday: false),
         cards: [
             PaymentCard(id: "card-business", label: "Carte business", last4: "3246"),
             PaymentCard(id: "card-perso", label: "Carte perso", last4: "1820"),

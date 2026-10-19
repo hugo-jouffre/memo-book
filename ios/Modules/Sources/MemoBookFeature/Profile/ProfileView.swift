@@ -610,6 +610,18 @@ public struct ProfileView: View {
                 sheet = .gender
             }
             BrandRow("Newsletter mensuelle MemoBook", isOn: newsletterBinding)
+            // Les notifications du compte — celles qui ne parlent d'aucun
+            // voyage (D13, Hugo, 19/10/2026). Sous la newsletter : ce sont
+            // les deux façons dont MemoBook vient te chercher. La coche dit
+            // que le serveur a reçu la dernière bascule de la feuille.
+            BrandRow(
+                AccountNotificationsCopy.rowTitle,
+                value: profile.map { AccountNotificationsCopy.summary($0.notifications) },
+                isValueLoading: profile == nil,
+                isConfirmed: model.justSaved == .notifications
+            ) {
+                sheet = .notifications
+            }
         }
         // L'interrupteur est le seul contrôle du groupe qui **agit** avant que
         // la valeur soit là : le basculer sur un profil pas encore chargé
@@ -762,6 +774,8 @@ public struct ProfileView: View {
             GenderSheet(current: model.profile?.gender ?? .undisclosed) {
                 model.setGender($0)
             }
+        case .notifications:
+            AccountNotificationsSheet(model: model)
         case .password:
             PasswordChangeSheet(
                 model: PasswordChangeModel(
@@ -853,6 +867,7 @@ public struct ProfileView: View {
 enum ProfileSheet: String, Identifiable, CaseIterable {
     case postalAddress
     case gender
+    case notifications
     case password
     case subscription
     case connectors

@@ -114,6 +114,56 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(profile.address.singleLine, "7 Rue, Lyon, France")
         XCTAssertEqual(profile.shippingCountries, [])
         XCTAssertNil(profile.shippingCountry(code: "FR"))
+        // Un serveur d'avant D13 ne sert pas les notifications du compte :
+        // tout allumé, comme la base.
+        XCTAssertEqual(profile.notifications, AccountNotificationPreferences())
+    }
+
+    // MARK: - Notifications du compte (D13)
+
+    /// Ce que le serveur sert : les quatre interrupteurs du compte, sous les
+    /// noms de `serializeAccountNotificationPreferences`.
+    func testTheProfileReadsTheAccountNotifications() throws {
+        let json = Data(
+            """
+            {
+              "fullName": "Maylis Garde",
+              "address": { "street": "", "postalCode": "", "city": "", "country": "" },
+              "wantsNewsletter": false,
+              "notifications": { "renewalReminder": true, "schoolHolidays": false, "learnedPeriod": true, "birthday": false },
+              "cards": [],
+              "connectors": [],
+              "subscription": { "weeklyPrice": 4.99, "isActive": false, "cancelledAt": null, "paidThrough": null, "hasEndedBefore": false },
+              "orders": []
+            }
+            """.utf8
+        )
+
+        let profile = try decoder.decode(TravellerProfile.self, from: json)
+
+        XCTAssertEqual(
+            profile.notifications,
+            AccountNotificationPreferences(schoolHolidays: false, birthday: false)
+        )
+    }
+
+    /// Le `PATCH` envoie le bloc entier sous `notifications`, et rien d'autre
+    /// quand il n'y a que lui.
+    func testAProfileEditSendsTheAccountNotificationsAsOneBlock() throws {
+        let edit = ProfileEdit(notifications: AccountNotificationPreferences(renewalReminder: false))
+        let data = try JSONEncoder().encode(edit)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(Array(object.keys), ["notifications"])
+        let notifications = try XCTUnwrap(object["notifications"] as? [String: Bool])
+        XCTAssertEqual(
+            notifications,
+            ["renewalReminder": false, "schoolHolidays": true, "learnedPeriod": true, "birthday": true]
+        )
+
+        // Sans elles, la clé n'existe pas : le serveur ne touche à rien.
+        let other = try JSONEncoder().encode(ProfileEdit(wantsNewsletter: true))
+        XCTAssertFalse(String(decoding: other, as: UTF8.self).contains("notifications"))
     }
 
     /// Ce que le serveur envoie aujourd'hui : le code, le nom dérivé, et la

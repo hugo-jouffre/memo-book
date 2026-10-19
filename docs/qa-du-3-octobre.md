@@ -225,7 +225,10 @@ seuls les réglages d'iOS les coupent.
 **Reco : b** — un réglage qu'on change chez les autres sans le savoir est une
 mauvaise surprise. Maquette nécessaire.
 
-Réponse :
+Réponse : **b** (Hugo, 19/10/2026). Fait : alertes du voyage par voyageur
+(`memo_notification_preferences`), ligne « Notifications » au profil pour les
+quatre du compte. La feuille du profil reprend celle du voyage — **maquette
+encore à dessiner dans Figma**.
 
 ---
 
