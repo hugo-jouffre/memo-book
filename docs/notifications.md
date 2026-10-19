@@ -23,6 +23,19 @@ touche une notification. Les règles vivent dans un seul fichier pur,
 | **Comportement appris** | Vacances | 14 jours avant la date anniversaire d'un voyage passé (un voyage suffit) | Rythme soutenu, aucun voyage déjà prévu sur cette période | « Créer un voyage » |
 | **Anniversaire** | Vacances | 7 jours avant | Rythme soutenu, pas en voyage, pas de voyage prévu ce jour-là | « Créer un voyage » |
 
+**Chacun règle les siennes** (D13, Hugo, 19/10/2026). Les alertes d'un voyage
+— l'interrupteur « Notifications » des réglages et les quatre de « Gérer mes
+notifications » — appartiennent à qui les règle : une ligne de
+`memo_notification_preferences` par (voyage, compte), sans ligne tout est
+allumé, et le planificateur lit celle **du destinataire**. Couper la relance
+d'écriture ne la coupe plus chez les co-voyageurs. Les notifications du compte
+— rappel de renouvellement, vacances scolaires, l'an dernier à la même époque,
+anniversaire — ont chacune un interrupteur sur la ligne « Notifications » du
+profil (`accounts.notifyRenewalReminder`, `notifySchoolHolidays`,
+`notifyLearnedPeriod`, `notifyBirthday`). Coupée, une notification ne devient
+même pas candidate. L'e-mail de fin de voyage n'en dépend pas : c'est l'argent
+du voyageur, pas une relance.
+
 Les textes sont dans `backend/src/services/notificationCopy.ts`. **Aucun ne vient
 d'une maquette** : la feuille donne l'objectif et le ton, pas les mots. Clara
 doit les relire (T242).

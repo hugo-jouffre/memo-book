@@ -106,6 +106,7 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
           "media_assets",
           "expenses",
           "memo_steps",
+          "memo_notification_preferences",
           "memo_members",
           "memos",
           "devices",

@@ -144,10 +144,19 @@ struct TripNotificationsSheet: View {
     /// enregistrent toujours, mais rien n'arrivera tant qu'on n'y retourne pas.
     private var isBlockedBySystem: Bool { pushNotifications?.authorization == .denied }
 
+    /// Le chapeau de la maquette, et sur un voyage partagé une phrase de plus :
+    /// ces alertes sont **les tiennes** (D13, 19/10/2026). Seul, on n'a
+    /// personne à qui les comparer, et la phrase n'aurait rien à dire.
+    private var headerParagraphs: [String] {
+        let subtitle = BookCopy.Notifications.subtitle(trip: settings?.name ?? "")
+        guard let guests = settings?.guests, !guests.isEmpty else { return [subtitle] }
+        return [subtitle, BookCopy.Notifications.personalNote]
+    }
+
     var body: some View {
         BrandSheet(
             BookCopy.Notifications.title,
-            subtitle: BookCopy.Notifications.subtitle(trip: settings?.name ?? "")
+            paragraphs: headerParagraphs
         ) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
                 // L'interrupteur maître est baissé : les quatre cartes restent

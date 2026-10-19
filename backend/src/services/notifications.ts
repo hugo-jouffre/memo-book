@@ -19,6 +19,7 @@ import {
 import { APPLE_SUBSCRIPTIONS_URL, type SubscriptionReminderMail } from "./mailer.js";
 import { SUBSCRIPTION_REMINDER_SUBJECT } from "./mailTemplates.js";
 import { visibleToAccount } from "./memoOwnership.js";
+import { tripNotificationPreferencesOf } from "./notificationPreferences.js";
 import {
   accountRhythm,
   FIRST_SENDING_HOUR,
@@ -221,6 +222,10 @@ export async function loadPlannerAccount(
       birthDate: true,
       addressPostalCode: true,
       addressCountry: true,
+      notifyRenewalReminder: true,
+      notifySchoolHolidays: true,
+      notifyLearnedPeriod: true,
+      notifyBirthday: true,
       subscriptions: {
         select: { provider: true, status: true, autoRenews: true, renewsAt: true },
       },
@@ -238,11 +243,6 @@ export async function loadPlannerAccount(
       stage: true,
       createdAt: true,
       narrationPace: true,
-      notificationsEnabled: true,
-      notifyWritingReminder: true,
-      notifyNewStory: true,
-      notifyWeeklyDigest: true,
-      notifyTripEnd: true,
       prompt: true,
       targetPageCount: true,
       pageCount: true,
@@ -258,7 +258,10 @@ export async function loadPlannerAccount(
   });
   const memoIds = memos.map((memo) => memo.id);
 
-  const [lastEntries, lastTurns, deliveries, recentTurns, othersTold, weekEntries] = await Promise.all([
+  const [preferencesOf, lastEntries, lastTurns, deliveries, recentTurns, othersTold, weekEntries] = await Promise.all([
+    // Les alertes **de ce compte** pour chacun de ses voyages — pas celles
+    // des autres co-voyageurs (D13, 19/10/2026).
+    tripNotificationPreferencesOf(prisma, accountId, memoIds),
     prisma.entry.groupBy({
       by: ["memoId"],
       where: { memoId: { in: memoIds }, kind: { not: "photo" } },
@@ -364,11 +367,7 @@ export async function loadPlannerAccount(
     createdOn: localDate(memo.createdAt, timeZone),
     storedStage: memo.stage,
     narrationPace: memo.narrationPace,
-    notificationsEnabled: memo.notificationsEnabled,
-    notifyWritingReminder: memo.notifyWritingReminder,
-    notifyNewStory: memo.notifyNewStory,
-    notifyWeeklyDigest: memo.notifyWeeklyDigest,
-    notifyTripEnd: memo.notifyTripEnd,
+    ...preferencesOf(memo.id),
     prompt: memo.prompt,
     storyCount: memo._count.entries,
     lastStoryOn: day(latest(memo.id)),
@@ -394,6 +393,10 @@ export async function loadPlannerAccount(
     // La même condition que `sendTripEndEmails` (`!row.email`) : une adresse vide n'en est pas une.
     hasEmail: Boolean(account.email),
     usedRecently: recentTurns > 0,
+    notifyRenewalReminder: account.notifyRenewalReminder,
+    notifySchoolHolidays: account.notifySchoolHolidays,
+    notifyLearnedPeriod: account.notifyLearnedPeriod,
+    notifyBirthday: account.notifyBirthday,
     trips,
     deliveries: deliveries.flatMap((delivery) =>
       isPushKind(delivery.kind)

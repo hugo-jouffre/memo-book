@@ -377,6 +377,52 @@ describe("le nouveau récit d'un co-voyageur", () => {
     expect(await notificationBubbles(memo.id)).toHaveLength(1);
   });
 
+  // D13 (Hugo, 19/10/2026) : couper une alerte ne la coupe que chez soi.
+  it("ne coupe une alerte que chez qui la coupe : les autres co-voyageurs la gardent", async () => {
+    const { camille, paul, clara, memo } = await sharedTrip();
+    const settings = (authorization: string) =>
+      harness.app.inject({ method: "GET", url: `/v1/trips/${memo.id}/settings`, headers: { authorization } });
+
+    const muted = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: paul.authorization },
+      payload: { notifications: { writingReminder: true, newStory: false, weeklyDigest: true, tripEndReminder: true } },
+    });
+    expect(muted.statusCode).toBe(200);
+    expect(muted.json<{ notifications: { newStory: boolean } }>().notifications.newStory).toBe(false);
+
+    // Paul lit son réglage, Camille le sien — et rien n'a bougé sur le voyage.
+    expect((await settings(paul.authorization)).json<{ notifications: { newStory: boolean } }>().notifications.newStory).toBe(false);
+    expect((await settings(camille.authorization)).json()).toMatchObject({
+      wantsNotifications: true,
+      notifications: { writingReminder: true, newStory: true, weeklyDigest: true, tripEndReminder: true },
+    });
+
+    await toldInChat(memo.id, clara.accountId, new Date("2026-10-04T08:00:00Z"));
+    expect((await sendDueNotifications(harness.context, OCTOBER_4_MORNING)).sent).toBe(1);
+    expect(await harness.prisma.notificationDelivery.findMany({ select: { accountId: true, kind: true } })).toEqual([
+      { accountId: camille.accountId, kind: "new_story" },
+    ]);
+  });
+
+  it("coupe tout un voyage chez qui baisse son interrupteur, et seulement chez lui", async () => {
+    const { camille, paul, clara, memo } = await sharedTrip();
+    await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: camille.authorization },
+      payload: { notificationsEnabled: false },
+    });
+
+    await toldInChat(memo.id, clara.accountId, new Date("2026-10-04T08:00:00Z"));
+    expect((await sendDueNotifications(harness.context, OCTOBER_4_MORNING)).sent).toBe(1);
+    expect((await harness.prisma.notificationDelivery.findFirstOrThrow()).accountId).toBe(paul.accountId);
+    expect(await harness.prisma.memoNotificationPreference.findMany({ select: { accountId: true } })).toEqual([
+      { accountId: camille.accountId },
+    ]);
+  });
+
   it("attend que MEMO ait répondu avant d'écrire dans le fil", async () => {
     const { clara, memo } = await sharedTrip();
     await toldInChat(memo.id, clara.accountId, new Date("2026-10-04T08:00:00Z"));
@@ -453,6 +499,30 @@ describe("le rappel avant le renouvellement", () => {
     expect(push.sent.filter((sent) => sent.message.title.includes("renouvelle"))).toHaveLength(1);
   });
 
+  it("se tait pour qui l'a coupé depuis son profil", async () => {
+    const { accountId, authorization } = await registerAccount(harness.app);
+    await registerToken(authorization);
+    await tripEndingOctober12(accountId);
+    await armedSubscription(accountId, new Date("2026-10-20T09:00:00Z"));
+
+    const patched = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/profile",
+      headers: { authorization },
+      payload: { notifications: { renewalReminder: false, schoolHolidays: true, learnedPeriod: true, birthday: true } },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json<{ notifications: unknown }>().notifications).toEqual({
+      renewalReminder: false,
+      schoolHolidays: true,
+      learnedPeriod: true,
+      birthday: true,
+    });
+
+    await sendDueNotifications(harness.context, new Date("2026-10-17T08:35:00Z"));
+    expect(await harness.prisma.notificationDelivery.count({ where: { kind: "renewal_reminder" } })).toBe(0);
+  });
+
   it("se tait tant qu'un voyage court", async () => {
     const { accountId, authorization } = await registerAccount(harness.app);
     await registerToken(authorization);
@@ -468,7 +538,7 @@ describe("le rappel avant le renouvellement", () => {
     const { accountId, authorization } = await registerAccount(harness.app);
     await registerToken(authorization);
     const memo = await tripEndingOctober12(accountId);
-    await harness.prisma.memo.update({ where: { id: memo.id }, data: { notifyTripEnd: false } });
+    await harness.prisma.memoNotificationPreference.create({ data: { memoId: memo.id, accountId, notifyTripEnd: false } });
     // Renouvellement le 16 : J-3 le 13, le jour de l'e-mail ; J-2 le 14.
     await armedSubscription(accountId, new Date("2026-10-16T09:00:00Z"));
 
@@ -487,7 +557,7 @@ describe("le rappel avant le renouvellement", () => {
     await registerToken(authorization);
     await harness.prisma.account.update({ where: { id: accountId }, data: { email: null } });
     const memo = await tripEndingOctober12(accountId);
-    await harness.prisma.memo.update({ where: { id: memo.id }, data: { notifyTripEnd: false } });
+    await harness.prisma.memoNotificationPreference.create({ data: { memoId: memo.id, accountId, notifyTripEnd: false } });
     // Renouvellement le 16 : J-3 le 13, le lendemain de la fin.
     await armedSubscription(accountId, new Date("2026-10-16T09:00:00Z"));
 

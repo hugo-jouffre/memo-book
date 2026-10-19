@@ -318,6 +318,7 @@ public actor PreviewAPI: MemoBookAPI {
         if case .some(let value) = edit.phoneNumber { profile.phoneNumber = value }
         if case .some(let value) = edit.birthDate { profile.birthDate = value }
         if let wantsNewsletter = edit.wantsNewsletter { profile.wantsNewsletter = wantsNewsletter }
+        if let notifications = edit.notifications { profile.notifications = notifications }
         if var address = edit.address {
             // Comme le serveur : le nom du pays se dérive du code, il ne se
             // stocke pas.

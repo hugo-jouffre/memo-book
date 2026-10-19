@@ -6,6 +6,10 @@ import { accountIdOf } from "../plugins/auth.js";
 import { readDailyCredit } from "../services/dailyCredit.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
+import {
+  readTripNotificationPreferences,
+  writeTripNotificationPreferences,
+} from "../services/notificationPreferences.js";
 import type { Memo } from "@prisma/client";
 import {
   hasWrittenStory,
@@ -55,12 +59,17 @@ const updateBody = z.object({
   startDate: z.coerce.date().nullable().optional(),
   endDate: z.coerce.date().nullable().optional(),
   narrationPace: z.string().trim().max(40).nullable().optional(),
+  /**
+   * L'interrupteur « Notifications » du voyage — **celui de qui écrit**, et de
+   * lui seul (D13, 19/10/2026) : ses co-voyageurs gardent le leur.
+   */
   notificationsEnabled: z.boolean().optional(),
   /**
    * Les quatre alertes, d'un bloc — la seule exception à la règle du réglage
    * unique, et elle se justifie : elles vivent sur la même feuille, personne
-   * d'autre ne les touche, et les envoyer une par une ferait quatre requêtes
-   * pour quatre bascules qu'on enchaîne au doigt.
+   * d'autre ne les touche — elles n'appartiennent qu'à qui écrit —, et les
+   * envoyer une par une ferait quatre requêtes pour quatre bascules qu'on
+   * enchaîne au doigt.
    */
   notifications: z
     .object({
@@ -139,13 +148,15 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
 
   // Le crédit du jour **du voyage** — partagé entre ses co-voyageurs —, vu par
   // celui qui lit : illimité s'il est abonné.
-  const [dailyCredit, storyStarted, reachable] = await Promise.all([
+  const [dailyCredit, storyStarted, reachable, notifications] = await Promise.all([
     readDailyCredit(context.prisma, { memoId: memo.id, viewer: account }),
     hasWrittenStory(context.prisma, memo.id),
     reachablePagesOf(context, memo),
+    // Les alertes **de qui lit** : chacun a les siennes (D13, 19/10/2026).
+    readTripNotificationPreferences(context.prisma, memo.id, accountId),
   ]);
 
-  return serializeTripSettings(memo, dailyCredit, accountId, storyStarted, reachable);
+  return serializeTripSettings(memo, dailyCredit, accountId, notifications, storyStarted, reachable);
 }
 
 /**
@@ -245,17 +256,6 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
         ...(body.narrationPace !== undefined
           ? { narrationPace: normalizeNarrationPace(body.narrationPace) }
           : {}),
-        ...(body.notificationsEnabled !== undefined
-          ? { notificationsEnabled: body.notificationsEnabled }
-          : {}),
-        ...(body.notifications
-          ? {
-              notifyWritingReminder: body.notifications.writingReminder,
-              notifyNewStory: body.notifications.newStory,
-              notifyWeeklyDigest: body.notifications.weeklyDigest,
-              notifyTripEnd: body.notifications.tripEndReminder,
-            }
-          : {}),
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.isPublicGallery !== undefined ? { isPublicGallery: body.isPublicGallery } : {}),
         ...(body.photoTextRatio !== undefined ? { photoTextRatio: body.photoTextRatio } : {}),
@@ -277,6 +277,16 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
           ? { crosswordEnabled: body.crosswordEnabled }
           : {}),
       },
+    });
+
+    // Les alertes ne vont pas sur le voyage : elles sont **à qui écrit**, et
+    // celles de ses co-voyageurs ne bougent pas (D13, 19/10/2026).
+    await writeTripNotificationPreferences(context.prisma, id, accountId, {
+      notificationsEnabled: body.notificationsEnabled,
+      notifyWritingReminder: body.notifications?.writingReminder,
+      notifyNewStory: body.notifications?.newStory,
+      notifyWeeklyDigest: body.notifications?.weeklyDigest,
+      notifyTripEnd: body.notifications?.tripEndReminder,
     });
 
     // Une date de fin qui recule dans le passé ferme le voyage, mais

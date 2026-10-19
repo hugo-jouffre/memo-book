@@ -48,6 +48,10 @@ function account(overrides: Partial<PlannerAccount> = {}): PlannerAccount {
     renewsOn: null,
     hasEmail: true,
     usedRecently: false,
+    notifyRenewalReminder: true,
+    notifySchoolHolidays: true,
+    notifyLearnedPeriod: true,
+    notifyBirthday: true,
     trips: [trip()],
     deliveries: [],
     ...overrides,
@@ -570,6 +574,45 @@ describe("l'anniversaire", () => {
       trips: [trip({ narrationPace: "daily", startsOn: "2026-10-15", endsOn: "2026-10-25" })],
     });
     expect(kinds(planNotifications(travelling, [], "2026-10-21"))).not.toContain("birthday");
+  });
+});
+
+describe("les notifications du compte, coupées depuis le profil (D13)", () => {
+  const sustained = { trips: [trip({ narrationPace: "daily", startsOn: "2026-06-01", endsOn: "2026-06-10" })] };
+
+  it("ne propose plus le rappel avant le renouvellement à qui l'a coupé", () => {
+    const renewing = { renewsAtApple: true, renewsOn: "2026-10-20" };
+    expect(kinds(planNotifications(account(renewing), [], "2026-10-17"))).toContain("renewal_reminder");
+    expect(
+      kinds(planNotifications(account({ ...renewing, notifyRenewalReminder: false }), [], "2026-10-17")),
+    ).not.toContain("renewal_reminder");
+  });
+
+  it("ne propose plus les vacances scolaires à qui les a coupées", () => {
+    const camille = account({ ...sustained, schoolCalendar: "B" });
+    expect(kinds(planNotifications(camille, [toussaintB], "2026-10-10"))).toContain("school_holidays");
+    expect(
+      kinds(planNotifications({ ...camille, notifySchoolHolidays: false }, [toussaintB], "2026-10-10")),
+    ).not.toContain("school_holidays");
+  });
+
+  it("ne rappelle plus la période de l'an dernier à qui l'a coupée", () => {
+    const camille = account({
+      trips: [trip({ startsOn: "2026-01-05", endsOn: "2026-01-12", narrationPace: "daily" })],
+    });
+    expect(kinds(planNotifications(camille, [], "2026-12-22"))).toContain("learned_period");
+    expect(kinds(planNotifications({ ...camille, notifyLearnedPeriod: false }, [], "2026-12-22"))).not.toContain(
+      "learned_period",
+    );
+  });
+
+  it("ne souhaite plus l'anniversaire à qui l'a coupé, et ne touche à rien d'autre", () => {
+    const camille = account({ ...sustained, birthDate: "1994-10-28", schoolCalendar: "B" });
+    const quiet = { ...camille, notifyBirthday: false };
+    expect(kinds(planNotifications(camille, [], "2026-10-21"))).toContain("birthday");
+    expect(kinds(planNotifications(quiet, [], "2026-10-21"))).not.toContain("birthday");
+    // Les vacances, elles, restent : un interrupteur n'en coupe qu'une.
+    expect(kinds(planNotifications(quiet, [toussaintB], "2026-10-10"))).toContain("school_holidays");
   });
 });
 

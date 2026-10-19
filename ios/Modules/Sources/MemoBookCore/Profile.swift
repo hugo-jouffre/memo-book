@@ -750,6 +750,47 @@ public enum Gender: String, Codable, Sendable, Hashable, CaseIterable {
     }
 }
 
+/// Les notifications **du compte** — celles qui ne parlent d'aucun voyage —,
+/// la feuille « Notifications » du profil (D13, Hugo, 19/10/2026).
+///
+/// Celles d'un voyage sont dans ``TripNotificationPreferences``, réglées
+/// voyage par voyage et pour soi seul. Celles-ci n'avaient aucun interrupteur :
+/// seul le réglage d'iOS les coupait, et lui coupe tout.
+///
+/// Décodage tolérant, comme les alertes d'un voyage : un serveur qui ne les
+/// sert pas encore rend tout allumé, ce qui est le défaut de la base.
+public struct AccountNotificationPreferences: Codable, Sendable, Hashable {
+    /// « Rappel de renouvellement » — trois jours avant que l'abonnement
+    /// reparte, quand aucun voyage ne court.
+    public var renewalReminder: Bool
+    /// « Vacances scolaires » — une semaine avant, puis le jour même.
+    public var schoolHolidays: Bool
+    /// « L’an dernier à la même époque » — la période d'un voyage passé revient.
+    public var learnedPeriod: Bool
+    /// « Anniversaire » — une semaine avant.
+    public var birthday: Bool
+
+    public init(
+        renewalReminder: Bool = true,
+        schoolHolidays: Bool = true,
+        learnedPeriod: Bool = true,
+        birthday: Bool = true
+    ) {
+        self.renewalReminder = renewalReminder
+        self.schoolHolidays = schoolHolidays
+        self.learnedPeriod = learnedPeriod
+        self.birthday = birthday
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        renewalReminder = try container.decodeIfPresent(Bool.self, forKey: .renewalReminder) ?? true
+        schoolHolidays = try container.decodeIfPresent(Bool.self, forKey: .schoolHolidays) ?? true
+        learnedPeriod = try container.decodeIfPresent(Bool.self, forKey: .learnedPeriod) ?? true
+        birthday = try container.decodeIfPresent(Bool.self, forKey: .birthday) ?? true
+    }
+}
+
 /// Tout ce que l'écran de profil montre, d'un seul tenant.
 public struct TravellerProfile: Codable, Sendable, Hashable {
     public var fullName: String
@@ -781,6 +822,8 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     /// liste que celle du tunnel de commande (``OrderContext/countries``).
     public var shippingCountries: [ShippingCountry]
     public var wantsNewsletter: Bool
+    /// Les notifications du compte — la ligne « Notifications » du profil.
+    public var notifications: AccountNotificationPreferences
     public var cards: [PaymentCard]
     public var selectedCardId: String?
     public var connectors: [Connector]
@@ -806,6 +849,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         address: PostalAddress = PostalAddress(),
         shippingCountries: [ShippingCountry] = [],
         wantsNewsletter: Bool = false,
+        notifications: AccountNotificationPreferences = AccountNotificationPreferences(),
         cards: [PaymentCard] = [],
         selectedCardId: String? = nil,
         connectors: [Connector] = [],
@@ -825,6 +869,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.address = address
         self.shippingCountries = shippingCountries
         self.wantsNewsletter = wantsNewsletter
+        self.notifications = notifications
         self.cards = cards
         self.selectedCardId = selectedCardId
         self.connectors = connectors
@@ -862,6 +907,10 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         // pas le profil entier qui disparaît.
         shippingCountries = try container.decodeIfPresent([ShippingCountry].self, forKey: .shippingCountries) ?? []
         wantsNewsletter = try container.decode(Bool.self, forKey: .wantsNewsletter)
+        // Absentes d'un serveur d'avant D13 : tout allumé, comme la base.
+        notifications =
+            try container.decodeIfPresent(AccountNotificationPreferences.self, forKey: .notifications)
+            ?? AccountNotificationPreferences()
         cards = try container.decode([PaymentCard].self, forKey: .cards)
         selectedCardId = try container.decodeIfPresent(String.self, forKey: .selectedCardId)
         connectors = try container.decode([Connector].self, forKey: .connectors)
@@ -928,6 +977,9 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
     /// Un simple optionnel : le genre ne s'efface pas, il se choisit.
     public var gender: Gender?
     public var wantsNewsletter: Bool?
+    /// Les quatre notifications du compte, d'un bloc — c'est le bloc entier que
+    /// la route accepte, comme les alertes d'un voyage.
+    public var notifications: AccountNotificationPreferences?
     public var address: PostalAddress?
 
     public init(
@@ -937,6 +989,7 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
         birthDate: CalendarDay?? = nil,
         gender: Gender? = nil,
         wantsNewsletter: Bool? = nil,
+        notifications: AccountNotificationPreferences? = nil,
         address: PostalAddress? = nil
     ) {
         self.firstName = firstName
@@ -945,11 +998,12 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
         self.birthDate = birthDate
         self.gender = gender
         self.wantsNewsletter = wantsNewsletter
+        self.notifications = notifications
         self.address = address
     }
 
     private enum CodingKeys: String, CodingKey {
-        case firstName, lastName, phoneNumber, birthDate, gender, wantsNewsletter, address
+        case firstName, lastName, phoneNumber, birthDate, gender, wantsNewsletter, notifications, address
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -962,6 +1016,7 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
         if let wantsNewsletter {
             try container.encode(wantsNewsletter, forKey: .wantsNewsletter)
         }
+        if let notifications { try container.encode(notifications, forKey: .notifications) }
         if let address { try container.encode(address, forKey: .address) }
     }
 }

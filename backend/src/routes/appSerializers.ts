@@ -24,6 +24,10 @@ import { avatarUrlOf } from "../services/avatars.js";
 import { renderPhase } from "./serializers.js";
 import { effectiveGender } from "../services/genderInference.js";
 import { effectiveStage } from "../services/tripStage.js";
+import {
+  serializeAccountNotificationPreferences,
+  type TripNotificationPreferences,
+} from "../services/notificationPreferences.js";
 
 /**
  * Ce que les trois écrans « produit » reçoivent : l'accueil, un voyage, le
@@ -643,6 +647,9 @@ export function serializeProfile(
     // y choisit le pays, et un second appel ferait attendre un menu.
     shippingCountries: SHIPPING_COUNTRIES,
     wantsNewsletter: account.wantsNewsletter,
+    // Les notifications du compte, celles qui ne parlent d'aucun voyage — la
+    // feuille « Notifications » du profil (D13, 19/10/2026).
+    notifications: serializeAccountNotificationPreferences(account),
     // **Gelé à zéro** (06/10/2026) : la cagnotte est retirée du produit. Les
     // builds installés décodent ce champ comme obligatoire ; à retirer quand
     // plus aucun ne le lit.
@@ -726,6 +733,11 @@ export function serializeTripSettings(
   memo: MemoForSettings,
   dailyCredit: DailyCredit,
   viewerAccountId: string,
+  /**
+   * Les alertes du voyage **de qui lit** — chacun a les siennes (D13,
+   * 19/10/2026), `readTripNotificationPreferences`.
+   */
+  notifications: TripNotificationPreferences,
   /** Une étape au moins est écrite : un changement de cible compte (`services/pageTarget.ts`). */
   storyStarted = false,
   /** Ce que le carnet peut atteindre, ratio par ratio (`reachablePageRangeByRatio`). */
@@ -747,12 +759,14 @@ export function serializeTripSettings(
     startDate: iso(memo.startDate),
     endDate: iso(memo.endDate),
     narrationPace: memo.narrationPace,
-    wantsNotifications: memo.notificationsEnabled,
+    // Les noms d'avant, les valeurs de qui lit : l'app décode la même chose,
+    // et ce qu'elle montre n'est plus le réglage d'un autre.
+    wantsNotifications: notifications.notificationsEnabled,
     notifications: {
-      writingReminder: memo.notifyWritingReminder,
-      newStory: memo.notifyNewStory,
-      weeklyDigest: memo.notifyWeeklyDigest,
-      tripEndReminder: memo.notifyTripEnd,
+      writingReminder: notifications.notifyWritingReminder,
+      newStory: notifications.notifyNewStory,
+      weeklyDigest: notifications.notifyWeeklyDigest,
+      tripEndReminder: notifications.notifyTripEnd,
     },
     // Le propriétaire **d'abord**, puis les invités dans l'ordre où ils ont été
     // conviés. C'est l'ordre de la feuille, et il n'est pas décoratif : la

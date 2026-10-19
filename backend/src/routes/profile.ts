@@ -5,6 +5,7 @@ import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { connectorByKey } from "../services/connectorCatalog.js";
 import { findShippingCountry } from "../services/shippingCountries.js";
+import { accountNotificationColumns } from "../services/notificationPreferences.js";
 import { linkDeviceToAccount, visibleToAccount } from "../services/memoOwnership.js";
 import { hashDeviceToken, hashSessionToken, parseBearerToken } from "../lib/auth.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
@@ -92,6 +93,20 @@ const updateBody = z.object({
   // « je ne préfère pas répondre » est une réponse, pas une absence.
   gender: z.enum(["female", "male", "undisclosed"]).optional(),
   wantsNewsletter: z.boolean().optional(),
+  /**
+   * Les notifications du compte, d'un bloc — la feuille « Notifications » du
+   * profil (D13, 19/10/2026). Même construction que celles d'un voyage
+   * (`PATCH /v1/trips/:id/settings`) : quatre bascules d'une même feuille, une
+   * requête.
+   */
+  notifications: z
+    .object({
+      renewalReminder: z.boolean(),
+      schoolHolidays: z.boolean(),
+      learnedPeriod: z.boolean(),
+      birthday: z.boolean(),
+    })
+    .optional(),
   address: z
     .object({
       street: nullableText(200),
@@ -301,6 +316,7 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
         ...(body.wantsNewsletter !== undefined
           ? { wantsNewsletter: body.wantsNewsletter }
           : {}),
+        ...(body.notifications ? accountNotificationColumns(body.notifications) : {}),
         ...(body.address
           ? {
               addressLine1: orNull(body.address.street),
