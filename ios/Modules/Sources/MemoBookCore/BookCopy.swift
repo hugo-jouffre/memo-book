@@ -157,7 +157,7 @@ public enum BookCopy {
 
         public static let quizTitle = "Quiz intégrés à l’histoire"
         public static let quizDetail =
-            "MemoBook génère des mini quiz au fur et à mesure du récit. Découvre-les et répond lors de la réception de ton carnet."
+            "MemoBook génère des mini quiz au fur et à mesure du récit. Découvre-les et réponds lors de la réception de ton carnet."
 
         public static let freeZonesTitle = "Zones libres"
         public static let freeZonesDetail =

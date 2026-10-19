@@ -107,6 +107,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 | T133 | La feuille d'ajout de carte s'ouvre **par-dessus** (paywall, profil, commande) : trois écarts à « une feuille ne s'empile pas ». Si Clara les accepte, la règle devient « une feuille ne s'empile que pour aller voir et revenir » | Paiement |
 | T204 | L'e-mail de réinitialisation arrive en indésirables : SPF, DKIM, DMARC et le sous-domaine `tx.memo-book.com` à poser chez Resend et au registrar (ex-T145). Même domaine, même sort pour l'e-mail « Tes données MemoBook sont prêtes » (01/10/2026) | Entrée — mot de passe oublié, Profil — export |
 | T254 | Les conditions d'utilisation et la politique de confidentialité de l'app sont à republier **à l'identique** sur memobook.fr (reste de T247) | Site |
+| T257 | **Rappel pour Hugo : republier sur memobook.fr les CGU et la confidentialité du lot 14** (19/10/2026). CGU, chapitre « Abonnement » : « Quand votre dernier voyage en cours se termine, MemoBook vous rappelle que vous pouvez résilier votre abonnement » (D4). Confidentialité : même rappel au § 2.4 (ex-2.5), l'ancien § 2.1 « Formulaire bêta-testeur » retiré (les suivants glissent d'un rang) et « Stripe Payments Europe Ltd. (paiement des carnets imprimés) » ajouté aux destinataires (D6). Le texte à copier est celui de `TermsOfUse.swift` et `PrivacyPolicy.swift` | Site |
 
 ### En pause — v2
 

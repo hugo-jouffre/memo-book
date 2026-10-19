@@ -10,9 +10,14 @@ import Foundation
 //   - le chapitre 9 se terminait par un point-virgule (T153).
 //
 // Deux sections ajoutées le 03/10/2026 (Hugo), avec l'abonnement mensuel et
-// le crédit du jour : les données d'achat reçues de l'App Store (2.5) et le
-// compteur d'usage quotidien par voyage (2.6), plus Apple parmi les
-// destinataires. Le reste décrit toujours le site (T203). ⚠️ **C'est le site
+// le crédit du jour : les données d'achat reçues de l'App Store (2.4) et le
+// compteur d'usage quotidien par voyage (2.5), plus Apple parmi les
+// destinataires.
+//
+// Le 19/10/2026 (Hugo, D6) : l'ancien § 2.1, le formulaire bêta-testeur qui
+// promettait « votre premier carnet gratuit », est retiré — les suivants ont
+// glissé d'un rang —, et Stripe, qui encaisse les carnets imprimés, rejoint
+// les destinataires. Le reste décrit toujours le site (T203). ⚠️ **C'est le site
 // qui fait foi** : memobook.fr doit publier les mêmes ajouts.
 
 public enum PrivacyPolicy {
@@ -53,15 +58,7 @@ public enum PrivacyPolicy {
         number: 2,
         title: "Données collectées et finalités",
         blocks: [
-            .heading("2.1 Formulaire bêta-testeur (inscription via numéro WhatsApp)"),
-            .lines([
-                "**Données collectées :** numéro de téléphone",
-                "**Finalité :** vous contacter sur WhatsApp pour vous expliquer le fonctionnement du service bêta et vous remettre votre premier carnet gratuit",
-                "**Base légale :** consentement (article 6.1.a du RGPD) — vous soumettez volontairement votre numéro via le formulaire",
-                "**Durée de conservation :** jusqu’à la fin de la phase bêta ou jusqu’à votre demande de suppression, et au maximum 3 ans après le dernier contact",
-            ]),
-
-            .heading("2.2 Données de navigation et de mesure d’audience"),
+            .heading("2.1 Données de navigation et de mesure d’audience"),
             .lines([
                 "**Données collectées :** adresse IP anonymisée, pages visitées, durée de visite, type d’appareil et de navigateur, provenance (via cookies Google Analytics et Hotjar)",
                 "**Finalité :** analyser l’utilisation du site pour améliorer l’expérience utilisateur",
@@ -69,7 +66,7 @@ public enum PrivacyPolicy {
                 "**Durée de conservation :** 13 mois maximum (Google Analytics) / 1 an (Hotjar)",
             ]),
 
-            .heading("2.3 Données publicitaires"),
+            .heading("2.2 Données publicitaires"),
             .lines([
                 "**Données collectées :** données comportementales de navigation transmises à Meta via le Meta Pixel (pages visitées, actions effectuées), permettant de mesurer l’efficacité de nos publicités Facebook et Instagram",
                 "**Finalité :** mesure des campagnes publicitaires et reciblage publicitaire",
@@ -77,7 +74,7 @@ public enum PrivacyPolicy {
                 "**Durée de conservation :** jusqu’à 90 jours chez Meta",
             ]),
 
-            .heading("2.4 Données techniques (Webflow)"),
+            .heading("2.3 Données techniques (Webflow)"),
             .lines([
                 "**Données collectées :** cookies techniques de session nécessaires au bon fonctionnement du site",
                 "**Finalité :** assurer le fonctionnement et la sécurité du site",
@@ -85,15 +82,15 @@ public enum PrivacyPolicy {
                 "**Durée de conservation :** durée de la session de navigation",
             ]),
 
-            .heading("2.5 Abonnement souscrit dans l’application (App Store)"),
+            .heading("2.4 Abonnement souscrit dans l’application (App Store)"),
             .lines([
                 "**Données collectées :** identifiants de transaction App Store (achat d’origine et renouvellements), abonnement souscrit, statut de l’abonnement, dates d’achat, de renouvellement et de fin de période. Aucune donnée bancaire : le paiement est traité par Apple, qui ne nous transmet ni vos moyens de paiement ni vos coordonnées bancaires",
-                "**Finalité :** ouvrir et maintenir l’accès illimité, l’honorer jusqu’à la fin de la période payée après une résiliation, vous rappeler à la fin d’un voyage que vous pouvez résilier, et répondre à vos demandes d’assistance",
+                "**Finalité :** ouvrir et maintenir l’accès illimité, l’honorer jusqu’à la fin de la période payée après une résiliation, vous rappeler que vous pouvez résilier quand votre dernier voyage en cours se termine, et répondre à vos demandes d’assistance",
                 "**Base légale :** exécution du contrat (article 6.1.b du RGPD)",
                 "**Durée de conservation :** tant que votre compte existe ; ces données sont supprimées avec lui",
             ]),
 
-            .heading("2.6 Compteur d’usage quotidien (crédit du jour)"),
+            .heading("2.5 Compteur d’usage quotidien (crédit du jour)"),
             .lines([
                 "**Données collectées :** pour chaque voyage et chaque jour, la durée cumulée des enregistrements vocaux et le nombre de caractères des textes envoyés, ainsi que le fuseau horaire de votre téléphone, qui fixe l’heure de minuit",
                 "**Finalité :** appliquer la limite d’utilisation gratuite (le crédit du jour de 5 minutes par voyage) et vous indiquer ce qu’il reste",
@@ -115,13 +112,15 @@ public enum PrivacyPolicy {
             // message : Hotjar Ltd, l'éditeur de Hotjar, que le ticket citait.
             //
             // Apple ajoutée le 03/10/2026 : c'est l'App Store qui encaisse
-            // l'abonnement et nous en transmet l'état (2.5).
+            // l'abonnement et nous en transmet l'état (2.4). Stripe le
+            // 19/10/2026 (D6) : c'est lui qui encaisse un carnet commandé.
             .bullets([
                 "Webflow Inc.",
                 "Google LLC (Analytics)",
                 "Hotjar Ltd",
                 "Meta Platforms Inc.",
                 "Apple Distribution International Ltd. (App Store, paiement de l’abonnement)",
+                "Stripe Payments Europe Ltd. (paiement des carnets imprimés)",
             ]),
             .paragraph("Aucune de vos données n’est vendue à des tiers. Aucune donnée n’est partagée à des fins commerciales sans votre consentement explicite."),
         ]

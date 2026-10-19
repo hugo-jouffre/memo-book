@@ -608,7 +608,7 @@ enum PaywallCopy {
     static let detailsTitleLead = "Les détails s’effacent "
     static let detailsTitleStrong = "en quelques jours"
     static let detailsBody = [
-        "Le nom de ce petit resto, la phrase du guide qui vous a fait rire, l’odeur du marché le matin...",
+        "Le nom de ce petit resto, la phrase du guide qui t’a fait rire, l’odeur du marché le matin...",
         "En illimité, tu racontes tout au moment où tu le vis, sans regarder le chrono.",
     ]
     static let previewPill = "Voir un aperçu →"
@@ -618,7 +618,7 @@ enum PaywallCopy {
     static let detailsFootnote = [
         "Gratuit : 5 minutes par jour et par voyage, à l’oral comme à l’écrit.",
         "—",
-        "Illimité : raconte autant que tu veux, aussi longtemps que ton voyage dure.",
+        "Illimité : raconte autant que tu veux, sur tous tes voyages.",
     ]
 
     // — La version « retour », premier écran
@@ -641,32 +641,39 @@ enum PaywallCopy {
     static let offerTitleLead = "Ce carnet que tu relieras encore "
     static let offerTitleStrong = "dans 30 ans"
 
-    /// Le pied de l'offre, en deux lignes : la première en deux morceaux,
-    /// parce que **le prix se lit en gras** (Hugo, 19/09/2026) — c'est le seul
-    /// chiffre de l'écran.
+    /// Le pied de l'offre : le nom de l'abonnement, son prix et sa période en
+    /// gras — **le prix se lit en gras** (Hugo, 19/09/2026), c'est le seul
+    /// chiffre de l'écran —, puis en petit ce qu'Apple veut lire sur l'écran
+    /// même (règle 3.1.2) : qui prélève, le renouvellement, la résiliation 24 h
+    /// avant la fin de la période, et où elle se fait (Hugo, 19/10/2026, D1).
     ///
-    /// **La période vient du produit** (03/10/2026) : « /mois » se lit sur
+    /// **La période vient du produit** (03/10/2026) : « mois » se lit sur
     /// l'App Store (`subscriptionPeriod`), et le mois de l'offre n'est que le
     /// repli. L'abonnement a été hebdomadaire ; un pied écrit à la main a déjà
-    /// annoncé une autre durée que la feuille d'Apple (17/09/2026).
+    /// annoncé une autre durée que la feuille d'Apple (17/09/2026). Le prix,
+    /// lui, est celui de la vitrine : 3,99 $US sur un compte de test américain.
     ///
-    /// **La seconde ligne ne promet pas d'arrêt automatique** (01/10/2026).
-    /// Apple ne laisse aucune app résilier à la place de son client : elle dit
-    /// ce qui est vrai — on résilie quand on veut, et on reçoit un rappel au
-    /// retour.
+    /// **Pas d'arrêt automatique promis** (01/10/2026) : Apple ne laisse
+    /// aucune app résilier à la place de son client. Le rappel part quand le
+    /// dernier voyage en cours se termine, pas à la fin de chacun (D4).
     ///
-    /// **« 4,99 €/mois » ne se coupe pas** (recette du 03/10/2026) : la barre
-    /// oblique laisse passer à la ligne après elle, et l'espace du prix aussi
-    /// quand StoreKit ou le repli en mettent une ordinaire. On lisait
-    /// « 4,99 €/ » puis « mois » sur la ligne suivante. Espaces insécables, et
-    /// un gluon de mot (U+2060) de part et d'autre de la barre.
-    static func offerFootnotePrice(price: String, period: String) -> (lead: String, price: String) {
-        let glued = "\(price)\u{2060}/\u{2060}\(period)"
+    /// **« 4,99 € par mois » ne se coupe pas** (recette du 03/10/2026) : on
+    /// lisait le prix sur une ligne et sa période sur la suivante. Espaces
+    /// insécables.
+    static func offerFootnotePrice(price: String, period: String) -> (lead: String, price: String, trail: String) {
+        let glued = "\(price) par \(period)"
             .replacingOccurrences(of: " ", with: "\u{00A0}")
-        return ("Renouvellement automatique pour ", glued)
+        return ("MemoBook illimité pour ", glued, ".")
     }
 
-    static let offerFootnoteDetail = "résiliable à tout moment, rappel à la fin du voyage"
+    static let offerFootnoteDetail =
+        "Payé par ton compte Apple, renouvelé automatiquement chaque mois sauf résiliation au moins 24 h avant la fin de la période, dans Réglages › ton nom › Abonnements. On te rappelle de résilier quand ton dernier voyage en cours se termine."
+
+    /// La phrase des conditions, à la période du produit : « chaque mois » ne
+    /// vaut que pour un abonnement mensuel.
+    static func offerFootnoteDetail(period: String) -> String {
+        offerFootnoteDetail.replacingOccurrences(of: "chaque mois", with: "chaque \(period)")
+    }
 
     /// Le bouton de l'offre nomme le geste — Hugo, 15/09/2026. « Choisis ton
     /// mode de paiement » ouvrait une feuille de cartes ; c'est désormais la
@@ -706,7 +713,7 @@ enum PaywallCopy {
             icon: "IconPictureFrame",
             title: "Vocaux et textes illimités",
             detail:
-                "Raconte autant que tu veux : tout est mis en page automatiquement, tout au long de ton voyage",
+                "Raconte autant que tu veux : tout est mis en page automatiquement, sur tous tes voyages",
             tilt: -1
         ),
         Argument(
@@ -715,7 +722,10 @@ enum PaywallCopy {
             // et la pile de cartes perdait son unité.
             icon: "IconPrinterFilled",
             title: "Vite fait, bien fait !",
-            detail: "Ton carnet est imprimé et livré chez toi quelques jours après ton retour !",
+            // **L'impression se paie à part** (Hugo, 19/10/2026, D2) : posée entre
+            // les deux avantages de l'abonnement, l'ancienne phrase laissait
+            // croire le carnet compris dedans.
+            detail: "Quand tu veux, ton carnet s’imprime et arrive chez toi — il se commande à part de l’abonnement.",
             tilt: 1.4
         ),
         Argument(
@@ -726,7 +736,7 @@ enum PaywallCopy {
             // jusqu'au bout du mois payé.
             title: "On te rappelle de résilier",
             detail:
-                "À la fin de ton voyage, tu coupes l’abonnement en un geste, et l’illimité reste ouvert jusqu’au bout du mois payé",
+                "Quand ton dernier voyage en cours se termine, tu coupes l’abonnement en un geste, et l’illimité reste ouvert jusqu’au bout du mois payé",
             tilt: -1
         ),
     ]

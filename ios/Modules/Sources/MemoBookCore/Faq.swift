@@ -373,7 +373,7 @@ public enum Faq {
                     "Tes enregistrements et tes photos sont conservés sur ton téléphone et se synchronisent dès que la connexion revient.",
                     "Tu peux donc continuer à raconter en avion, en montagne ou sans forfait local.",
                     "Si le crédit du jour est épuisé quand ils partent, ils attendent sur ton téléphone, marqués « Partira demain », et repartent tout seuls après minuit, dès que tu rouvres l’app.",
-                    "Un vocal plus long que {{credit_jour}} ne tient dans aucune journée : il attend que tu passes en illimité, ou tu le supprimes depuis sa bulle.",
+                    "Un enregistrement plus long que le crédit d’une journée attend, lui, que tu passes en illimité — ou tu le supprimes depuis sa bulle.",
                 ]
             ),
             FaqEntry(
@@ -739,7 +739,8 @@ public enum Faq {
                     "Il coûte {{prix_abo_mensuel}} par mois et rend ton récit illimité, à l’oral comme à l’écrit, sur tous tes voyages.",
                     "Il est personnel : ce que tu racontes ne prend plus rien au crédit du jour, et tes co-voyageurs qui ne sont pas abonnés continuent de partager le leur.",
                     "Il se renouvelle chaque mois par ton identifiant Apple. Tu le résilies quand tu veux dans les réglages de ton iPhone, et l’illimité reste ouvert jusqu’à la fin du mois déjà payé.",
-                    "À la fin de ton voyage, on te rappelle que tu peux le résilier en un geste.",
+                    "Quand ton dernier voyage en cours se termine, on te rappelle que tu peux le résilier en un geste.",
+                    "Un mois commencé est dû ; pour un remboursement, c’est Apple qui décide, depuis reportaproblem.apple.com.",
                 ]
             ),
             FaqEntry(
