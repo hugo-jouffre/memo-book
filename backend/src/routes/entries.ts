@@ -6,7 +6,9 @@ import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { lockThread } from "../services/conversationThread.js";
 import {
+  CORRECTION_FREE_CHARACTERS,
   chargeDailyCredit,
+  correctionCharacters,
   countCharacters,
   exceedsDailyCredit,
   loadSpeaker,
@@ -16,6 +18,7 @@ import {
   withDailyCredit,
 } from "../services/dailyCredit.js";
 import { finalTextOf } from "../jobs/redact.js";
+import { deleteEntryAndMedia } from "../services/deletion.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { loadVisibleMemo } from "./memos.js";
@@ -235,11 +238,20 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
    * proposée » est un simple `null`. À partir de là, la mise en page reprend
    * la correction au mot près.
    *
-   * **Ce qu'une correction ajoute se décompte** du crédit du jour (Hugo,
-   * 03/10/2026) : `max(0, nouveau − ancien)` caractères, l'ancien étant le
-   * texte que la fiche montrait. Corriger, raccourcir, revenir à la version
-   * proposée ne coûtent rien ; récrire un récit deux fois plus long au clavier,
-   * si — sinon le clavier contournerait les 5 minutes.
+   * **Ce qu'une correction modifie se mesure** (Hugo, 19/10/2026, QA D8) :
+   * les caractères du nouveau texte qui n'étaient pas dans celui que la fiche
+   * montrait (`correctionCharacters`) — un nom propre corrigé, un mot
+   * remplacé, une phrase retournée. Raccourcir et revenir à la version
+   * proposée ne coûtent rien.
+   *
+   * **Les 200 premiers sont offerts**, par fiche et cumulés
+   * (`CORRECTION_FREE_CHARACTERS`, `entries.correctionFreeCharacters`) : pot
+   * vide, on corrige encore la fiche que le dernier vocal vient de remplir.
+   * Au-delà, la correction paie comme un texte (75 ms par caractère) ; pot
+   * vide, elle est refusée en entier — « au-delà de 200 caractères modifiés,
+   * la correction passe par l’illimité ». Sinon le clavier contournerait les
+   * 5 minutes. Un abonné ne compte rien, et n'entame pas les 200 de ses
+   * co-voyageurs.
    */
   app.patch("/v1/entries/:id", async (request) => {
     const { id } = entryIdParams.parse(request.params);
@@ -277,13 +289,18 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
         // paient plus chacune contre le même ancien texte. La seconde ne paie
         // que ce qu'elle ajoute à la première — rien, si c'est la même.
         const current = hasNewText ? await tx.entry.findUniqueOrThrow({ where: { id } }) : null;
-        const growth = current
-          ? Math.max(0, countCharacters(body.editedText ?? "") - countCharacters(finalTextOf(current) ?? ""))
-          : 0;
+        const changed = current ? correctionCharacters(finalTextOf(current) ?? "", body.editedText ?? "") : 0;
+        // Les 200 offerts d'abord — jamais à un abonné, qui ne compte rien.
+        const offered =
+          current && speaker && !speaker.isUnlimited
+            ? Math.min(changed, Math.max(0, CORRECTION_FREE_CHARACTERS - current.correctionFreeCharacters))
+            : 0;
+        const paid = changed - offered;
         const saved = await tx.entry.update({
           where: { id },
           data: {
             ...(hasNewText ? { editedText: body.editedText, editedAt: now } : {}),
+            ...(offered > 0 ? { correctionFreeCharacters: { increment: offered } } : {}),
             ...(clearsEdit ? { editedText: null, editedAt: null } : {}),
             ...(body.placeLabel !== undefined ? { placeLabel: body.placeLabel } : {}),
             ...(body.suggestedTitle !== undefined ? { suggestedTitle: body.suggestedTitle } : {}),
@@ -291,11 +308,11 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
           },
           include: { media: true },
         });
-        if (speaker && growth > 0) {
+        if (speaker && paid > 0) {
           await chargeDailyCredit(tx, {
             memoId: entry.memoId,
             ...speaker,
-            charge: { kind: "text", characters: growth, correction: true },
+            charge: { kind: "text", characters: paid, correction: true },
             now,
           });
         }
@@ -369,7 +386,10 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
 
     if (!entry) throw HttpError.notFound("Entrée introuvable.");
 
-    await context.prisma.entry.delete({ where: { id } });
+    // Le souvenir **et son fichier** — le vocal, la photo (QA D12) : la ligne
+    // du média dans la transaction, le fichier après elle, sans faire
+    // échouer la suppression (`services/deletion.ts`).
+    await deleteEntryAndMedia(context, id);
     // Les chiffres du voyage reculent, et une étape vidée de son dernier
     // souvenir disparaît (T235, T227) — avant la réponse : l'app relit le
     // voyage aussitôt après la croix.

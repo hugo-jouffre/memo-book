@@ -475,4 +475,37 @@ final class DailyCreditTests: XCTestCase {
             XCTAssertFalse(text.localizedCaseInsensitiveContains("token"), text)
         }
     }
+
+    // MARK: - Les corrections offertes (QA D8, 19/10/2026)
+
+    /// Les mêmes cas que le serveur (`test/dailyCredit.test.ts`) : les deux
+    /// côtés doivent tomber sur le même nombre.
+    func testCorrectionMeasuresWhatChangedLikeTheServer() {
+        XCTAssertEqual(CorrectionMeasure.changedCharacters(from: "On a vu Famine.", to: "On a vu Fanny."), 3)
+        XCTAssertEqual(CorrectionMeasure.changedCharacters(from: "Le chat dort.", to: "Le chien dort."), 3)
+        XCTAssertEqual(CorrectionMeasure.changedCharacters(from: "Une phrase de trop. La suite.", to: "La suite."), 0)
+        let middle = String(repeating: " au milieu", count: 200)
+        XCTAssertEqual(
+            CorrectionMeasure.changedCharacters(from: "Famine\(middle) Rome", to: "Fanny\(middle) Roma"), 3 + 4)
+        XCTAssertEqual(CorrectionMeasure.changedCharacters(from: "", to: "Écrit 🙂"), "Écrit 🙂".unicodeScalars.count)
+    }
+
+    func testCorrectionIsFreeWithinWhatTheCardStillOffers() {
+        let empty = credit(remaining: 0)
+        let original = "Nous avons dîné avec Famine."
+        let fixed = "Nous avons dîné avec Fanny."
+        XCTAssertEqual(empty.cost(ofCorrection: fixed, replacing: original, freeLeft: 200), 0)
+        // Plus rien d'offert : chaque caractère modifié paie, comme un texte.
+        XCTAssertEqual(empty.cost(ofCorrection: fixed, replacing: original, freeLeft: 0), 3 * 75)
+        // Un serveur d'avant ne dit rien : les 200 du barème.
+        XCTAssertEqual(empty.cost(ofCorrection: fixed, replacing: original, freeLeft: nil), 0)
+        XCTAssertEqual(
+            credit(remaining: 0, isUnlimited: true).cost(ofCorrection: fixed, replacing: "", freeLeft: 0), 0)
+    }
+
+    func testTheRefusalBeyondTheFreeCharactersSaysWhatTheServerSays() {
+        XCTAssertEqual(
+            DailyCreditCopy.correctionBeyondFree,
+            "Au-delà de 200 caractères modifiés, la correction passe par l’illimité.")
+    }
 }

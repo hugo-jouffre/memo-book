@@ -496,14 +496,31 @@ public final class ChatModel {
     public var isCreditExhausted: Bool { credit?.isExhausted == true }
 
     /// Ce que le brouillon coûterait au crédit : ses caractères, ou — pour
-    /// une fiche corrigée « à la main » — ce que la correction ajoute.
+    /// une fiche corrigée « à la main » — ce que la correction modifie
+    /// au-delà des 200 caractères offerts à la fiche (Hugo, 19/10/2026, QA
+    /// D8 ; ``DailyCredit/cost(ofCorrection:replacing:freeLeft:)``).
     private var draftCost: Int {
         guard let credit else { return 0 }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let original = editingOriginalText else { return credit.cost(ofText: text) }
-        let growth = max(0, text.unicodeScalars.count - original.unicodeScalars.count)
-        return growth * credit.textMsPerCharacter
+        return credit.cost(ofCorrection: text, replacing: original, freeLeft: editingFreeCharactersLeft)
     }
+
+    /// Ce qui reste des 200 caractères offerts à la fiche qu'on corrige — lu
+    /// sur sa fiche dans le fil, que le serveur redessine à chaque lecture.
+    private var editingFreeCharactersLeft: Int? {
+        guard let editingEntryId else { return nil }
+        for message in messages {
+            if case .transcript(let card) = message.body, card.entryId == editingEntryId {
+                return card.freeCorrectionCharactersLeft
+            }
+        }
+        return nil
+    }
+
+    /// On corrige une fiche « à la main » : pot vide, le champ ne pâlit pas —
+    /// les 200 caractères offerts par fiche passent encore (QA D8).
+    public var isWritingCorrection: Bool { isEditingTranscript && editingOriginalText != nil }
 
     /// Le brouillon dépasse ce qu'il reste aujourd'hui : l'envoi pâlit, et une
     /// boîte d'information dit combien de caractères il reste. Le serveur le
@@ -519,7 +536,13 @@ public final class ChatModel {
     /// combien de caractères cela fait. `nil` le reste du temps, et toujours
     /// pour un abonné.
     public var creditTextNotice: ChatCreditTextNotice? {
-        guard composer == .writing, let credit, !credit.isUnlimited, !credit.isExhausted else { return nil }
+        guard composer == .writing, let credit, !credit.isUnlimited else { return nil }
+        // Pot vide, une correction au-delà des 200 offerts attend l'illimité :
+        // la même phrase que le refus du serveur.
+        if credit.isExhausted, isWritingCorrection, draftExceedsCredit {
+            return .tooLong(DailyCreditCopy.correctionBeyondFree)
+        }
+        guard !credit.isExhausted else { return nil }
         if draftExceedsCredit {
             return .tooLong(DailyCreditCopy.textTooLong(charactersLeft: credit.charactersLeft))
         }
@@ -1223,8 +1246,9 @@ public final class ChatModel {
                 let entry = try await transport.editTranscript(entryId, text)
                 try Task.checkCancellation()
                 refreshCard(for: entry)
-                // Ce que la correction ajoute se paie, comme un texte — et le
-                // serveur l'a déjà compté : c'est son chiffre, pas une attente.
+                // Ce que la correction modifie au-delà des 200 offerts se
+                // paie, comme un texte — et le serveur l'a déjà compté : c'est
+                // son chiffre, pas une attente.
                 if growthCost > 0, let served = servedCredit {
                     setServerCredit(served.refreshed(now: .now).consuming(growthCost))
                 }
@@ -1266,7 +1290,9 @@ public final class ChatModel {
                     entryId: entry.id,
                     footnote: card.footnote,
                     phase: .ready,
-                    isValidated: entry.validatedAt != nil || card.isValidated
+                    isValidated: entry.validatedAt != nil || card.isValidated,
+                    freeCorrectionCharactersLeft: entry.freeCorrectionCharactersLeft
+                        ?? card.freeCorrectionCharactersLeft
                 )
             )
         }

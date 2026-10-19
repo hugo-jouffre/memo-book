@@ -8,6 +8,7 @@ import { accountIdOf } from "../plugins/auth.js";
 import { publicApiBaseUrl } from "../services/avatars.js";
 import {
   chargeDailyCredit,
+  recordVoiceCharge,
   countCharacters,
   exceedsDailyCredit,
   holdsRefusedTurns,
@@ -731,6 +732,8 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
           const charged =
             charge && speaker ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now }) : null;
           if (charged?.notice) ids.push(charged.notice.id);
+          // Ce que ce vocal a pris : rendu s'il se révèle muet (QA D9).
+          if (charged) await recordVoiceCharge(tx, message, charged.charged);
           return { ids, credit: charged?.credit ?? null };
         }),
       );
@@ -831,6 +834,8 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         const charged =
           charge && speaker ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now }) : null;
         if (charged?.notice) ids.push(charged.notice.id);
+        // Ce que ce vocal a pris : rendu s'il se révèle muet (QA D9).
+        if (charged && isAudio) await recordVoiceCharge(tx, message, charged.charged);
         return { ids, credit: charged?.credit ?? null };
       }),
     );

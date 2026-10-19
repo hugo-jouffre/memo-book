@@ -472,6 +472,18 @@ dans `src/services/dailyCredit.ts` et **voyagent avec le solde** jusqu'à l'app
   l'abonnement.
 - **Gratuit** : une puce envoyée telle quelle, une commande silencieuse, les
   photos. Le contexte du voyage et les précisions comptent comme le reste.
+- **Corriger une fiche à la main** (19/10/2026, QA D8) : 200 caractères
+  modifiés offerts par fiche, cumulés (`entries.correctionFreeCharacters`),
+  pot vide compris ; au-delà, 75 ms par caractère modifié, et pot vide le
+  refus dit « Au-delà de 200 caractères modifiés, la correction passe par
+  l’illimité. ». Ce qui est « modifié » : les caractères du nouveau texte
+  absents de l'ancien, alignés mot à mot (`correctionCharacters`, mesuré de
+  même par l'app). Un abonné n'entame pas les 200 de la fiche.
+- **Un vocal muet** (19/10/2026, QA D9) : transcription vide, sa durée revient
+  au pot de la journée où elle avait été prise (`refundSilentVoice`, trace
+  `payload.dailyCharge` sur la bulle), et MEMO dit « Ce vocal était
+  silencieux, sa durée n’est pas déduite de tes 5 min d’enregistrement
+  gratuit par jour. »
 - **La bulle « reviens demain »** : quand le crédit tombe à zéro, MEMO pose une
   fois par voyage et par jour une bulle écrite par le code, avec l'appel à
   l'action « Raconter sans limite » vers le paywall. Un abonné ne la voit pas.

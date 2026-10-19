@@ -313,7 +313,8 @@ co-voyageurs qui ne sont pas abonnés. **Un seul crédit** pour l'oral et l'écr
 |---|---|
 | Un vocal — chat, accueil, contexte du voyage compris | Sa durée, **mesurée par le serveur** dans le fichier (jamais celle que l'app déclare) |
 | Un texte libre — récit, précision, contexte du voyage | 75 ms par caractère : **800 caractères = 1 minute**, 4 000 = 5 minutes |
-| Un texte corrigé à la main | Ce qu'il gagne en longueur, seulement |
+| Un texte corrigé à la main | Rien jusqu'à **200 caractères modifiés par fiche**, cumulés — pot vide compris ; au-delà, chaque caractère modifié paie comme un texte, et pot vide la correction passe par l'illimité (Hugo, 19/10/2026, QA D8) |
+| Un vocal muet (transcription vide) | Rien : sa durée revient au pot, et MEMO le dit (Hugo, 19/10/2026, QA D9) |
 | Une puce envoyée telle quelle, une commande silencieuse, des photos | Rien |
 
 Le jour est celui de **qui raconte**, à son fuseau, et ne recule jamais ; le

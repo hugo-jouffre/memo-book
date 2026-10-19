@@ -151,6 +151,11 @@ public struct TranscriptCard: Sendable, Hashable {
     /// « Ça me convient » a été dit sur ce souvenir.
     public let isValidated: Bool
 
+    /// Ce qui reste des 200 caractères de correction offerts à cette fiche
+    /// (Hugo, 19/10/2026, QA D8) — ``DailyCredit/cost(ofCorrection:replacing:freeLeft:)``.
+    /// `nil` : un serveur d'avant, ou une fiche du jeu d'essai.
+    public let freeCorrectionCharactersLeft: Int?
+
     public init(
         title: String,
         heading: String? = nil,
@@ -162,7 +167,8 @@ public struct TranscriptCard: Sendable, Hashable {
         entryId: String? = nil,
         footnote: String? = nil,
         phase: Phase = .ready,
-        isValidated: Bool = false
+        isValidated: Bool = false,
+        freeCorrectionCharactersLeft: Int? = nil
     ) {
         self.title = title
         self.heading = heading
@@ -175,6 +181,7 @@ public struct TranscriptCard: Sendable, Hashable {
         self.footnote = footnote
         self.phase = phase
         self.isValidated = isValidated
+        self.freeCorrectionCharactersLeft = freeCorrectionCharactersLeft
     }
 
     /// La même fiche, une fois le récit revenu.
@@ -190,7 +197,8 @@ public struct TranscriptCard: Sendable, Hashable {
             entryId: entryId,
             footnote: footnote,
             phase: .ready,
-            isValidated: isValidated
+            isValidated: isValidated,
+            freeCorrectionCharactersLeft: freeCorrectionCharactersLeft
         )
     }
 
@@ -207,7 +215,7 @@ public struct TranscriptCard: Sendable, Hashable {
 extension TranscriptCard: Codable {
     private enum CodingKeys: String, CodingKey {
         case title, heading, capturedAt, placeLabel, duration, text, isSimulated, entryId, footnote
-        case phase, isValidated
+        case phase, isValidated, freeCorrectionCharactersLeft
     }
 
     public init(from decoder: any Decoder) throws {
@@ -223,7 +231,9 @@ extension TranscriptCard: Codable {
             entryId: try container.decodeIfPresent(String.self, forKey: .entryId),
             footnote: try container.decodeIfPresent(String.self, forKey: .footnote),
             phase: try container.decodeIfPresent(Phase.self, forKey: .phase) ?? .ready,
-            isValidated: try container.decodeIfPresent(Bool.self, forKey: .isValidated) ?? false
+            isValidated: try container.decodeIfPresent(Bool.self, forKey: .isValidated) ?? false,
+            freeCorrectionCharactersLeft: try container.decodeIfPresent(
+                Int.self, forKey: .freeCorrectionCharactersLeft)
         )
     }
 
@@ -240,6 +250,7 @@ extension TranscriptCard: Codable {
         try container.encodeIfPresent(footnote, forKey: .footnote)
         try container.encode(phase, forKey: .phase)
         try container.encode(isValidated, forKey: .isValidated)
+        try container.encodeIfPresent(freeCorrectionCharactersLeft, forKey: .freeCorrectionCharactersLeft)
     }
 }
 

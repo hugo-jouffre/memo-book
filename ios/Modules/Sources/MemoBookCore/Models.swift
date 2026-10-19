@@ -145,6 +145,9 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
     public let error: String?
     public let media: MediaSummary?
     public let createdAt: Date
+    /// Ce qui reste des 200 caractères de correction offerts (QA D8,
+    /// 19/10/2026). `nil` pour un serveur d'avant.
+    public let freeCorrectionCharactersLeft: Int?
 
     /// `true` quand l'utilisateur a repris le texte à la main.
     public var isEdited: Bool { editedText != nil }
@@ -181,7 +184,8 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         placeLabel: String? = nil,
         error: String? = nil,
         media: MediaSummary? = nil,
-        createdAt: Date
+        createdAt: Date,
+        freeCorrectionCharactersLeft: Int? = nil
     ) {
         self.id = id
         self.memoId = memoId
@@ -204,6 +208,7 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         self.error = error
         self.media = media
         self.createdAt = createdAt
+        self.freeCorrectionCharactersLeft = freeCorrectionCharactersLeft
     }
 
     /// Décodage tolérant sur les champs de rédaction.
@@ -240,6 +245,7 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         error = try container.decodeIfPresent(String.self, forKey: .error)
         media = try container.decodeIfPresent(MediaSummary.self, forKey: .media)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
+        freeCorrectionCharactersLeft = try container.decodeIfPresent(Int.self, forKey: .freeCorrectionCharactersLeft)
 
         // Le serveur calcule `displayText` ; le repli local applique la même
         // hiérarchie pour que les deux ne puissent pas diverger.
