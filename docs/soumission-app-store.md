@@ -10,7 +10,7 @@ Le dernier envoi était le build 8, du 14/09/2026, rejeté le 15/09 en
 |---|---|
 | Compile en **Release** pour iPhone | ✅ vérifié le 19/10 (la CI ne compile qu'en Debug) |
 | Adresse de l'API embarquée | ✅ `https://api-production-9f35a.up.railway.app` |
-| Numéro de build | ✅ `CFBundleVersion` 9, dans `ios/project.yml` |
+| Numéro de build | ✅ `CFBundleVersion` 10, dans `ios/project.yml` |
 | Manifeste de confidentialité | ✅ `ios/App/PrivacyInfo.xcprivacy` (nouveau) : aucun suivi, données liées au compte pour le fonctionnement de l'app, UserDefaults (CA92.1) |
 | Chiffrement | ✅ `ITSAppUsesNonExemptEncryption: false` |
 | Textes des autorisations | ✅ micro, photothèque, appareil photo, dictée |
