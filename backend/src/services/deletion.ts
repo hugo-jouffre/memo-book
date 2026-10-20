@@ -194,6 +194,60 @@ export async function deleteAccountAndData(
   return report;
 }
 
+/**
+ * **Supprime un souvenir, et son fichier** (Hugo, 19/10/2026, QA D12) : le
+ * vocal ou la photo ne reste plus sur nos serveurs, rattaché à rien — c'est ce
+ * qu'on attend d'un « supprimer » au sens du RGPD.
+ *
+ * Les mêmes pièges que plus haut, à l'échelle d'un souvenir :
+ *
+ *  - la ligne `media_assets` part **dans la transaction** qui supprime le
+ *    souvenir (§ 2) — sauf si un autre souvenir pointe encore vers elle ;
+ *  - le fichier part **après** la validation (§ 3), sans faire échouer la
+ *    suppression : au pire un fichier survit à sa ligne, jamais l'inverse ;
+ *  - un fichier encore nommé par une autre ligne `media_assets` (un original
+ *    partagé) ne part pas.
+ *
+ * Rend `false` quand le souvenir n'existe plus.
+ */
+export async function deleteEntryAndMedia(
+  context: AppContext,
+  entryId: string,
+): Promise<{ deleted: boolean; mediaObjects: number }> {
+  const { prisma } = context;
+
+  const storageKeys = await prisma.$transaction(async (tx) => {
+    const entry = await tx.entry.findUnique({
+      where: { id: entryId },
+      select: { mediaId: true, media: { select: { storageKey: true, originalStorageKey: true } } },
+    });
+    if (!entry) return null;
+
+    await tx.entry.delete({ where: { id: entryId } });
+    if (!entry.mediaId || !entry.media) return [];
+
+    // Un autre souvenir sur le même média le garde, ligne et fichier.
+    const sharers = await tx.entry.count({ where: { mediaId: entry.mediaId } });
+    if (sharers > 0) return [];
+    await tx.mediaAsset.delete({ where: { id: entry.mediaId } });
+
+    const keys = [entry.media.storageKey, entry.media.originalStorageKey].filter(
+      (key): key is string => Boolean(key),
+    );
+    // Une clé qu'une autre ligne nomme encore reste en stockage.
+    const stillNamed = await tx.mediaAsset.findMany({
+      where: { OR: [{ storageKey: { in: keys } }, { originalStorageKey: { in: keys } }] },
+      select: { storageKey: true, originalStorageKey: true },
+    });
+    const named = new Set(stillNamed.flatMap((asset) => [asset.storageKey, asset.originalStorageKey]));
+    return [...new Set(keys)].filter((key) => !named.has(key));
+  });
+
+  if (storageKeys === null) return { deleted: false, mediaObjects: 0 };
+  await removeObjects(context, storageKeys, { entryId });
+  return { deleted: true, mediaObjects: storageKeys.length };
+}
+
 /** Supprime un carnet, ses souvenirs, ses médias et ses commandes. */
 export async function deleteMemoAndData(
   context: AppContext,

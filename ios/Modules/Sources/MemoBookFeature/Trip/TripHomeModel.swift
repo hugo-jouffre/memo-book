@@ -1,5 +1,6 @@
 import Foundation
 import MemoBookCore
+import MemoBookNetworking
 import Observation
 
 /// Ce que l'accueil d'un voyage sait faire : charger son contenu, et filtrer
@@ -26,6 +27,11 @@ public final class TripHomeModel {
 
     /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
     private let cached: CachedValue<TripDetail>?
+
+    /// Ce que la carte de l'accueil sait du voyage — titre, dates, photo —,
+    /// pour l'ouvrir hors ligne quand il n'a **jamais** été ouvert ici (D11,
+    /// Hugo, 19/10/2026). `nil` en aperçu.
+    private let homeCard: CachedValue<Trip>?
 
     /// Ce que le dernier chargement a appris. C'est lui que la vue anime —
     /// voir ``SwiftUI/View/brandRefreshFlash(_:)``.
@@ -55,12 +61,14 @@ public final class TripHomeModel {
         tripId: String,
         source: @escaping (String) async throws -> TripDetail = { .fixture(id: $0) },
         cached: CachedValue<TripDetail>? = nil,
+        homeCard: CachedValue<Trip>? = nil,
         validateStep: ((String, String) async throws -> TripDetail)? = nil,
         deleteEntry: ((String) async throws -> Void)? = nil
     ) {
         self.tripId = tripId
         self.source = source
         self.cached = cached
+        self.homeCard = homeCard
         self.validateStepRemotely = validateStep
         self.deleteEntry = deleteEntry
     }
@@ -87,6 +95,18 @@ public final class TripHomeModel {
             // page et on pose le bandeau. C'est la même règle que l'accueil
             // hors ligne.
             errorMessage = error.localizedDescription
+
+            // Rien sur le disque, et pas de réseau : un voyage rejoint
+            // ailleurs, ou une installation neuve. L'écran s'ouvrait sur un
+            // squelette et son bandeau, sans chemin vers la conversation — qui,
+            // elle, s'ouvre hors ligne. On le dessine d'après la carte de
+            // l'accueil, sans étapes, **sous** le bandeau : la page ne prétend
+            // pas être à jour (D11). Une réponse du serveur — un 404, un 500 —
+            // n'est pas une panne : elle garde son écran d'erreur.
+            if detail == nil, (error as? APIError)?.isTransport == true, let card = await homeCard?() {
+                detail = TripDetail(trip: card)
+                freshness = .restored
+            }
         }
     }
 

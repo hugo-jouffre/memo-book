@@ -137,7 +137,7 @@ public enum TermsOfUse {
                 "L’abonnement se renouvelle automatiquement chaque mois, au même prix, sauf résiliation au moins 24 heures avant la fin de la période en cours.",
                 "Vous pouvez gérer et résilier votre abonnement à tout moment dans les réglages de votre compte Apple (Réglages de l’iPhone, votre nom, puis Abonnements).",
                 "La résiliation prend effet à la fin de la période déjà payée : l’accès illimité reste ouvert jusqu’à cette date, puis le service revient à l’utilisation gratuite décrite au chapitre 4. Vos carnets et vos contenus sont conservés.",
-                "À la fin de chaque voyage, MemoBook vous rappelle que vous pouvez résilier votre abonnement.",
+                "Quand votre dernier voyage en cours se termine, MemoBook vous rappelle que vous pouvez résilier votre abonnement.",
             ]),
 
             .heading("Remboursement"),

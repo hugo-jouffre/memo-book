@@ -601,14 +601,17 @@ struct PaywallOffer: View {
             VStack(spacing: MemoBookSpacing.xs / 2) {
                 let renewal = PaywallCopy.offerFootnotePrice(price: price, period: period)
                 (Text(renewal.lead).font(MemoBookFont.taglineRegular)
-                    + Text(renewal.price).font(MemoBookFont.tagline))
+                    + Text(renewal.price).font(MemoBookFont.tagline)
+                    + Text(renewal.trail).font(MemoBookFont.taglineRegular))
                     .foregroundStyle(MemoBookColor.ink)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text(PaywallCopy.offerFootnoteDetail)
-                    .font(MemoBookFont.taglineRegular)
-                    .foregroundStyle(MemoBookColor.ink)
+                // En petit, comme une mention : elle est là pour être
+                // trouvée, pas pour disputer le prix au regard.
+                Text(PaywallCopy.offerFootnoteDetail(period: period))
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }

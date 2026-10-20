@@ -245,4 +245,7 @@ public enum CoversIntent: Sendable, Hashable {
     case openStyle
     case openPhoto
     case openTexts
+    /// Les personnalisations du carnet, par la commande d'en-tête (Hugo,
+    /// 19/10/2026) — le chemin inverse de « Configurer mes couvertures ».
+    case openCustomisation
 }

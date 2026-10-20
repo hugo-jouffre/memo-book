@@ -289,6 +289,24 @@ model Account {
   /// pas dit : on suppose alors Paris.
   timeZone String?
 
+  // --- Les notifications du compte — feuille « Notifications » du profil ----
+  //
+  // Celles qui ne parlent d'aucun voyage (D13, Hugo, 19/10/2026) : elles
+  // n'avaient aucun interrupteur dans l'app, seul le réglage d'iOS les
+  // coupait — et lui coupe tout. Allumées par défaut, comme les alertes d'un
+  // voyage. Celles d'un voyage vivent dans `memo_notification_preferences`.
+  // L'e-mail de fin de voyage n'en dépend pas : c'est l'argent du voyageur,
+  // pas une relance (`planTripEndEmail`).
+
+  /// « Rappel de renouvellement » — trois jours avant que l'abonnement reparte.
+  notifyRenewalReminder Boolean @default(true)
+  /// « Vacances scolaires » — J-7 et le jour J d'une période de vacances.
+  notifySchoolHolidays  Boolean @default(true)
+  /// « L'an dernier à la même époque » — la période d'un voyage passé revient.
+  notifyLearnedPeriod   Boolean @default(true)
+  /// « Anniversaire » — une semaine avant.
+  notifyBirthday        Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -311,6 +329,8 @@ model Account {
   chatMessages      ChatMessage[]
   supportMessages   SupportMessage[]
   faqVotes          FaqVote[]
+
+  tripNotificationPreferences MemoNotificationPreference[]
 
   @@map("accounts")
 }
@@ -672,29 +692,28 @@ model Memo {
   /// tant que le récit ne s'est pas nommé ; l'aperçu retombe alors sur `title`.
   bookTitle String?
 
-  /// Les relances de **ce voyage-ci**.
-  ///
-  /// Rien à voir avec l'autorisation système, qui est globale et vit dans iOS :
-  /// couper ici n'enlève aucune permission, ça arrête les relances de ce
-  /// carnet. C'est pour ça que l'écran de réglages porte les deux lignes,
-  /// l'interrupteur et « Gérer mes notifications ».
-  notificationsEnabled Boolean @default(true)
-
-  // --- Le détail des alertes — feuille « Notifications » ---------------------
+  // --- Les alertes du voyage — ⚠️ colonnes en sursis -------------------------
   //
-  // Quatre drapeaux, et non un seul : `notificationsEnabled` coupe tout d'un
-  // coup depuis la ligne des réglages, ceux-ci disent *quoi* recevoir quand il
-  // est levé. Sans eux, la feuille « Gérer mes notifications » proposait un
-  // réglage fin que rien ne retenait — exactement ce que
-  // `docs/reglages-utilisateur.md` interdit.
+  // **Elles ne se lisent plus** (D13, Hugo, 19/10/2026). Elles valaient pour
+  // tous les co-voyageurs : un seul qui coupait la relance d'écriture la
+  // coupait chez tout le monde. Chacun a désormais les siennes, dans
+  // `memo_notification_preferences`, où la migration
+  // `20261019120000_alertes_propres_a_chaque_voyageur` a recopié ces
+  // valeurs pour le propriétaire et chaque co-voyageur.
+  //
+  // Elles restent le temps d'un déploiement : l'API en place pendant la
+  // migration les lit encore, et les retirer dans le même temps la ferait
+  // tomber. À supprimer dans une migration à part.
 
-  /// « Rappel d'écriture » — la relance calée sur `narrationPace`.
+  /// Ancien interrupteur du voyage — voir `MemoNotificationPreference`.
+  notificationsEnabled  Boolean @default(true)
+  /// Ancienne alerte — voir `MemoNotificationPreference`.
   notifyWritingReminder Boolean @default(true)
-  /// « Nouveau récit » — un co-voyageur a alimenté le carnet.
+  /// Ancienne alerte — voir `MemoNotificationPreference`.
   notifyNewStory        Boolean @default(true)
-  /// « Résumé hebdomadaire » — un point sur les souvenirs capturés.
+  /// Ancienne alerte — voir `MemoNotificationPreference`.
   notifyWeeklyDigest    Boolean @default(true)
-  /// « Rappel de fin de voyage » — l'alerte qui dit de valider l'impression.
+  /// Ancienne alerte — voir `MemoNotificationPreference`.
   notifyTripEnd         Boolean @default(true)
 
   /// Le lien de prévisualisation publique, celui qu'on envoie à ses proches.
@@ -812,6 +831,8 @@ model Memo {
   subscriptionTransactions SubscriptionTransaction[]
   /// Les notifications qui ont parlé de ce voyage.
   notifications            NotificationDelivery[]
+  /// Les alertes de ce voyage, une ligne par voyageur qui les a réglées.
+  notificationPreferences  MemoNotificationPreference[]
   /// Les messages à l'équipe écrits depuis ce voyage.
   supportMessages          SupportMessage[]
 
@@ -950,6 +971,47 @@ model MemoMember {
   @@map("memo_members")
 }
 
+/// Les alertes d'un voyage, **pour un voyageur** — la ligne « Notifications »
+/// des réglages du voyage et sa feuille « Gérer mes notifications ».
+///
+/// Une table et non des colonnes de `memo_members` (D13, Hugo, 19/10/2026) :
+/// le propriétaire n'y a pas de ligne, et c'est lui qui règle le plus souvent.
+/// Une clé (voyage, compte) dit la même chose pour tous les deux.
+///
+/// **Pas de ligne, tout est allumé** : on n'en écrit une qu'au premier
+/// réglage. Un co-voyageur qui entre dans un voyage reçoit donc les alertes
+/// par défaut, quoi qu'aient coupé les autres. Le planificateur lit la ligne
+/// **du destinataire** (`loadPlannerAccount`).
+model MemoNotificationPreference {
+  memoId    String
+  memo      Memo    @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// L'interrupteur du voyage : coupé, aucune des quatre ne part.
+  ///
+  /// Rien à voir avec l'autorisation système, qui est globale et vit dans
+  /// iOS : couper ici n'enlève aucune permission, ça arrête les relances de
+  /// ce carnet. C'est pour ça que l'écran de réglages porte les deux lignes,
+  /// l'interrupteur et « Gérer mes notifications ».
+  notificationsEnabled  Boolean @default(true)
+  /// « Rappel d'écriture » — la relance calée sur `narrationPace`.
+  notifyWritingReminder Boolean @default(true)
+  /// « Nouveau récit » — un co-voyageur a alimenté le carnet.
+  notifyNewStory        Boolean @default(true)
+  /// « Résumé hebdomadaire » — un point sur les souvenirs capturés.
+  notifyWeeklyDigest    Boolean @default(true)
+  /// « Rappel de fin de voyage » — la fin du voyage, le carnet pas commandé.
+  notifyTripEnd         Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+
+  @@id([memoId, accountId])
+  /// La passe des notifications lit toutes les lignes d'un compte d'un coup.
+  @@index([accountId])
+  @@map("memo_notification_preferences")
+}
+
 /// Une étape du voyage : un lieu, des dates, ceux qui y étaient.
 ///
 /// Une étape **regroupe** des souvenirs, elle n'en est pas un. Jusqu'ici le
@@ -1055,6 +1117,13 @@ model Entry {
   /// il fait autorité : la mise en page le reprend **au mot près**.
   editedText String?
   editedAt   DateTime?
+  /// Les caractères de correction au clavier **déjà offerts** à cette fiche,
+  /// cumulés : 200 au plus (`CORRECTION_FREE_CHARACTERS`, Hugo, 19/10/2026,
+  /// QA D8). Une correction prend d'abord ici, puis au crédit du jour ; pot
+  /// vide, ce qui dépasse attend l'illimité. Revenir à la version proposée ne
+  /// le remet pas à zéro — sinon l'aller-retour rouvrirait les 200. Un abonné
+  /// ne l'entame pas : il ne le prendrait qu'à ses co-voyageurs.
+  correctionFreeCharacters Int @default(0)
 
   /// Propositions de l'agent de rédaction, que la mise en page consomme.
   suggestedTitle String?

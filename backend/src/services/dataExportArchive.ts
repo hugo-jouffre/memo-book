@@ -9,6 +9,11 @@ import {
   frenchTime,
 } from "../lib/frenchFormat.js";
 import { visibleToAccount } from "./memoOwnership.js";
+import {
+  pickTripNotificationPreferences,
+  serializeAccountNotificationPreferences,
+  type TripNotificationPreferences,
+} from "./notificationPreferences.js";
 import type { MediaStorage } from "./storage.js";
 import { contextVoiceOf } from "./tripContext.js";
 import { shareBaseUrl } from "./shareLink.js";
@@ -84,6 +89,8 @@ const accountInclude = {
   sessions: { orderBy: { createdAt: "asc" } },
   passwordResets: { orderBy: { createdAt: "asc" } },
   dataExports: { orderBy: { createdAt: "asc" } },
+  // Les alertes réglées voyage par voyage : elles sont à lui seul (D13).
+  tripNotificationPreferences: true,
   connectors: { orderBy: { createdAt: "asc" } },
   cards: { orderBy: { createdAt: "asc" } },
   walletEntries: { orderBy: { createdAt: "asc" } },
@@ -275,6 +282,9 @@ export async function planDataExport(
       shareBaseUrl: shareBaseUrl(env),
       coverFiles,
       bookFiles,
+      notifications: pickTripNotificationPreferences(
+        account.tripNotificationPreferences.find((row) => row.memoId === memo.id),
+      ),
     }));
     json(
       `${folder}/souvenirs.json`,
@@ -471,6 +481,7 @@ function accountDocument(account: ExportedAccount, profilePhoto: string | null) 
     birthDate: account.birthDate ? account.birthDate.toISOString().slice(0, 10) : null,
     gender: account.gender,
     newsletter: account.wantsNewsletter,
+    notifications: serializeAccountNotificationPreferences(account),
     postalAddress: hasAddress
       ? {
           line1: account.addressLine1,
@@ -511,6 +522,8 @@ function tripDocument(
     shareBaseUrl: string;
     coverFiles: { file: string; addedAt: string | null }[];
     bookFiles: { file: string; composedAt: string | null; orderedByYou: boolean }[];
+    /** Les alertes **de qui exporte** pour ce voyage, pas celles des autres. */
+    notifications: TripNotificationPreferences;
   },
 ) {
   const { accountId } = options;
@@ -536,11 +549,11 @@ function tripDocument(
     shareLink: memo.shareSlug ? `${options.shareBaseUrl}/c/${memo.shareSlug}` : null,
     gallery: { shared: memo.isPublicGallery, summary: memo.gallerySummary },
     notifications: {
-      enabled: memo.notificationsEnabled,
-      writingReminder: memo.notifyWritingReminder,
-      newStory: memo.notifyNewStory,
-      weeklyDigest: memo.notifyWeeklyDigest,
-      tripEnd: memo.notifyTripEnd,
+      enabled: options.notifications.notificationsEnabled,
+      writingReminder: options.notifications.notifyWritingReminder,
+      newStory: options.notifications.notifyNewStory,
+      weeklyDigest: options.notifications.notifyWeeklyDigest,
+      tripEnd: options.notifications.notifyTripEnd,
     },
     bookSettings: {
       targetPageCount: memo.targetPageCount,

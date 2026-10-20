@@ -138,11 +138,135 @@ final class BookPreviewModelTests: XCTestCase {
             source: { _ in try source.next() },
             startComposition: { _ in throw Refused(message: refusal) }
         )
+        model.opensBlankPages = false
 
         await model.run()
 
         XCTAssertEqual(model.stage, .composing)
         XCTAssertEqual(model.errorMessage, refusal)
+    }
+
+    // MARK: - Une composition qui ne finit pas (19/10/2026)
+
+    /// Un rendu que personne ne finit : la page ne se remonte plus sans fin,
+    /// l'écran dit que c'est long et propose de réessayer.
+    func testACompositionThatNeverMovesStopsWaiting() async throws {
+        let stuck = BookPreview(
+            memoId: "memo-1",
+            title: "Rome",
+            status: .composing,
+            render: BookRenderProgress(id: "r1", phase: .queued)
+        )
+        var reads = 0
+        let model = BookPreviewModel(
+            memoId: "memo-1",
+            source: { _ in
+                reads += 1
+                return stuck
+            },
+            startComposition: { _ in }
+        )
+        model.opensBlankPages = false
+        model.pacing = .fast
+
+        await model.run()
+
+        XCTAssertEqual(model.stage, .composing)
+        XCTAssertEqual(model.errorMessage, BookCopy.Composition.tooLong)
+        XCTAssertEqual(reads, BookPreviewModel.Pacing.fast.maxUnchangedCompositionPolls + 1)
+    }
+
+    /// Une composition qui avance — la file, puis la mise en page — n'est pas
+    /// bloquée : le compte repart à chaque changement.
+    func testACompositionThatMovesKeepsBeingFollowed() async throws {
+        func step(_ phase: BookRenderPhase) -> BookPreview {
+            BookPreview(memoId: "memo-1", title: "Rome", status: .composing, render: BookRenderProgress(id: "r1", phase: phase))
+        }
+        let source = QueuedSource(
+            [step(.queued), step(.queued), step(.writing), step(.writing), step(.composing), step(.composing)]
+                + [preview(status: .ready)]
+        )
+        let model = BookPreviewModel(memoId: "memo-1", source: { _ in try source.next() }, startComposition: { _ in })
+        model.opensBlankPages = false
+        model.pacing = .fast
+
+        await model.run()
+
+        XCTAssertEqual(model.stage, .preview)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    // MARK: - Debug : prévisualiser sans vrai contenu (Hugo, 19/10/2026)
+
+    /// Un carnet sans souvenir, en debug : l'aperçu s'ouvre sur des pages
+    /// blanches, le refus du serveur en bandeau.
+    func testDebugOpensBlankPagesForABookWithoutContent() async throws {
+        let refusal = "Ce carnet ne contient encore aucun souvenir."
+        let model = BookPreviewModel(
+            memoId: "memo-1",
+            source: { _ in BookPreview(memoId: "memo-1", title: "Rome", pageCount: 0) },
+            startComposition: { _ in throw Refused(message: refusal) }
+        )
+        model.pacing = .fast
+
+        await model.run()
+
+        XCTAssertEqual(model.stage, .preview)
+        XCTAssertTrue(model.showsBlankPages)
+        XCTAssertEqual(model.sheetCount, BookPreviewModel.blankPageCount)
+        XCTAssertEqual(model.errorMessage, refusal)
+        XCTAssertFalse(model.isComposed, "Des pages blanches ne se commandent pas.")
+    }
+
+    /// Le serveur injoignable, en debug : des pages blanches quand même.
+    func testDebugOpensBlankPagesWithoutAServer() async throws {
+        let model = BookPreviewModel(memoId: "memo-1", source: { _ in throw Refused(message: "Injoignable") })
+        model.pacing = .fast
+
+        await model.run()
+
+        XCTAssertEqual(model.stage, .preview)
+        XCTAssertEqual(model.preview?.title, BookCopy.Preview.blankTitle)
+        XCTAssertEqual(model.sheetCount, BookPreviewModel.blankPageCount)
+    }
+
+    /// Une composition trop longue pour le debug : les pages blanches, puis le
+    /// vrai carnet quand il arrive, sans rien toucher.
+    func testDebugShowsBlankPagesWhileACompositionTakesTooLong() async throws {
+        let composing = BookPreview(
+            memoId: "memo-1",
+            title: "Rome",
+            status: .composing,
+            render: BookRenderProgress(id: "r1", phase: .writing)
+        )
+        let gate = Gate()
+        let model = BookPreviewModel(
+            memoId: "memo-1",
+            source: { _ in gate.isOpen ? self.preview(status: .ready, pageCount: 12) : composing },
+            startComposition: { _ in }
+        )
+        var pacing = BookPreviewModel.Pacing.fast
+        pacing.maxUnchangedCompositionPolls = 1_000
+        pacing.maxUnchangedRecompositionPolls = 1_000
+        pacing.debugBlankPagesAfter = .milliseconds(100)
+        model.pacing = pacing
+
+        let task = Task { await model.run() }
+        try await waitUntil { model.stage == .preview }
+        XCTAssertTrue(model.showsBlankPages)
+        XCTAssertTrue(model.isRecomposing)
+        XCTAssertNil(model.errorMessage)
+
+        gate.isOpen = true
+        await task.value
+
+        XCTAssertFalse(model.isRecomposing)
+        XCTAssertEqual(model.sheetCount, 12)
+        XCTAssertTrue(model.isComposed)
+    }
+
+    private final class Gate {
+        var isOpen = false
     }
 
     /// Un refus ne cache pas un carnet déjà composé : on le feuillette quand
@@ -258,4 +382,19 @@ final class BookPreviewModelTests: XCTestCase {
     }
 
     private struct TimedOut: Error {}
+}
+
+extension BookPreviewModel.Pacing {
+    /// Le parcours en accéléré : une cascade et des sondages de quelques
+    /// millisecondes, et une borne atteinte en cinq sondages.
+    static var fast: Self {
+        Self(
+            compositionDuration: .milliseconds(20),
+            progressTick: .milliseconds(5),
+            pollInterval: .milliseconds(5),
+            maxUnchangedCompositionPolls: 5,
+            recompositionPollInterval: .milliseconds(5),
+            maxUnchangedRecompositionPolls: 5
+        )
+    }
 }

@@ -29,8 +29,19 @@ public struct CoversView: View {
     public var body: some View {
         ScrollView {
             VStack(spacing: MemoBookSpacing.s) {
-                BrandScreenHeader(title: BookCopy.Covers.title)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // **Le chemin vers les personnalisations** (Hugo, 19/10/2026) :
+                // les couvertures et le reste du style se règlent ensemble, et
+                // chacun des deux écrans mène à l'autre par l'angle supérieur
+                // droit. Le signe est celui de la pastille « Décorations » des
+                // personnalisations, pas l'engrenage des réglages du voyage.
+                BrandScreenHeader(title: BookCopy.Covers.title) {
+                    BrandHeaderAction(
+                        icon: "IconCategoryDecorations",
+                        label: BookCopy.Preview.customise,
+                        action: { onIntent(.openCustomisation) }
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 CoverFaceTabs(face: $model.face)
 

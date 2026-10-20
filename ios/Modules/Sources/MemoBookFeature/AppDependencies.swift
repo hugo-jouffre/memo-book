@@ -427,6 +427,11 @@ public final class AppDependencies {
                 if let stored = await content.read(.trip(id), as: TripDetail.self) { return stored }
                 return await outbox.localTrip(id).map { TripDetail(trip: $0.trip) }
             },
+            // Jamais ouvert ici, et hors ligne : la carte de l'accueil gardé
+            // (D11). Le modèle ne s'en sert que sur une panne de transport.
+            homeCard: { [content] in
+                await content.read(.home, as: HomeFeed.self)?.trips.first { $0.id == id }
+            },
             validateStep: { [api] tripId, stepId in try await api.validateStep(tripId: tripId, stepId: stepId) },
             // Un souvenir déjà effacé — par un co-voyageur, entre deux
             // lectures — n'est pas un échec : c'est ce qu'on voulait (T235).

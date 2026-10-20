@@ -6,6 +6,7 @@ import type {
   PrintOrderCopy,
   Render,
 } from "@prisma/client";
+import { freeCorrectionCharactersLeft } from "../services/dailyCredit.js";
 import type { PrintQuote } from "../services/printPricing.js";
 
 /** Une commande et, quand elles ont été chargées, les options de ses exemplaires. */
@@ -57,6 +58,8 @@ export function serializeEntry(entry: Entry & { media?: MediaAsset | null }) {
      * client.
      */
     displayText: entry.editedText ?? entry.redactedText ?? entry.transcript,
+    /** Les caractères de correction encore offerts à cette fiche (QA D8, 19/10/2026). */
+    freeCorrectionCharactersLeft: freeCorrectionCharactersLeft(entry),
     suggestedTitle: entry.suggestedTitle,
     funFact: entry.funFact,
     funFactTitle: entry.funFactTitle,

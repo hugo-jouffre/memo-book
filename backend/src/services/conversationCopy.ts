@@ -116,6 +116,13 @@ export const REVISION_UNHEARD =
   "Je n’ai pas réussi à écouter ta correction. Tu peux me la redire, ou faire la modification à la main ?";
 
 /**
+ * Après « ce vocal était silencieux » (`silentVoiceLine`, QA D9) : de quoi
+ * repartir. Le premier suit un vocal raconté, le second une correction dictée.
+ */
+export const SILENT_VOICE_RETRY = "Tu peux le réenregistrer, ou me l’écrire ici.";
+export const SILENT_REVISION_RETRY = "Tu peux me redire ta correction, ou faire la modification à la main ?";
+
+/**
  * Une fois le texte validé : le nombre **exact** de photos qui remplit l'étape,
  * calculé par `photoBudgetFor` sur le texte validé **et sur le ratio texte /
  * photo réglé par le voyageur**.

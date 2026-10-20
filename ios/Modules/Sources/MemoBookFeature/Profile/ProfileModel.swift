@@ -35,6 +35,7 @@ public final class ProfileModel {
         case address
         case gender
         case newsletter
+        case notifications
         case avatar
     }
 
@@ -289,6 +290,15 @@ public final class ProfileModel {
         guard isOn != profile?.wantsNewsletter else { return }
         mutate { $0.wantsNewsletter = isOn }
         save(ProfileEdit(wantsNewsletter: isOn), confirming: .newsletter)
+    }
+
+    /// Les notifications du compte, depuis la feuille « Notifications » du
+    /// profil (D13, 19/10/2026). Le bloc entier part : c'est ce que la route
+    /// accepte, comme les alertes d'un voyage.
+    public func setNotifications(_ preferences: AccountNotificationPreferences) {
+        guard preferences != profile?.notifications else { return }
+        mutate { $0.notifications = preferences }
+        save(ProfileEdit(notifications: preferences), confirming: .notifications)
     }
 
     public func setConnector(id: String, isEnabled: Bool) {

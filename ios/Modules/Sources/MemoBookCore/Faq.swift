@@ -373,7 +373,7 @@ public enum Faq {
                     "Tes enregistrements et tes photos sont conservés sur ton téléphone et se synchronisent dès que la connexion revient.",
                     "Tu peux donc continuer à raconter en avion, en montagne ou sans forfait local.",
                     "Si le crédit du jour est épuisé quand ils partent, ils attendent sur ton téléphone, marqués « Partira demain », et repartent tout seuls après minuit, dès que tu rouvres l’app.",
-                    "Un vocal plus long que {{credit_jour}} ne tient dans aucune journée : il attend que tu passes en illimité, ou tu le supprimes depuis sa bulle.",
+                    "Un enregistrement plus long que le crédit d’une journée attend, lui, que tu passes en illimité — ou tu le supprimes depuis sa bulle.",
                 ]
             ),
             FaqEntry(
@@ -416,7 +416,7 @@ public enum Faq {
                 question: "Je peux supprimer un souvenir que je regrette ?",
                 answer: [
                     "Oui. Dans l’accueil de ton voyage, fais glisser la carte de son étape vers la gauche, puis touche la croix.",
-                    "Le souvenir quitte ton carnet. Une commande déjà passée, elle, est imprimée telle que tu l’as validée.",
+                    "Le souvenir quitte ton carnet, et son vocal ou sa photo est effacé de nos serveurs. Une commande déjà passée, elle, est imprimée telle que tu l’as validée.",
                 ]
             ),
         ]
@@ -728,6 +728,7 @@ public enum Faq {
                 answer: [
                     "Chaque voyage dispose de {{credit_jour}} de récit par jour, à partager entre les co-voyageurs qui ne sont pas abonnés.",
                     "Un message vocal consomme sa durée, et {{caracteres_par_minute}} écrits valent une minute. Les photos ne consomment rien.",
+                    "Corriger une fiche à la main est offert jusqu’à 200 caractères modifiés par fiche, même quand le crédit est épuisé ; au-delà, la correction compte comme un texte, ou passe par l’illimité. Un vocal silencieux ne compte pas.",
                     "Tu suis ce qu’il reste dans les réglages du voyage, à la ligne « Crédit du jour ». Trente secondes avant la fin, un message te prévient au-dessus du micro, et ce que tu as déjà dit est toujours gardé.",
                     "Le crédit se recharge chaque nuit à minuit : tu reprends le lendemain, ou tu passes en illimité pour {{prix_abo_mensuel}} par mois et tu continues tout de suite.",
                 ]
@@ -739,7 +740,8 @@ public enum Faq {
                     "Il coûte {{prix_abo_mensuel}} par mois et rend ton récit illimité, à l’oral comme à l’écrit, sur tous tes voyages.",
                     "Il est personnel : ce que tu racontes ne prend plus rien au crédit du jour, et tes co-voyageurs qui ne sont pas abonnés continuent de partager le leur.",
                     "Il se renouvelle chaque mois par ton identifiant Apple. Tu le résilies quand tu veux dans les réglages de ton iPhone, et l’illimité reste ouvert jusqu’à la fin du mois déjà payé.",
-                    "À la fin de ton voyage, on te rappelle que tu peux le résilier en un geste.",
+                    "Quand ton dernier voyage en cours se termine, on te rappelle que tu peux le résilier en un geste.",
+                    "Un mois commencé est dû ; pour un remboursement, c’est Apple qui décide, depuis reportaproblem.apple.com.",
                 ]
             ),
             FaqEntry(

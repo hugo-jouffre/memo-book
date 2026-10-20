@@ -12,7 +12,12 @@ import {
 } from "../services/conversationCopy.js";
 import { firstNameOf, type ChatMessageRow, type EntryWithMedia } from "../services/conversationThread.js";
 import { avatarUrlOf } from "../services/avatars.js";
-import { LIMITED_AUDIENCE, serializeDailyCredit, type DailyCredit } from "../services/dailyCredit.js";
+import {
+  LIMITED_AUDIENCE,
+  freeCorrectionCharactersLeft,
+  serializeDailyCredit,
+  type DailyCredit,
+} from "../services/dailyCredit.js";
 import {
   contextVoiceOf,
   isGathering,
@@ -238,6 +243,8 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbe
           footnote: phase === "ready" ? TRANSCRIPT_FOOTNOTE : null,
           phase,
           isValidated: entry.validatedAt !== null,
+          // Ce qui reste des 200 caractères de correction offerts (QA D8).
+          freeCorrectionCharactersLeft: freeCorrectionCharactersLeft(entry),
         },
       };
     }

@@ -564,16 +564,13 @@ final class ProfileModelTests: XCTestCase {
         XCTAssertTrue(subscriber.hasSuffix(DeleteAccountCopy.closeTripInstead))
     }
 
-    /// « 4,99 €/mois » ne se coupe jamais en « 4,99 €/ » puis « mois ».
+    /// « 4,99 € par mois » ne se coupe jamais entre le prix et sa période.
     func testTheOfferPriceNeverBreaks() {
         let renewal = PaywallCopy.offerFootnotePrice(price: "4,99 €", period: "mois")
         XCTAssertFalse(renewal.price.contains(" "))
-        XCTAssertEqual(
-            renewal.price
-                .replacingOccurrences(of: "\u{2060}", with: "")
-                .replacingOccurrences(of: "\u{00A0}", with: " "),
-            "4,99 €/mois"
-        )
+        XCTAssertEqual(renewal.price.replacingOccurrences(of: "\u{00A0}", with: " "), "4,99 € par mois")
+        XCTAssertEqual(renewal.lead, "MemoBook illimité pour ")
+        XCTAssertEqual(renewal.trail, ".")
     }
 
     // MARK: - La jauge du crédit (Hugo, 08/10/2026)

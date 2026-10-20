@@ -37,7 +37,7 @@ CGU, à deux touches. C'est un motif de rejet fréquent à la revue.
 **Reco : a**, à dessiner dans Figma avec T251 (le voile du pied, qui estompe
 déjà les liens légaux).
 
-Réponse :
+Réponse : **a, réécrite** (Hugo, 19/10/2026) — « MemoBook illimité pour **4,99 € par mois**. » puis, en petit : « Payé par ton compte Apple, renouvelé automatiquement chaque mois sauf résiliation au moins 24 h avant la fin de la période, dans Réglages › ton nom › Abonnements. On te rappelle de résilier quand ton dernier voyage en cours se termine. » Prix et période viennent de l'App Store (3,99 $US sur un compte de test américain). La fin suit D4. Le pied plus haut couvre les liens légaux tant qu'on n'a pas défilé : T251.
 
 ### D2 — « Ton carnet est imprimé et livré chez toi »
 
@@ -53,7 +53,7 @@ FAQ, les CGU et le README disent qu'elle se paie à part.
 
 **Reco : b.**
 
-Réponse :
+Réponse : **b, réécrite** (Hugo, 19/10/2026) — « Quand tu veux, ton carnet s’imprime et arrive chez toi — il se commande à part de l’abonnement. »
 
 ### D3 — « Aussi longtemps que ton voyage dure »
 
@@ -68,7 +68,7 @@ vaut pour tous les voyages.
 
 **Reco : a** (à rattacher à T247, les textes du nouveau modèle).
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — « … sur tous tes voyages. » dans les deux phrases.
 
 ### D4 — « Le rappel à la fin de chaque voyage »
 
@@ -84,7 +84,7 @@ quelqu'un qui raconte encore.
 **Reco : a.** Les CGU et la confidentialité sont aussi à republier sur
 memobook.fr.
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — « quand ton dernier voyage en cours se termine » au paywall (carte et pied), dans la FAQ, les CGU et la confidentialité. Republication sur memobook.fr : T257.
 
 ### D5 — Le remboursement, dans la FAQ
 
@@ -99,7 +99,7 @@ Apple ». La FAQ n'en parle pas, et sa recherche ne trouve rien au mot
 
 **Reco : a.**
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — ajouté à « Comment marche l’abonnement ? ».
 
 ### D6 — La politique de confidentialité promet un carnet gratuit
 
@@ -115,7 +115,7 @@ le chapitre 2.)
 **Reco : b** si le formulaire WhatsApp du site vit encore, **a** sinon. Hugo
 relit, et memobook.fr publie le même texte.
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — § 2.1 retiré (les suivants glissent d'un rang), « Stripe Payments Europe Ltd. (paiement des carnets imprimés) » ajouté aux destinataires. Republication : T257.
 
 ### D7 — Les CGU disent « participants »
 
@@ -127,7 +127,7 @@ le vocabulaire disent « co-voyageurs ».
 
 **Reco : a**, avec la prochaine republication des CGU (D4).
 
-Réponse :
+Réponse : **b** (Hugo, 19/10/2026) — on garde « participants » et « utilisateurs » : plus parlants pour quelqu'un qui ne connaît pas encore l'app.
 
 ---
 
@@ -147,7 +147,9 @@ C'est pourtant le moment naturel pour corriger.
 **Reco : b** — on corrige sans payer, on ne peut pas écrire un récit entier par
 ce biais.
 
-Réponse :
+Réponse : **b** (Hugo, 19/10/2026) — 200 caractères modifiés offerts par
+fiche, cumulés, pot vide compris ; au-delà, la correction passe par
+l'illimité.
 
 ### D9 — Un vocal muet consomme-t-il le crédit ?
 
@@ -159,7 +161,9 @@ Depuis cette QA, MEMO dit qu'il n'a rien entendu au lieu de se taire.
 
 **Reco : b.** À revoir si des voyageurs s'en plaignent.
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — rendu au pot, et MEMO dit « Ce vocal
+était silencieux, sa durée n’est pas déduite de tes 5 min d’enregistrement
+gratuit par jour. »
 
 ### D10 — Le texte « hors ligne » de la FAQ
 
@@ -174,7 +178,7 @@ l'illimité.
 
 **Reco : a.**
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — « Un enregistrement plus long que le crédit d’une journée attend, lui, que tu passes en illimité — ou tu le supprimes depuis sa bulle. »
 
 ---
 
@@ -193,7 +197,7 @@ alors qu'on pourrait y raconter hors ligne. (Voisin de T239.)
 
 **Reco : a.**
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — l'écran du voyage s'ouvre d'après la carte de l'accueil (titre, dates, photo), sous le bandeau d'erreur, et « Accéder au chat » mène au fil hors ligne.
 
 ### D12 — Supprimer un souvenir efface-t-il son vocal ?
 
@@ -207,7 +211,8 @@ elle, efface tout.
 
 **Reco : a** — c'est ce qu'on attend d'un « supprimer » au sens du RGPD.
 
-Réponse :
+Réponse : **a** (Hugo, 19/10/2026) — le fichier part après la suppression
+(`deleteEntryAndMedia`).
 
 ### D13 — Couper les notifications d'un voyage coupe celles de tout le monde
 
@@ -225,7 +230,10 @@ seuls les réglages d'iOS les coupent.
 **Reco : b** — un réglage qu'on change chez les autres sans le savoir est une
 mauvaise surprise. Maquette nécessaire.
 
-Réponse :
+Réponse : **b** (Hugo, 19/10/2026). Fait : alertes du voyage par voyageur
+(`memo_notification_preferences`), ligne « Notifications » au profil pour les
+quatre du compte. La feuille du profil reprend celle du voyage — **maquette
+encore à dessiner dans Figma**.
 
 ---
 
@@ -238,7 +246,7 @@ réception de ton carnet. » — **réponds**.
 
 **Reco** : corriger dans Figma, l'app suit.
 
-Réponse :
+Réponse : corrigé dans Figma ; « réponds » dans l'app aussi (19/10/2026).
 
 ### D15 — Un vouvoiement et une majuscule
 
@@ -249,7 +257,7 @@ Réponse :
 
 **Reco** : « qui t'a fait rire », « Mon abonnement ».
 
-Réponse :
+Réponse : **reco** (Hugo, 19/10/2026) — « qui t’a fait rire » ; « Mon abonnement » l'était déjà.
 
 ### D16 — L'annonce VoiceOver de l'arrêt à la limite
 
@@ -260,7 +268,7 @@ est gardé. » (ce texte n'a pas de maquette).
 
 **Reco** : valider tel quel.
 
-Réponse :
+Réponse : **validé tel quel** (Hugo, 19/10/2026).
 
 ---
 

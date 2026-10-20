@@ -22,6 +22,8 @@ import {
   PRECISION_NOTED,
   REVISION_NOTED,
   REVISION_UNHEARD,
+  SILENT_REVISION_RETRY,
+  SILENT_VOICE_RETRY,
   ROSE_EPINE_GRAINE,
   SUGGESTION_SETS,
   fallbackPrompt,
@@ -35,7 +37,12 @@ import {
   tooShort,
   validationQuestionFor,
 } from "../services/conversationCopy.js";
-import { DAILY_CREDIT_CALL_TO_ACTION, DAILY_CREDIT_EXHAUSTED } from "../services/dailyCredit.js";
+import {
+  DAILY_CREDIT_CALL_TO_ACTION,
+  DAILY_CREDIT_EXHAUSTED,
+  refundSilentVoice,
+  silentVoiceLine,
+} from "../services/dailyCredit.js";
 import { photoBudgetFor } from "../services/photoBudget.js";
 import { measurePhoto } from "../services/photoOrientation.js";
 import { photosForTarget, tripDays } from "../services/pageTarget.js";
@@ -267,6 +274,12 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     kind === "voice" &&
     (message.entry?.status === "failed" ||
       (message.entry?.status === "ready" && !(message.entry.transcript ?? "").trim()));
+  // **Un vocal muet ne se décompte pas** (Hugo, 19/10/2026, QA D9) : la
+  // transcription a réussi et n'a rien rendu — sa durée revient au pot avant
+  // que MEMO ne le dise, et le prochain solde servi la porte.
+  const silentVoice =
+    kind === "voice" && message.entry?.status === "ready" && !(message.entry.transcript ?? "").trim();
+  const refund = silentVoice ? await refundSilentVoice(prisma, { messageId: message.id, memoId: memo.id }) : null;
 
   const input: ConversationInput = {
     memo: {
@@ -345,6 +358,16 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   // qui la réécrira, en recalculant les étapes (`tripFacts.ts`).
   if (!reply && !message.suggestionId && kind === "voice" && !transcriptFailed) {
     reply = flowReply([], [], "memory", null);
+  }
+  // Muet : MEMO dit que ce silence ne coûte rien — sans modèle, la phrase est
+  // fixée (QA D9) —, et propose de le redire.
+  if (!reply && !message.suggestionId && refund) {
+    reply = flowReply(
+      composeBeats("", [silentVoiceLine(refund.refundedMs), SILENT_VOICE_RETRY]),
+      [...SUGGESTION_SETS.withoutTranscript],
+      "memory",
+      step?.placeName ?? memo.destinationCity,
+    );
   }
   if (!reply && !message.suggestionId && kind === "photos") {
     const tally = await photosReceivedFor(context, message);
@@ -577,7 +600,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     }
 
     const payload: Prisma.InputJsonObject = {
-      ...((message.payload as Prisma.JsonObject | null) ?? {}),
+      // La trace d'un vocal muet remboursé (`refundSilentVoice`) est dans la
+      // charge relue après le remboursement, pas dans celle du tour chargé.
+      ...(((refund?.payload ?? message.payload) as Prisma.JsonObject | null) ?? {}),
       ...(answersRoseEpineGraine ? { topic: ROSE_EPINE_GRAINE_TOPIC } : {}),
     };
 
@@ -643,6 +668,7 @@ async function converseOralRevision(
   const { prisma, logger, queue } = context;
 
   let text = "";
+  let transcribed = false;
   const voice = contextVoiceOf(message.payload);
   if (voice) {
     try {
@@ -653,6 +679,7 @@ async function converseOralRevision(
         mimeType: voice.mimeType,
       });
       text = result.text.trim();
+      transcribed = true;
     } catch (cause) {
       logger.warn({ messageId: message.id, err: cause }, "Correction orale non transcrite");
     }
@@ -664,7 +691,15 @@ async function converseOralRevision(
   });
   const heard = text.length > 0;
   const rewrites = heard && Boolean(entry?.transcript);
-  const beats = composeBeats(text, [rewrites ? REVISION_NOTED : REVISION_UNHEARD]);
+  // Transcrite, mais vide : un silence. Sa durée revient au pot (QA D9).
+  const refund =
+    transcribed && !heard ? await refundSilentVoice(prisma, { messageId: message.id, memoId: message.memoId }) : null;
+  const beats = composeBeats(
+    text,
+    refund
+      ? [silentVoiceLine(refund.refundedMs), SILENT_REVISION_RETRY]
+      : [rewrites ? REVISION_NOTED : REVISION_UNHEARD],
+  );
 
   await prisma.$transaction(async (tx) => {
     for (const [index, beat] of beats.entries()) {
@@ -1128,6 +1163,11 @@ async function converseTripContextTurn(
       heard = false;
     }
   }
+  // Un vocal du contexte transcrit vide : un silence, rendu au pot (QA D9).
+  const refund =
+    voice && heard && text.trim().length === 0
+      ? await refundSilentVoice(prisma, { messageId: message.id, memoId: memo.id })
+      : null;
 
   const history = await loadHistory(prisma, memo.id, message.seq);
   const travellerFirstName = message.account?.firstName?.trim() || null;
@@ -1165,7 +1205,9 @@ async function converseTripContextTurn(
   // machine. Il se pose alors devant la question, dans la même bulle.
   const texts = !heard
     ? ["Je n’ai pas réussi à écouter ce vocal.", "Tu peux me le réécrire ici ?"]
-    : acknowledgement
+    : refund
+      ? [silentVoiceLine(refund.refundedMs), next]
+      : acknowledgement
       ? [acknowledgement, next]
       : [`${CONTEXT_NOTED} ${next}`];
   const beats = composeBeats(text, texts);
