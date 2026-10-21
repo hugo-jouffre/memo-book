@@ -26,7 +26,7 @@ import { basename, resolve } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import type { CallToActionId } from "../src/services/callsToAction.js";
+import { CALLS_TO_ACTION, type CallToActionId } from "../src/services/callsToAction.js";
 import {
   EMPTY_CONVERSATION_STATE,
   MAX_BEATS,
@@ -34,6 +34,7 @@ import {
   type ConversationInput,
   type ConversationReply,
   type MemoResponder,
+  type MissingDayTurnReply,
 } from "../src/services/conversation.js";
 import { AnthropicResponder } from "../src/services/conversationAnthropic.js";
 import { HeuristicResponder } from "../src/services/conversationHeuristics.js";
@@ -47,6 +48,7 @@ const { values } = parseArgs({
     heuristic: { type: "boolean", default: false },
     only: { type: "string" },
     json: { type: "boolean", default: false },
+    "missing-day": { type: "boolean", default: false },
     model: { type: "string", default: process.env.ANTHROPIC_CONVERSATION_MODEL ?? "claude-sonnet-5" },
   },
 });
@@ -90,6 +92,12 @@ interface Scene {
   allows?: { roseEpineGraine?: boolean; callsToAction?: CallToActionId[] };
   /** `callToActionId` : le bouton attendu, ou `null` pour « aucun ». Absent : pas vérifié. */
   expect?: { disposition?: ConversationReply["disposition"]; callToActionId?: CallToActionId | null };
+  /**
+   * **La journée qui manque** (21/10/2026) — une scène de l'autre appel, celui
+   * qui pose la question du trou (`--missing-day`). Le trou est donné : le
+   * code l'a trouvé, et c'est ce que le modèle en dit qu'on éprouve.
+   */
+  missingDay?: { days: string[]; before: string; after: string; beforeText?: string; afterText?: string };
 }
 
 const NOW = new Date("2026-09-21T18:00:00Z");
@@ -409,12 +417,22 @@ async function main(): Promise<void> {
   const results: unknown[] = [];
   let failures = 0;
 
+  // `--missing-day` : l'autre appel. Le trou est donné par la scène, comme le
+  // code le donne au modèle ; ce qui se lit, c'est la question.
+  if (values["missing-day"]) {
+    await runMissingDay(files, responder, label);
+    return;
+  }
+
   if (!values.json) {
     console.log(`\nMEMO — ${label}, ${files.length} scène(s)\n${"=".repeat(60)}`);
   }
 
   for (const file of files) {
     const scene = JSON.parse(await readFile(resolve(SCENES_DIR, file), "utf8")) as Scene;
+    // Une scène de l'autre appel n'a pas de message à traiter : elle attend
+    // `--missing-day`, pas le tour de conversation.
+    if (scene.missingDay) continue;
     const input = toInput(scene);
 
     let reply: ConversationReply;
@@ -489,6 +507,109 @@ async function main(): Promise<void> {
       ? "\nAucun manquement de forme. Le reste se lit — grille § 13.\n"
       : `\n${failures} manquement(s) de forme ci-dessus. Le reste se lit — grille § 13.\n`,
   );
+}
+
+/**
+ * Les scènes de la question du trou. Ce qu'une machine relit ici : une seule
+ * question (c'est l'objet même de la bulle), la longueur, le libellé du bouton
+ * repris mot pour mot, la journée nommée. Le reste se lit — et surtout la
+ * ligne qui n'a pas de machine : **est-ce que ça sonne comme une question, et
+ * pas comme un reproche ?**
+ */
+async function runMissingDay(files: string[], responder: MemoResponder, label: string): Promise<void> {
+  const scenes: { file: string; scene: Scene }[] = [];
+  for (const file of files) {
+    const scene = JSON.parse(await readFile(resolve(SCENES_DIR, file), "utf8")) as Scene;
+    if (scene.missingDay) scenes.push({ file, scene });
+  }
+  if (scenes.length === 0) {
+    console.error("Aucune scène de journée manquante (clé `missingDay`) dans ce dossier.");
+    process.exit(1);
+  }
+
+  console.log(`\nMEMO — la journée qui manque — ${label}, ${scenes.length} scène(s)\n${"=".repeat(60)}`);
+  let failures = 0;
+
+  for (const { file, scene } of scenes) {
+    const gap = scene.missingDay!;
+    const buttonLabel = CALLS_TO_ACTION.fill_missing_day.label;
+    let reply: MissingDayTurnReply;
+    try {
+      reply = await responder.askMissingDay({
+        memo: { title: scene.memo?.title ?? "Rome 2026", destinationCity: scene.memo?.destinationCity ?? null },
+        travellerFirstName: scene.traveller?.firstName ?? "Hugo",
+        days: gap.days,
+        before: gap.before,
+        after: gap.after,
+        beforeText: gap.beforeText ?? null,
+        afterText: gap.afterText ?? null,
+        buttonLabel,
+        now: NOW,
+      });
+    } catch (cause) {
+      failures += 1;
+      console.error(`\n✗ ${scene.name} (${basename(file)}) — ${(cause as Error).message}`);
+      continue;
+    }
+
+    console.log(`\n${scene.name}  ·  ${basename(file)}`);
+    if (scene.why) console.log(`  ↳ ${scene.why}`);
+    console.log("");
+    console.log(`  Le trou : ${gap.days.join(", ")}, entre le ${gap.before} et le ${gap.after}`);
+    console.log("");
+    console.log(`  MEMO : ${reply.text ?? "(rien — la carte fixe parle)"}`);
+    console.log("");
+
+    const text = reply.text ?? "";
+    const questions = (text.match(/[?？]/g) ?? []).length;
+    const checks: Check[] = [
+      { label: "Une bulle est venue", ok: reply.text !== null },
+      { label: "Une seule question", ok: questions === 1, detail: `${questions} point(s) d'interrogation` },
+      { label: "240 caractères au plus", ok: text.length <= 240, detail: `${text.length} caractères` },
+      { label: "Ni Markdown ni emoji", ok: !/[*_#`]|\p{Extended_Pictographic}/u.test(text) },
+      {
+        // Les deux apostrophes se valent : le catalogue porte la typographique
+        // (’), le modèle écrit souvent la droite (') — à l'écran, c'est le même
+        // libellé, et exiger le glyphe serait un faux positif de plus.
+        label: "Le libellé du bouton, mot pour mot",
+        ok: sameApostrophes(text).includes(sameApostrophes(buttonLabel)),
+        detail: sameApostrophes(text).includes(sameApostrophes(buttonLabel))
+          ? undefined
+          : `attendu : « ${buttonLabel} »`,
+      },
+      {
+        label: "Aucun mot interdit",
+        ok: FORBIDDEN.every((word) => !text.toLowerCase().includes(word)),
+        detail: FORBIDDEN.filter((word) => text.toLowerCase().includes(word)).join(", ") || undefined,
+      },
+    ];
+    failures += checks.filter((check) => !check.ok).length;
+    for (const check of checks) {
+      console.log(`  ${check.ok ? "✓" : "✗"} ${check.label}${check.detail ? `  — ${check.detail}` : ""}`);
+    }
+    console.log(
+      "  " +
+        [
+          "La question demande bien si c'est voulu **ou** oublié",
+          "Aucun fait inventé sur la journée qui manque",
+          "Ça sonne comme une question, pas comme un reproche",
+          "La porte de sortie est lisible : laisser le trou est une réponse",
+        ]
+          .map((item) => `☐ ${item}`)
+          .join("\n  "),
+    );
+    console.log("-".repeat(60));
+  }
+
+  console.log(
+    failures === 0
+      ? "\nAucun manquement de forme. Le reste se lit.\n"
+      : `\n${failures} manquement(s) de forme ci-dessus. Le reste se lit.\n`,
+  );
+}
+
+function sameApostrophes(text: string): string {
+  return text.replace(/[\u2019\u02BC]/g, "'");
 }
 
 function shorten(text: string): string {

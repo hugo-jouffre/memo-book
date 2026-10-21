@@ -1,0 +1,13 @@
+{
+  "name": "La question du trou — deux journées d'affilée",
+  "why": "Deux journées manquent, et le plafond de `MAX_GAP_DAYS` les accepte encore. MEMO les nomme toutes les deux mais ne pose qu'**une** question : « voulu ou oublié », pas « laquelle des deux » — le choix de la journée appartient au bouton, pas à la bulle. Le piège est d'en faire deux questions.",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Naxos" },
+  "traveller": { "firstName": "Maxime" },
+  "missingDay": {
+    "days": ["2026-09-18", "2026-09-19"],
+    "before": "2026-09-17",
+    "after": "2026-09-20",
+    "beforeText": "Le 17, journée scooter autour de l'île, deux villages traversés, et la plage de Hawaii bien ventée.",
+    "afterText": "Le 20, on a pris le ferry pour Ios, arrivée en fin d'après-midi, hôtel avec piscine."
+  }
+}

@@ -624,7 +624,13 @@ function shortDay(day: string): string {
 }
 
 /**
- * La bulle de la carte « ✦ Suggestions ».
+ * La bulle de la carte « ✦ Suggestions » — **le repli depuis le 21/10/2026.**
+ *
+ * C'est MEMO qui pose la question du trou maintenant, avec les mots du fil
+ * (`conversationAnthropic.askMissingDay`) : voulu, ou oublié ? Cette phrase-ci
+ * reste pour quand l'appel tombe ou que la bulle sort du contrat. Elle ne pose
+ * pas de question, et c'est très bien : sur un oubli, une phrase neutre vaut
+ * mieux qu'une question de travers.
  *
  * Trois exigences, et elles tiennent toutes les trois dans ces deux phrases :
  * **aucun point d'interrogation** — le bouton est la question, et MEMO n'en

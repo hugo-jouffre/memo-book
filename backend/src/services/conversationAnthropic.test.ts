@@ -4,6 +4,9 @@ import {
   AnthropicResponder,
   buildUserPrompt,
   callToActionCatalogue,
+  acceptableMissingDay,
+  buildMissingDayPrompt,
+  missingDaySchema,
   replySchema,
   suggestionCatalogue,
   toReply,
@@ -401,5 +404,83 @@ describe("le schéma de la réponse", () => {
       "import_photos",
       null,
     ]);
+  });
+});
+
+/**
+ * Le bug du 03/10 au 21/10/2026 : `type: ["string", "null"]` à côté d'un
+ * `enum`. L'API le refuse (« Enum value does not match declared type »), le
+ * repli silencieux a répondu à la place du modèle pendant dix-huit jours, et
+ * **aucun test ne l'a vu** — ils donnent tous une fausse réponse au lieu
+ * d'appeler l'API. Celui-ci regarde la forme, sans appeler personne.
+ */
+describe("les schémas de sortie", () => {
+  const walk = (node: unknown, path: string, found: string[]): void => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      node.forEach((item, index) => walk(item, `${path}[${index}]`, found));
+      return;
+    }
+    const record = node as Record<string, unknown>;
+    if ("enum" in record && Array.isArray(record.type)) found.push(path);
+    for (const [key, value] of Object.entries(record)) walk(value, `${path}.${key}`, found);
+  };
+
+  it("ne mettent jamais une union de types à côté d'un `enum`", () => {
+    for (const [name, schema] of [
+      ["replySchema", replySchema()],
+      ["tripContextSchema", tripContextSchema()],
+      ["missingDaySchema", missingDaySchema()],
+    ] as const) {
+      const found: string[] = [];
+      walk(schema, name, found);
+      expect(found).toEqual([]);
+    }
+  });
+});
+
+describe("la question de la journée qui manque", () => {
+  it("garde une bulle qui pose une seule question", () => {
+    const bulle =
+      "Entre Testaccio et l'Aventin, le samedi 26 reste silencieux. Journée calme ou " +
+      "oubliée en chemin ? Si tu veux la raconter, « Compléter l'étape manquante » est là.";
+    expect(acceptableMissingDay(bulle)).toBe(bulle);
+  });
+
+  it("jette une bulle qui pose deux questions", () => {
+    expect(acceptableMissingDay("Le 26 manque. C'était voulu ? Tu veux me le raconter ?")).toBeNull();
+  });
+
+  it("jette une bulle qui n'en pose aucune : la question est tout l'objet", () => {
+    expect(acceptableMissingDay("Entre le 25 et le 27, il me manque le 26.")).toBeNull();
+  });
+
+  it("jette une bulle trop longue, et une bulle vide", () => {
+    expect(acceptableMissingDay(`${"a".repeat(260)} ?`)).toBeNull();
+    expect(acceptableMissingDay("   ")).toBeNull();
+  });
+
+  it("jette le Markdown et les emoji", () => {
+    expect(acceptableMissingDay("Il manque le **26**. Voulu ou oublié ?")).toBeNull();
+    expect(acceptableMissingDay("Il manque le 26 🙂. Voulu ou oublié ?")).toBeNull();
+  });
+
+  it("donne au modèle le trou, ses bords et le libellé du bouton — et rien à chercher", () => {
+    const prompt = buildMissingDayPrompt({
+      memo: { title: "Rome 2026", destinationCity: "Rome" },
+      travellerFirstName: "Hugo",
+      days: ["2026-09-26"],
+      before: "2026-09-25",
+      after: "2026-09-27",
+      beforeText: "Le marché de Testaccio avec Clara.",
+      afterText: "Le coucher de soleil depuis l'Aventin.",
+      buttonLabel: "Compléter l’étape manquante",
+      now: new Date("2026-09-28T10:00:00Z"),
+    });
+    expect(prompt).toContain("Compléter l’étape manquante");
+    expect(prompt).toContain("Testaccio");
+    expect(prompt).toContain("Aventin");
+    // La journée en clair, pas en ISO : c'est ainsi que MEMO doit la nommer.
+    expect(prompt).toMatch(/26 septembre/);
   });
 });

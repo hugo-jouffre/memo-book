@@ -14,6 +14,7 @@ import {
   type ConversationState,
   type ConversationInput,
   type ConversationReply,
+  type MemoResponder,
 } from "../services/conversation.js";
 import {
   ACKNOWLEDGED,
@@ -53,6 +54,8 @@ import {
   gapBorders,
   type Gap,
 } from "../services/conversationGaps.js";
+import { localDate } from "../services/localCalendar.js";
+import { CALLS_TO_ACTION } from "../services/callsToAction.js";
 import { photoBudgetFor, type PhotoBudgetSettings } from "../services/photoBudget.js";
 import { ensureRenderInProgress } from "../services/renderTrigger.js";
 import { samplePhotoJpegs } from "../services/samplePhotos.js";
@@ -455,10 +458,17 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   // et jamais dans le même tour qu'elle : deux relances d'affilée, c'est une
   // de trop. Tout le reste du contrat tombe de cet ancrage unique : jamais au
   // milieu d'un souvenir, ni sous une précision, ni après un refus.
-  const offer =
+  const found =
     message.suggestionId === "photos-ok" && !closing
       ? await gapToOffer(context, memo, state, now, timeZone)
       : null;
+  // **C'est MEMO qui pose la question** (21/10/2026, Hugo) : le code a trouvé
+  // le trou, le modèle demande s'il est voulu ou oublié. Un appel qui tombe,
+  // ou une bulle hors contrat, laisse parler la carte fixe — le trou se dit
+  // quand même, c'est seulement la question qui s'éteint.
+  const offer = found
+    ? { ...found, ...(await missingDayBubble(responder, found, memo, input, logger, messageId)) }
+    : null;
   if (closing) {
     reply = {
       ...reply,
@@ -580,17 +590,16 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     // **la dernière du tour**, sans puces — le sérialiseur remonte alors au
     // tour d'avant pour les siennes, qui restent celles qu'on attendait.
     if (offer) {
-      const notice = missingDayNotice(offer.gap.days, offer.before, offer.after);
       await tx.chatMessage.create({
         data: {
           memoId: memo.id,
           author: "memo",
           kind: "text",
-          text: notice,
+          text: offer.notice,
           replyToId: message.id,
           stepId: message.stepId,
-          pauseMilliseconds: pauseBeforeSaying(notice),
-          model: "scripted",
+          pauseMilliseconds: pauseBeforeSaying(offer.notice),
+          model: offer.model,
           payload: { callToAction: { id: "fill_missing_day" } },
         },
       });
@@ -879,12 +888,21 @@ async function gapToOffer(
   state: ConversationState,
   now: Date,
   timeZone: string,
-): Promise<{ gap: Gap; before: string; after: string } | null> {
+): Promise<{
+  gap: Gap;
+  before: string;
+  after: string;
+  beforeText: string | null;
+  afterText: string | null;
+} | null> {
   const entries = await context.prisma.entry.findMany({
     // Les photos n'ouvrent ni ne ferment un trou : une photo du 26 illustre le
     // plus souvent l'étape du 25.
     where: { memoId: memo.id, kind: { not: "photo" } },
-    select: { capturedAt: true },
+    // `text` sert la question de MEMO (21/10/2026) : savoir ce qui a été
+    // raconté de part et d'autre, c'est la différence entre « il te manque le
+    // 26 » et une question qui tombe juste.
+    select: { capturedAt: true, editedText: true, redactedText: true, transcript: true },
   });
   const told = entries.map((entry) => entry.capturedAt);
 
@@ -892,7 +910,63 @@ async function gapToOffer(
   if (!gap) return null;
 
   const borders = gapBorders(gap, told, timeZone);
-  return borders ? { gap, before: borders.before, after: borders.after } : null;
+  if (!borders) return null;
+
+  // Le dernier récit de la journée, quand elle en porte plusieurs : c'est lui
+  // qui touche le trou.
+  const textOn = (day: string): string | null => {
+    const ofDay = entries
+      .filter((entry) => localDate(entry.capturedAt, timeZone) === day)
+      // Le corrigé au clavier, sinon le rédigé, sinon le brut — l'ordre du reste
+      // du serveur (`routes/serializers.ts`).
+      .map((entry) => (entry.editedText ?? entry.redactedText ?? entry.transcript ?? "").trim())
+      .filter((text) => text !== "");
+    return ofDay.length > 0 ? ofDay[ofDay.length - 1]! : null;
+  };
+
+  return {
+    gap,
+    before: borders.before,
+    after: borders.after,
+    beforeText: textOn(borders.before),
+    afterText: textOn(borders.after),
+  };
+}
+
+/**
+ * La bulle du trou : celle de MEMO, ou celle du code.
+ *
+ * Le repli n'est pas un pis-aller discret — c'est la carte fixe d'avant le
+ * 21/10/2026, qui dit le trou et sa porte de sortie sans poser de question.
+ * `model` le dit : le nom du modèle, ou « scripted ».
+ */
+async function missingDayBubble(
+  responder: MemoResponder,
+  found: { gap: Gap; before: string; after: string; beforeText: string | null; afterText: string | null },
+  memo: { title: string; destinationCity: string | null },
+  input: ConversationInput,
+  logger: AppContext["logger"],
+  messageId: string,
+): Promise<{ notice: string; model: string }> {
+  const scripted = missingDayNotice(found.gap.days, found.before, found.after);
+  try {
+    const asked = await responder.askMissingDay({
+      memo: { title: memo.title, destinationCity: memo.destinationCity },
+      travellerFirstName: input.traveller.firstName,
+      days: [...found.gap.days],
+      before: found.before,
+      after: found.after,
+      beforeText: found.beforeText,
+      afterText: found.afterText,
+      buttonLabel: CALLS_TO_ACTION.fill_missing_day.label,
+      now: input.now,
+    });
+    if (asked.text) return { notice: asked.text, model: asked.model };
+    return { notice: scripted, model: "scripted" };
+  } catch (cause) {
+    logger.warn({ messageId, err: cause }, "La question du trou n'est pas venue, la carte fixe parle");
+    return { notice: scripted, model: "scripted" };
+  }
 }
 
 /**

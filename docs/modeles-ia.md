@@ -31,6 +31,8 @@ Voilà l'état des lieux, une fois OpenAI parti :
 | **Structuration** avant rendu | `services/structuring.ts` | `gpt-4o` | ⚠️ **sans compte** |
 | **Rédaction** d'un souvenir | `services/redaction.ts` | Claude Opus 5 | en place |
 | **Conversation** — MEMO | `services/conversationAnthropic.ts` | Claude Sonnet 5 | en place |
+| **Le contexte du voyage** — extraction | `conversationAnthropic.gatherContext` | Claude Sonnet 5 | en place |
+| **La journée qui manque** — la question | `conversationAnthropic.askMissingDay` | Claude Sonnet 5 | en place depuis le 21/10/2026 |
 | **Mise en page** | `services/bookPdf.ts` + APITemplate | pas de modèle | en place |
 | **Photo** | `agents/agent-photo.md` | — | phase 2 |
 | **Modération** | `agents/agent-moderation.md` | — | jamais construit |
@@ -216,6 +218,7 @@ rédacteur. Elle suit désormais la même règle que la conversation
 | Besoin | Où | Pourquoi ça bloque si ça manque |
 |---|---|---|
 | Sortie **JSON contrainte par schéma** | rédaction, conversation, structuration | Sans elle, on reparse du texte libre et on réintroduit les pannes qu'on a supprimées |
+| Un schéma que l'API **accepte vraiment** | les trois appels de MEMO | Du 03/10 au 21/10/2026, une union de types à côté d'un `enum` a fait refuser chaque tour ; le repli silencieux a répondu à la place du modèle pendant dix-huit jours, et aucun test ne l'a vu — voir [`conversation.md`](conversation.md) § 13 |
 | **Cache de prompt système** | rédaction (~9 600 jetons depuis le 02/10/2026, 12 530 avant), conversation (3 900) | Sans lui, les prix du § 2 sont faux : le système se repaie à chaque appel |
 | Un **refus** distinguable d'une réponse | les deux | Sans lui, un refus se lit comme une réponse vide et l'écran ment |
 | Un **effort de réflexion réglable** | bas pour MEMO, haut pour la rédaction | C'est ce qui sépare « MEMO répond en 2 s » de « MEMO réfléchit dix secondes » |

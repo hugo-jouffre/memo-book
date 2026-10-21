@@ -12,10 +12,13 @@ import {
   type ConversationInput,
   type ConversationReply,
   type MemoResponder,
+  type MissingDayTurnInput,
+  type MissingDayTurnReply,
   type TripContextTurnInput,
   type TripContextTurnReply,
 } from "./conversation.js";
 import { tripDate } from "./localCalendar.js";
+import { longDay } from "./conversationCopy.js";
 import { describeTripContext, questionFor, type TripContextUpdate } from "./tripContext.js";
 import {
   CALLS_TO_ACTION,
@@ -149,6 +152,36 @@ export class AnthropicResponder implements MemoResponder {
           : null,
       model: this.model,
     };
+  }
+
+  /**
+   * Demande la journée qui manque, avec les mots du fil plutôt qu'une phrase
+   * toute faite (21/10/2026, Hugo). **Le trou est déjà trouvé** par le code :
+   * ce qui est demandé ici, c'est une question — voulu, ou oublié ?
+   *
+   * Tout ce qui ne tient pas le contrat rend `null`, et la carte fixe parle :
+   * une question de travers sur un oubli vaut moins qu'une phrase neutre.
+   */
+  async askMissingDay(input: MissingDayTurnInput): Promise<MissingDayTurnReply> {
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 1_000,
+      thinking: { type: "adaptive" },
+      output_config: {
+        effort: "low",
+        format: { type: "json_schema", schema: missingDaySchema() },
+      },
+      system: [{ type: "text", text: MISSING_DAY_SYSTEM, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: buildMissingDayPrompt(input) }],
+    });
+
+    if (response.stop_reason === "refusal") throw new Error("Le modèle a refusé la question du trou.");
+    if (response.stop_reason === "max_tokens") throw new Error("La réponse s'est arrêtée avant la fin.");
+    const text = response.content.find((block) => block.type === "text")?.text;
+    if (!text) throw new Error("Le modèle n'a produit aucun texte exploitable.");
+
+    const raw = JSON.parse(text) as { text?: string | null };
+    return { text: acceptableMissingDay(raw.text ?? ""), model: this.model };
   }
 
   private buildSystemPrompt(): Anthropic.TextBlockParam[] {
@@ -675,4 +708,99 @@ export function tripContextSchema() {
 
 interface RawTripContext extends Required<{ [K in keyof TripContextUpdate]: TripContextUpdate[K] }> {
   acknowledgement: string;
+}
+
+// ---------------------------------------------------------------------------
+// La journée qui manque
+// ---------------------------------------------------------------------------
+
+/**
+ * Deux cent quarante caractères : une bulle de trois phrases courtes. Plus
+ * long, on fait la leçon sur un oubli — exactement ce qu'on ne fait pas.
+ */
+const MISSING_DAY_LIMIT = 240;
+
+const MISSING_DAY_SYSTEM = [
+  "Tu es MEMO, la voix de MemoBook. Le voyageur te raconte son voyage, et ça devient un",
+  "carnet imprimé. **Une journée de son voyage n'a aucun récit**, et le code vient de la",
+  "trouver sur les dates — elle est encadrée par deux journées racontées, donc elle a bien",
+  "été sautée. On te donne la date : tu n'as rien à chercher ni à vérifier.",
+  "",
+  "Ton travail : **une bulle, une question**. Tu dis la journée qui manque, et tu demandes",
+  "si elle a été sautée **exprès** — un jour sans rien à raconter, ça existe — ou si elle",
+  "est simplement passée sous le nez. Les deux réponses sont bonnes : c'est une question,",
+  "pas un reproche.",
+  "",
+  "Règles, sans exception :",
+  "- **N'invente rien.** Tu ne sais de ces journées que ce qu'on te donne. Tu ne devines",
+  "  pas ce qui s'y est passé, et tu ne proposes pas ce qu'elle « a dû » contenir.",
+  "- **Une seule question**, un seul point d'interrogation, dans la même phrase.",
+  "- Tutoiement. Pas de Markdown, pas d'emoji, pas de liste.",
+  "- Tu nommes la journée comme on te la donne (« le mercredi 26 »).",
+  "- Tu renvoies au bouton par son libellé exact, qu'on te donne — tu ne le réécris pas.",
+  "- **Tu n'insistes pas.** La question se pose une fois, et laisser le trou est une",
+  "  réponse acceptable : dis-le. « Sinon on le laisse comme ça » est la bonne note.",
+  "- Tu ne parles ni d'argent, ni du crédit du jour, ni de l'abonnement, ni de ce que le",
+  "  carnet « perdrait ». Tu ne dis pas que tu es une IA.",
+  "- Tu ne reproches rien, et tu ne plains pas le carnet.",
+  "",
+  "Tu réponds uniquement par l'objet JSON demandé.",
+].join("\n");
+
+export function buildMissingDayPrompt(input: MissingDayTurnInput): string {
+  const lines: string[] = ["## Le carnet", `Titre : ${input.memo.title}`];
+  if (input.memo.destinationCity) lines.push(`Destination : ${input.memo.destinationCity}`);
+  if (input.travellerFirstName) lines.push(`Celui qui raconte : ${input.travellerFirstName}`);
+  lines.push(`Aujourd'hui : ${dayOf(input.now)}`);
+
+  lines.push("", "## La journée qui manque");
+  lines.push(
+    input.days.length > 1
+      ? `Ces journées n'ont aucun récit : ${input.days.map(longDay).join(", ")}.`
+      : `Cette journée n'a aucun récit : ${longDay(input.days[0]!)}.`,
+  );
+  lines.push(`Elle est encadrée par ${longDay(input.before)} et ${longDay(input.after)}, racontées.`);
+
+  if (input.beforeText) {
+    lines.push("", `## Ce qu'il a raconté du ${longDay(input.before)}`, truncate(input.beforeText, 400));
+  }
+  if (input.afterText) {
+    lines.push("", `## Ce qu'il a raconté du ${longDay(input.after)}`, truncate(input.afterText, 400));
+  }
+
+  lines.push("", "## Le bouton sous ta bulle");
+  lines.push(`Son libellé, exactement : « ${input.buttonLabel} »`);
+  lines.push("", `Écris ta bulle : ${MISSING_DAY_LIMIT} caractères au plus, une seule question.`);
+  return lines.join("\n");
+}
+
+export function missingDaySchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      text: {
+        type: "string",
+        description:
+          `Ta bulle : la journée qui manque, et une seule question — voulu ou oublié. ` +
+          `${MISSING_DAY_LIMIT} caractères au plus.`,
+      },
+    },
+    required: ["text"],
+  };
+}
+
+/**
+ * Ce qui passe, et ce qui rend la main à la carte fixe. Une bulle trop longue,
+ * muette ou qui pose deux questions n'est pas rattrapée : sur un oubli, une
+ * phrase neutre vaut mieux qu'une question de travers.
+ */
+export function acceptableMissingDay(raw: string): string | null {
+  const text = raw.trim().replace(/\s+/g, " ");
+  if (text.length === 0 || text.length > MISSING_DAY_LIMIT) return null;
+  // Une question, et une seule : c'est tout l'objet de cette bulle.
+  if ((text.match(/[?？]/g) ?? []).length !== 1) return null;
+  if (/[*_#`]|\p{Extended_Pictographic}/u.test(text)) return null;
+  // Le vouvoiement ne se tranche pas ici : un co-voyageur rend « vous » correct.
+  return text;
 }

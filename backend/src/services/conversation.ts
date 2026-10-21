@@ -256,6 +256,37 @@ export interface TripContextTurnReply {
   model: string;
 }
 
+/**
+ * **La journée qui manque, telle que MEMO la demande** (21/10/2026, Hugo).
+ *
+ * Le trou reste calculé par le code — `conversationGaps.ts`, sur des dates, et
+ * rien d'autre : un trou inventé serait pire que pas de trou du tout. Ce que
+ * le modèle fait, c'est **poser la question**, en contexte, et demander si la
+ * journée a été sautée exprès ou si elle est passée sous le nez. La carte à
+ * texte fixe (`missingDayNotice`) reste le repli quand l'appel tombe.
+ */
+export interface MissingDayTurnInput {
+  memo: { title: string; destinationCity: string | null };
+  travellerFirstName: string | null;
+  /** Les journées sans récit, en ISO, telles que le code les a trouvées. */
+  days: string[];
+  /** La journée racontée juste avant le trou, et celle juste après. */
+  before: string;
+  after: string;
+  /** Ce qui a été raconté de part et d'autre — de quoi poser une question qui tombe juste. */
+  beforeText: string | null;
+  afterText: string | null;
+  /** Le libellé exact du bouton posé sous la bulle, pour que MEMO y renvoie sans le réécrire. */
+  buttonLabel: string;
+  now: Date;
+}
+
+export interface MissingDayTurnReply {
+  /** Une bulle, une question : voulu ou oublié. `null` laisse parler la carte fixe. */
+  text: string | null;
+  model: string;
+}
+
 export interface MemoResponder {
   /** L'ouverture : une copie fixe, sans modèle. Sur l'interface pour refléter `MemoResponder.swift`. */
   opening(): { text: string; suggestionIds: SuggestionId[] };
@@ -265,6 +296,11 @@ export interface MemoResponder {
    * extrait ; **le code** décide de ce qui manque et de la question suivante.
    */
   gatherContext(input: TripContextTurnInput): Promise<TripContextTurnReply>;
+  /**
+   * Demande la journée qui manque. **Le code a déjà trouvé le trou** : le
+   * répondeur n'a qu'à l'énoncer et à demander si c'est voulu ou oublié.
+   */
+  askMissingDay(input: MissingDayTurnInput): Promise<MissingDayTurnReply>;
 }
 
 // ---------------------------------------------------------------------------
@@ -561,6 +597,11 @@ export class FakeResponder implements MemoResponder {
       acknowledgement: null,
       model: "fake",
     };
+  }
+
+  /** Sans modèle, la carte fixe dit déjà tout : `null` la laisse parler. */
+  async askMissingDay(_input: MissingDayTurnInput): Promise<MissingDayTurnReply> {
+    return { text: null, model: "fake" };
   }
 
   /** Vocal et photo = souvenir ; puce = commande ; texte court sur un souvenir en cours = précision. */

@@ -723,11 +723,57 @@ celui du banc de rédaction (Opus 5.5, `modeles-ia.md` § Décisions, 02/10). Ic
 le prompt système est mis en cache, et 21 des 22 scènes le relisent au tarif
 cache.
 
+### La question du trou — 21/10/2026, Sonnet 5
+
+Hugo, le 21/10 : la carte à texte fixe ne suffit pas, il veut que MEMO
+**questionne** le voyageur sur son trou — et distingue le jour sauté exprès du
+jour passé sous le nez. La carte disait le trou sans jamais demander pourquoi.
+
+Ce qui ne change pas, et c'est l'essentiel : **le code trouve toujours le
+trou.** Un trou se calcule sur des dates ; un trou inventé serait pire que pas
+de trou du tout, et ça reste vrai. Ce qui change, c'est qui écrit la phrase.
+
+| | Avant le 21/10 | Depuis |
+|---|---|---|
+| Qui trouve le trou | `conversationGaps.ts`, sur les dates | inchangé |
+| Qui écrit la bulle | `missingDayNotice`, texte fixe | MEMO, avec les mots du fil |
+| Y a-t-il une question | non — « le bouton est la question » | oui, une : voulu ou oublié |
+| Quand l'appel tombe | — | la carte fixe parle, et `model` dit « scripted » |
+
+Le tour où la carte s'accroche — « Je valide mes photos », le seul instant au
+repos du déroulé — est un tour **scripté** : le modèle n'y est pas appelé. La
+question du trou est donc un **troisième appel**, sur le modèle du second
+(celui qui extrait le contexte du voyage) : son prompt système, son schéma, sa
+validation, et son repli. Le § 8 du prompt de conversation **ne change pas** :
+MEMO ne relève toujours jamais un trou de lui-même dans le fil, et ce qu'on a
+mesuré le matin du 21/10 reste valable.
+
+Ce que la validation jette, plutôt que de le rattraper : une bulle sans
+question, avec deux questions, de plus de 240 caractères, vide, ou qui porte du
+Markdown. Dans tous ces cas la carte fixe parle. Sur un oubli, une phrase
+neutre vaut mieux qu'une question de travers.
+
+Deux scènes neuves, et le banc a son mode (`--missing-day`) — un trou d'un
+jour, un trou de deux. Les deux passent du premier coup :
+
+> Entre Testaccio et l'Aventin, le samedi 26 septembre reste silencieux.
+> Journée volontairement calme ou simplement oubliée en chemin ? Si tu veux la
+> raconter, « Compléter l'étape manquante » est là, sinon on le laisse comme ça.
+
+Une correction dans le banc, la quatrième de cette famille : les deux
+apostrophes se valent quand on compare le libellé du bouton. Le catalogue porte
+la typographique (’), le modèle écrit la droite (') — à l'écran c'est le même
+libellé.
+
+**Le plafond de deux jours reste** (Hugo, 21/10) : au-delà, ce n'est plus un
+oubli mais une façon de raconter, et seule la manière de demander a changé.
+
 ### L'outil de relecture
 
 ```bash
 cd backend && npm run conversation:eval            # Claude, sur toutes les scènes
 cd backend && npm run conversation:eval -- --heuristic   # le moteur de règles, sans clé
+cd backend && npm run conversation:eval -- --missing-day  # la question du trou
 ```
 
 Le script (`backend/scripts/conversation-eval.ts`) fait parler MEMO sur les
@@ -791,3 +837,5 @@ exactement ce que le modèle doit faire mieux.
 | 19/10/2026 | Raconter une journée passée se fait par ce bouton, qui date le récit suivant sur elle ; pas de choix de date libre, et des puces datées seulement quand il manque deux journées | Hugo |
 | 21/10/2026 | Un `enum` de schéma de sortie ne porte pas de `type` à côté : l'API refuse l'union, et le repli silencieux rendait la panne invisible hors du banc (§ 13) | reco Claude |
 | 21/10/2026 | Un mot du vocabulaire du prompt ne s'emploie pas au sens courant ailleurs dans le prompt : « relance » au § 8 faisait écrire des relances au § 7, mesuré à 6 sur 8 | reco Claude |
+| 21/10/2026 | C'est MEMO qui pose la question du trou, et il demande si la journée est sautée exprès ou oubliée ; le code continue de trouver le trou, et la carte fixe reste le repli | Hugo |
+| 21/10/2026 | Le plafond de deux jours ne bouge pas : seule la façon de demander change | Hugo |
