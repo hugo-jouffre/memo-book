@@ -102,23 +102,48 @@ fun resourceName(iosName: String): String = iosName
  * Un seul prétraitement : les `<mask>` de Figma sont retirés. VectorDrawable ne
  * sait pas masquer, et dans ce catalogue un masque ne sert qu'à cacher la
  * moitié intérieure d'un contour de 0,3 posé sur un aplat de la même couleur
- * (`IconStar`, `IconPlusOutlined…`) : sans lui, le dessin est le même.
+ * (`IconStar`, `IconPlusOutlinedDuo`) : sans lui, le dessin est le même.
+ *
+ * Un cas de plus : Figma exporte parfois ce contour **déjà développé**, en un
+ * tracé plein masqué — 73 180 caractères pour `IconPlusOutlined`. aapt2 ne
+ * stocke pas une chaîne de plus de 32 767 caractères, et la tronque sans le
+ * dire : l'image plantait l'écran qui l'affichait (21/10/2026). Ce tracé-là est
+ * redessiné en ce qu'il est, le contour de 0,3 du tracé du masque — le dessin
+ * même de son jumeau `Duo`.
  */
 fun convert(source: Path, target: Path): String {
-    val svg = source.readText()
+    val notes = StringBuilder()
+    var svg = source.readText()
+    val maskPaths = Regex("<mask\\b[^>]*\\bid=\"([^\"]+)\"[^>]*>(.*?)</mask>", RegexOption.DOT_MATCHES_ALL)
+        .findAll(svg)
+        .associate { it.groupValues[1] to Regex("<path\\b[^>]*\\bd=\"([^\"]+)\"").find(it.groupValues[2])?.groupValues?.get(1) }
+    svg = Regex("<path\\b([^>]*)\\bd=\"([^\"]{$MAX_PATH_LENGTH,})\"([^>]*)\\bmask=\"url\\(#([^)]+)\\)\"([^>]*)/>").replace(svg) { match ->
+        val outline = maskPaths[match.groupValues[4]] ?: return@replace match.value
+        val color = Regex("fill=\"([^\"]+)\"").find(match.value)?.groupValues?.get(1) ?: "#2D231A"
+        notes.append("contour développé de ${match.groupValues[2].length} caractères redessiné en trait de 0,3")
+        "<path d=\"$outline\" stroke=\"$color\" stroke-width=\"0.3\" stroke-linejoin=\"round\"/>"
+    }
+    svg = svg
         .replace(Regex("<mask\\b[^>]*>.*?</mask>", RegexOption.DOT_MATCHES_ALL), "")
         .replace(Regex("\\smask=\"url\\(#[^)]*\\)\""), "")
     val prepared = Files.createTempFile("memobook-", ".svg")
     try {
         prepared.writeText(svg)
         val out = ByteArrayOutputStream()
-        val warnings = Svg2Vector.parseSvgToXml(prepared, out)
-        target.writeText(out.toString(Charsets.UTF_8))
-        return warnings
+        notes.append(Svg2Vector.parseSvgToXml(prepared, out))
+        val xml = out.toString(Charsets.UTF_8)
+        target.writeText(xml)
+        Regex("pathData=\"([^\"]{$MAX_PATH_LENGTH,})\"").findAll(xml).forEach {
+            notes.append(" ⚠️ tracé de ${it.groupValues[1].length} caractères : aapt2 le tronquera, simplifier la source")
+        }
+        return notes.toString()
     } finally {
         Files.deleteIfExists(prepared)
     }
 }
+
+/** La plus longue chaîne qu'aapt2 sait stocker dans une ressource compilée. */
+private const val MAX_PATH_LENGTH = 32_767
 
 private fun brandImagesSource(entries: List<Pair<String, String>>): String = buildString {
     appendLine("// Généré par `./gradlew :tools:importBrandAssets` — ne pas éditer à la main.")
