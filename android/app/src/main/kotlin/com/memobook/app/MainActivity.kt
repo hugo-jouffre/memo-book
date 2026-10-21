@@ -18,8 +18,16 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         val dependencies = (application as MemoBookApplication).dependencies
+        // Les interrupteurs de lancement, comme les arguments du simulateur iOS
+        // (`-previewSignedIn`…) : des extras de l'intention, sans effet en Release.
+        //   make run ARGS="--ez designCatalogue true"
+        val opensDesignCatalogue = BuildConfig.DEBUG && intent.getBooleanExtra("designCatalogue", false)
         setContent {
-            RootView(dependencies = dependencies, showsDeveloperDetails = BuildConfig.DEBUG)
+            RootView(
+                dependencies = dependencies,
+                showsDeveloperDetails = BuildConfig.DEBUG,
+                opensDesignCatalogue = opensDesignCatalogue,
+            )
         }
     }
 }

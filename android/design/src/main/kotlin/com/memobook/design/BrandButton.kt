@@ -318,11 +318,11 @@ private fun BrandButtonPreview() {
         verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.s),
     ) {
         BrandButton("Découvre MemoBook", icon = arrow, fillsWidth = true) {}
-        Row {
+        Row(horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {
             BrandButton("Primary", icon = arrow) {}
             BrandButton("Secondary", style = BrandButton.Style.Secondary) {}
         }
-        Row {
+        Row(horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {
             BrandButton("Tertiary", style = BrandButton.Style.Tertiary) {}
             BrandButton(
                 "Link",
@@ -331,7 +331,7 @@ private fun BrandButtonPreview() {
                 style = BrandButton.Style.Link,
             ) {}
         }
-        Row {
+        Row(horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {
             BrandButton("Small", size = BrandButton.Size.Small) {}
             BrandButton(icon = arrow, size = BrandButton.Size.Small, contentDescription = "Suivant") {}
             BrandButton(icon = arrow, contentDescription = "Suivant") {}
@@ -351,6 +351,7 @@ private fun BrandButtonPreview() {
             Modifier
                 .background(MemoBookColor.surface, RoundedCornerShape(MemoBookSpacing.largeCornerRadius))
                 .padding(MemoBookSpacing.s),
+            horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs),
         ) {
             BrandButton("Soft", style = BrandButton.Style.Soft) {}
             BrandButton(icon = arrow, style = BrandButton.Style.Soft, isRound = true, contentDescription = "Suivant") {}

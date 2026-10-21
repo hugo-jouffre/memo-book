@@ -5,6 +5,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -16,6 +17,28 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
+}
+
+// Chaque @Preview du module est aussi un test de capture : `make snapshots`
+// enregistre les images de référence dans `src/test/screenshots`, la CI les
+// compare. Les previews privées comptent — ce sont celles des composants.
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
+    @OptIn(com.github.takahirom.roborazzi.ExperimentalRoborazziApi::class)
+    generateComposePreviewRobolectricTests {
+        enable.set(true)
+        packages.set(listOf("com.memobook.design"))
+        includePrivatePreviews.set(true)
+        robolectricConfig.set(mapOf("sdk" to "[36]", "qualifiers" to "RobolectricDeviceQualifiers.Pixel7"))
+    }
+}
+
+// Robolectric lit les descripteurs de fichiers par un accès interne du JDK,
+// que le JDK 21 ferme par défaut.
+tasks.withType<Test>().configureEach {
+    jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED", "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
+    maxHeapSize = "2g"
 }
 
 // `res-brand/` est écrit par `./gradlew :tools:importBrandAssets`, et par lui
@@ -35,4 +58,13 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.preview.scanner)
+    testImplementation(libs.preview.scanner)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

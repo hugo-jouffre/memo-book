@@ -2,12 +2,15 @@ package com.memobook.design
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,6 +23,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -88,9 +92,18 @@ private fun ErrorMark() {
     )
 }
 
+/** Un lien du bandeau : le corps du message, au vert d'action — le `Button` nu de SwiftUI, teinté. */
 @Composable
 private fun ErrorLink(title: String, action: () -> Unit) {
-    BrandButton(title, style = BrandButton.Style.Link, action = action)
+    BrandText(
+        text = title,
+        style = MemoBookFont.notification,
+        color = MemoBookColor.action,
+        modifier = Modifier
+            .sizeIn(minHeight = MemoBookSpacing.minimumTapTarget)
+            .clickable(role = Role.Button, onClick = action)
+            .wrapContentHeight(),
+    )
 }
 
 /**
