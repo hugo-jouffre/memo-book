@@ -53,6 +53,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    // L'app ne parle que français (`FrenchLocale`) : on n'embarque que les
+    // traductions françaises des bibliothèques, et le Play Store ne découpe pas
+    // le paquet par langue — un téléphone réglé en anglais recevrait sinon les
+    // textes anglais des bibliothèques, et non les français que l'app affiche.
+    androidResources { localeFilters += setOf("fr") }
+    bundle { language { enableSplit = false } }
 }
 
 dependencies {
