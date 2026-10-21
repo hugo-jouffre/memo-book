@@ -118,7 +118,7 @@ object BrandStatusBarScrim {
     fun fadeHeight(height: Dp): Dp = max(0.dp, min(maximumFadeHeight, height / 3))
 }
 
-@Preview(name = "Voile de la barre d’état", widthDp = 390, heightDp = 600)
+@Preview(locale = "fr-rFR", name = "Voile de la barre d’état", widthDp = 390, heightDp = 600)
 @Composable
 private fun BrandStatusBarScrimPreview() {
     BrandStatusBarScrim(Modifier.background(MemoBookColor.background)) {

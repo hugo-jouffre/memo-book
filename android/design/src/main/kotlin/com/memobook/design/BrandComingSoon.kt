@@ -130,7 +130,7 @@ fun BrandComingSoon(
 /** Le voile de la carte : celui de « Bientôt disponible ». */
 private const val CONTENT_OPACITY = 0.45f
 
-@Preview(name = "À venir", widthDp = 390, heightDp = 300)
+@Preview(locale = "fr-rFR", name = "À venir", widthDp = 390, heightDp = 300)
 @Composable
 private fun BrandComingSoonPreview() {
     Column(

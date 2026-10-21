@@ -98,7 +98,7 @@ fun BrandGauge(
 private fun percent(fraction: Float): String =
     NumberFormat.getPercentInstance().apply { maximumFractionDigits = 0 }.format(fraction.toDouble())
 
-@Preview(name = "Jauge", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Jauge", widthDp = 390)
 @Composable
 private fun BrandGaugePreview() {
     Column(

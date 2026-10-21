@@ -223,7 +223,7 @@ private fun BubbleRow(author: ChatAuthor, text: String) {
     }
 }
 
-@Preview(name = "Bulles", widthDp = 390, heightDp = 500)
+@Preview(locale = "fr-rFR", name = "Bulles", widthDp = 390, heightDp = 500)
 @Composable
 private fun BrandChatBubblePreview() {
     Column(
@@ -239,7 +239,7 @@ private fun BrandChatBubblePreview() {
     }
 }
 
-@Preview(name = "Bulles — police à 200 %", widthDp = 390, heightDp = 500)
+@Preview(locale = "fr-rFR", name = "Bulles — police à 200 %", widthDp = 390, heightDp = 500)
 @Composable
 private fun BrandChatBubbleLargeTextPreview() {
     val density = LocalDensity.current

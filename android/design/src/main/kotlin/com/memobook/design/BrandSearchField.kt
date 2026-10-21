@@ -79,10 +79,10 @@ fun BrandSearchField(
     val shape = RoundedCornerShape(percent = 50)
     val borderColor by animateColorAsState(
         if (isFocused) MemoBookColor.action else MemoBookColor.hairline,
-        SwiftUISpring.smooth(200),
+        SwiftMotion.smooth(0.2f),
         label = "contour",
     )
-    val borderWidth by animateDpAsState(if (isFocused) 1.5.dp else 1.dp, SwiftUISpring.smooth(200), label = "trait")
+    val borderWidth by animateDpAsState(if (isFocused) 1.5.dp else 1.dp, SwiftMotion.smooth(0.2f), label = "trait")
 
     CompositionLocalProvider(LocalTextSelectionColors provides BrandTextSelectionColors) {
         Row(
@@ -131,8 +131,8 @@ fun BrandSearchField(
 
             AnimatedVisibility(
                 visible = value.isNotEmpty(),
-                enter = fadeIn(SwiftUISpring.smooth(200)),
-                exit = fadeOut(SwiftUISpring.smooth(200)),
+                enter = fadeIn(SwiftMotion.smooth(0.2f)),
+                exit = fadeOut(SwiftMotion.smooth(0.2f)),
             ) {
                 // La croix ne pousse pas le champ en apparaissant : elle est ramenée
                 // à la hauteur du glyphe, sa cible de 48 déborde la capsule.
@@ -165,7 +165,7 @@ fun BrandSearchField(
     }
 }
 
-@Preview(name = "Champ de recherche", widthDp = 390, heightDp = 200)
+@Preview(locale = "fr-rFR", name = "Champ de recherche", widthDp = 390, heightDp = 200)
 @Composable
 private fun BrandSearchFieldPreview() {
     var empty by remember { mutableStateOf("") }

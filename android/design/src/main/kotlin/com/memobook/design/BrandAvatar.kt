@@ -81,7 +81,7 @@ fun BrandAvatar(
     }
 }
 
-@Preview(name = "Portraits")
+@Preview(locale = "fr-rFR", name = "Portraits")
 @Composable
 private fun BrandAvatarPreview() {
     Row(

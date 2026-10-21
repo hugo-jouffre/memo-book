@@ -125,7 +125,7 @@ fun BrandCountryField(
             ) {
                 // Le nom change en fondu quand on choisit, comme une valeur qui
                 // s'écrit — pas d'un coup sec.
-                Crossfade(display, Modifier.weight(1f), animationSpec = SwiftUISpring.snappy(200), label = "pays") { shown ->
+                Crossfade(display, Modifier.weight(1f), animationSpec = SwiftMotion.snappy(0.2f), label = "pays") { shown ->
                     BrandText(
                         shown.text,
                         // Le texte indicatif prend le dessin de celui d'un
@@ -254,7 +254,7 @@ private class BelowTheField(private val margin: Int, private val gap: Int) : Pop
     }
 }
 
-@Preview(name = "Pays", widthDp = 390, heightDp = 360)
+@Preview(locale = "fr-rFR", name = "Pays", widthDp = 390, heightDp = 360)
 @Composable
 private fun BrandCountryFieldPreview() {
     val countries = listOf(

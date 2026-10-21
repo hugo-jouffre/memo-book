@@ -39,7 +39,7 @@ fun BrandIconBadge(@DrawableRes icon: Int, modifier: Modifier = Modifier) {
     )
 }
 
-@Preview
+@Preview(locale = "fr-rFR")
 @Composable
 private fun BrandIconBadgePreview() {
     BrandIconBadge(R.drawable.icon_locker)

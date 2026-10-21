@@ -125,7 +125,7 @@ object BrandFilterChip {
     }
 }
 
-@Preview(name = "Filtres", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Filtres", widthDp = 390)
 @Composable
 private fun BrandFilterChipPreview() {
     Column(

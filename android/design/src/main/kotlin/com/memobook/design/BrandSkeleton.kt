@@ -99,7 +99,7 @@ fun BrandSkeleton(
     )
 }
 
-@Preview(name = "Barres d’attente", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Barres d’attente", widthDp = 390)
 @Composable
 private fun BrandSkeletonPreview() {
     Column(

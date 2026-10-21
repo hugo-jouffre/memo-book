@@ -146,7 +146,7 @@ fun BrandLimitBanner(
     }
 }
 
-@Preview(name = "Bandeau de limite — ses trois états", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Bandeau de limite — ses trois états", widthDp = 390)
 @Composable
 private fun BrandLimitBannerPreview() {
     Column(

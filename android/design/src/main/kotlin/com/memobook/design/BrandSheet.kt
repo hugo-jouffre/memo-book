@@ -256,7 +256,7 @@ private fun BrandSheetLayout(
     // s'arrête pas à l'app, il traverse la pile de feuilles.
     val coverScale by animateFloatAsState(
         targetValue = if (isCoveredByAnotherSheet) 0.94f else 1f,
-        animationSpec = if (reduceMotion) snap() else SwiftUISpring.smooth(350),
+        animationSpec = if (reduceMotion) snap() else SwiftMotion.smooth(0.35f),
         label = "recul",
     )
     val shape = brandSheetShape()
@@ -582,9 +582,9 @@ internal fun SheetPresentation(
     LaunchedEffect(isPresented) {
         if (isPresented) {
             isShowing = true
-            presence.animateTo(0f, SwiftUISpring.smooth(SHEET_MOTION_MS))
+            presence.animateTo(0f, SwiftMotion.smooth(SHEET_MOTION_MS / 1000f))
         } else if (isShowing) {
-            presence.animateTo(1f, SwiftUISpring.smooth(SHEET_MOTION_MS))
+            presence.animateTo(1f, SwiftMotion.smooth(SHEET_MOTION_MS / 1000f))
             isShowing = false
         }
     }
@@ -707,7 +707,7 @@ private class SheetDrag(
                 withFrameNanos {}
                 if (!isStillPresented()) return@launch
             }
-            animate(offset, 0f, velocity, SwiftUISpring.smooth(SHEET_MOTION_MS)) { value, _ -> offset = value }
+            animate(offset, 0f, velocity, SwiftMotion.smooth(SHEET_MOTION_MS / 1000f)) { value, _ -> offset = value }
         }
     }
 
@@ -857,7 +857,7 @@ fun BrandSheetPresenter(isPresented: Boolean, modifier: Modifier = Modifier, con
     // retrouvé sa taille avant que la feuille ait fini de partir.
     val recoil by animateFloatAsState(
         targetValue = if (isPresented) 1f else 0f,
-        animationSpec = if (reduceMotion) snap() else SwiftUISpring.smooth(if (isPresented) 350 else 200),
+        animationSpec = if (reduceMotion) snap() else SwiftMotion.smooth(if (isPresented) 0.35f else 0.2f),
         label = "recul",
     )
     val screenRadius = DeviceScreen.cornerRadius()
@@ -894,28 +894,10 @@ fun BrandSheetPresenter(isPresented: Boolean, modifier: Modifier = Modifier, con
 
 // MARK: - Les ressorts de SwiftUI
 
-/**
- * Les ressorts nommés de SwiftUI, pour que les durées se recopient telles
- * quelles. `.smooth(duration:)` et `.snappy(duration:)` sont des ressorts à
- * durée perçue : raideur (2π / durée)², amortissement 1 pour `smooth`, 0,85
- * pour `snappy` (son rebond de 0,15, plus `extraBounce`).
- */
-internal object SwiftUISpring {
-    fun <T> smooth(durationMillis: Int): SpringSpec<T> =
-        spring(dampingRatio = 1f, stiffness = stiffness(durationMillis))
-
-    fun <T> snappy(durationMillis: Int, extraBounce: Float = 0f): SpringSpec<T> =
-        spring(dampingRatio = 1f - (0.15f + extraBounce), stiffness = stiffness(durationMillis))
-
-    private fun stiffness(durationMillis: Int): Float {
-        val omega = 2f * PI.toFloat() / (durationMillis / 1000f)
-        return omega * omega
-    }
-}
 
 // MARK: - Aperçus
 
-@Preview(name = "Feuille, titre à gauche", widthDp = 390, heightDp = 520)
+@Preview(locale = "fr-rFR", name = "Feuille, titre à gauche", widthDp = 390, heightDp = 520)
 @Composable
 private fun BrandSheetLeadingPreview() {
     Box(Modifier.fillMaxSize().background(MemoBookColor.background), contentAlignment = Alignment.BottomCenter) {
@@ -925,7 +907,7 @@ private fun BrandSheetLeadingPreview() {
     }
 }
 
-@Preview(name = "Feuille centrée, icône et pastille", widthDp = 390, heightDp = 620)
+@Preview(locale = "fr-rFR", name = "Feuille centrée, icône et pastille", widthDp = 390, heightDp = 620)
 @Composable
 private fun BrandSheetCenteredPreview() {
     Box(Modifier.fillMaxSize().background(MemoBookColor.background), contentAlignment = Alignment.BottomCenter) {
@@ -941,7 +923,7 @@ private fun BrandSheetCenteredPreview() {
     }
 }
 
-@Preview(name = "Feuille, illustration devant le titre", widthDp = 390, heightDp = 420)
+@Preview(locale = "fr-rFR", name = "Feuille, illustration devant le titre", widthDp = 390, heightDp = 420)
 @Composable
 private fun BrandSheetLeadingArtworkPreview() {
     Box(Modifier.fillMaxSize().background(MemoBookColor.background), contentAlignment = Alignment.BottomCenter) {
@@ -951,7 +933,7 @@ private fun BrandSheetLeadingArtworkPreview() {
     }
 }
 
-@Preview(name = "Feuille d’écoute", widthDp = 390, heightDp = 420)
+@Preview(locale = "fr-rFR", name = "Feuille d’écoute", widthDp = 390, heightDp = 420)
 @Composable
 private fun BrandSheetListeningPreview() {
     Box(Modifier.fillMaxSize().background(MemoBookColor.background), contentAlignment = Alignment.BottomCenter) {

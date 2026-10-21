@@ -153,7 +153,7 @@ private fun SelectionMark(isSelected: Boolean) {
     }
 }
 
-@Preview(name = "Options", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Options", widthDp = 390)
 @Composable
 private fun BrandOptionGroupPreview() {
     Column(

@@ -30,6 +30,8 @@ roborazzi {
         enable.set(true)
         packages.set(listOf("com.memobook.design"))
         includePrivatePreviews.set(true)
+        // La langue vient de chaque preview (`@Preview(locale = "fr-rFR")`), comme
+        // l'app est en français (`FrenchLocale`) : le testeur l'applique par-dessus.
         robolectricConfig.set(mapOf("sdk" to "[36]", "qualifiers" to "RobolectricDeviceQualifiers.Pixel7"))
     }
 }

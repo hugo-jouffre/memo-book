@@ -379,7 +379,7 @@ private object GeneralSansMetrics {
 /** Le `.snappy(duration: 0.22)` du champ, ou rien sous « Supprimer les animations ». */
 @Composable
 private fun <T> fieldMotion(): FiniteAnimationSpec<T> =
-    if (isReduceMotionEnabled()) snap() else SwiftUISpring.snappy(220)
+    if (isReduceMotionEnabled()) snap() else SwiftMotion.snappy(0.22f)
 
 private fun placeholderAlignment(textAlign: TextAlign): Alignment = when (textAlign) {
     TextAlign.Center -> Alignment.Center
@@ -455,7 +455,7 @@ internal fun rememberFocusBinding(
 
 private enum class PreviewField { Email, Password, Street, Code }
 
-@Preview(name = "Champs", widthDp = 390, heightDp = 640)
+@Preview(locale = "fr-rFR", name = "Champs", widthDp = 390, heightDp = 640)
 @Composable
 private fun BrandTextFieldPreview() {
     var focus by remember { mutableStateOf<PreviewField?>(null) }

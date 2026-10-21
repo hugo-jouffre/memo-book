@@ -207,7 +207,7 @@ object BrandSegmentedPicker {
     }
 }
 
-@Preview(name = "Sélecteur à segments", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Sélecteur à segments", widthDp = 390)
 @Composable
 private fun BrandSegmentedPickerPreview() {
     var selection by remember { mutableStateOf("Inscription") }

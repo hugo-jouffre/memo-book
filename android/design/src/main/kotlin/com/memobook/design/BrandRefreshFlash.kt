@@ -202,7 +202,7 @@ private const val BADGE_DURATION_MS = 1800L
 /** Le temps de vider la région vivante, pour qu'une deuxième mise à jour s'annonce aussi. */
 private const val ANNOUNCEMENT_RESET_MS = 100L
 
-@Preview(name = "Mise à jour en direct", widthDp = 390, heightDp = 400)
+@Preview(locale = "fr-rFR", name = "Mise à jour en direct", widthDp = 390, heightDp = 400)
 @Composable
 private fun BrandRefreshFlashPreview() {
     var isUpdated by remember { mutableStateOf(false) }

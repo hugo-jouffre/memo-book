@@ -260,7 +260,7 @@ object BrandWaveform {
     }
 }
 
-@Preview(name = "Formes d’onde", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Formes d’onde", widthDp = 390)
 @Composable
 private fun BrandWaveformPreview() {
     Column(
@@ -277,7 +277,7 @@ private fun BrandWaveformPreview() {
     }
 }
 
-@Preview(name = "Frise de la feuille", widthDp = 390, heightDp = 500)
+@Preview(locale = "fr-rFR", name = "Frise de la feuille", widthDp = 390, heightDp = 500)
 @Composable
 private fun BrandWaveformSheetPreview() {
     Column(

@@ -83,7 +83,7 @@ object BrandMarkBackdrop {
     internal const val VERTICAL_SHIFT = 0.09f
 }
 
-@Preview(name = "Le M en fond", widthDp = 390, heightDp = 844)
+@Preview(locale = "fr-rFR", name = "Le M en fond", widthDp = 390, heightDp = 844)
 @Composable
 private fun BrandMarkBackdropPreview() {
     Box(

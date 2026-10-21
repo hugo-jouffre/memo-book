@@ -252,7 +252,7 @@ private fun DisclosureHeader(
     }
 }
 
-@Preview(name = "Carte dépliable", widthDp = 390, heightDp = 640)
+@Preview(locale = "fr-rFR", name = "Carte dépliable", widthDp = 390, heightDp = 640)
 @Composable
 private fun BrandDisclosureCardPreview() {
     var isFirstOpen by remember { mutableStateOf(true) }

@@ -289,7 +289,7 @@ internal object BrandSlider {
     fun moved(value: Int, delta: Int, bounds: IntRange): Int = (value + delta).coerceIn(bounds.first, bounds.last)
 }
 
-@Preview(name = "Curseur", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Curseur", widthDp = 390)
 @Composable
 private fun BrandSliderPreview() {
     var ratio by remember { mutableIntStateOf(50) }

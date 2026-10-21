@@ -129,7 +129,7 @@ fun Modifier.brandHorizontalFade(width: Dp = MemoBookSpacing.s): Modifier = this
         )
     }
 
-@Preview(name = "Bandeaux d'erreur", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Bandeaux d'erreur", widthDp = 390)
 @Composable
 private fun ErrorBannerPreview() {
     Column(

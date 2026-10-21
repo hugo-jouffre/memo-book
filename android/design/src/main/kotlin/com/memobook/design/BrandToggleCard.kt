@@ -238,7 +238,7 @@ private val SwitchInset = 2.dp
 /** Le rail éteint du `UISwitch` : le gris de remplissage du système (#787880 à 16 %), repris tel quel. */
 private val SwitchOffTrack = Color(0x29787880)
 
-@Preview(name = "Carte à interrupteur", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Carte à interrupteur", widthDp = 390)
 @Composable
 private fun BrandToggleCardPreview() {
     var isOn by remember { mutableStateOf(true) }

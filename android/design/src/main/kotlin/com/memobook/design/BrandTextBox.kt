@@ -124,7 +124,7 @@ private fun resolvedSpan(lineSpan: IntRange, isAccessibilitySize: Boolean): IntR
     return maxOf(2, lineSpan.first - 1)..maxOf(3, lineSpan.last - 4)
 }
 
-@Preview(name = "Texte long", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Texte long", widthDp = 390)
 @Composable
 private fun BrandTextBoxPreview() {
     var empty by remember { mutableStateOf("") }

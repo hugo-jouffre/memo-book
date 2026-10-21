@@ -311,7 +311,7 @@ object BrandButton {
     }
 }
 
-@Preview(name = "Boutons", widthDp = 390, heightDp = 760)
+@Preview(locale = "fr-rFR", name = "Boutons", widthDp = 390, heightDp = 760)
 @Composable
 private fun BrandButtonPreview() {
     val arrow = painterResource(R.drawable.icon_arrow_right)

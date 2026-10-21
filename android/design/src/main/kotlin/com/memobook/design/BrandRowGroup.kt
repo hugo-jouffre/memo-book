@@ -819,7 +819,7 @@ private fun ConfirmableMark(isConfirmed: Boolean, side: Dp, glyphSide: Dp, idle:
 
 // Aperçus
 
-@Preview(name = "Lignes groupées", widthDp = 390, heightDp = 640)
+@Preview(locale = "fr-rFR", name = "Lignes groupées", widthDp = 390, heightDp = 640)
 @Composable
 private fun BrandRowGroupPreview() {
     Column(
@@ -850,7 +850,7 @@ private fun BrandRowGroupPreview() {
     }
 }
 
-@Preview(name = "Lignes groupées — AX3", widthDp = 390, heightDp = 640, fontScale = 2f)
+@Preview(locale = "fr-rFR", name = "Lignes groupées — AX3", widthDp = 390, heightDp = 640, fontScale = 2f)
 @Composable
 private fun BrandRowGroupAccessibilityPreview() {
     Column(

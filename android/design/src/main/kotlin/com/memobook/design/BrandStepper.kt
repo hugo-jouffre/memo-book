@@ -179,7 +179,7 @@ private fun StepperButton(
     }
 }
 
-@Preview(name = "Compteur")
+@Preview(locale = "fr-rFR", name = "Compteur")
 @Composable
 private fun BrandStepperPreview() {
     var value by remember { mutableIntStateOf(2) }

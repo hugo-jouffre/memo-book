@@ -105,7 +105,7 @@ fun BrandRangeCalendar(
     ) {
         CalendarMonthBar(visibleMonth, locale) { visibleMonth = it }
         CalendarWeekdayHeader(firstDayOfWeek, locale)
-        Crossfade(visibleMonth, animationSpec = SwiftUISpring.smooth(200), label = "mois") { month ->
+        Crossfade(visibleMonth, animationSpec = SwiftMotion.smooth(0.2f), label = "mois") { month ->
             CalendarDaysGrid(month, firstDayOfWeek) { day ->
                 RangeDayCell(day, selection.role(day), locale) { onSelectionChange(selection.tap(day)) }
             }
@@ -130,7 +130,7 @@ private fun RowScope.RangeDayCell(day: LocalDate, role: DateRangeSelection.Role,
         contentAlignment = Alignment.Center,
     ) {
         // La plage change en fondu, comme le reste de la grille.
-        Crossfade(role, Modifier.fillMaxWidth(), animationSpec = SwiftUISpring.smooth(200), label = "jour") { shown ->
+        Crossfade(role, Modifier.fillMaxWidth(), animationSpec = SwiftMotion.smooth(0.2f), label = "jour") { shown ->
             Box(Modifier.fillMaxWidth().heightIn(min = daySide), contentAlignment = Alignment.Center) {
                 RangeDayBackground(shown, daySide)
                 if (isToday && !shown.isEndpoint) CalendarTodayRing(daySide)
@@ -288,8 +288,8 @@ internal fun CalendarMonthBar(month: YearMonth, locale: Locale, onMonthChange: (
             modifier = Modifier.weight(1f),
             transitionSpec = {
                 val forward = targetState > initialState
-                (slideInVertically(SwiftUISpring.smooth(200)) { if (forward) it else -it } + fadeIn(SwiftUISpring.smooth(200)))
-                    .togetherWith(slideOutVertically(SwiftUISpring.smooth(200)) { if (forward) -it else it } + fadeOut(SwiftUISpring.smooth(200)))
+                (slideInVertically(SwiftMotion.smooth(0.2f)) { if (forward) it else -it } + fadeIn(SwiftMotion.smooth(0.2f)))
+                    .togetherWith(slideOutVertically(SwiftMotion.smooth(0.2f)) { if (forward) -it else it } + fadeOut(SwiftMotion.smooth(0.2f)))
             },
             contentAlignment = Alignment.Center,
             label = "titre du mois",
@@ -389,7 +389,7 @@ internal fun CalendarDayNumber(day: LocalDate, isEndpoint: Boolean) {
     )
 }
 
-@Preview(name = "Plage", widthDp = 390, heightDp = 520)
+@Preview(locale = "fr-rFR", name = "Plage", widthDp = 390, heightDp = 520)
 @Composable
 private fun BrandRangeCalendarPreview() {
     var selection by remember {

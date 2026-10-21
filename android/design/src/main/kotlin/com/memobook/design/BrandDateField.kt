@@ -243,7 +243,7 @@ private fun DayPickerCalendar(
     Column(modifier.padding(vertical = MemoBookSpacing.snug), verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {
         CalendarMonthBar(visibleMonth, locale) { visibleMonth = it }
         CalendarWeekdayHeader(firstDayOfWeek, locale)
-        Crossfade(visibleMonth, animationSpec = SwiftUISpring.smooth(200), label = "mois") { month ->
+        Crossfade(visibleMonth, animationSpec = SwiftMotion.smooth(0.2f), label = "mois") { month ->
             CalendarDaysGrid(month, firstDayOfWeek) { day ->
                 PickerDayCell(day, isSelected = day == selected, isInRange = day in range, locale) { onPick(day) }
             }
@@ -279,7 +279,7 @@ private fun RowScope.PickerDayCell(day: LocalDate, isSelected: Boolean, isInRang
     }
 }
 
-@Preview(name = "Dates", widthDp = 390, heightDp = 260)
+@Preview(locale = "fr-rFR", name = "Dates", widthDp = 390, heightDp = 260)
 @Composable
 private fun BrandDateFieldPreview() {
     var start by remember { mutableStateOf<LocalDate?>(null) }

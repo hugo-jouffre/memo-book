@@ -400,7 +400,7 @@ private class MenuPosition(private val gap: Int) : PopupPositionProvider {
     }
 }
 
-@Preview(name = "Tiroir d’actions", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Tiroir d’actions", widthDp = 390)
 @Composable
 private fun BrandSwipeDrawerPreview() {
     Column(

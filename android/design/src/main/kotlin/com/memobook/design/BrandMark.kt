@@ -239,7 +239,7 @@ internal fun DrawScope.drawBrandMark(progress: Float, color: Color, rect: Rect) 
     )
 }
 
-@Preview(name = "Le M, tracé", widthDp = 390, heightDp = 500)
+@Preview(locale = "fr-rFR", name = "Le M, tracé", widthDp = 390, heightDp = 500)
 @Composable
 private fun BrandMarkDrawingPreview() {
     val progress = remember { Animatable(0f) }

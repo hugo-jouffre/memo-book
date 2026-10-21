@@ -209,7 +209,7 @@ private fun plainPressAlpha(interaction: MutableInteractionSource): Float {
     return alpha
 }
 
-@Preview(name = "En-têtes d’écran", widthDp = 390, heightDp = 500)
+@Preview(locale = "fr-rFR", name = "En-têtes d’écran", widthDp = 390, heightDp = 500)
 @Composable
 private fun BrandScreenHeaderPreview() {
     Column(

@@ -185,7 +185,7 @@ object BrandNotice {
     }
 }
 
-@Preview(name = "Bloc d’information", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Bloc d’information", widthDp = 390)
 @Composable
 private fun BrandNoticePreview() {
     Column(

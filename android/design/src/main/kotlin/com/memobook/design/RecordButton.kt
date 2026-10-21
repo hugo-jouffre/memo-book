@@ -214,7 +214,7 @@ private fun Halo(modifier: Modifier) {
 }
 
 
-@Preview(name = "Repos", widthDp = 390, heightDp = 400)
+@Preview(locale = "fr-rFR", name = "Repos", widthDp = 390, heightDp = 400)
 @Composable
 private fun RecordButtonIdlePreview() {
     Box(Modifier.fillMaxSize().background(MemoBookColor.listeningBackground), contentAlignment = Alignment.Center) {
@@ -222,7 +222,7 @@ private fun RecordButtonIdlePreview() {
     }
 }
 
-@Preview(name = "Enregistrement", widthDp = 390, heightDp = 400)
+@Preview(locale = "fr-rFR", name = "Enregistrement", widthDp = 390, heightDp = 400)
 @Composable
 private fun RecordButtonRecordingPreview() {
     Box(Modifier.fillMaxSize().background(MemoBookColor.listeningBackground), contentAlignment = Alignment.Center) {
@@ -230,7 +230,7 @@ private fun RecordButtonRecordingPreview() {
     }
 }
 
-@Preview(name = "En pause", widthDp = 390, heightDp = 400)
+@Preview(locale = "fr-rFR", name = "En pause", widthDp = 390, heightDp = 400)
 @Composable
 private fun RecordButtonPausedPreview() {
     Box(Modifier.fillMaxSize().background(MemoBookColor.listeningBackground), contentAlignment = Alignment.Center) {

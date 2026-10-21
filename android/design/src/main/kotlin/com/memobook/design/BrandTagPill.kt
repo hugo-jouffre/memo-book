@@ -185,7 +185,7 @@ fun Modifier.brandDashedCard(
     )
 }
 
-@Preview(name = "Pastilles et jauge", widthDp = 390)
+@Preview(locale = "fr-rFR", name = "Pastilles et jauge", widthDp = 390)
 @Composable
 private fun BrandTagPillPreview() {
     Column(
