@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- aapt ne lit l'icône adaptative que sous `-v26`, même avec minSdk 26 :
+         sans le qualificatif, la ressource disparaît du build. -->
+    <issue id="ObsoleteSdkInt">
+        <ignore path="src/main/res/mipmap-anydpi-v26" />
+    </issue>
+    <!-- La cible suit l'exigence du Play Store (API 36 depuis août 2026) ;
+         la monter est une PR à part, après lecture des changements de comportement. -->
+    <issue id="OldTargetApi" severity="ignore" />
+    <!-- `allowBackup="false"` coupe déjà toute sauvegarde avant Android 12 :
+         `fullBackupContent` n'aurait rien à y exclure. -->
+    <issue id="DataExtractionRules" severity="ignore" />
+</lint>

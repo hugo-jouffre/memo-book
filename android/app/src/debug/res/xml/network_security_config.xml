@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug seulement : le back-end du Mac parle en HTTP (`npm run dev`), vu de
+     l'émulateur (10.0.2.2) ou d'un téléphone sur le même Wi-Fi, dont l'IP ne
+     se connaît pas d'avance. C'est le `NSAllowsLocalNetworking` de l'Info.plist
+     iOS. Un build Release n'a pas ce fichier et refuse tout HTTP en clair. -->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration" />
+</network-security-config>

@@ -13,9 +13,14 @@ fichier Figma. SwiftUI ne sait qu'**ajouter** de l'interligne — `lineSpacing`
 ignore les valeurs négatives — donc un interligne plus serré que la police ne
 peut pas se rattraper côté code : il se règle dans la police.
 
+L'app Android embarque **les mêmes fichiers** : chacun est recopié dans
+`android/design/src/main/res/font`, sous le nom qu'Android exige (minuscules,
+sans tiret). Les deux apps dessinent ainsi le même texte au même interligne.
+
 Relancer ce script après toute mise à jour des sources variables.
 """
 
+import shutil
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
@@ -27,8 +32,9 @@ SOURCES = ROOT / "MemoBook Generator" / "public" / "fonts"
 # La police manuscrite du carnet n'est pas variable : elle est livrée en woff2
 # avec le template d'impression. CoreText ne sait pas lire le woff2, d'où la
 # conversion — c'est le **même** dessin, pas une seconde police.
-WOFF2_SOURCES = ROOT / "templates" / "travel-journal" / "assets" / "fonts"
+WOFF2_SOURCES = ROOT / "MemoBook Generator" / "templates" / "travel-journal" / "assets" / "fonts"
 DESTINATION = ROOT / "ios" / "Modules" / "Sources" / "MemoBookDesign" / "Resources" / "Fonts"
+ANDROID_DESTINATION = ROOT / "android" / "design" / "src" / "main" / "res" / "font"
 
 # Interlignes des styles Figma, en multiple de la taille du corps.
 #   Sora        — `App/h1` : 32 pt de corps pour 35 pt d'interligne.
@@ -84,6 +90,13 @@ def retune_vertical_metrics(font: TTFont, ratio: float) -> None:
     os2.fsSelection |= 1 << 7  # USE_TYPO_METRICS
 
 
+def copy_for_android(postscript: str) -> None:
+    """Recopie la police iOS telle quelle dans `res/font` : `Sora-SemiBold` → `sora_semibold.ttf`."""
+    ANDROID_DESTINATION.mkdir(parents=True, exist_ok=True)
+    name = postscript.lower().replace("-", "_")
+    shutil.copyfile(DESTINATION / f"{postscript}.ttf", ANDROID_DESTINATION / f"{name}.ttf")
+
+
 def build(source: str, weight: int, family: str, style: str) -> None:
     font = instancer.instantiateVariableFont(
         TTFont(SOURCES / source), {"wght": weight}, inplace=False, updateFontNames=False
@@ -103,6 +116,7 @@ def build(source: str, weight: int, family: str, style: str) -> None:
 
     DESTINATION.mkdir(parents=True, exist_ok=True)
     font.save(DESTINATION / f"{postscript}.ttf")
+    copy_for_android(postscript)
     hhea = font["hhea"]
     height = (hhea.ascender - hhea.descender + hhea.lineGap) / font["head"].unitsPerEm
     print(f"{postscript}.ttf — graisse {weight}, interligne ×{height:.4f}")
@@ -115,6 +129,7 @@ def convert(source: str, postscript: str) -> None:
 
     DESTINATION.mkdir(parents=True, exist_ok=True)
     font.save(DESTINATION / f"{postscript}.ttf")
+    copy_for_android(postscript)
 
     family = font["name"].getDebugName(1)
     print(f"{postscript}.ttf — {family}, converti depuis woff2")

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ impose son écran de lancement : le crème, et l'icône. -->
+    <style name="Theme.MemoBook" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/memobook_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowSplashScreenBackground">@color/memobook_background</item>
+    </style>
+</resources>

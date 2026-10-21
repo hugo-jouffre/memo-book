@@ -32,6 +32,13 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
+# Android — le détail est dans android/.gitignore. Ces lignes-ci valent pour
+# tout le dépôt : une clé de signature ou une config Firebase n'a sa place nulle part.
+.gradle/
+*.jks
+*.keystore
+google-services.json
+
 # Secrets — les clés API ne doivent jamais être commitées
 *.xcconfig.local
 Secrets.swift
