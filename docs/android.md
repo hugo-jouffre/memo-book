@@ -95,19 +95,35 @@ fichier Kotlin porte le même.
 | `Tokens.swift`, `BrandFonts` | `Tokens.kt`, `BrandFonts.kt`, les six polices | ✅ |
 | `StoreKitCatalog` | `PlayCatalog` — le même identifiant de produit | ✅ |
 | Format du vocal (`AudioRecorder`) | `VoiceNoteFormat` | ✅ |
-| `Onboarding/LaunchView` | le M posé sur le crème, vérifié dans l'émulateur (Pixel 8 ; 360 × 640 dp à 200 %) ; le tracé animé arrive avec `BrandMarkBackdrop` | 🔄 |
+| `Onboarding/LaunchView` | le M s'écrit sur la courbe de la marque (`BrandMarkBackdrop`), vérifié dans l'émulateur | ✅ |
 | Icône `AppIcon.icon` | icône adaptative, M crème sur vert, monochrome pour Android 13+ | ✅ |
 | `ci-ios.yml` | `ci-android.yml` | ✅ |
 
 ### Design system (A2)
 
-| iOS | État |
-|---|---|
-| `BrandButton` (9 styles, 3 tailles), `BrandTextField`, `BrandSegmentedPicker`, `BrandSheet`, `BrandRowGroup`, `BrandOptionGroup` | ⏳ |
-| `BrandChatBubble`, `BrandWaveform`, `BrandSkeleton`, `BrandNotice`, `ErrorBanner`, `BrandFooterScrim`, `BrandRefreshFlash` | ⏳ |
-| `BrandSwipeDrawer`, `BrandDisclosureCard`, `BrandGauge`, `BrandSearchField`, `BrandCountryField`, `BrandRangeCalendar`, `BrandToggleCard`, `.brandComingSoon()` | ⏳ |
-| Les autres `Brand…` (avatar, fond, filtres, pastilles, curseur, compteur…) | ⏳ |
-| Import des icônes de marque, Lucide, illustrations, logos, ornements de couverture depuis `assets/` | ⏳ |
+Les 41 fichiers de `MemoBookDesign`, chacun sous le même nom dans
+`android/design`. L'écran-catalogue (`make run ARGS="--ez designCatalogue true"`)
+les montre tous, et chaque preview est une capture de référence que la CI compare.
+
+| iOS | Android | État |
+|---|---|---|
+| `Tokens.swift`, `BrandFonts` | `Tokens.kt`, `BrandFonts.kt` ; l'interlettrage posé là où iOS le pose, pas partout | ✅ |
+| Le catalogue d'images (178) | `make assets` : VectorDrawables et images depuis `MemoBookAssets.xcassets` ; deux tests les chargent toutes | ✅ |
+| `BrandButton`, `ErrorBanner`, `BrandTagPill` (et la jauge, la carte en pointillés), `BrandSkeleton`, `BrandIconBadge`, `BrandFooterScrim`, `LucideIcon` | portés | ✅ |
+| `BrandRowGroup`, `BrandOptionGroup`, `BrandDisclosureCard`, `BrandToggleCard`, `BrandSegmentedPicker`, `BrandNotice`, `BrandLimitBanner`, `BrandSlider`, `BrandGauge`, `BrandStepper` | portés ; l'interrupteur d'iOS redessiné (`BrandSwitch`) | ✅ |
+| `BrandSheet`, `BrandTextField`, `BrandTextBox`, `KeyboardDismissBar`, `BrandSearchField`, `BrandCountryField`, `BrandDateField`, `BrandRangeCalendar` | portés ; la feuille se présente par `BrandSheetHost`, et se referme au glissé (poignée ou contenu), au voile, au retour | ✅ |
+| `BrandMark`, `BrandMarkBackdrop`, `BrandBackdrop`, `BrandStrokes`, `BrandChatBubble`, `BrandWaveform`, `RecordButton`, `BrandScreenHeader`, `BrandSwipeDrawer`, `BrandRefreshFlash`, `BrandComingSoon`, `BrandStatusBarScrim`, `BrandFilterChip`, `BrandAvatar`, `ScrollOffsetReader` | portés ; le tiroir glisse sans voler le défilement vertical, TalkBack y trouve ses actions | ✅ |
+| `DeviceScreen`, `brandScrollWithoutBounce`, `brandHorizontalFade` | portés — le rayon des coins vient d'Android, qui le donne | ✅ |
+| L'app en français sur un téléphone réglé dans une autre langue | `FrenchLocale` : la langue française, la région du téléphone | ✅ |
+
+**À vérifier sur un vrai téléphone, à côté de l'iPhone :** TalkBack sur les
+champs de saisie (l'intitulé est sur un nœud voisin de la zone de saisie, et
+non sur elle : il peut s'annoncer en deux temps) ; le voile (40 %), la durée
+(400 ms) et le seuil de fermeture de la feuille ; l'interrupteur aux mesures
+d'iOS 26 plutôt que d'avant ; l'éclairci à 70 % des boutons nus sous le doigt.
+Et une règle à trancher : les jours hors plage du calendrier et un champ
+« Pays » sans liste sont désactivés, comme sur iOS, quand la règle de la maison
+voudrait qu'ils pâlissent et s'expliquent.
 
 ### Cœur et bac à sable (A3)
 
@@ -184,7 +200,10 @@ fichier Kotlin porte le même.
 
 ### Ce qui ne se porte pas
 
-- `MemoList/` et `MemoDetail/` : plus aucune route n'y mène sur iOS.
+- `MemoList/` et `MemoDetail/` : plus aucune route n'y mène sur iOS — et avec
+  eux `StatusBadge` et `EmptyStateView`, qu'ils sont seuls à employer.
+- `BrandNavigation` : il rend sur iOS le glissé de retour qu'une barre masquée
+  emporte ; Android a son geste de retour.
 - Ce qui est « à venir » sur iOS l'est aussi sur Android, au même endroit :
   l'import Polarsteps, le Tricount, les six connecteurs, l'ouverture d'un carnet
   de la galerie.

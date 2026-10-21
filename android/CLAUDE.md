@@ -155,6 +155,12 @@ Android. Un token change ? Les deux fichiers changent dans la même PR.
   `make assets`. `res-brand/` n'appartient qu'au script ; ce qui est dessiné à
   la main vit dans `res/drawable` — le M (`brand_mark.xml`) et les symboles
   système d'iOS redessinés (`system_*.xml`), SF Symbols n'existant pas ici.
+  ⚠️ aapt2 tronque sans rien dire un tracé de plus de 32 767 caractères, et
+  l'écran qui l'affiche plante : l'import le signale, et `BrandImagesLoadTest`
+  charge chaque image comme `painterResource` la charge.
+- **`Modifier.border` dessine par-dessus le contenu**, pas dessous comme
+  `strokeBorder` sur iOS : ce qui doit couper un contour (l'intitulé monté d'un
+  champ) a besoin d'un contour dessiné derrière.
 
 ### Porter un composant
 
