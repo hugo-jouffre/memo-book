@@ -514,7 +514,9 @@ export function replySchema() {
       // L'enum ne contient que les boutons que le modèle a le droit de choisir ;
       // ceux de **ce** tour, c'est `validateReply` qui les fait respecter.
       callToActionId: {
-        type: ["string", "null"],
+        // Pas de `type` à côté de l'`enum` : l'API refuse une union de types
+        // dès qu'un `enum` l'accompagne (400 « Enum value does not match
+        // declared type »). L'`enum` porte déjà `null`, et suffit.
         enum: [...MODEL_CALL_TO_ACTION_IDS, null],
         description:
           "Le bouton sous ta dernière bulle, parmi ceux que le code autorise ce tour-ci. " +
@@ -649,7 +651,7 @@ export function tripContextSchema() {
       itinerary: nullableString("Les lieux prévus, dans l'ordre."),
       occasion: nullableString("L'occasion : lune de miel, anniversaire…"),
       narrationMoment: {
-        type: ["string", "null"],
+        // Même raison que `callToActionId` : l'`enum` seul, sans `type`.
         enum: ["before", "during", "after", null],
         description: "Avant, pendant ou après le voyage.",
       },

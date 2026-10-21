@@ -290,7 +290,10 @@ function automaticChecks(
   ];
 
   // Sur un refus, il n'y a rien à reformuler : exiger l'écho serait exiger
-  // d'insister.
+  // d'insister. Même chose sur une **commande** (21/10/2026) — « il me reste
+  // combien de temps ? » appelle la règle du crédit du jour, pas un écho des
+  // mots de la question. Troisième faux positif de la même famille que les
+  // deux du 23/09 et celui du 24/09.
   // Quelqu'un d'autre est en scène : un co-voyageur, une personne de la fiche
   // de cohérence, ou un prénom dans le message.
   const someoneElse =
@@ -305,7 +308,7 @@ function automaticChecks(
     checks.push({ label: "Tutoiement", ok: vouvoiement === undefined, detail: vouvoiement });
   }
 
-  if (travellerWords.length > 0 && !refused) {
+  if (travellerWords.length > 0 && !refused && reply.disposition !== "command") {
     checks.push({
       label: "La reformulation reprend un mot du voyageur",
       ok: echoed.length > 0,

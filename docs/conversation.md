@@ -659,6 +659,70 @@ posé, ce qui est fréquent sur un vocal aussi dense. Pas changé pour l'instant
 — une scène ne suffit pas à trancher, et rien n'empêche la question au tour
 suivant.
 
+### Troisième calibration — 21/10/2026, Sonnet 5, la ligne de l'étape manquante
+
+Occasion : la fonctionnalité « étape manquante » (§ 14, 19/10) ajoute au § 8 du
+prompt une ligne d'interdiction — MEMO ne fait jamais remarquer qu'il manque
+une journée, c'est le code qui relève les trous. Une scène neuve l'éprouve,
+`22-journee-manquante.json` : un fil où le 25 et le 27 sont racontés, le 26
+jamais.
+
+**Le banc ne tournait plus depuis le 03/10.** Premier passage : les 22 scènes
+refusées par l'API avant que le modèle parle, `400 invalid_request_error —
+Enum value 'subscribe' does not match declared type '['string', 'null']'`.
+L'API refuse une union de types dès qu'un `enum` l'accompagne, et les deux
+schémas de `conversationAnthropic.ts` le faisaient : `callToActionId` et
+`narrationMoment`, tous deux écrits le 03/10 avec le crédit du jour. L'`enum`
+porte déjà `null` et suffit ; le `type` est retiré.
+
+⚠️ **Le même schéma sert au vrai chat.** Dans `jobs/converse.ts`, un répondeur
+qui jette ne casse rien de visible : un `logger.warn` part et le moteur de
+règles répond à sa place. Du 03/10 au 21/10, chaque tour de conversation réel
+est donc parti en 400 et c'est l'heuristique qui a parlé aux voyageurs — sans
+que personne le voie, puisque le repli est silencieux et que les tests back
+ne touchent pas l'API. L'extraction du contexte du voyage (§ 2 bis) était
+cassée de la même façon. À retenir : **le banc est le seul endroit où cette
+panne est visible**, et il n'avait pas tourné depuis que la ligne existait.
+
+Ce que la grille a attrapé ensuite, et ce qui a changé :
+
+| Ce qu'on a lu | Pourquoi c'est une faute | Ce qui a changé |
+|---|---|---|
+| Scène 22 : rien sur le trou, ni remarque ni question | — | Rien : la ligne du § 8 fait ce qu'on lui demande, aux trois passages |
+| « Ce dîner à Trastevere **avec Clara**, un détail qui t'est resté ? » en relance | La relance s'affiche sur la carte du voyage, que tous les co-voyageurs lisent — § 7 dit « elle ne nomme personne ». Même faute qu'au 23/09 | La **dernière phrase de la ligne du § 8** est réécrite : elle disait « ferait deux **relances** pour un seul oubli » |
+
+**Le mot « relance » était la cause, et ça se mesure.** Dans ce prompt « la
+relance » est un terme technique — la phrase de la carte du § 7. L'employer au
+sens courant de « rappel » dans une ligne du § 8 amorçait le champ. Seize
+tirages de la scène 02 par état du prompt :
+
+| Prompt | Relances écrites | Dont nommant quelqu'un |
+|---|---|---|
+| La ligne d'origine | 6 sur 8 | 3 |
+| Sans la ligne | 0 sur 16 | 0 |
+| La ligne réécrite, sans le mot « relance » | 0 sur 16 | 0 |
+
+La ligne dit maintenant « Le dire toi aussi, ce serait signaler deux fois le
+même oubli ». Leçon qui dépasse ce cas : **un mot du vocabulaire du prompt
+employé au sens courant ailleurs dans le prompt se paie**, et le banc ne
+l'attrape que si on relit les relances, qu'aucune case automatique ne coche.
+
+Et une correction dans le **banc**, pas dans le prompt — la troisième de cette
+famille après les deux du 23/09 et celle du 24/09 : l'écho des mots du voyageur
+ne s'exige plus sur une **commande**. « Il me reste combien de temps ? » appelle
+la règle du crédit du jour, pas un écho de la question ; l'exiger était déjà
+sans objet sur un refus, pour la même raison.
+
+Au terme des trois passages, les 22 scènes passent sans manquement de forme, et
+les lignes qui se lisent tiennent : rien d'inventé, aucune question déjà
+répondue, aucune relance ne nomme personne, et le mélange tu (au voyageur) /
+vous (au groupe) sonne juste partout.
+
+**Coût réel d'un passage : environ 0,30 $**, pas 1 à 2 $ — ce chiffre-là est
+celui du banc de rédaction (Opus 5.5, `modeles-ia.md` § Décisions, 02/10). Ici
+le prompt système est mis en cache, et 21 des 22 scènes le relisent au tarif
+cache.
+
 ### L'outil de relecture
 
 ```bash
@@ -725,3 +789,5 @@ exactement ce que le modèle doit faire mieux.
 | 12/10/2026 | La relance de l'accueil suit la dernière étape racontée quand son lieu est connu ; la photo du voyage est, à défaut d'une photo choisie, la dernière envoyée dans le fil | Hugo |
 | 19/10/2026 | Une suggestion d'étape manquante, calculée par le code sur un trou **refermé** de deux jours au plus, voyage en cours et rythme quotidien ; une fois par journée, deux refus et plus jamais — le silence vaut refus | Hugo |
 | 19/10/2026 | Raconter une journée passée se fait par ce bouton, qui date le récit suivant sur elle ; pas de choix de date libre, et des puces datées seulement quand il manque deux journées | Hugo |
+| 21/10/2026 | Un `enum` de schéma de sortie ne porte pas de `type` à côté : l'API refuse l'union, et le repli silencieux rendait la panne invisible hors du banc (§ 13) | reco Claude |
+| 21/10/2026 | Un mot du vocabulaire du prompt ne s'emploie pas au sens courant ailleurs dans le prompt : « relance » au § 8 faisait écrire des relances au § 7, mesuré à 6 sur 8 | reco Claude |
