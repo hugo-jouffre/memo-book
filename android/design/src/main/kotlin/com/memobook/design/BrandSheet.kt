@@ -17,6 +17,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -76,6 +78,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
@@ -641,6 +644,16 @@ internal fun SheetPresentation(
                         .heightIn(max = ceiling)
                         .onSizeChanged { drag.height = it.height }
                         .graphicsLayer { translationY = presence.value * size.height + drag.offset }
+                        // Le doigt qui se lève, où qu'il soit sur la feuille : voir `fingerLifted`.
+                        .pointerInput(drag) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                do {
+                                    val event = awaitPointerEvent(PointerEventPass.Final)
+                                } while (event.changes.any { it.pressed })
+                                drag.fingerLifted()
+                            }
+                        }
                         .nestedScroll(drag)
                         .draggable(
                             state = dragState,
@@ -695,7 +708,30 @@ private class SheetDrag(
         offset = (offset + resisted).coerceAtLeast(0f)
     }
 
+    /**
+     * Le relâché d'un glissé parti du **contenu**.
+     *
+     * Le défilement du contenu passe sa lancée à la feuille quand le doigt se
+     * lève (`onPreFling`) — mais pas une lancée nulle : une feuille tirée
+     * lentement au-delà de sa moitié par son texte remontait, quand la même,
+     * tirée par la poignée, se refermait (vu dans l'émulateur, 21/10/2026). On
+     * attend donc deux images la lancée du contenu ; sans elle, on relâche à
+     * l'arrêt.
+     */
+    fun fingerLifted() {
+        if (offset <= 0f) return
+        awaitingRelease = true
+        scope.launch {
+            withFrameNanos {}
+            withFrameNanos {}
+            if (awaitingRelease && settling?.isActive != true) release(0f)
+        }
+    }
+
+    private var awaitingRelease = false
+
     fun release(velocity: Float) {
+        awaitingRelease = false
         cancelSettle()
         settling = scope.launch {
             // Où le geste mènerait la feuille s'il continuait sur sa lancée.
