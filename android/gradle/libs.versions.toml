@@ -9,6 +9,8 @@ composeBom = "2026.09.00"
 activityCompose = "1.13.0"
 coreKtx = "1.19.1"
 junit = "4.13.2"
+# Le convertisseur SVG → VectorDrawable d'Android Studio ; sa version suit celle d'AGP (9.4.1 → 32.4.1).
+sdkCommon = "32.4.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -19,6 +21,7 @@ compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 junit = { module = "junit:junit", version.ref = "junit" }
+android-sdk-common = { module = "com.android.tools:sdk-common", version.ref = "sdkCommon" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 
 [plugins]

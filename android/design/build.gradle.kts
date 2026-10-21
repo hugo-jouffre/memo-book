@@ -18,6 +18,14 @@ android {
     buildFeatures { compose = true }
 }
 
+// `res-brand/` est écrit par `./gradlew :tools:importBrandAssets`, et par lui
+// seul : le catalogue d'images de l'app iOS, converti.
+androidComponents {
+    onVariants { variant ->
+        variant.sources.res?.addStaticSourceDirectory("src/main/res-brand")
+    }
+}
+
 dependencies {
     implementation(project(":core"))
     implementation(platform(libs.compose.bom))
@@ -25,4 +33,6 @@ dependencies {
     api(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlin.test)
 }

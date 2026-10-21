@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- `res-brand/` est le catalogue d'images d'iOS, converti tel quel par
+         `:tools:importBrandAssets` : les mêmes vecteurs Figma, les mêmes
+         planches. Simplifier un tracé ou ajouter une densité se fait à la
+         source (Figma, `assets/`), pour les deux apps à la fois. -->
+    <issue id="VectorPath">
+        <ignore path="src/main/res-brand" />
+    </issue>
+    <issue id="VectorRaster">
+        <ignore path="src/main/res-brand" />
+    </issue>
+    <issue id="IconDensities">
+        <ignore path="src/main/res-brand" />
+    </issue>
+    <issue id="IconMissingDensityFolder">
+        <ignore path="src/main/res-brand" />
+    </issue>
+</lint>

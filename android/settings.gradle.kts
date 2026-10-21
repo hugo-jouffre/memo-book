@@ -28,4 +28,6 @@ include(
     ":payments",
     ":feature",
     ":app",
+    // Outillage, hors de l'app : l'import des images de marque.
+    ":tools",
 )
