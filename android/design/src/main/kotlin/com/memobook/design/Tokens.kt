@@ -124,11 +124,16 @@ object MemoBookSpacing {
  * Un `lineHeight` posé en plus ne ferait que s'y ajouter.
  */
 object MemoBookFont {
-    /** L'espacement des lettres de la maquette : 1 % de la taille. */
-    private val tracking: TextUnit = 0.01.em
+    /**
+     * L'interlettrage de la maquette : 1 % de la taille du corps. Il ne fait
+     * **pas** partie des styles : iOS le pose à la main, là où la maquette le
+     * demande (`.tracking(MemoBookFont.tracking(…))`, une quinzaine
+     * d'endroits), et on le pose aux mêmes — `style.copy(letterSpacing = MemoBookFont.tracking)`.
+     */
+    val tracking: TextUnit = 0.01.em
 
     private fun style(family: FontFamily, weight: FontWeight, size: Int) =
-        TextStyle(fontFamily = family, fontWeight = weight, fontSize = size.sp, letterSpacing = tracking)
+        TextStyle(fontFamily = family, fontWeight = weight, fontSize = size.sp)
 
     val h1 = style(BrandFonts.sora, FontWeight.SemiBold, 32)
     val h1Light = style(BrandFonts.sora, FontWeight.Normal, 32)
