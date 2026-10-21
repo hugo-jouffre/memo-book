@@ -121,7 +121,7 @@ fun BrandScreenHeader(
                 // en fondu plutôt que d'un coup sec, sans quoi c'est la seule
                 // chose de l'en-tête qui saute. (iOS fait rouler les chiffres,
                 // `numericText` ; Compose n'a que le fondu.)
-                Crossfade(subtitle, animationSpec = BrandMotion.smooth(0.25f), label = "subtitle") { text ->
+                Crossfade(subtitle, animationSpec = SwiftMotion.smooth(0.25f), label = "subtitle") { text ->
                     BrandText(text, MemoBookFont.h3)
                 }
             }

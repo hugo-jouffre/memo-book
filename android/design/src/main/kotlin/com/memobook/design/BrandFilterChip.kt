@@ -65,17 +65,17 @@ fun BrandFilterChip(
     // qu'on ait choisi dans un menu ou tapé dans une barre.
     val foreground by animateColorAsState(
         if (isActive) MemoBookColor.onAction else MemoBookColor.ink,
-        BrandMotion.snappy(0.22f),
+        SwiftMotion.snappy(0.22f),
         label = "foreground",
     )
     val background by animateColorAsState(
         if (isActive) MemoBookColor.action else MemoBookColor.surface,
-        BrandMotion.snappy(0.22f),
+        SwiftMotion.snappy(0.22f),
         label = "background",
     )
     val border by animateColorAsState(
         if (isActive) MemoBookColor.action else MemoBookColor.separator,
-        BrandMotion.snappy(0.22f),
+        SwiftMotion.snappy(0.22f),
         label = "border",
     )
     val capsule = RoundedCornerShape(percent = 50)
@@ -84,7 +84,7 @@ fun BrandFilterChip(
         modifier
             .background(background, capsule)
             .border(1.dp, border, capsule)
-            .animateContentSize(BrandMotion.snappy(0.22f))
+            .animateContentSize(SwiftMotion.snappy(0.22f))
             .heightIn(min = MemoBookSpacing.minimumTapTarget)
             .padding(horizontal = MemoBookSpacing.s - 2.dp, vertical = MemoBookSpacing.xs + 2.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),

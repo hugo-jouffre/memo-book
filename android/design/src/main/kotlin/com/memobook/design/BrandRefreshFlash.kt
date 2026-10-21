@@ -165,14 +165,14 @@ fun BrandRefreshFlash(
             visible = badgeVisible,
             modifier = Modifier.align(Alignment.TopCenter),
             enter = if (reduceMotion) {
-                fadeIn(BrandMotion.snappy(0.3f))
+                fadeIn(SwiftMotion.snappy(0.3f))
             } else {
-                slideInVertically(BrandMotion.snappy(0.3f)) { -it } + fadeIn(BrandMotion.snappy(0.3f))
+                slideInVertically(SwiftMotion.snappy(0.3f)) { -it } + fadeIn(SwiftMotion.snappy(0.3f))
             },
             exit = if (reduceMotion) {
-                fadeOut(BrandMotion.snappy(0.3f))
+                fadeOut(SwiftMotion.snappy(0.3f))
             } else {
-                slideOutVertically(BrandMotion.snappy(0.3f)) { -it } + fadeOut(BrandMotion.snappy(0.3f))
+                slideOutVertically(SwiftMotion.snappy(0.3f)) { -it } + fadeOut(SwiftMotion.snappy(0.3f))
             },
         ) {
             val capsule = RoundedCornerShape(percent = 50)

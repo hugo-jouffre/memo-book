@@ -62,6 +62,10 @@ import androidx.compose.ui.unit.dp
  *   forme, mais passe au gris — « Continuer » tant que le formulaire est
  *   incomplet.
  */
+// Le libellé vient avant le `modifier`, contre la règle de Compose : c'est
+// l'ordre d'iOS (`BrandButton("Continuer") { … }`), et le libellé est optionnel
+// parce qu'un bouton peut n'être qu'une icône.
+@Suppress("ModifierParameter")
 @Composable
 fun BrandButton(
     title: String? = null,

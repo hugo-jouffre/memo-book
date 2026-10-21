@@ -207,7 +207,7 @@ private fun SwipeBand(actions: List<BrandSwipeAction>, card: @Composable () -> U
 
     fun close() {
         scope.launch {
-            if (reduceMotion) state.snapTo(Slot.Card) else state.animateTo(Slot.Card, BrandMotion.snappy(0.25f))
+            if (reduceMotion) state.snapTo(Slot.Card) else state.animateTo(Slot.Card, SwiftMotion.snappy(0.25f))
         }
     }
 
@@ -249,7 +249,7 @@ private fun SwipeBand(actions: List<BrandSwipeAction>, card: @Composable () -> U
             flingBehavior = AnchoredDraggableDefaults.flingBehavior(
                 state,
                 positionalThreshold = { distance -> distance * 0.5f },
-                animationSpec = BrandMotion.snappy(0.25f),
+                animationSpec = SwiftMotion.snappy(0.25f),
             ),
         ),
     ) { measurables, constraints ->

@@ -93,7 +93,7 @@ fun RecordButton(
     val breathTarget = if (isCapturing && !reduceMotion) 1f + level.coerceIn(0.0, 1.0).toFloat() * 0.05f else 1f
     // Le ressort, et pas une courbe douce : c'est lui qui donne le rebond quand
     // la voix repart d'un coup.
-    val breath by animateFloatAsState(breathTarget, BrandMotion.spring(response = 0.32f, dampingFraction = 0.55f), label = "breath")
+    val breath by animateFloatAsState(breathTarget, SwiftMotion.spring(response = 0.32f, dampingFraction = 0.55f), label = "breath")
 
     // Le disque s'enfonce sous le doigt et **rebondit** en revenant. Un simple
     // fondu linéaire donnait un bouton mou ; le ressort lui donne sa matière.
@@ -101,7 +101,7 @@ fun RecordButton(
     val pressed by interaction.collectIsPressedAsState()
     val press by animateFloatAsState(
         if (pressed) 0.94f else 1f,
-        BrandMotion.spring(response = 0.25f, dampingFraction = 0.5f),
+        SwiftMotion.spring(response = 0.25f, dampingFraction = 0.5f),
         label = "press",
     )
 
@@ -160,7 +160,7 @@ fun RecordButton(
                     // son échelle qui dit qu'il s'est passé quelque chose.
                     val iconScale by animateFloatAsState(
                         if (isCapturing) 1.08f else 1f,
-                        BrandMotion.spring(response = 0.3f, dampingFraction = 0.45f),
+                        SwiftMotion.spring(response = 0.3f, dampingFraction = 0.45f),
                         label = "mic",
                     )
                     Image(
@@ -213,26 +213,6 @@ private fun Halo(modifier: Modifier) {
     )
 }
 
-/**
- * Les ressorts de SwiftUI, en Compose : le design system iOS les écrit
- * `.spring(response:dampingFraction:)`, `.snappy(duration:)` et
- * `.smooth(duration:)`. Les mêmes durées et les mêmes rebonds, traduits une
- * fois ici : la raideur d'un ressort de période `response` est `(2π / response)²`,
- * l'amortissement est le même rapport des deux côtés. Partagé par les
- * composants de la marque qui s'animent.
- */
-internal object BrandMotion {
-    fun <T> spring(response: Float, dampingFraction: Float): SpringSpec<T> {
-        val stiffness = (2 * PI / response).let { it * it }.toFloat()
-        return androidx.compose.animation.core.spring(dampingRatio = dampingFraction, stiffness = stiffness)
-    }
-
-    /** `.snappy(duration:)` : un ressort à peine rebondi (15 %). */
-    fun <T> snappy(duration: Float): SpringSpec<T> = spring(response = duration, dampingFraction = 0.85f)
-
-    /** `.smooth(duration:)` : un ressort sans rebond. */
-    fun <T> smooth(duration: Float): SpringSpec<T> = spring(response = duration, dampingFraction = 1f)
-}
 
 @Preview(name = "Repos", widthDp = 390, heightDp = 400)
 @Composable
