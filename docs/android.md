@@ -101,7 +101,7 @@ fichier Kotlin porte le même.
 
 ### Design system (A2)
 
-Les 41 fichiers de `MemoBookDesign`, chacun sous le même nom dans
+44 des 45 fichiers de `MemoBookDesign` — tous sauf `BrandNavigation` —, chacun sous le même nom dans
 `android/design`. L'écran-catalogue (`make run ARGS="--ez designCatalogue true"`)
 les montre tous, et chaque preview est une capture de référence que la CI compare.
 
