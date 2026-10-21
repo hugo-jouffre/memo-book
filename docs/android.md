@@ -1,0 +1,210 @@
+# MemoBook sur Android — portage et parité
+
+L'app Android fait **tout ce que fait l'app iOS**, sur le même serveur, la même
+base, les mêmes comptes. Un voyageur passe de l'un à l'autre sans rien perdre :
+ses voyages, ses vocaux, son abonnement le suivent, puisqu'ils sont au serveur.
+
+Référence : iOS 0.1.0 (build 10), `main` à `5d46279`, le 21/10/2026. Les
+conventions du code Android sont dans [`android/CLAUDE.md`](../android/CLAUDE.md).
+
+## Ce qui reste, ce qui change
+
+Natif, en Kotlin et Jetpack Compose, construit comme l'app iOS : mêmes modules,
+même sens de dépendance, mêmes noms de fichiers. Compose reprend presque mot
+pour mot les règles SwiftUI et MVVM du code iOS ; une base commune aux deux
+plateformes demanderait de réécrire une app iOS déjà livrée.
+
+| Sujet | iOS | Android | Serveur |
+|---|---|---|---|
+| API, comptes, base | Fastify sur Railway, jeton de session de 90 jours | la même ; `POST /v1/devices` accepte déjà `platform: "android"` | rien |
+| Écrans | SwiftUI, `@Observable`, `RootView` | Compose, `ViewModel` + `StateFlow`, `RootView` | rien |
+| Stockage local | Trousseau, Application Support, Caches, UserDefaults | jeton chiffré par le Keystore, `filesDir`, `cacheDir`, DataStore | rien |
+| File des envois | `RecordingOutbox`, vidée au retour dans l'app | la même, vidée par WorkManager — elle survit aussi à l'arrière-plan | rien |
+| Vocal | AAC 44,1 kHz mono, `.m4a`, `audio/mp4` | le même fichier, par `MediaRecorder` | rien |
+| Transcription en direct, lecture à voix haute | `SFSpeechRecognizer`, `AVSpeechSynthesizer`, `fr-FR` | `SpeechRecognizer` sur l'appareil, `TextToSpeech`, `fr-FR` | rien |
+| Connexion | Apple natif, SDK Google, e-mail | Google par Credential Manager, Apple par le web, e-mail | B1, B2 |
+| Abonnement | StoreKit 2, `com.memobook.app.subscription.monthly`, 4,99 € | Google Play Billing, **même identifiant**, vérifié par le serveur | B4 |
+| Carnet imprimé | Stripe PaymentSheet, Apple Pay | Stripe PaymentSheet Android, Google Pay | B5 |
+| Notifications | APNs | Firebase Cloud Messaging, mêmes types et mêmes liens | B3 |
+| Liens | `memobook://`, liens universels `/j/*` | `memobook://`, App Links `/j/*` (`assetlinks.json`) | B1 |
+| Test et publication | TestFlight, App Store Connect | piste de test interne, Play Console, Play App Signing | — |
+| CI | `ci-ios.yml`, macOS, Debug | `ci-android.yml`, Linux, Debug **et** Release | — |
+
+**L'illimité pend du compte, pas du store** (`hasUnlimitedAccess`) : un abonné
+de l'App Store est abonné sur Android, et inversement. Android ne propose pas
+« S'abonner » à un compte illimité, et « Gérer » l'envoie au store qui a vendu
+l'abonnement.
+
+## Les phases
+
+Dix semaines estimées jusqu'à la piste de test interne, en deux couloirs : les
+phases de l'app (A) et les lots du serveur (B). L'app iOS et son serveur ont
+mis douze semaines du premier commit (27/07) au build 10 ; le portage part
+d'un produit, d'un serveur et d'un code déjà tranchés.
+
+| Phase | Semaines | Contenu | Fini quand | Attend |
+|---|---|---|---|---|
+| **A0** Comptes et clés | 1–2 | Play Console ; client OAuth Android (SHA-1 debug, upload, signature Play) ; Firebase ; compte de service Play ; Services ID Apple ; clé d'upload hors du dépôt ; téléphones de test ; `api.memo-book.com` tranché | chaque clé existe et est rangée avec celles d'iOS | Hugo |
+| **A1** Socle | 1 | projet Gradle aux modules d'iOS, tokens, polices, adresse du serveur, CI | CI verte, l'app s'ouvre dans l'émulateur | — |
+| **A2** Design system | 1–3 | les 36 composants `Brand…`, import des 178 images, tests de capture | un écran-catalogue montre chaque composant | — |
+| **A3** Cœur, client, bac à sable | 2–3 | modèles, client des 72 routes, erreurs, jeton, connectivité, cache, `PreviewApi` et interrupteurs de debug | les tests Core et Networking portés passent | — |
+| **A4** Comptes et entrée | 3–4 | lancement, accueil d'entrée, e-mail, Google, Apple, mot de passe oublié, dernières questions, déconnexion, suppression | les deux comptes de test entrent sur un Pixel ; l'e-mail de réinitialisation ouvre l'app | B1, B2 |
+| **A5** Le récit | 4–6 | accueil, nouveau carnet, rejoindre, création de voyage hors ligne, écran du voyage, conversation avec MEMO, enregistrement et crédit du jour, file des envois, cache | un vocal enregistré hors ligne sur Android arrive une fois dans le fil iPhone du même voyage | — |
+| **A6** Le carnet | 6–7 | réglages du voyage, personnalisation, couvertures, composition, lecteur PDF, partage, galerie | un voyage donne le même PDF sur les deux | — |
+| **A7** L'argent | 7–8 | paywall, abonnement Play, feuille d'abonnement, tunnel de commande Stripe et Google Pay, cartes, suivi | un achat de test sur Android rend illimité le même compte sur iPhone | B4, B5 |
+| **A8** Profil, aide, notifications | 8–9 | profil et ses neuf feuilles, statistiques, export, aide, textes légaux, FCM | chacun des neuf types de notification ouvre son écran | B3 |
+| **A9** Recette et Play | 9–10 | la recette iOS rejouée sur Android, fiche Play, sécurité des données, URL de suppression, test interne → fermé → production | Clara et Paul installent l'app depuis la piste interne | B6, A0 |
+
+Un compte développeur Play **personnel** et neuf doit faire tester l'app à
+12 testeurs pendant 14 jours avant la production. Un compte **organisation**
+(numéro D-U-N-S) en est dispensé : à trancher en A0.
+
+## Les lots du serveur
+
+Tous additifs : chaque build iOS en circulation continue de marcher. La base de
+développement est celle de production — chaque migration part dans sa propre
+PR, appliquée à la production par la Pre-deploy Command et à `memobook_test` à
+la main.
+
+| Lot | Ce qui change | Fichiers | Migration |
+|---|---|---|---|
+| **B1** Liens et Google | `GOOGLE_WEB_CLIENT_ID` posé sur Railway (l'audience des jetons Android) ; `/.well-known/assetlinks.json` ; `/j/:code` et `/password/reset` savent mener au Play Store ou dans l'app, sans dire « iPhone » | `env.ts`, `invitePage.ts`, `passwordResetPage.ts` | non |
+| **B2** Apple par le web | un Services ID accepté comme audience ; le retour `form_post` d'Apple qui rend le jeton à l'app | `socialIdentity.ts`, `routes/auth.ts` | non |
+| **B3** FCM | `push_tokens.provider` (apns ou fcm) ; `/v1/push-tokens` accepte un jeton FCM sans le passer en minuscules ; un expéditeur FCM derrière `PushSender` | `schema.prisma`, `routes/notifications.ts`, `services/apns.ts`, `services/fcm.ts` | oui |
+| **B4** Google Play Billing | le fournisseur `google_play` ; la route d'achat qui vérifie et **acquitte** le jeton ; le webhook des notifications temps réel ; résiliation, sérialiseurs et rappels selon le store | `schema.prisma`, `services/googlePlay.ts`, `routes/profile.ts`, `appSerializers.ts`, `subscriptionCatalog.ts` | oui |
+| **B5** Google Pay et plateforme | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
+| **B6** Page de suppression | une page publique pour demander la suppression d'un compte par e-mail, que Google Play exige de toute app qui crée des comptes | à côté de `dataExportPage.ts` | non |
+
+⚠️ Aujourd'hui, `POST /v1/profile/subscription/cancel` résilie **localement**
+tout abonnement qui n'est pas StoreKit (`routes/profile.ts`) : un abonnement
+Google Play y serait coupé côté serveur et continuerait d'être facturé. B4 le
+corrige avant tout achat Android.
+
+## La liste de parité
+
+Écran par écran, dans l'ordre des phases. ✅ fait · 🔄 en cours · ⏳ à faire.
+Les noms sont ceux du code iOS (`ios/Modules/Sources/MemoBookFeature`) ; le
+fichier Kotlin porte le même.
+
+### Socle (A1)
+
+| iOS | Android | État |
+|---|---|---|
+| `APIConfiguration` et ses tests | `ApiConfiguration` — l'émulateur vise `10.0.2.2`, un téléphone retombe sur la production | ✅ |
+| `NotificationLink`, `InviteLink`, `PasswordResetLink` | les trois lecteurs de liens, dans `:core`, et leurs tests | ✅ |
+| `Tokens.swift`, `BrandFonts` | `Tokens.kt`, `BrandFonts.kt`, les six polices | ✅ |
+| `StoreKitCatalog` | `PlayCatalog` — le même identifiant de produit | ✅ |
+| Format du vocal (`AudioRecorder`) | `VoiceNoteFormat` | ✅ |
+| `Onboarding/LaunchView` | le M posé sur le crème ; le tracé animé arrive avec `BrandMarkBackdrop` | 🔄 |
+| Icône `AppIcon.icon` | icône adaptative, M crème sur vert, monochrome pour Android 13+ | ✅ |
+| `ci-ios.yml` | `ci-android.yml` | ✅ |
+
+### Design system (A2)
+
+| iOS | État |
+|---|---|
+| `BrandButton` (9 styles, 3 tailles), `BrandTextField`, `BrandSegmentedPicker`, `BrandSheet`, `BrandRowGroup`, `BrandOptionGroup` | ⏳ |
+| `BrandChatBubble`, `BrandWaveform`, `BrandSkeleton`, `BrandNotice`, `ErrorBanner`, `BrandFooterScrim`, `BrandRefreshFlash` | ⏳ |
+| `BrandSwipeDrawer`, `BrandDisclosureCard`, `BrandGauge`, `BrandSearchField`, `BrandCountryField`, `BrandRangeCalendar`, `BrandToggleCard`, `.brandComingSoon()` | ⏳ |
+| Les autres `Brand…` (avatar, fond, filtres, pastilles, curseur, compteur…) | ⏳ |
+| Import des icônes de marque, Lucide, illustrations, logos, ornements de couverture depuis `assets/` | ⏳ |
+
+### Cœur et bac à sable (A3)
+
+| iOS | État |
+|---|---|
+| Modèles de `MemoBookCore` et leur décodage (états inconnus tolérés) | ⏳ |
+| `MemoBookAPIClient` : les 72 routes, `APIError` et ses messages en français | ⏳ |
+| `TokenStore`, `Connectivity`, `ContentCache` | ⏳ |
+| `PreviewAPI`, `SandboxPersona`, interrupteurs `-previewSignedIn`, `-openOrder`, `-composeBook`, `-lastQuestions`, `-resetOnboarding` (en extras de lancement) | ⏳ |
+
+### Comptes et entrée (A4)
+
+| iOS | État |
+|---|---|
+| `SessionRestore`, `LaunchView` animé | ⏳ |
+| `WelcomeView` et les carnets d'exemple | ⏳ |
+| `AuthView` (inscription, connexion), `SocialCompletionView` | ⏳ |
+| Google (`GoogleSignInService`), Apple | ⏳ |
+| `PasswordRecoverySheet`, `PasswordResetView` et le lien de l'e-mail | ⏳ |
+| `LastQuestionsView` | ⏳ |
+| Déconnexion, `DeleteAccountSheet` | ⏳ |
+
+### Le récit (A5)
+
+| iOS | État |
+|---|---|
+| `HomeView` : cartes, tiroir d'actions, micro, boîte hors ligne, alerte de fin de voyage | ⏳ |
+| `NewNotebookSheet`, `JoinTripSheet` (Polarsteps reste « à venir ») | ⏳ |
+| `TripCreationView` : six étapes, création hors ligne, code d'accès | ⏳ |
+| `TripHomeView` : en-tête, étapes, validation, suppression d'étape | ⏳ |
+| `ChatView` : texte, vocal, photos, suggestions, appels à l'action, lecture à voix haute, photo plein écran, contexte du voyage, fil hors ligne | ⏳ |
+| `RecordingSheet` : forme d'onde, pause, transcription en direct, crédit du jour (30 s, 5 s, zéro) | ⏳ |
+| `RecordingOutbox`, `PendingRecordingStore`, `PendingTripStore` | ⏳ |
+| `PhotoFlow` | ⏳ |
+
+### Le carnet (A6)
+
+| iOS | État |
+|---|---|
+| `TripSettingsView` et ses feuilles (dates, rythme, notifications, thème, co-voyageurs, suppression) | ⏳ |
+| `DailyCreditSheet`, `PageTargetChangeSheet`, `PageTargetReachSheet` | ⏳ |
+| `BookCustomisationView` : ratio, pages, décorations, typos, extras, aperçus de personnalisation | ⏳ |
+| `CoversView`, `CoverCarouselView`, `CoverTextsView`, `CoverStatsSheet` | ⏳ |
+| `BookPreviewFlowView` : composition, lecteur PDF, plein écran | ⏳ |
+| `ShareBookSheet` (PDF, lien, WhatsApp), `FoundersNoteSheet` | ⏳ |
+| `GalleryView` | ⏳ |
+
+### L'argent (A7)
+
+| iOS | État |
+|---|---|
+| `PaywallView` (premier passage, retour), `BookPreviewSheet` par-dessus | ⏳ |
+| Achat de l'abonnement, restauration, achats non livrés | ⏳ |
+| `SubscriptionSheet` : actuel, continuer, raison, fin — et « Gérer » vers le bon store | ⏳ |
+| `OrderView` : sept étapes, Stripe, Google Pay, reprise d'un paiement abandonné, `OrderWhatsAppSheet` | ⏳ |
+| Moyens de paiement enregistrés | ⏳ |
+
+### Profil, aide, notifications (A8)
+
+| iOS | État |
+|---|---|
+| `ProfileView` : nom, photo, adresse, genre, notifications du compte, mot de passe, connecteurs (à venir), suivi de commande, statistiques, export | ⏳ |
+| `SupportView` : FAQ, votes, formulaire | ⏳ |
+| `LegalDocumentView` : conditions et confidentialité, avec Google Play à côté de l'App Store | ⏳ |
+| Notifications : permission au même moment qu'iOS, `ChatNotificationsNudge`, ouverture du bon écran, accusé d'ouverture | ⏳ |
+
+### Recette et publication (A9)
+
+| Sujet | État |
+|---|---|
+| La recette iOS rejouée : deux comptes, petit et grand téléphone, police à 200 %, TalkBack | ⏳ |
+| Fiche Play en français, classification, sécurité des données, URL de suppression | ⏳ |
+| Piste interne → test fermé → production | ⏳ |
+
+### Ce qui ne se porte pas
+
+- `MemoList/` et `MemoDetail/` : plus aucune route n'y mène sur iOS.
+- Ce qui est « à venir » sur iOS l'est aussi sur Android, au même endroit :
+  l'import Polarsteps, le Tricount, les six connecteurs, l'ouverture d'un carnet
+  de la galerie.
+
+## Les risques
+
+- **Un micro, deux écoutes.** Sur iOS, la transcription en direct lit le son de
+  l'enregistreur. Le `SpeechRecognizer` d'Android ouvre le micro lui-même, et
+  seul Android 13+ lui laisse lire un flux fourni par l'app. Piste : enregistrer
+  par `AudioRecord` et un encodeur AAC, nourrir la reconnaissance sur Android
+  13+, n'afficher que la forme d'onde avant. La transcription affichée n'est
+  qu'un retour visuel ; celle du serveur ne change pas. **À trancher par Clara.**
+- **Deux comptes Apple pour une personne.** La connexion Apple par le web ne
+  rend le même identifiant que si le Services ID est groupé sous l'App ID
+  `com.memobook.app`. À faire en A0, à vérifier avec un compte Apple existant
+  avant A4.
+- **Payer deux fois.** Voir plus haut : Android masque « S'abonner » à tout
+  compte illimité, quel que soit le store.
+- **Material contre le papier.** Les composants Material tirent les écrans hors
+  de la marque. Les écrans n'emploient que des `Brand…`.
+- **Deux apps qui divergent.** Chaque lot iOS fusionné après aujourd'hui creuse
+  l'écart. Les PR portent les étiquettes `ios`, `android`, `backend`, et disent
+  ce que l'autre plateforme doit reprendre ; cette liste en garde la trace.

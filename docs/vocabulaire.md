@@ -67,6 +67,13 @@ Et les mots des pièces d'un écran, pour décrire une maquette sans la montrer 
 | **Sections**, **en-tête**, **pages** d'un écran | les morceaux d'un écran trop long pour un fichier, gardés à côté de lui | `HomeSections.swift`, `TripHeader.swift`, `PaywallPages.swift` |
 | **Client** | ce qui parle au serveur ; la seule chose qui fabrique une `URLRequest` | `MemoBookAPIClient`, protocole `MemoBookAPI` |
 
+Côté Android (`android/`), les mêmes mots et les mêmes noms, **au fichier
+près** : `HomeView.swift` a pour jumeau `HomeView.kt`, et un `grep` trouve les
+deux. Un modèle d'écran y est un `ViewModel` qui expose un `StateFlow`, une
+preview Xcode y est une preview Compose (`@Preview`), et Kotlin écrit les sigles
+en casse de mot : `MemoBookAPI` → `MemoBookApi`, `APIConfiguration` →
+`ApiConfiguration`. Voir `android/CLAUDE.md`.
+
 Côté serveur (`backend/src/`) :
 
 | Mot | Ce que c'est | Où |
