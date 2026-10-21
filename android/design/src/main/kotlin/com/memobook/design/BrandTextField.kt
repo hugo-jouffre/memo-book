@@ -46,6 +46,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -187,8 +193,11 @@ fun <F : Any> BrandTextField(
                         .fillMaxWidth()
                         .height(height)
                         .background(fill, shape)
-                        // Pas de `border(0.dp)` au repos : zéro y vaut un trait d'un pixel.
-                        .then(if (isOutlined) Modifier.border(1.dp, borderColor, shape) else Modifier)
+                        // Pas de trait de zéro au repos : zéro y vaut un trait d'un pixel.
+                        // Et le contour **sous** le contenu : `Modifier.border` le
+                        // dessine par-dessus, et l'intitulé monté ne le coupait plus —
+                        // le trait le barrait (vu dans l'émulateur, 21/10/2026).
+                        .then(if (isOutlined) Modifier.outlineBehind({ borderColor }, MemoBookSpacing.controlCornerRadius) else Modifier)
                         // Tout le cadre donne le focus, pas seulement la ligne de texte.
                         .pointerInput(Unit) { detectTapGestures { binding.requester.requestFocus() } },
                 ) {
@@ -495,4 +504,16 @@ private fun BrandTextFieldPreview() {
             textAlign = TextAlign.Center,
         )
     }
+}
+
+/** Un contour d'un trait, dessiné **derrière** le contenu, à l'intérieur du cadre comme `Modifier.border`. */
+private fun Modifier.outlineBehind(color: () -> Color, cornerRadius: Dp): Modifier = drawBehind {
+    val stroke = 1.dp.toPx()
+    drawRoundRect(
+        color = color(),
+        topLeft = Offset(stroke / 2, stroke / 2),
+        size = Size(size.width - stroke, size.height - stroke),
+        cornerRadius = CornerRadius(cornerRadius.toPx() - stroke / 2),
+        style = Stroke(stroke),
+    )
 }
