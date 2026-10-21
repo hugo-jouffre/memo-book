@@ -187,6 +187,11 @@ par Robolectric en Pixel 7) : `make snapshots` écrit les images dans
 regarder ses nouvelles images **avant** de les commiter, et les poser à côté de
 la preview Xcode du jumeau. Les previews privées comptent.
 
+La comparaison tolère **1 % des pixels** (`MemoBookPreviewTester`) : les images
+sont enregistrées sur un Mac, comparées sous Linux, et Robolectric n'y lisse pas
+le texte tout à fait pareil (jusqu'à 0,5 % au premier passage de la CI). Deux dp
+de marge en plus sur une pastille la font bien échouer.
+
 ## Vérification
 
 Un écran n'est fini que vérifié sur trois axes : petit téléphone

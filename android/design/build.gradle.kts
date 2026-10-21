@@ -30,6 +30,11 @@ roborazzi {
         enable.set(true)
         packages.set(listOf("com.memobook.design"))
         includePrivatePreviews.set(true)
+        // Une tolérance d'1 % des pixels entre le Mac qui enregistre et la CI
+        // Linux qui compare : voir `MemoBookPreviewTester`.
+        testerQualifiedClassName.set("com.memobook.design.MemoBookPreviewTester")
+        // Le testeur garde la recherche des previews de Roborazzi, privées comprises.
+        useScanOptionParametersInTester.set(true)
         // La langue vient de chaque preview (`@Preview(locale = "fr-rFR")`), comme
         // l'app est en français (`FrenchLocale`) : le testeur l'applique par-dessus.
         robolectricConfig.set(mapOf("sdk" to "[36]", "qualifiers" to "RobolectricDeviceQualifiers.Pixel7"))
