@@ -27,7 +27,7 @@ import kotlin.math.pow
  * leurs jumeaux. `.smooth` et `.snappy` sont des ressorts décrits par une durée
  * perçue et un rebond : raideur (2π / durée)², amortissement 1 − rebond.
  */
-internal object SwiftMotion {
+object SwiftMotion {
     /** `.smooth(duration:)` : sans rebond. */
     fun <T> smooth(duration: Float): SpringSpec<T> = springWithBounce(duration, bounce = 0f)
 
@@ -55,7 +55,7 @@ internal object SwiftMotion {
  * pâlit un instant sous le doigt, comme un bouton du système. Le même 0,7 que
  * le `PressStyle` de [BrandButton].
  */
-internal object PlainButtonIndication : IndicationNodeFactory {
+object PlainButtonIndication : IndicationNodeFactory {
     override fun create(interactionSource: InteractionSource): DelegatableNode = PlainPressNode(interactionSource)
 
     override fun equals(other: Any?): Boolean = other === this
