@@ -13,22 +13,34 @@
 import type { ShippingSpeed } from "@prisma/client";
 
 /**
- * Le prix de fabrication, décomposé comme l'imprimeur le facture : une part
- * qui suit le nombre de pages, deux qui n'en dépendent pas.
+ * **Le prix du carnet, par palier de pages** (Hugo, 21/10/2026), livraison
+ * standard comprise. Il remplace le prix à la page (1,32 € la page + 23,90 €),
+ * qui faisait payer 110 € un carnet de 65 pages et 288 € un de 200.
  *
- * C'était jusqu'ici un taux unique de 1,798 € la page, avec le défaut que son
- * propre commentaire signalait — « un carnet de dix pages ne coûte pas un
- * cinquième d'un carnet de cinquante ». Les frais fixes en sortent, ce qui
- * rend la courbe juste aux petits carnets sans bouger l'ancre commerciale :
- * **50 pages font toujours 89,90 €**, valeur de la maquette.
+ * La grille vise **10 à 20 € sous Polarsteps Premium** à chaque tranche, et en
+ * suit les seuils — dont le saut de 95 à 120 € à 101 pages. Les trois premiers
+ * paliers sont les cibles Compact / Par défaut / Détaillé d'un voyage sans date
+ * de fin, 40 / 60 / 80 pages à ± 5 (`pageTarget.ts`). Les paliers sont **fixes
+ * en pages** : un Compact de six mois en fait 120, et se paie 110 €, pas 55.
  *
- * ⚠️ À retarifer avec l'imprimeur avant d'encaisser quoi que ce soit. Les
- * trois lignes sont celles que le récapitulatif nomme, pas une invention
- * d'affichage.
+ * Plus cher que Polarsteps de 16 à 24 pages (45 € chez eux) et de 46 à 50
+ * (70 €) : accepté par Hugo, la marge n'y descendrait pas plus bas.
+ *
+ * Le calcul (coûts Pumbo estimés, marges, écarts) est dans
+ * `livrables/MemoBook Prix du carnet par palier.xlsx`, hors dépôt. Chaque
+ * palier vaut jusqu'à `upTo` pages comprises ; au-delà du dernier, son prix.
  */
-const PAPER_CENTS_PER_PAGE = 132;
-const COVER_CENTS = 1_490;
-const BINDING_CENTS = 900;
+const LAST_TIER = { upTo: 400, cents: 14_500 };
+const PRICE_TIERS: readonly { upTo: number; cents: number }[] = [
+  { upTo: 45, cents: 5_500 },
+  { upTo: 65, cents: 7_500 },
+  { upTo: 85, cents: 8_000 },
+  { upTo: 100, cents: 8_500 },
+  { upTo: 120, cents: 10_500 },
+  { upTo: 200, cents: 11_000 },
+  { upTo: 300, cents: 12_900 },
+  LAST_TIER,
+];
 
 /** Le supplément de l'acheminement rapide. `standard` est inclus. */
 const EXPRESS_CENTS = 990;
@@ -59,12 +71,11 @@ export const BOOK_SPECIFICATIONS = [
  * Le prix d'**un** carnet. C'est aussi ce que l'étape 3 affiche en « prix
  * unitaire », et ce que la notification de fin de voyage annonce.
  *
- * La décomposition reste interne : une part qui suit les pages, deux frais
- * fixes. Elle ne sort plus vers l'app — voir ``BOOK_SPECIFICATIONS``.
+ * Le palier de `PRICE_TIERS` où tombe le nombre de pages.
  */
 export function unitPriceCents(pageCount: number): number {
   const pages = Math.max(pageCount, 1);
-  return pages * PAPER_CENTS_PER_PAGE + COVER_CENTS + BINDING_CENTS;
+  return (PRICE_TIERS.find((t) => pages <= t.upTo) ?? LAST_TIER).cents;
 }
 
 export function shippingCents(speed: ShippingSpeed): number {
