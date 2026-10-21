@@ -359,11 +359,16 @@ Une seule formule, dans `src/services/printPricing.ts`, pour deux lecteurs :
 l'estimation de la notification de fin de voyage et le montant réellement
 débité.
 
-> ⚠️ **Le prix est à trancher avec l'imprimeur.** 1,798 € la page, frais fixes
-> et port compris — ce qui est faux dès qu'on s'éloigne de cinquante pages. Et
-> `billablePageCount()` retombe sur `targetPageCount` parce que
-> `Memo.pageCount` n'est jamais écrit par le back-end. Les deux sont signalés
-> dans le code.
+**Un prix par palier de pages** (Hugo, 21/10/2026), livraison standard
+comprise, sur le nombre de pages du carnet composé (`billablePages`) :
+
+| Pages | 16–45 | 46–65 | 66–85 | 86–100 | 101–120 | 121–200 | 201–300 | 301–400 |
+|---|---|---|---|---|---|---|---|---|
+| Prix TTC | 55 € | 75 € | 80 € | 85 € | 105 € | 110 € | 129 € | 145 € |
+
+La grille vise 10 à 20 € sous Polarsteps Premium ; le calcul (coûts Pumbo
+estimés, marges) est dans `livrables/MemoBook Prix du carnet par palier.xlsx`,
+hors dépôt. ⚠️ Les coûts Pumbo restent à confirmer par devis.
 
 ## L'abonnement, et le crédit du jour
 

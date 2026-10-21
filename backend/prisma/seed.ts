@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { generateDeviceToken, hashDeviceToken } from "../src/lib/auth.js";
 import { hashPassword } from "../src/lib/password.js";
 import { DEFAULT_TIME_ZONE, localDate } from "../src/services/localCalendar.js";
+import { unitPriceCents } from "../src/services/printPricing.js";
 import { APP_STORE_PRODUCT_IDS, SUBSCRIPTION_MONTHLY_CENTS } from "../src/services/subscriptionCatalog.js";
 import { seedTripThemes } from "./tripThemes.js";
 
@@ -467,10 +468,10 @@ async function seedTraveller(
       // en livraison standard. **Rien n'est déduit** — la cagnotte d'un compte
       // neuf est vide, et une commande qui prétendrait le contraire ne
       // correspondrait à aucune écriture du registre.
-      itemsCents: 2 * (58 * 132 + 1_490 + 900),
+      itemsCents: 2 * unitPriceCents(58),
       shippingCents: 0,
       walletAppliedCents: 0,
-      amountCents: 2 * (58 * 132 + 1_490 + 900),
+      amountCents: 2 * unitPriceCents(58),
       submittedAt: new Date(),
       copyOptions: {
         create: [
