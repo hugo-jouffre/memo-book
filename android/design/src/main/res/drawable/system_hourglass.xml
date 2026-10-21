@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le symbole système « hourglass » d'iOS, le pictogramme par défaut de
+     BrandLimitBanner. Redessiné au trait, monochrome — la couleur se pose à
+     l'usage. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M6.5,3h11M6.5,21h11"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M8,3v2.6c0,2.8 4,4.2 4,6.4c0,2.2 -4,3.6 -4,6.4V21M16,3v2.6c0,2.8 -4,4.2 -4,6.4c0,2.2 4,3.6 4,6.4V21"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
