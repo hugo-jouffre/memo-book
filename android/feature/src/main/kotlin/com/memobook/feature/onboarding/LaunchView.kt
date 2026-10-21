@@ -96,7 +96,7 @@ fun LaunchView(developerDetails: String? = null, onDrawingFinished: () -> Unit =
 /** La durée du tracé, celle d'iOS (`drawDuration`, 950 ms). */
 private const val DRAW_DURATION_MS = 950
 
-@Preview(widthDp = 360, heightDp = 640)
+@Preview(locale = "fr-rFR", widthDp = 360, heightDp = 640)
 @Composable
 private fun LaunchViewPreview() {
     LaunchView(developerDetails = "API · http://10.0.2.2:3000 ↪︎ production")

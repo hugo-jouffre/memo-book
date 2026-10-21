@@ -17,7 +17,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.memobook.core.ChatAuthor
+import com.memobook.core.ShippingCountry
 import com.memobook.design.BrandAvatar
+import com.memobook.design.BrandCountryField
+import com.memobook.design.BrandDateField
+import com.memobook.design.BrandKeyboardDismissBar
+import com.memobook.design.BrandRangeCalendar
+import com.memobook.design.BrandSearchField
+import com.memobook.design.BrandSheet
+import com.memobook.design.BrandSheetHost
+import com.memobook.design.BrandTextBox
+import com.memobook.design.BrandTextField
+import com.memobook.design.DateRangeSelection
 import com.memobook.design.BrandChatBubble
 import com.memobook.design.BrandComingSoon
 import com.memobook.design.BrandDisclosureCard
@@ -64,6 +75,9 @@ internal object DesignCatalogueSections {
         "Avis et limites" to { Notices() },
         "Conversation et voix" to { Voice() },
         "En-têtes, filtres et tiroirs" to { Headers() },
+        "Champs" to { Fields() },
+        "Feuille" to { Sheet() },
+        "Calendrier" to { Calendar() },
     )
 }
 
@@ -224,4 +238,70 @@ private fun Headers() {
             BrandRowGroup(modifier = accessibility) { +BrandRow("Glisse-moi vers la gauche", action = {}) }
         }
     }
+}
+
+/** Les champs du formulaire d'entrée, dans l'ordre où le clavier les enchaîne. */
+private enum class CatalogueField { Email, Password, Note }
+
+@Composable
+private fun Fields() {
+    var focus by remember { mutableStateOf<CatalogueField?>(null) }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("memobook2026") }
+    var search by remember { mutableStateOf("") }
+    var country by remember { mutableStateOf("FR") }
+    var departure by remember { mutableStateOf<java.time.LocalDate?>(java.time.LocalDate.of(2026, 10, 21)) }
+    var note by remember { mutableStateOf("") }
+    val today = java.time.LocalDate.of(2026, 10, 21)
+    BrandKeyboardDismissBar {
+        Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.s)) {
+            BrandTextField("E-mail", email, { email = it }, CatalogueField.Email, focus, { focus = it })
+            BrandTextField(
+                "Mot de passe", password, { password = it }, CatalogueField.Password, focus, { focus = it },
+                isSecure = true, labelPlacement = BrandTextField.LabelPlacement.Above,
+                hint = "8 caractères, une lettre et un chiffre",
+            )
+            BrandSearchField("Rechercher un pays", search, { search = it }, onClear = { search = "" })
+            BrandCountryField(
+                listOf(ShippingCountry("FR", "France"), ShippingCountry("BE", "Belgique"), ShippingCountry("CH", "Suisse")),
+                country,
+                { country = it },
+            )
+            BrandDateField("Départ", departure, { departure = it }, today.minusYears(1)..today.plusYears(2))
+            BrandTextBox(
+                "Raconte ce qui t’a marqué aujourd’hui",
+                note,
+                { note = it },
+                isFocused = focus == CatalogueField.Note,
+                onFocusChange = { focus = if (it) CatalogueField.Note else null },
+            )
+        }
+    }
+}
+
+@Composable
+private fun Sheet() {
+    var isPresented by remember { mutableStateOf(false) }
+    BrandButton("Ouvrir une feuille", style = BrandButton.Style.Secondary, fillsWidth = true) { isPresented = true }
+    BrandSheetHost(isPresented, onDismissRequest = { isPresented = false }) {
+        BrandSheet(
+            "Mot de passe oublié",
+            paragraphs = listOf(
+                "Indique l’adresse de ton compte : on t’envoie un lien pour choisir un nouveau mot de passe.",
+                "Le lien vaut trente minutes.",
+            ),
+            icon = DesignR.drawable.icon_locker,
+            badge = "Compte",
+        ) {
+            BrandButton("Envoyer le lien", fillsWidth = true) { isPresented = false }
+        }
+    }
+}
+
+@Composable
+private fun Calendar() {
+    var selection by remember {
+        mutableStateOf(DateRangeSelection(java.time.LocalDate.of(2026, 10, 21), java.time.LocalDate.of(2026, 10, 28)))
+    }
+    BrandRangeCalendar(selection, { selection = it })
 }

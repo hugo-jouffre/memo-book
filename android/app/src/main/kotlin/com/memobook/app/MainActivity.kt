@@ -1,5 +1,6 @@
 package com.memobook.app
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -9,6 +10,10 @@ import com.memobook.feature.RootView
 
 /** La seule activité de l'app : tout le reste est en Compose, sous [RootView]. */
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(FrenchLocale.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Barres système claires sur le crème, quel que soit le thème du
         // téléphone : la marque ne se retourne pas en sombre.
