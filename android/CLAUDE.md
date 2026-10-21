@@ -34,9 +34,23 @@ make build     # compile le Debug
 make test      # tests de tous les modules, sur la JVM
 make lint
 make release   # le Release minifié par R8, que la CI compile aussi
+make snapshots # réenregistre les captures de référence du design system
+make assets    # réimporte le catalogue d'images d'iOS
 make run       # installe et lance sur l'émulateur ou le téléphone branché
 make doctor    # JDK, SDK, appareil, back-end
 ```
+
+### Interrupteurs de lancement
+
+Les arguments de lancement du simulateur iOS (`-previewSignedIn`…) sont ici
+des **extras de l'intention**, lus par `MainActivity` en Debug seulement :
+
+```bash
+make run ARGS="--ez designCatalogue true"   # l'écran-catalogue du design system
+```
+
+Les interrupteurs d'iOS arrivent avec le bac à sable (phase A3), sous le même
+nom.
 
 Gradle demande un JDK 17 ou plus ; le `Makefile` prend celui de Homebrew
 (`brew install openjdk@21`) quand le Java du Mac est plus ancien, et le SDK
@@ -131,9 +145,41 @@ Android. Un token change ? Les deux fichiers changent dans la même PR.
 - **Polices** : les mêmes fichiers que sur iOS, dans `design/src/main/res/font`,
   écrits par `python3 ios/Tools/make-brand-fonts.py` — jamais à la main.
   L'interligne Figma est dans les polices ; ne pas poser de `lineHeight`.
-- **Images** : des VectorDrawables, importés de `assets/` par script comme sur
-  iOS (phase A2), jamais dessinés à la main. Le M de la marque
-  (`brand_mark.xml`) vient de `ios/App/AppIcon.icon/Assets/M 01 3.svg`.
+- **Images** : `make assets` recopie **le catalogue d'iOS**
+  (`MemoBookAssets.xcassets`) dans `design/src/main/res-brand` — les SVG en
+  VectorDrawables par le convertisseur d'Android Studio, les PNG et JPG à leur
+  densité. Les scripts de `ios/Tools` ont déjà nommé et nettoyé chaque image :
+  partir de leur sortie donne les mêmes images sous les mêmes noms
+  (`IconPrinterDuo` → `R.drawable.icon_printer_duo`, `BrandImages["IconPrinterDuo"]`
+  pour un nom qui arrive en texte). Ajouter une image : le script iOS, puis
+  `make assets`. `res-brand/` n'appartient qu'au script ; ce qui est dessiné à
+  la main vit dans `res/drawable` — le M (`brand_mark.xml`) et les symboles
+  système d'iOS redessinés (`system_*.xml`), SF Symbols n'existant pas ici.
+
+### Porter un composant
+
+`BrandButton.kt` est le modèle. Le composant garde le nom et les paramètres de
+son jumeau Swift ; ses types imbriqués vivent dans un `object` du même nom
+(`BrandButton.Style`). Un `Binding` devient une valeur et son rappel, nommé
+d'après elle (`isOn` / `onIsOnChange`) ; un `@ViewBuilder`, un emplacement
+`@Composable`. Ce que SwiftUI donne et que Compose Foundation n'a pas est écrit
+une fois : `Platform.kt` (`BrandText`, `scaled()` pour `@ScaledMetric`,
+`isAccessibilityTextSize()`, `isReduceMotionEnabled()`, `brandShadow`,
+`ActivitySpinner`) et `SwiftMotion.kt` (les ressorts `.smooth`, `.snappy`,
+`.spring`, et l'appui `.plain`). Un composant qui ne peut pas être identique le
+dit en une ligne, à l'endroit où il diffère.
+
+`BrandNavigation` ne se porte pas : il rend sur iOS le glissé de retour qu'une
+barre masquée emporte, et Android a son geste de retour. `StatusBadge` et
+`EmptyStateView` non plus : seuls les écrans abandonnés d'iOS s'en servent.
+
+### Captures de référence
+
+Chaque `@Preview` de `:design` est aussi un test de capture (Roborazzi, rendu
+par Robolectric en Pixel 7) : `make snapshots` écrit les images dans
+`design/src/test/screenshots`, la CI les compare. Changer un composant, c'est
+regarder ses nouvelles images **avant** de les commiter, et les poser à côté de
+la preview Xcode du jumeau. Les previews privées comptent.
 
 ## Vérification
 
