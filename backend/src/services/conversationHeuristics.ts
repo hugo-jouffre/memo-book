@@ -35,6 +35,8 @@ import {
   type TripContextTurnInput,
   type TripContextTurnReply,
   type MemoResponder,
+  type MissingDayTurnInput,
+  type MissingDayTurnReply,
 } from "./conversation.js";
 import { updateByRules } from "./tripContext.js";
 
@@ -746,6 +748,14 @@ export class HeuristicResponder implements MemoResponder {
       acknowledgement: null,
       model: "heuristic",
     };
+  }
+
+  /**
+   * Le moteur de règles n'improvise pas une question : `null` rend la main à
+   * la carte fixe (`missingDayNotice`), qui dit déjà le trou et sa sortie.
+   */
+  async askMissingDay(_input: MissingDayTurnInput): Promise<MissingDayTurnReply> {
+    return { text: null, model: "heuristic" };
   }
 
   async reply(input: ConversationInput): Promise<ConversationReply> {

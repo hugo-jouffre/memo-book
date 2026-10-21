@@ -1,0 +1,13 @@
+{
+  "name": "La question du trou — une journée, et deux récits autour",
+  "why": "Le code a trouvé le 26, encadré par le 25 et le 27 (`conversationGaps.ts`). MEMO doit poser **une** question — la journée a-t-elle été sautée exprès, ou est-elle passée sous le nez — en renvoyant au bouton par son libellé exact, et laisser le trou comme réponse acceptable. Il ne devine rien de ce qui s'est passé le 26.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome" },
+  "traveller": { "firstName": "Hugo" },
+  "missingDay": {
+    "days": ["2026-09-26"],
+    "before": "2026-09-25",
+    "after": "2026-09-27",
+    "beforeText": "Le 25, on a passé l'après-midi au marché de Testaccio, avec Clara. On a goûté une burrata coupée devant nous, puis on a marché jusqu'au Tibre sous la chaleur.",
+    "afterText": "Le 27, on est montés voir le coucher de soleil depuis l'Aventin. Il y avait une lumière orange sur toute la ville."
+  }
+}
