@@ -55,9 +55,10 @@ d'un produit, d'un serveur et d'un code déjà tranchés.
 | **A8** Profil, aide, notifications | 8–9 | profil et ses neuf feuilles, statistiques, export, aide, textes légaux, FCM | chacun des neuf types de notification ouvre son écran | B3 |
 | **A9** Recette et Play | 9–10 | la recette iOS rejouée sur Android, fiche Play, sécurité des données, URL de suppression, test interne → fermé → production | Clara et Paul installent l'app depuis la piste interne | B6, A0 |
 
-Un compte développeur Play **personnel** et neuf doit faire tester l'app à
-12 testeurs pendant 14 jours avant la production. Un compte **organisation**
-(numéro D-U-N-S) en est dispensé : à trancher en A0.
+Le compte développeur Play est un compte **organisation**, créé le 21/10/2026 :
+il est dispensé du test fermé (12 testeurs pendant 14 jours) qu'un compte
+personnel neuf doit passer avant la production. Reste l'examen de Google à
+chaque version.
 
 ## Les lots du serveur
 
