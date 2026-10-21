@@ -95,7 +95,7 @@ fichier Kotlin porte le même.
 | `Tokens.swift`, `BrandFonts` | `Tokens.kt`, `BrandFonts.kt`, les six polices | ✅ |
 | `StoreKitCatalog` | `PlayCatalog` — le même identifiant de produit | ✅ |
 | Format du vocal (`AudioRecorder`) | `VoiceNoteFormat` | ✅ |
-| `Onboarding/LaunchView` | le M posé sur le crème ; le tracé animé arrive avec `BrandMarkBackdrop` | 🔄 |
+| `Onboarding/LaunchView` | le M posé sur le crème, vérifié dans l'émulateur (Pixel 8 ; 360 × 640 dp à 200 %) ; le tracé animé arrive avec `BrandMarkBackdrop` | 🔄 |
 | Icône `AppIcon.icon` | icône adaptative, M crème sur vert, monochrome pour Android 13+ | ✅ |
 | `ci-ios.yml` | `ci-android.yml` | ✅ |
 
