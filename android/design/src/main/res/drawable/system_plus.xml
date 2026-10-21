@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le symbole système « plus » d'iOS, celui du « + » de BrandStepper.
+     Redessiné au trait, à la graisse « medium » du symbole, monochrome — la
+     couleur se pose à l'usage. Le jeu de marque a un `IconPlus`, mais pas de
+     « moins » : les deux cercles du compteur doivent porter le même dessin. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M3,12h18M12,3v18"
+        android:strokeWidth="2.6"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round" />
+</vector>
