@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ce que le `FileProvider` de `PhotoFlow` prête à l'app photo du système :
+     le seul dossier `camera/` du cache, où s'écrit la photo qu'on prend. -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+</paths>

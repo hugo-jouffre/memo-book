@@ -3,6 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13 et plus : la permission des notifications, demandée aux
+         mêmes moments que sur iOS — l'étape « Notifications » de la création
+         d'un voyage, la bulle de la conversation (`PushNotifications`). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Portrait seulement, comme sur l'iPhone — Android 16 l'ignore sur les
          grands écrans, et c'est voulu.
@@ -52,5 +56,19 @@
                 <data android:path="/password/reset" />
             </intent-filter>
         </activity>
+
+        <!-- Le fichier que l'app photo du système remplit quand on prend une
+             photo (`PhotoFlow`, `TakePicture`) : un fichier du cache, prêté le
+             temps de la prise de vue. Aucune permission de stockage ni de
+             caméra : l'app photo fait le reste. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/photo_paths" />
+        </provider>
     </application>
 </manifest>
