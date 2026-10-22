@@ -75,6 +75,9 @@ import com.memobook.feature.notifications.rememberNotificationPermissionRequest
 import com.memobook.feature.notifications.LocalPushNotifications
 import com.memobook.feature.notifications.NotificationAuthorization
 import com.memobook.feature.notifications.PushNotifications
+import com.memobook.feature.tripcreation.TripAccessCode
+import com.memobook.feature.tripcreation.TripThemePickerPlaceholder
+import com.memobook.feature.tripcreation.TripThemePicker
 
 // Les feuilles des paramètres d'un voyage. Jumeau de
 // `TripSettings/TripSettingsSheets.swift` ; l'énumération des feuilles,

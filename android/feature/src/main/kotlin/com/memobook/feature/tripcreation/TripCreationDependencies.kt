@@ -2,6 +2,7 @@ package com.memobook.feature.tripcreation
 
 import com.memobook.feature.AppDependencies
 import kotlinx.coroutines.flow.map
+import com.memobook.feature.chat.NotificationsNudge
 
 /**
  * Les six étapes de « Créer un voyage ». Le `tripCreationModel()`

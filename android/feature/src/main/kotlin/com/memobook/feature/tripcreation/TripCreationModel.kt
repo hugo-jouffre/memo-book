@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.UUID
+import com.memobook.feature.chat.NotificationsNudge
 
 /**
  * Les six étapes de « Créer un voyage », dans l'ordre où on les traverse.

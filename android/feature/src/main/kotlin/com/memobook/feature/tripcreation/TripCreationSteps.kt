@@ -100,6 +100,8 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlin.math.abs
 import kotlin.math.max
+import com.memobook.feature.notifications.rememberNotificationPermissionRequest
+import com.memobook.feature.notifications.LocalPushNotifications
 
 /**
  * Les champs de la création. Le focus appartient à l'écran, pas au champ —
