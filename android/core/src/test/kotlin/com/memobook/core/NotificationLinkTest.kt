@@ -53,6 +53,11 @@ class NotificationLinkTest {
     }
 
     @Test
+    fun theTokenIsWrittenAsAPNsExpectsIt() {
+        assertEquals("00ab10ff", PushTokenRegistration.hex(byteArrayOf(0x00, 0xAB.toByte(), 0x10, 0xFF.toByte())))
+    }
+
+    @Test
     fun theAppLinkCarriesTheCode() {
         val uri = URI("https://api-production-9f35a.up.railway.app/j/JHKFDA")
         assertEquals("JHKFDA", InviteLink.code(uri))
