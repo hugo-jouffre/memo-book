@@ -839,3 +839,4 @@ exactement ce que le modèle doit faire mieux.
 | 21/10/2026 | Un mot du vocabulaire du prompt ne s'emploie pas au sens courant ailleurs dans le prompt : « relance » au § 8 faisait écrire des relances au § 7, mesuré à 6 sur 8 | reco Claude |
 | 21/10/2026 | C'est MEMO qui pose la question du trou, et il demande si la journée est sautée exprès ou oubliée ; le code continue de trouver le trou, et la carte fixe reste le repli | Hugo |
 | 21/10/2026 | Le plafond de deux jours ne bouge pas : seule la façon de demander change | Hugo |
+| 22/10/2026 | Les maquettes « Chat — Smart reco » montrent des puces « Aujourd'hui / Hier » et un texte de carte en gabarit (« J'ai détecté un trou… ») : elles sont antérieures au 19/10 et on garde l'existant — puces datées seulement sur deux journées manquantes, en libellés absolus, et la question écrite par MEMO | Hugo |
