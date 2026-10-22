@@ -69,12 +69,12 @@ la main.
 
 | Lot | Ce qui change | Fichiers | Migration |
 |---|---|---|---|
-| **B1** Liens et Google | `GOOGLE_WEB_CLIENT_ID` posé sur Railway (l'audience des jetons Android) ; `/.well-known/assetlinks.json` ; `/j/:code` et `/password/reset` savent mener au Play Store ou dans l'app, sans dire « iPhone » | `env.ts`, `invitePage.ts`, `passwordResetPage.ts` | non |
+| **B1** Liens et Google — 🔶 PR #143 : `assetlinks.json`, pages d'invitation et de mot de passe ; reste `GOOGLE_WEB_CLIENT_ID` | `GOOGLE_WEB_CLIENT_ID` posé sur Railway (l'audience des jetons Android) ; `/.well-known/assetlinks.json` ; `/j/:code` et `/password/reset` savent mener au Play Store ou dans l'app, sans dire « iPhone » | `env.ts`, `invitePage.ts`, `passwordResetPage.ts` | non |
 | **B2** Apple par le web | un Services ID accepté comme audience ; le retour `form_post` d'Apple qui rend le jeton à l'app | `socialIdentity.ts`, `routes/auth.ts` | non |
 | **B3** FCM | `push_tokens.provider` (apns ou fcm) ; `/v1/push-tokens` accepte un jeton FCM sans le passer en minuscules ; un expéditeur FCM derrière `PushSender` | `schema.prisma`, `routes/notifications.ts`, `services/apns.ts`, `services/fcm.ts` | oui |
-| **B4** Google Play Billing | le fournisseur `google_play` ; la route d'achat qui vérifie et **acquitte** le jeton ; le webhook des notifications temps réel ; résiliation, sérialiseurs et rappels selon le store | `schema.prisma`, `services/googlePlay.ts`, `routes/profile.ts`, `appSerializers.ts`, `subscriptionCatalog.ts` | oui |
-| **B5** Google Pay et plateforme | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
-| **B6** Page de suppression | une page publique pour demander la suppression d'un compte par e-mail, que Google Play exige de toute app qui crée des comptes | à côté de `dataExportPage.ts` | non |
+| **B4** Google Play Billing — l'app appelle déjà `POST /v1/subscriptions/google-play` (`purchaseToken`, `productId`, `memoId`) | le fournisseur `google_play` ; la route d'achat qui vérifie et **acquitte** le jeton ; le webhook des notifications temps réel ; résiliation, sérialiseurs et rappels selon le store | `schema.prisma`, `services/googlePlay.ts`, `routes/profile.ts`, `appSerializers.ts`, `subscriptionCatalog.ts` | oui |
+| **B5** Google Pay et plateforme — l'app envoie déjà `X-App-Platform: android` | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
+| **B6** Page de suppression — 🔶 PR #143 : `/account/delete` | une page publique pour demander la suppression d'un compte par e-mail, que Google Play exige de toute app qui crée des comptes | à côté de `dataExportPage.ts` | non |
 
 Côté app, B4 rend aussi indépendant du store ce qui ne connaît qu'Apple :
 `Subscription.managedByAppStore` (dire quel store tient l'abonnement), les états
@@ -145,77 +145,105 @@ son nom. 380 tests sur la JVM, portés cas pour cas des suites iOS.
 | Textes : `ChatCopy`, `BookCopy`, `OrderCopy`, CGU, confidentialité, FAQ, aide | recopiés par script, comparés chaîne à chaîne avec le Swift | ✅ |
 | `MemoBookAPIClient` : les routes, `APIError` et ses messages en français | `MemoBookApiClient` (OkHttp, coroutines annulables), `ApiError` ; la bascule vers l'adresse de secours ; `platform: "android"` à l'enregistrement de l'appareil | ✅ |
 | `TokenStore`, `Connectivity`, `NetworkLog` | interfaces pures ; `KeystoreTokenStore` (AES-GCM, clé dans l'AndroidKeyStore), `AndroidConnectivity`, `AndroidLogSink` — **compilés par la CI seulement** | ✅ |
-| `ContentCache` | | ⏳ |
-| `PreviewAPI`, `SandboxPersona`, interrupteurs `-previewSignedIn`, `-openOrder`, `-composeBook`, `-lastQuestions`, `-resetOnboarding` (en extras de lancement) | | ⏳ |
+| `ContentCache`, `CachedSource`, `SessionRestore` | les mêmes, dans `cacheDir` ; l'empreinte des voyages est celle d'iOS | ✅ |
+| `PreviewAPI`, `SandboxPersona`, `SandboxCredit`, les jeux d'essai | `PreviewSupport.kt`, `SandboxPersona.kt`, un `…Fixtures.kt` par écran ; `HomeFeed.fixture` s'écrit pareil | ✅ |
+| Interrupteurs `-previewSignedIn`, `-openOrder`, `-composeBook`, `-lastQuestions`, `-resetOnboarding` | extras de lancement du même nom (`LaunchSwitches`), lus en Debug seulement | ✅ |
+| `AppDependencies`, `RootView` | `AppDependencies` assemblé à la première activité, les fabriques en fonctions d'extension par écran ; `RootView` et ses deux piles en Navigation 3, routes et intentions dans `Navigation.kt` | ✅ |
 
-À brancher dans l'app avec le bac à sable : `ApiError.developerDiagnostics` et
-`VoiceMode.forBuild(BuildConfig.DEBUG)`, que `:core` et `:networking` ne peuvent
-pas lire eux-mêmes. `BookCustomisationPreviewManifest.kt` est une recopie de la
-table Swift : la régénérer avec elle (deux tests le vérifient).
+`ApiError.developerDiagnostics` est posé par l'app en Debug.
+`BookCustomisationPreviewManifest.kt` est une recopie de la table Swift : la
+régénérer avec elle (deux tests le vérifient).
 
 ### Comptes et entrée (A4)
 
+✅ porté et testé sur la JVM, vu dans l'émulateur sur le jeu d'essai ·
+🔶 porté, mais attend une clé ou un lot serveur · ⏳ à faire.
+**Rien n'est encore vérifié sur un vrai téléphone, ni contre le serveur.**
+
 | iOS | État |
 |---|---|
-| `SessionRestore`, `LaunchView` animé | ⏳ |
-| `WelcomeView` et les carnets d'exemple | ⏳ |
-| `AuthView` (inscription, connexion), `SocialCompletionView` | ⏳ |
-| Google (`GoogleSignInService`), Apple | ⏳ |
-| `PasswordRecoverySheet`, `PasswordResetView` et le lien de l'e-mail | ⏳ |
-| `LastQuestionsView` | ⏳ |
-| Déconnexion, `DeleteAccountSheet` | ⏳ |
+| `SessionRestore`, `LaunchView` animé | ✅ |
+| `WelcomeView` et les carnets d'exemple | ✅ |
+| `AuthView` (inscription, connexion), `SocialCompletionView` | ✅ |
+| Google par Credential Manager — bouton masqué tant que `memobook.googleWebClientId` est vide (A0, B1) | 🔶 |
+| Apple par le web — bouton masqué tant que `memobook.appleServicesId` est vide (A0, B2) | 🔶 |
+| `PasswordRecoverySheet`, `PasswordResetView` et le lien de l'e-mail (`memobook://` et App Link `/password/reset`) | ✅ |
+| `LastQuestionsView` | ✅ |
+| Déconnexion, `DeleteAccountSheet` | ✅ |
 
 ### Le récit (A5)
 
 | iOS | État |
 |---|---|
-| `HomeView` : cartes, tiroir d'actions, micro, boîte hors ligne, alerte de fin de voyage | ⏳ |
-| `NewNotebookSheet`, `JoinTripSheet` (Polarsteps reste « à venir ») | ⏳ |
-| `TripCreationView` : six étapes, création hors ligne, code d'accès | ⏳ |
-| `TripHomeView` : en-tête, étapes, validation, suppression d'étape | ⏳ |
-| `ChatView` : texte, vocal, photos, suggestions, appels à l'action, lecture à voix haute, photo plein écran, contexte du voyage, fil hors ligne | ⏳ |
-| `RecordingSheet` : forme d'onde, pause, transcription en direct, crédit du jour (30 s, 5 s, zéro) | ⏳ |
-| `RecordingOutbox`, `PendingRecordingStore`, `PendingTripStore` | ⏳ |
-| `PhotoFlow` | ⏳ |
+| `HomeView` : cartes, tiroir d'actions, micro, boîte hors ligne, alerte de fin de voyage (seulement pour un abonnement Google Play) | ✅ |
+| `NewNotebookSheet`, `JoinTripSheet` (Polarsteps reste « à venir ») | ✅ |
+| `TripCreationView` : six étapes, création hors ligne, code d'accès, invitation par la feuille de partage | ✅ |
+| `TripHomeView` : en-tête, étapes, validation, suppression d'étape | ✅ |
+| `ChatView` : texte, vocal, photos, suggestions, appels à l'action, lecture à voix haute, photo plein écran, contexte du voyage, fil hors ligne | ✅ |
+| `RecordingSheet` : forme d'onde, pause, crédit du jour (30 s, 5 s, zéro) — **forme d'onde seule**, sans transcription en direct (voir les risques) | ✅ |
+| `RecordingOutbox`, `PendingRecordingStore`, `PendingTripStore`, vidés aussi app fermée par WorkManager | ✅ |
+| `PhotoFlow` : sélecteur de photos du système (sans permission), appareil photo | ✅ |
 
 ### Le carnet (A6)
 
 | iOS | État |
 |---|---|
-| `TripSettingsView` et ses feuilles (dates, rythme, notifications, thème, co-voyageurs, suppression) | ⏳ |
-| `DailyCreditSheet`, `PageTargetChangeSheet`, `PageTargetReachSheet` | ⏳ |
-| `BookCustomisationView` : ratio, pages, décorations, typos, extras, aperçus de personnalisation | ⏳ |
-| `CoversView`, `CoverCarouselView`, `CoverTextsView`, `CoverStatsSheet` | ⏳ |
-| `BookPreviewFlowView` : composition, lecteur PDF, plein écran | ⏳ |
-| `ShareBookSheet` (PDF, lien, WhatsApp), `FoundersNoteSheet` | ⏳ |
-| `GalleryView` | ⏳ |
+| `TripSettingsView` et ses feuilles (dates, rythme, notifications, thème, co-voyageurs, suppression) | ✅ |
+| `DailyCreditSheet`, `PageTargetChangeSheet`, `PageTargetReachSheet` | ✅ |
+| `BookCustomisationView` : ratio, pages, décorations, typos, extras, aperçus de personnalisation (images du bucket public, par Coil) | ✅ |
+| `CoversView`, `CoverCarouselView`, `CoverTextsView`, `CoverStatsSheet` — un seul modèle pour les quatre écrans | ✅ |
+| `BookPreviewFlowView` : composition, lecteur PDF (`PdfRenderer`), plein écran | ✅ |
+| `ShareBookSheet` (PDF, lien, WhatsApp), `FoundersNoteSheet` | ✅ |
+| `GalleryView` | ✅ |
 
 ### L'argent (A7)
 
 | iOS | État |
 |---|---|
-| `PaywallView` (premier passage, retour), `BookPreviewSheet` par-dessus | ⏳ |
-| Achat de l'abonnement, restauration, achats non livrés | ⏳ |
-| `SubscriptionSheet` : actuel, continuer, raison, fin — et « Gérer » vers le bon store | ⏳ |
-| `OrderView` : sept étapes, Stripe, Google Pay, reprise d'un paiement abandonné, `OrderWhatsAppSheet` | ⏳ |
-| Moyens de paiement enregistrés | ⏳ |
+| `PaywallView` (premier passage, retour), `BookPreviewSheet` par-dessus | ✅ |
+| Achat de l'abonnement par Google Play Billing, restauration, achats non livrés — la remise au serveur (`POST /v1/subscriptions/google-play`) attend le lot B4 : le produit ne s'active pas dans la Play Console avant | 🔶 |
+| `SubscriptionSheet` : actuel, continuer, raison, fin — et « Gérer » vers le store qui l'a vendu (Google Play, ou le renvoi vers l'iPhone pour l'App Store) | ✅ |
+| `OrderView` : sept étapes, feuille Stripe, reprise d'un paiement abandonné, `OrderWhatsAppSheet` | ✅ |
+| Google Pay dans la feuille Stripe — prévu, éteint (`googlePayEnabled`) tant que le lot B5 et l'accès production Google Pay manquent | 🔶 |
+| Moyens de paiement enregistrés (CustomerSheet de Stripe) | ✅ |
 
 ### Profil, aide, notifications (A8)
 
 | iOS | État |
 |---|---|
-| `ProfileView` : nom, photo, adresse, genre, notifications du compte, mot de passe, connecteurs (à venir), suivi de commande, statistiques, export | ⏳ |
-| `SupportView` : FAQ, votes, formulaire | ⏳ |
-| `LegalDocumentView` : conditions et confidentialité, avec Google Play à côté de l'App Store | ⏳ |
-| Notifications : permission au même moment qu'iOS, `ChatNotificationsNudge`, ouverture du bon écran, accusé d'ouverture | ⏳ |
+| `ProfileView` : nom, photo, adresse, genre, notifications du compte, mot de passe, connecteurs (à venir), suivi de commande, statistiques, export | ✅ |
+| `SupportView` : FAQ, votes, formulaire | ✅ |
+| `LegalDocumentView` : conditions et confidentialité | ✅ |
+| Textes légaux et FAQ qui parlent de l'App Store et de l'iPhone (CGU chap. 5, confidentialité 2.4 et 3, trois réponses) : à réécrire pour Google Play avant la fiche Play | ⏳ |
+| Notifications : permission `POST_NOTIFICATIONS` au même moment qu'iOS, `ChatNotificationsNudge`, ouverture du bon écran, accusé d'ouverture | ✅ |
+| Le jeton FCM (`FirebasePushTokenSource`, un `TODO(B3)`) — attend le projet Firebase (A0) et le lot B3 | 🔶 |
 
 ### Recette et publication (A9)
 
 | Sujet | État |
 |---|---|
 | La recette iOS rejouée : deux comptes, petit et grand téléphone, police à 200 %, TalkBack | ⏳ |
-| Fiche Play en français, classification, sécurité des données, URL de suppression | ⏳ |
-| Piste interne → test fermé → production | ⏳ |
+| Fiche Play en français, classification, sécurité des données | ⏳ |
+| URL de suppression : `/account/delete` (PR #143) | 🔶 |
+| Envoi signé sur la piste interne : `.github/workflows/play-internal.yml`, attend les cinq secrets de Hugo | 🔶 |
+| Piste interne → production (pas de test fermé obligatoire pour un compte organisation) | ⏳ |
+
+### Textes propres à Android, à relire par Clara
+
+Tous les textes sont recopiés du Swift, à ces exceptions près, qui nomment la
+plateforme :
+
+- « Paramètres du téléphone » / « Ouvrir les Paramètres » à la place des
+  « Réglages » d'iOS (micro, photos, notifications).
+- La feuille d'abonnement, pour un abonnement pris sur iPhone : « Ton
+  abonnement a été pris sur un iPhone : il se résilie chez Apple, dans les
+  réglages de ton iPhone. MemoBook ne peut pas le couper depuis ce
+  téléphone. » (et sa jumelle « il se réactive… ne peut pas le relancer »).
+- Le prélèvement raté d'un abonnement Google Play : « Google Play réessaie /
+  cesse de réessayer / ne le retentera pas », « dans ton compte Google Play ».
+- Le paywall : « compte Google », « Play Store › Paiements et abonnements ›
+  Abonnements » ; une erreur de vérification : « Le Play Store… ».
+- « Continuer avec Apple » (iOS laisse le bouton système écrire le sien).
 
 ### Ce qui ne se porte pas
 
@@ -234,7 +262,10 @@ table Swift : la régénérer avec elle (deux tests le vérifient).
   seul Android 13+ lui laisse lire un flux fourni par l'app. Piste : enregistrer
   par `AudioRecord` et un encodeur AAC, nourrir la reconnaissance sur Android
   13+, n'afficher que la forme d'onde avant. La transcription affichée n'est
-  qu'un retour visuel ; celle du serveur ne change pas. **À trancher par Clara.**
+  qu'un retour visuel ; celle du serveur ne change pas. **Porté en forme
+  d'onde seule** (l'option recommandée de `android-reprise.md`) ; l'interface
+  du transcripteur est en place pour l'option Android 13+ si Clara la choisit
+  (`SpeechTranscriber.kt` dit comment).
 - **Deux comptes Apple pour une personne.** La connexion Apple par le web ne
   rend le même identifiant que si le Services ID est groupé sous l'App ID
   `com.memobook.app`. À faire en A0, à vérifier avec un compte Apple existant
