@@ -97,6 +97,7 @@ dependencies {
     implementation(project(":design"))
     implementation(project(":networking"))
     implementation(project(":feature"))
+    implementation(project(":payments"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.compose.bom))

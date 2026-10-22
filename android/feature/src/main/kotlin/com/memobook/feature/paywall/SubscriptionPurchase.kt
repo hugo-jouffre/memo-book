@@ -3,6 +3,8 @@ package com.memobook.feature.paywall
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
+import com.memobook.payments.RestoreOutcome
+import com.memobook.payments.PurchaseOutcome
 
 /**
  * Ce que l'offre et la feuille d'abonnement savent faire du store, pour le

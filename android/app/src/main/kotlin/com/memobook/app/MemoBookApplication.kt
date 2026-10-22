@@ -15,6 +15,12 @@ import com.memobook.feature.OnboardingStorage
 import com.memobook.feature.PreviewSupport
 import com.memobook.feature.RecordingOutboxWorker
 import com.memobook.feature.SharedPreferencesAppSettings
+import com.memobook.payments.PlayBillingSubscriptionStore
+import com.memobook.payments.StripeCustomerSheetPresenter
+import com.memobook.payments.StripePaymentSheetPresenter
+import com.memobook.payments.StubPaymentMethodsPresenter
+import com.memobook.payments.StubPaymentPresenter
+import com.memobook.payments.StubSubscriptionStore
 import com.memobook.networking.AndroidConnectivity
 import com.memobook.networking.AndroidLogSink
 import com.memobook.networking.ApiConfiguration
@@ -26,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
+import java.net.URI
 
 /**
  * Le point d'entrée du processus, comme `MemoBookApp.swift` : il lit la
@@ -98,6 +105,11 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory, AppDepe
             googleWebClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID.ifBlank { null },
             appleServicesId = BuildConfig.APPLE_SERVICES_ID.ifBlank { null },
             scheduleBackgroundFlush = RecordingOutboxWorker.scheduler(this),
+            // Le bac à sable ne paie rien : ses doubles n'appellent personne.
+            payments = if (switches.previewSignedIn) StubPaymentPresenter() else StripePaymentSheetPresenter(),
+            subscriptions = if (switches.previewSignedIn) StubSubscriptionStore() else PlayBillingSubscriptionStore(this, scope),
+            paymentMethods = if (switches.previewSignedIn) StubPaymentMethodsPresenter() else StripeCustomerSheetPresenter(),
+            productionApiBaseUrl = runCatching { URI(BuildConfig.PRODUCTION_API_BASE_URL) }.getOrNull(),
         )
     }
 

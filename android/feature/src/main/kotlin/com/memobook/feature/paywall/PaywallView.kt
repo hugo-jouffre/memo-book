@@ -74,6 +74,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.max
+import com.memobook.payments.RestoreOutcome
+import com.memobook.payments.PurchaseOutcome
 
 /**
  * Le paywall : des écrans qui se suivent tout seuls, comme des stories. Jumeau

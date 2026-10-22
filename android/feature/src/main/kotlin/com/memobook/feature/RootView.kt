@@ -61,6 +61,7 @@ import com.memobook.feature.onboarding.LastQuestionsEntry
 import com.memobook.feature.onboarding.LastQuestionsModel
 import com.memobook.feature.onboarding.LaunchView
 import com.memobook.feature.order.OrderEntry
+import com.memobook.feature.paywall.LocalSubscriptionPurchase
 import com.memobook.feature.paywall.PaywallEntry
 import com.memobook.feature.profile.PasswordResetSheetEntry
 import com.memobook.feature.profile.ProfileEntry
@@ -72,6 +73,7 @@ import com.memobook.feature.tripsettings.BookCustomisationEntry
 import com.memobook.feature.tripsettings.TripSettingsEntry
 import com.memobook.feature.welcome.WelcomeEntry
 import com.memobook.networking.ApiError
+import com.memobook.payments.PaymentSheetsHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -110,6 +112,21 @@ fun RootView(dependencies: AppDependencies, showsDeveloperDetails: Boolean, inco
 
     LaunchedEffect(state) { state.restore() }
 
+    // Les feuilles de Stripe s'enregistrent dans la composition : une fois,
+    // tout en haut, hors des piles — sinon elles partiraient avec l'écran qui
+    // les a ouvertes.
+    PaymentSheetsHost(dependencies.payments, dependencies.paymentMethods)
+
+    // Un achat remis hors du paywall (un achat en attente qui se conclut, un
+    // lancement précédent) : l'accueil se relit, le profil aussi.
+    val delivered by dependencies.deliveredTransactions.collectAsStateWithLifecycle()
+    LaunchedEffect(delivered) {
+        if (delivered > 0) {
+            state.homeReloadRequest += 1
+            state.subscription.noteOutsideChange()
+        }
+    }
+
     // Un lien reçu : réinitialisation, invitation, notification.
     val link = incomingLinks.pending
     LaunchedEffect(link, state.stage) {
@@ -121,6 +138,10 @@ fun RootView(dependencies: AppDependencies, showsDeveloperDetails: Boolean, inco
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         scope.launch { dependencies.flushOutboxOnForeground() }
         scope.launch { state.onReturnToForeground() }
+        // Un achat que le store a encaissé et que le serveur n'a pas reçu.
+        if (state.stage is RootState.Stage.SignedIn && !dependencies.isPreviewingSignedIn) {
+            scope.launch { dependencies.deliverUnfinishedTransactions() }
+        }
     }
 
     // **L'illimité libère la file** (03/10/2026) : ce qui attendait le crédit
@@ -265,9 +286,17 @@ private fun SignedInStack(state: RootState, account: Account) {
         if (state.path.none { it is HomeRoute.Chat }) state.recordingHandoff = null
     }
 
+    // Ce que le store a gardé pendant que personne n'était connecté part
+    // maintenant qu'une session peut le remettre.
+    LaunchedEffect(account.id) {
+        if (!dependencies.isPreviewingSignedIn) dependencies.deliverUnfinishedTransactions()
+    }
+    val purchase = remember(account.id) { dependencies.subscriptionPurchase(account.id) }
+
     CompositionLocalProvider(
         LocalSessionViewModelStoreOwner provides sessionModels,
         LocalTravellerFirstName provides account.firstName,
+        LocalSubscriptionPurchase provides purchase,
     ) {
         val back: () -> Unit = { state.path.removeLastOrNull() }
         NavDisplay(

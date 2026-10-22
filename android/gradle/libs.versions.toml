@@ -30,6 +30,10 @@ work = "2.12.0"
 # d'identité que le serveur vérifie comme celui du SDK Google d'iOS.
 credentials = "1.6.0"
 googleId = "1.2.1"
+# L'argent, isolé dans `:payments` : l'abonnement par Google Play Billing (le
+# StoreKit 2 d'iOS), le carnet imprimé par la feuille de Stripe et Google Pay.
+playBilling = "9.1.0"
+stripe = "23.25.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -66,6 +70,8 @@ coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
 androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleId" }
+play-billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "playBilling" }
+stripe-android = { module = "com.stripe:stripe-android", version.ref = "stripe" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 
 [plugins]

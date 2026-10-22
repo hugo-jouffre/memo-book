@@ -17,6 +17,21 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
 import java.io.File
 import java.time.Instant
+import java.net.URI
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import com.memobook.feature.paywall.SubscriptionPurchase
+import com.memobook.payments.TransactionRefused
+import com.memobook.payments.TransactionDelivery
+import com.memobook.payments.SubscriptionStore
+import com.memobook.payments.StubSubscriptionStore
+import com.memobook.payments.StubPaymentPresenter
+import com.memobook.payments.StubPaymentMethodsPresenter
+import com.memobook.payments.StripeSDK
+import com.memobook.payments.PaymentPresenter
+import com.memobook.payments.PaymentMethodsPresenter
 
 /**
  * Les dépendances que les écrans partagent. Un seul point d'assemblage, comme
@@ -67,6 +82,26 @@ class AppDependencies(
     val googleWebClientId: String? = null,
     val appleServicesId: String? = null,
     scheduleBackgroundFlush: (Instant?) -> Unit = {},
+    /**
+     * Qui ouvre une feuille de paiement — la feuille Stripe, ou un double qui
+     * n'appelle personne (aperçus, bac à sable, tests).
+     */
+    val payments: PaymentPresenter = StubPaymentPresenter(),
+    /**
+     * Qui achète l'abonnement — Google Play, ou un double. **À part de
+     * [payments], et pour de bon** : l'abonnement est un service numérique,
+     * Google impose sa facturation, et le faire passer par Stripe ferait
+     * refuser l'app (règlement « Paiements » de Google Play).
+     */
+    val subscriptions: SubscriptionStore = StubSubscriptionStore(),
+    /** Qui ouvre la feuille « Moyens de paiement » de Stripe, depuis le profil. */
+    val paymentMethods: PaymentMethodsPresenter = StubPaymentMethodsPresenter(),
+    /**
+     * L'adresse de **production**, même dans un build de développement : le
+     * lien d'invitation d'un co-voyageur (`InviteLink.url`) doit mener quelque
+     * part sur le téléphone de l'invité. `null` dans un test.
+     */
+    val productionApiBaseUrl: URI? = null,
 ) {
     /**
      * Ce que l'app garde du serveur sur l'appareil — voir [ContentCache].
@@ -258,4 +293,85 @@ class AppDependencies(
 
     /** Ce qu'on avait pour [slot], pour le `cached` d'un modèle. */
     internal inline fun <reified Value> cached(slot: ContentCache.Slot): CachedValue<Value> = { content.read<Value>(slot) }
+
+    // MARK: - L'argent
+
+    private val deliveredTransactionCount = MutableStateFlow(0)
+
+    /**
+     * Combien d'achats Google Play **remis hors du paywall** le serveur a
+     * acceptés : un achat en attente qui se conclut, un code promo, un achat
+     * qu'un lancement précédent n'avait pas pu remettre. `RootView` relit
+     * l'accueil à chaque fois.
+     */
+    val deliveredTransactions: StateFlow<Int> = deliveredTransactionCount.asStateFlow()
+
+    init {
+        // **Au lancement, et pas à l'ouverture du paywall** : un achat en
+        // attente, un code promo arrivent quand ils veulent.
+        subscriptions.startListening(countingDelivery())
+    }
+
+    private fun countingDelivery(): TransactionDelivery {
+        val deliver = deliveringTransaction(api, memoId = null)
+        return { signed ->
+            deliver(signed)
+            deliveredTransactionCount.update { it + 1 }
+        }
+    }
+
+    /** Remet au serveur ce que Google Play garde de non acquitté — à la connexion, et au retour dans l'app. */
+    suspend fun deliverUnfinishedTransactions() {
+        subscriptions.deliverUnfinished(countingDelivery())
+    }
+
+    /** Ce que Google Play tient pour ce compte Google — voir [SubscriptionStore.hasCurrentEntitlement]. */
+    suspend fun hasCurrentEntitlement(): Boolean? = subscriptions.hasCurrentEntitlement()
+
+    /**
+     * Ce que l'offre sait faire du store, pour **ce** compte — posé par
+     * `RootView` une fois connecté. L'identifiant du compte part dans l'achat
+     * (`setObfuscatedAccountId`) : c'est lui qui permet au serveur de rattacher
+     * chaque renouvellement.
+     */
+    fun subscriptionPurchase(accountId: String): SubscriptionPurchase = SubscriptionPurchase(
+        displayPrice = { subscriptions.displayPrice() },
+        displayPeriod = { subscriptions.displayPeriod() },
+        purchase = { memoId -> subscriptions.purchase(accountId, deliveringTransaction(api, memoId)) },
+        restore = { subscriptions.restore(deliveringTransaction(api, memoId = null)) },
+        willAutoRenew = { subscriptions.willAutoRenew() },
+        deliverUnfinished = { subscriptions.deliverUnfinished(deliveringTransaction(api, memoId = null)) },
+    )
+
+    /**
+     * Ouvre la feuille « Moyens de paiement » de Stripe — les cartes du compte.
+     * Rend un message si elle n'a pas pu s'ouvrir.
+     */
+    suspend fun managePaymentMethods(): String? =
+        paymentMethods.present(
+            key = { api.paymentMethodsKey(stripeApiVersion = StripeSDK.apiVersion) },
+            setupIntent = { api.paymentMethodsSetupIntent() },
+        )
+
+    companion object {
+        /**
+         * Remet un achat Google Play au serveur. **Un refus définitif devient
+         * [TransactionRefused]** : un achat fait depuis un autre compte MemoBook
+         * (403), un abonnement déjà rattaché ailleurs (409), un jeton que le
+         * serveur ne sait pas vérifier (400). Tout le reste lève tel quel, et
+         * l'achat reste non acquitté pour la prochaine fois.
+         *
+         * ⏳ Lot B4 : tant que la route n'existe pas, le serveur répond 404 et
+         * l'achat n'est pas acquitté — le produit ne s'active donc pas dans la
+         * Play Console avant elle.
+         */
+        internal fun deliveringTransaction(api: MemoBookApi, memoId: String?): TransactionDelivery = { signed ->
+            try {
+                api.syncGooglePlayPurchase(purchaseToken = signed.purchaseToken, productId = signed.productId, memoId = memoId)
+            } catch (error: ApiError.Server) {
+                if (error.statusCode in setOf(400, 403, 409)) throw TransactionRefused(error.message)
+                throw error
+            }
+        }
+    }
 }

@@ -251,6 +251,19 @@ interface MemoBookApi {
      */
     suspend fun syncAppStoreTransaction(signedTransaction: String, memoId: String?): TravellerProfile
 
+    /**
+     * Remet au serveur un achat Google Play — le jumeau Android de
+     * [syncAppStoreTransaction] : le jeton d'achat et le produit, que le
+     * serveur vérifie auprès de la Play Developer API, puis **acquitte**
+     * (sans quoi Google rembourse sous trois jours). `memoId` rattache l'achat
+     * au voyage qu'il finance. Rend le profil relu.
+     *
+     * ⏳ Lot B4 : la route `POST /v1/subscriptions/google-play` n'existe pas
+     * encore côté serveur, qui répond 404. L'achat reste alors non acquitté, et
+     * le produit ne s'active pas dans la Play Console avant elle.
+     */
+    suspend fun syncGooglePlayPurchase(purchaseToken: String, productId: String, memoId: String?): TravellerProfile
+
     /** Branche ou débranche un connecteur. */
     suspend fun setConnector(key: String, isEnabled: Boolean)
 

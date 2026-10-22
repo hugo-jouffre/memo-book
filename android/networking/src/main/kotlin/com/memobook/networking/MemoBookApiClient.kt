@@ -340,6 +340,14 @@ class MemoBookApiClient(
             credential = Credential.Session,
         )
 
+    override suspend fun syncGooglePlayPurchase(purchaseToken: String, productId: String, memoId: String?): TravellerProfile =
+        send(
+            method = "POST",
+            path = "/v1/subscriptions/google-play",
+            body = encoded(GooglePlayPurchaseBody(purchaseToken, productId, memoId)),
+            credential = Credential.Session,
+        )
+
     override suspend fun updateProfile(edit: ProfileEdit): TravellerProfile =
         send("PATCH", "/v1/profile", encoded(edit), Credential.Session)
 
@@ -946,6 +954,7 @@ class MemoBookApiClient(
     @Serializable private class FaqVotesResponse(val votes: List<FaqVote>)
     @Serializable private class CancellationBody(val reason: String?)
     @Serializable private class AppStoreTransactionBody(val signedTransaction: String, val memoId: String?)
+    @Serializable private class GooglePlayPurchaseBody(val purchaseToken: String, val productId: String, val memoId: String?)
     @Serializable private class ConnectorBody(val isEnabled: Boolean)
     @Serializable private class ConnectorResponse(val key: String)
     @Serializable private class LinkDeviceBody(val deviceToken: String)

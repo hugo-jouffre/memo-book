@@ -447,6 +447,18 @@ internal class PreviewApi(
         return profile
     }
 
+    /** Le jumeau Google Play : l'abonnement s'ouvre de même, tenu par le Play Store. */
+    override suspend fun syncGooglePlayPurchase(purchaseToken: String, productId: String, memoId: String?): TravellerProfile {
+        val profile = editProfile { profile ->
+            profile.copy(
+                subscription = profile.subscription.updating(isActive = true, cancelledAt = null, managedByAppStore = false),
+            )
+        }
+        SandboxCredit.setUnlimited(true)
+        if (SandboxPersona.current != null) SandboxPersona.current = SandboxPersona.Subscriber
+        return profile
+    }
+
     override suspend fun changePassword(current: String, new: String) {}
 
     override suspend fun removeAvatar(): TravellerProfile = editProfile { it.copy(avatarUrl = null) }
