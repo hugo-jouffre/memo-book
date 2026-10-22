@@ -59,7 +59,7 @@ import java.time.Instant
  * suspend pas. [send] le relâche le temps que MEMO réponde — la réentrance de
  * l'acteur d'iOS, au même endroit.
  */
-internal class PreviewChatBox {
+internal class PreviewChatBox : ChatTransport.LocalBox {
     private val lock = Any()
     private val threads = mutableMapOf<String, ChatThread>()
     private val stamps = mutableMapOf<String, MutableMap<String, Instant>>()
@@ -129,9 +129,9 @@ internal class PreviewChatBox {
         stamps[trip.id] = mutableMapOf()
     }
 
-    fun read(tripId: String): ChatThread = synchronized(lock) { thread(tripId).stamped(now = Instant.now()) }
+    override suspend fun read(tripId: String): ChatThread = synchronized(lock) { thread(tripId).stamped(now = Instant.now()) }
 
-    fun updates(tripId: String, since: Instant): ChatThreadUpdate = synchronized(lock) {
+    override suspend fun updates(tripId: String, since: Instant): ChatThreadUpdate = synchronized(lock) {
         val thread = thread(tripId)
         val changed = thread.messages.filter { (stamps[tripId]?.get(it.id) ?: distantPast) > since }
         ChatThreadUpdate(
@@ -147,7 +147,7 @@ internal class PreviewChatBox {
      * Pose la bulle du voyageur, fait répondre MEMO, et date ses bulles
      * **après** le reçu : c'est ce qui les fait arriver au sondage suivant.
      */
-    suspend fun send(tripId: String, message: ChatMessage): ChatTurnReceipt {
+    override suspend fun send(tripId: String, message: ChatMessage): ChatTurnReceipt {
         val now = Instant.now()
         val written = mutableListOf<ChatMessage>()
         val (pending, history) = synchronized(lock) {
@@ -230,7 +230,7 @@ internal class PreviewChatBox {
         notice
     }
 
-    fun validate(entryId: String): Boolean = synchronized(lock) {
+    override suspend fun validate(entryId: String): Boolean = synchronized(lock) {
         var found = false
         for ((tripId, thread) in threads.toMap()) {
             val messages = thread.messages.map { message ->
@@ -247,7 +247,7 @@ internal class PreviewChatBox {
     }
 
     /** « À la main » : le texte corrigé remplace celui de la fiche, qui reste prête. */
-    fun edit(entryId: String, text: String): Unit = synchronized(lock) {
+    override suspend fun edit(entryId: String, text: String): Unit = synchronized(lock) {
         for ((tripId, thread) in threads.toMap()) {
             val messages = thread.messages.map { message ->
                 val body = message.body
@@ -285,12 +285,12 @@ internal class PreviewChatBox {
 // extension de `PreviewAPI` ; ici, des fonctions que ses `override` appellent :
 // Kotlin n'implémente pas une interface par extension.
 
-internal fun PreviewApi.sandboxChatThread(tripId: String): ChatThread {
+internal suspend fun PreviewApi.sandboxChatThread(tripId: String): ChatThread {
     SandboxNetwork.failIfOffline()
     return chat.read(tripId).copy(dailyCredit = sandboxCredit(tripId))
 }
 
-internal fun PreviewApi.sandboxChatUpdates(tripId: String, since: Instant): ChatThreadUpdate {
+internal suspend fun PreviewApi.sandboxChatUpdates(tripId: String, since: Instant): ChatThreadUpdate {
     SandboxNetwork.failIfOffline()
     return chat.updates(tripId, since).copy(dailyCredit = sandboxCredit(tripId))
 }

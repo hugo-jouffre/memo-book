@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le symbole système « play.fill » d'iOS — « Reprendre » de la feuille
+     d'enregistrement. Redessiné plein, aux angles adoucis, monochrome — la
+     couleur se pose à l'usage. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M7,5.25v13.5c0,0.85 0.93,1.37 1.65,0.92l10.6,-6.75c0.66,-0.42 0.66,-1.42 0,-1.84l-10.6,-6.75c-0.72,-0.45 -1.65,0.07 -1.65,0.92z" />
+</vector>

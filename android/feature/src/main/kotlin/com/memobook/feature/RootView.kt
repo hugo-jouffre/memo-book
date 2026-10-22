@@ -31,6 +31,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
@@ -118,8 +119,20 @@ fun RootView(dependencies: AppDependencies, showsDeveloperDetails: Boolean, inco
     // « Ce qui n'a pas eu le temps de partir repart au retour dans l'app », et
     // une session refusée pendant qu'on était dedans ramène à l'entrée.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        scope.launch { dependencies.flushOutboxOnForeground() }
         scope.launch { state.onReturnToForeground() }
     }
+
+    // **L'illimité libère la file** (03/10/2026) : ce qui attendait le crédit
+    // de demain repart tout de suite — une fois au geste, une fois quand le
+    // serveur le confirme. La session ne connaît pas la file, ni la file la
+    // session : c'est ici, où vivent les deux, qu'on les relie.
+    val unlimited = state.subscription.isUnlimited
+    val confirmed = state.subscription.known == true
+    LaunchedEffect(unlimited) { if (unlimited) dependencies.releaseCreditHolds() }
+    LaunchedEffect(confirmed) { if (confirmed) dependencies.releaseCreditHolds() }
+
+    val localTrips by dependencies.outbox.localTrips.collectAsStateWithLifecycle()
 
     CompositionLocalProvider(
         LocalBrandSheetPresentation provides sheets,
@@ -127,6 +140,9 @@ fun RootView(dependencies: AppDependencies, showsDeveloperDetails: Boolean, inco
         LocalAppSettings provides dependencies.settings,
         LocalLaunchOverlayIsVisible provides state.isLaunching,
         LocalHomeReloadRequest provides state.homeReloadRequest,
+        // Les voyages créés hors ligne que le serveur n'a pas encore reçus :
+        // leurs réglages, leur aperçu et leur commande pâlissent (T239).
+        LocalTripsAwaitingServer provides localTrips.map { it.id }.toSet(),
     ) {
         // L'app entière recule pendant qu'une feuille est ouverte : c'est ici,
         // au seul niveau qui occupe vraiment tout l'écran.
