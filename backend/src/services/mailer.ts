@@ -9,6 +9,8 @@ import {
   renderSubscriptionReminderMail,
   type RenderedMail,
 } from "./mailTemplates.js";
+import { storeManageUrl } from "./subscriptionCatalog.js";
+import type { SubscriptionStore } from "./subscriptions.js";
 
 /**
  * Ce que le back-end sait envoyer par e-mail. Un message par cas d'usage, et
@@ -39,8 +41,8 @@ export interface Mailer {
    * 03/10/2026). C'est la promesse du paywall, « On te rappelle de
    * résilier », tenue aussi pour qui a refusé les notifications.
    *
-   * Pas de secret ici : le bouton mène à la page des abonnements d'Apple, la
-   * seule où un abonnement App Store se coupe.
+   * Pas de secret ici : le bouton mène à la page des abonnements du store qui
+   * le tient — Apple ou Google Play —, la seule où il se coupe.
    */
   sendSubscriptionReminder(message: SubscriptionReminderMail): Promise<void>;
 }
@@ -76,14 +78,19 @@ export interface SubscriptionReminderMail {
    * carnet vide ou déjà commandé : il n'y a rien à proposer.
    */
   bookEstimateCents: number | null;
+  /**
+   * Le store qui tient l'abonnement (lot B4) : il choisit le chemin à suivre
+   * et le bouton. Absent, c'est l'App Store — l'e-mail d'avant Android.
+   */
+  store?: SubscriptionStore;
 }
 
 /**
- * La page des abonnements d'Apple — sur un iPhone, elle ouvre Réglages ▸ ton
- * nom ▸ Abonnements. Un abonnement App Store ne se coupe que là : Apple ne
- * laisse aucune app résilier à la place de son client.
+ * La page des abonnements d'Apple — rangée avec celle de Google Play dans
+ * `subscriptionCatalog.ts` (lot B4) ; gardée ici sous son nom pour ceux qui
+ * l'importaient.
  */
-export const APPLE_SUBSCRIPTIONS_URL = "https://apps.apple.com/account/subscriptions";
+export { APPLE_SUBSCRIPTIONS_URL } from "./subscriptionCatalog.js";
 
 /**
  * Le lien du bouton « Réinitialiser mon mot de passe ». En production, il mène
@@ -131,7 +138,7 @@ function mailerOver(env: Env, transport: Transport): Mailer {
       await transport.send(message.to, mail);
     },
     async sendSubscriptionReminder(message) {
-      const mail = renderSubscriptionReminderMail(message, APPLE_SUBSCRIPTIONS_URL);
+      const mail = renderSubscriptionReminderMail(message, storeManageUrl(message.store ?? "app_store"));
       await transport.send(message.to, mail);
     },
   };

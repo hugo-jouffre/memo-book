@@ -16,7 +16,7 @@ import {
   localHour,
   tripDate,
 } from "./localCalendar.js";
-import { APPLE_SUBSCRIPTIONS_URL, type SubscriptionReminderMail } from "./mailer.js";
+import type { SubscriptionReminderMail } from "./mailer.js";
 import { SUBSCRIPTION_REMINDER_SUBJECT } from "./mailTemplates.js";
 import { visibleToAccount } from "./memoOwnership.js";
 import { tripNotificationPreferencesOf } from "./notificationPreferences.js";
@@ -37,7 +37,14 @@ import {
 } from "./notificationPlanner.js";
 import { billablePages, unitPriceCents } from "./printPricing.js";
 import { schoolCalendarOf, type SchoolHolidayPeriod, type SchoolZone } from "./schoolHolidays.js";
-import { LIVING_SUBSCRIPTION_STATUSES, subscriptionStateOf } from "./subscriptions.js";
+import { storeManageUrl } from "./subscriptionCatalog.js";
+import {
+  LIVING_SUBSCRIPTION_STATUSES,
+  STORE_PROVIDERS,
+  storeOf,
+  subscriptionStateOf,
+  type SubscriptionStore,
+} from "./subscriptions.js";
 
 /**
  * La passe d'envoi : **charger, décider, envoyer, retenir**. Appelée toutes
@@ -76,7 +83,7 @@ const WEEK_DAYS = 7;
 const PLACED_ORDER = ["submitted", "in_production", "shipped"] as const;
 
 /**
- * L'abonnement App Store qui **va se renouveler** : vivant
+ * L'abonnement App Store ou Google Play qui **va se renouveler** : vivant
  * (`LIVING_SUBSCRIPTION_STATUSES`, la règle de `services/subscriptions.ts`),
  * chez Apple, renouvellement armé — `autoRenews` nul veut dire qu'Apple ne
  * l'a pas encore dit, et un abonnement vivant se renouvelle par défaut. Le
@@ -84,7 +91,11 @@ const PLACED_ORDER = ["submitted", "in_production", "shipped"] as const;
  * aucun abonnement ne s'arrête seul (Hugo, 03/10/2026).
  *
  * Rend le prochain renouvellement encore à venir — le plus proche s'il y en a
- * deux, nul tant qu'Apple ne l'a pas daté —, ou `null` sans abonnement armé.
+ * deux, nul tant qu'Apple ne l'a pas daté —, ou `null` sans abonnement armé ;
+ * et le store qui le tient, pour dire où le couper.
+ *
+ * Google Play compte depuis le lot B4 (22/10/2026) : son abonné ne se résilie
+ * pas plus depuis l'app que celui d'Apple. Le nom date d'avant.
  */
 export function armedAppleRenewal(
   subscriptions: ReadonlyArray<{
@@ -94,10 +105,10 @@ export function armedAppleRenewal(
     renewsAt: Date | null;
   }>,
   now: Date,
-): { renewsAt: Date | null } | null {
+): { renewsAt: Date | null; store: SubscriptionStore } | null {
   const armed = subscriptions.filter(
     (subscription) =>
-      subscription.provider === "storekit" &&
+      (STORE_PROVIDERS as readonly SubscriptionProvider[]).includes(subscription.provider) &&
       // `past_due` : Apple tente encore de prélever, et `renewsAt` est la fin
       // du délai de grâce — « se renouvelle dans 3 jours » serait faux. Et une
       // ligne restée `active` sans nouvelles d'Apple trois jours après
@@ -108,10 +119,10 @@ export function armedAppleRenewal(
   if (armed.length === 0) return null;
 
   const upcoming = armed
-    .map((subscription) => subscription.renewsAt)
-    .filter((renewsAt): renewsAt is Date => renewsAt !== null && renewsAt > now)
-    .sort((a, b) => a.getTime() - b.getTime());
-  return { renewsAt: upcoming[0] ?? null };
+    .filter((subscription) => subscription.renewsAt !== null && subscription.renewsAt > now)
+    .sort((a, b) => a.renewsAt!.getTime() - b.renewsAt!.getTime());
+  const next = upcoming[0] ?? armed[0]!;
+  return { renewsAt: upcoming[0]?.renewsAt ?? null, store: storeOf(next.provider) ?? "app_store" };
 }
 
 /** Ce que le planificateur relit de l'historique : tout, sauf l'e-mail. */
@@ -582,7 +593,7 @@ export interface TripEndEmailReport {
  * comptes qui ont un téléphone, et s'arrête sans APNs. L'e-mail est fait pour
  * les autres — ceux qui ont refusé les notifications, ou changé de téléphone.
  *
- * Seuls les comptes dont un abonnement App Store est vivant sont lus : ils se
+ * Seuls les comptes dont un abonnement App Store ou Google Play est vivant sont lus : ils se
  * comptent en dizaines, et c'est la première condition de la règle.
  */
 export async function sendTripEndEmails(
@@ -594,7 +605,9 @@ export async function sendTripEndEmails(
   const accounts = await context.prisma.account.findMany({
     where: {
       email: { not: null },
-      subscriptions: { some: { provider: "storekit", status: { in: [...LIVING_SUBSCRIPTION_STATUSES] } } },
+      subscriptions: {
+        some: { provider: { in: [...STORE_PROVIDERS] }, status: { in: [...LIVING_SUBSCRIPTION_STATUSES] } },
+      },
     },
     select: {
       id: true,
@@ -623,7 +636,7 @@ export async function sendTripEndEmails(
         context,
         { id: row.id, email: row.email, firstName: row.firstName },
         planned,
-        renewal.renewsAt,
+        renewal,
         now,
       );
       if (sent) report.sent += 1;
@@ -648,7 +661,7 @@ async function deliverTripEndEmail(
   context: AppContext,
   recipient: { id: string; email: string; firstName: string | null },
   planned: PlannedTripEndEmail,
-  unlimitedUntil: Date | null,
+  renewal: { renewsAt: Date | null; store: SubscriptionStore },
   now: Date,
 ): Promise<boolean> {
   const { prisma } = context;
@@ -666,7 +679,7 @@ async function deliverTripEndEmail(
         // Pas le corps de l'e-mail — il vit dans `mailTemplates.ts` : de quoi
         // reconnaître l'envoi en lisant le journal.
         body: `Rappel de couper l’abonnement, après « ${trip.title.trim()} ».`,
-        link: APPLE_SUBSCRIPTIONS_URL,
+        link: storeManageUrl(renewal.store),
         sentAt: now,
       },
       select: { id: true },
@@ -681,8 +694,9 @@ async function deliverTripEndEmail(
     to: recipient.email,
     firstName: recipient.firstName,
     trip: { title: trip.title, city: trip.city },
-    unlimitedUntil,
+    unlimitedUntil: renewal.renewsAt,
     bookEstimateCents: trip.storyCount > 0 && !trip.hasOrder ? trip.estimateCents : null,
+    store: renewal.store,
   };
 
   try {

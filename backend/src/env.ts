@@ -286,6 +286,39 @@ const schema = z.object({
     .transform((value) => value === "true"),
 
   /**
+   * Google Play — **l'abonnement sur Android** (lot B4). Voir
+   * `services/googlePlay.ts` et `docs/paiements.md`.
+   *
+   * `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` : la clé JSON d'un compte de service
+   * Google Cloud, **tout le fichier** (sur une ligne ; les `\n` de la clé
+   * privée restent tels quels). *Google Cloud ▸ IAM ▸ Comptes de service ▸
+   * Clés ▸ Ajouter une clé ▸ JSON*, puis ce compte invité dans *Play Console ▸
+   * Utilisateurs et autorisations* avec « Afficher les données financières »
+   * et « Gérer les commandes et les abonnements ». C'est le seul secret : il
+   * lit et acquitte les achats. Vide, `POST /v1/subscriptions/google-play`
+   * répond 503 `google_play_unavailable`, et rien d'autre ne change.
+   *
+   * `GOOGLE_PLAY_PACKAGE_NAME` : le paquet dont on lit les achats — un jeton
+   * d'une autre app n'y existe pas, et Google le refuse.
+   *
+   * Le webhook (`POST /v1/webhooks/google-play`, notifications temps réel
+   * poussées par Pub/Sub) s'authentifie de l'une de deux façons :
+   * - **le jeton OIDC du push** (recommandé) : `GOOGLE_PLAY_PUSH_AUDIENCE`,
+   *   l'audience réglée sur l'abonnement Pub/Sub (par défaut, l'URL du
+   *   webhook), et `GOOGLE_PLAY_PUSH_SERVICE_ACCOUNT`, l'adresse du compte de
+   *   service qui signe le push ;
+   * - **un secret partagé**, à défaut : `GOOGLE_PLAY_WEBHOOK_SECRET`, que
+   *   l'URL du push porte en `?secret=…`.
+   * Les deux vides, le webhook répond 503 `webhook_not_configured` : Pub/Sub
+   * réessaie pendant sept jours, rien n'est perdu le temps de la poser.
+   */
+  GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: z.string().default(""),
+  GOOGLE_PLAY_PACKAGE_NAME: z.string().default("com.memobook.app"),
+  GOOGLE_PLAY_PUSH_AUDIENCE: z.string().default(""),
+  GOOGLE_PLAY_PUSH_SERVICE_ACCOUNT: z.string().default(""),
+  GOOGLE_PLAY_WEBHOOK_SECRET: z.string().default(""),
+
+  /**
    * L'app Android — `com.memobook.app`, comme l'app iOS.
    *
    * `ANDROID_APP_CERT_SHA256` : les empreintes SHA-256 des certificats qui

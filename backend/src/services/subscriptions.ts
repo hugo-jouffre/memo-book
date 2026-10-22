@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient, SubscriptionProvider } from "@prisma/client";
 
 /**
  * L'abonnement, vu du serveur : **qui raconte sans limite**.
@@ -18,6 +18,29 @@ import type { Prisma, PrismaClient } from "@prisma/client";
  * de grâce, et qui tranchera.
  */
 export const LIVING_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due"] as const;
+
+/**
+ * Les fournisseurs **qui tiennent l'abonnement à notre place** : Apple
+ * (StoreKit) et Google Play (lot B4, 22/10/2026). Aucune app ne résilie chez
+ * eux à la place de son client — le serveur n'y enregistre que la raison
+ * (`POST /v1/profile/subscription/cancel`), et c'est leur notification qui
+ * ferme la ligne. Stripe, lui, se résilie ici.
+ */
+export const STORE_PROVIDERS = ["storekit", "google_play"] as const satisfies readonly SubscriptionProvider[];
+
+/** Le store qui tient l'abonnement, dans les mots de l'app ; `null` pour une ligne Stripe. */
+export type SubscriptionStore = "app_store" | "google_play";
+
+export function storeOf(provider: SubscriptionProvider): SubscriptionStore | null {
+  switch (provider) {
+    case "storekit":
+      return "app_store";
+    case "google_play":
+      return "google_play";
+    default:
+      return null;
+  }
+}
 
 /**
  * Combien de temps un abonnement **vivant** reste ouvert après sa date de

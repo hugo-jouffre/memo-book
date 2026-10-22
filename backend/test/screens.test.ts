@@ -370,6 +370,9 @@ describe("le profil", () => {
       hasEndedBefore: false,
       // Rien de souscrit : ni Apple ni personne ne tient l'abonnement.
       managedByAppStore: false,
+      // Ni store, ni page où le gérer (lot B4).
+      store: null,
+      manageUrl: null,
       // Aucun abonnement, donc aucun voyage rattaché (T71).
       tripTitle: null,
       tripDestination: null,

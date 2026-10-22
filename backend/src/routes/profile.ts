@@ -10,7 +10,7 @@ import { linkDeviceToAccount, visibleToAccount } from "../services/memoOwnership
 import { hashDeviceToken, hashSessionToken, parseBearerToken } from "../lib/auth.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { pushCancellationToSheet } from "../services/statsExport.js";
-import { LIVING_SUBSCRIPTION_STATUSES } from "../services/subscriptions.js";
+import { LIVING_SUBSCRIPTION_STATUSES, STORE_PROVIDERS } from "../services/subscriptions.js";
 import {
   aggregateTravelStatistics,
   memoStatisticsSelect,
@@ -498,6 +498,12 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
    * notification d'Apple (`AUTO_RENEW_DISABLED`) qui fermera la ligne. La
    * fermer d'ici ferait croire l'abonnement arrêté pendant qu'Apple continue de
    * prélever. Pour lui, cette route n'enregistre que **la raison**.
+   *
+   * **Google Play non plus** (lot B4, 22/10/2026) : l'app Android ouvre la
+   * page des abonnements du Play Store (`subscription.manageUrl` du profil
+   * rendu), et c'est la notification `SUBSCRIPTION_CANCELED` qui ferme la
+   * ligne. Avant ce lot, un abonnement Play aurait été coupé ici pendant que
+   * Google continuait de facturer.
    */
   app.post("/v1/profile/subscription/cancel", async (request) => {
     const accountId = accountIdOf(request);
@@ -506,11 +512,11 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
 
     const [{ count: storeKit }, { count: others }] = await Promise.all([
       context.prisma.subscription.updateMany({
-        where: { accountId, provider: "storekit", status: { in: [...living] } },
+        where: { accountId, provider: { in: [...STORE_PROVIDERS] }, status: { in: [...living] } },
         data: reason === undefined ? {} : { cancellationReason: reason },
       }),
       context.prisma.subscription.updateMany({
-        where: { accountId, provider: { not: "storekit" }, status: { in: [...living] } },
+        where: { accountId, provider: { notIn: [...STORE_PROVIDERS] }, status: { in: [...living] } },
         data: {
           status: "cancelled",
           cancelledAt: new Date(),
