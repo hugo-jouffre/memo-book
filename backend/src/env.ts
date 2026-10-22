@@ -320,6 +320,23 @@ const schema = z.object({
   APNS_KEY_ID: z.string().default(""),
   APNS_TEAM_ID: z.string().default(""),
   APNS_PRIVATE_KEY: z.string().default(""),
+
+  /**
+   * Les notifications Android — Firebase Cloud Messaging, API HTTP v1. Voir
+   * `services/fcm.ts` et `docs/notifications.md` (lot B3, 22/10/2026).
+   *
+   * - `FCM_SERVICE_ACCOUNT_JSON` — le fichier JSON d'un compte de service,
+   *   téléchargé dans *Console Firebase ▸ Paramètres du projet ▸ Comptes de
+   *   service ▸ Générer une nouvelle clé privée*, collé tel quel sur une ligne.
+   *   C'est un secret : il signe au nom du projet.
+   * - `FCM_PROJECT_ID` — l'identifiant du projet Firebase (*Paramètres du
+   *   projet ▸ Général*). Vide, celui du JSON (`project_id`) sert.
+   *
+   * Vides, comme APNs : journalisées en développement, rien ne part en
+   * production. Les iPhone, eux, continuent de recevoir les leurs.
+   */
+  FCM_SERVICE_ACCOUNT_JSON: z.string().default(""),
+  FCM_PROJECT_ID: z.string().default(""),
 });
 
 export type Env = z.infer<typeof schema> & {

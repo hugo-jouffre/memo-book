@@ -21,6 +21,9 @@ import { createHarness, registerAccount, resetDatabase, type TestHarness } from 
 
 const TOKEN = "a".repeat(64);
 
+/** Un jeton FCM à la forme de ceux de Firebase : casse mêlée, `:`, `-`, `_`. */
+const FCM_TOKEN = "dQw4w9WgXcQ:APA91bH-Xy_Z0aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789AbCdEfGhIjKlMnOpQrStUvWxYz";
+
 /** Un double d'APNs qu'on règle envoi par envoi. */
 class ScriptedPushSender implements PushSender {
   readonly enabled = true;
@@ -159,6 +162,47 @@ describe("POST /v1/push-tokens", () => {
     ).toBe(401);
   });
 
+  it("garde un jeton FCM tel quel, casse comprise", async () => {
+    const { authorization } = await registerAccount(harness.app);
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/push-tokens",
+      headers: { authorization },
+      payload: { token: FCM_TOKEN, environment: "production", provider: "fcm", timeZone: "Europe/Paris" },
+    });
+    expect(response.statusCode).toBe(204);
+
+    const token = await harness.prisma.pushToken.findUniqueOrThrow({ where: { token: FCM_TOKEN } });
+    expect(token).toMatchObject({ provider: "fcm", environment: "production" });
+  });
+
+  it("déduit FCM d'un téléphone Android, et garde APNs par défaut", async () => {
+    const { authorization } = await registerAccount(harness.app);
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/push-tokens",
+      headers: { authorization },
+      payload: { token: FCM_TOKEN, environment: "sandbox", platform: "android" },
+    });
+    await registerToken(authorization, "B".repeat(64));
+
+    const tokens = await harness.prisma.pushToken.findMany({ orderBy: { provider: "asc" } });
+    expect(tokens.map(({ token, provider }) => ({ token, provider }))).toEqual([
+      { token: "b".repeat(64), provider: "apns" },
+      { token: FCM_TOKEN, provider: "fcm" },
+    ]);
+  });
+
+  it("refuse un jeton FCM qui n'en a pas la forme, et un jeton FCM annoncé APNs", async () => {
+    const { authorization } = await registerAccount(harness.app);
+    const send = (payload: Record<string, string>) =>
+      harness.app.inject({ method: "POST", url: "/v1/push-tokens", headers: { authorization }, payload });
+
+    expect((await send({ token: "pas un jeton", environment: "sandbox", provider: "fcm" })).statusCode).toBe(400);
+    expect((await send({ token: FCM_TOKEN, environment: "sandbox" })).statusCode).toBe(400);
+    expect(await harness.prisma.pushToken.count()).toBe(0);
+  });
+
   it("part avec la session : se déconnecter oublie le téléphone", async () => {
     const { authorization } = await registerAccount(harness.app);
     await registerToken(authorization);
@@ -181,7 +225,7 @@ describe("la passe horaire", () => {
     const report = await sendDueNotifications(harness.context, OCTOBER_12_MORNING);
     expect(report.sent).toBe(1);
     expect(push.sent).toHaveLength(1);
-    expect(push.sent[0]?.destination).toEqual({ token: TOKEN, environment: "sandbox" });
+    expect(push.sent[0]?.destination).toEqual({ token: TOKEN, environment: "sandbox", provider: "apns" });
     expect(push.sent[0]?.message).toMatchObject({
       title: "Ton voyage à Rome se termine aujourd’hui",
       link: `memobook://trips/${memo.id}/preview`,
@@ -231,6 +275,25 @@ describe("la passe horaire", () => {
 
     await sendDueNotifications(harness.context, OCTOBER_12_MORNING);
 
+    expect(await harness.prisma.pushToken.count()).toBe(0);
+  });
+
+  it("envoie à FCM le jeton d'un téléphone Android, et l'oublie quand Firebase ne le connaît plus", async () => {
+    const { accountId, authorization } = await registerAccount(harness.app);
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/push-tokens",
+      headers: { authorization },
+      payload: { token: FCM_TOKEN, environment: "production", provider: "fcm", timeZone: "Europe/Paris" },
+    });
+    await tripEndingOctober12(accountId);
+
+    expect((await sendDueNotifications(harness.context, OCTOBER_12_MORNING)).sent).toBe(1);
+    expect(push.sent[0]?.destination).toEqual({ token: FCM_TOKEN, environment: "production", provider: "fcm" });
+
+    await harness.prisma.notificationDelivery.deleteMany();
+    push.outcome = { kind: "invalid_token", reason: "UNREGISTERED" };
+    await sendDueNotifications(harness.context, OCTOBER_12_MORNING);
     expect(await harness.prisma.pushToken.count()).toBe(0);
   });
 
