@@ -65,7 +65,7 @@ import {
 import { platformOfPayload, platformPayload } from "../services/appPlatform.js";
 import { localDate } from "../services/localCalendar.js";
 import { CALLS_TO_ACTION } from "../services/callsToAction.js";
-import { photoBudgetFor, type PhotoBudgetSettings } from "../services/photoBudget.js";
+import { photoBudgetFor } from "../services/photoBudget.js";
 import { measurePhoto } from "../services/photoOrientation.js";
 import { photosForTarget, tripDays } from "../services/pageTarget.js";
 import { ensureRenderInProgress } from "../services/renderTrigger.js";
