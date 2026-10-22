@@ -448,7 +448,13 @@ class ApiClientTest {
         assertEquals("/v1/push-tokens", lastRequest.url.encodedPath)
         assertEquals("Bearer jeton-de-session", lastRequest.header("Authorization"))
         assertEquals(
-            mapOf("token" to "00ab10ff", "environment" to "sandbox", "timeZone" to "Europe/Paris", "appVersion" to "0.1.0 (8)"),
+            mapOf(
+                "token" to "00ab10ff",
+                "environment" to "sandbox",
+                "provider" to "fcm",
+                "timeZone" to "Europe/Paris",
+                "appVersion" to "0.1.0 (8)",
+            ),
             lastBodyStrings(),
         )
     }

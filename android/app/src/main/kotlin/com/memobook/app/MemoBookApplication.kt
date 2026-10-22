@@ -15,6 +15,9 @@ import com.memobook.feature.OnboardingStorage
 import com.memobook.feature.PreviewSupport
 import com.memobook.feature.RecordingOutboxWorker
 import com.memobook.feature.SharedPreferencesAppSettings
+import com.memobook.feature.notifications.FirebaseConfiguration
+import com.memobook.feature.notifications.FirebasePush
+import com.memobook.feature.notifications.PushNotificationPoster
 import com.memobook.feature.notifications.PushNotifications
 import com.memobook.payments.PlayBillingSubscriptionStore
 import com.memobook.payments.StripeCustomerSheetPresenter
@@ -66,6 +69,11 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory, AppDepe
         PushNotifications.create(this, SharedPreferencesAppSettings(this), BuildConfig.DEBUG, BuildConfig.VERSION_NAME, scope)
     }
 
+    /** Pose la notification d'un message FCM reçu (`MemoBookMessagingService`). */
+    val notificationPoster by lazy {
+        PushNotificationPoster(this, MainActivity::class.java, R.drawable.ic_launcher_monochrome)
+    }
+
     /** Un seul client HTTP pour l'API et les images : un seul pool de connexions. */
     private val httpClient by lazy { OkHttpClient() }
 
@@ -74,6 +82,16 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory, AppDepe
         // Le `#if DEBUG` d'iOS : les messages d'erreur pour développeur ne
         // s'écrivent qu'en Debug.
         if (BuildConfig.DEBUG) ApiError.developerDiagnostics = ApiError.DeveloperDiagnostics(runsInEmulator())
+        // Firebase avant tout le reste : un message reçu app fermée relance le
+        // processus sans activité, et son service en a besoin. Sans projet
+        // (`memobook.firebase.*` vides), rien ne s'initialise et aucun jeton ne part.
+        val firebase = FirebaseConfiguration.from(
+            applicationId = BuildConfig.FIREBASE_APPLICATION_ID,
+            apiKey = BuildConfig.FIREBASE_API_KEY,
+            projectId = BuildConfig.FIREBASE_PROJECT_ID,
+            gcmSenderId = BuildConfig.FIREBASE_GCM_SENDER_ID,
+        )
+        if (FirebasePush.initialize(this, firebase)) notificationPoster.createChannel()
     }
 
     /**

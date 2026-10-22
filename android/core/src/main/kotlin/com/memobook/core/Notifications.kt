@@ -33,22 +33,38 @@ enum class PushEnvironment(val rawValue: String) {
     }
 }
 
+/**
+ * Qui sait joindre un jeton — `push_tokens.provider` au serveur. L'iPhone ne
+ * l'envoie pas (APNs par défaut) ; Android envoie toujours `fcm` (lot B3,
+ * 22/10/2026).
+ */
+enum class PushProvider(val rawValue: String) {
+    Apns("apns"),
+    Fcm("fcm"),
+}
+
 /** Ce que le téléphone dit de lui à `POST /v1/push-tokens`. */
 data class PushTokenRegistration(
-    /** Le jeton, en hexadécimal pour APNs. */
+    /**
+     * Le jeton : en hexadécimal pour APNs, **tel que Firebase le donne** pour
+     * FCM — le serveur ne le met pas en minuscules, la casse en fait partie.
+     */
     var token: String,
+    /** Sans effet pour FCM, qui n'a qu'un serveur : retenu pour le support. */
     var environment: PushEnvironment,
     /** Le fuseau du téléphone — `Europe/Paris`. C'est lui qui fait partir une
      *  notification à 10 h chez le voyageur, où qu'il soit. */
     var timeZone: String,
     /** `0.1.0 (8)`, pour le support. */
     var appVersion: String?,
+    var provider: PushProvider = PushProvider.Fcm,
 ) {
     /** Le corps de la requête. */
     val body: Map<String, String>
         get() = buildMap {
             put("token", token)
             put("environment", environment.rawValue)
+            put("provider", provider.rawValue)
             put("timeZone", timeZone)
             appVersion?.let { put("appVersion", it) }
         }

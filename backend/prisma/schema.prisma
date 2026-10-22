@@ -167,6 +167,13 @@ enum PushEnvironment {
   production
 }
 
+/// Qui sait joindre un jeton : APNs pour un iPhone, Firebase Cloud Messaging
+/// pour un téléphone Android (lot B3, 22/10/2026).
+enum PushProvider {
+  apns
+  fcm
+}
+
 /// Les notifications que le serveur envoie — `docs/notifications.md`. Une
 /// énumération et non du texte libre : chacune a sa règle, son plafond et son
 /// lien, et une faute de frappe ne doit pas en inventer une huitième.
@@ -441,7 +448,7 @@ model Session {
   @@map("sessions")
 }
 
-/// Un téléphone qui accepte les notifications, tel qu'Apple le désigne.
+/// Un téléphone qui accepte les notifications, tel qu'Apple — ou Firebase — le désigne.
 ///
 /// **Rattaché à la session, pas seulement au compte.** Se déconnecter supprime
 /// la session, donc le jeton avec elle : un téléphone rendu, prêté ou partagé
@@ -461,8 +468,14 @@ model PushToken {
 
   /// Le jeton APNs, en hexadécimal, tel que `didRegisterForRemoteNotifications`
   /// le donne. Ce n'est pas un secret : il ne sert qu'avec la clé du serveur.
+  ///
+  /// Un jeton FCM, lui, s'écrit tel que Firebase le donne — lettres, chiffres,
+  /// `:`, `-`, `_` — et **ne se met pas en minuscules** : la casse en fait partie.
   token       String          @unique
+  /// `sandbox` ou `production` pour APNs. FCM ne connaît qu'un serveur : la
+  /// valeur y est retenue pour le support, sans servir à l'envoi.
   environment PushEnvironment
+  provider    PushProvider    @default(apns)
   /// La version de l'app qui l'a envoyé (`0.1.0 (8)`), pour le support.
   appVersion  String?
 

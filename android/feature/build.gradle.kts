@@ -46,6 +46,8 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    // Le jeton FCM et la notification d'un message reçu (`FirebasePush.kt`).
+    implementation(libs.firebase.messaging)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)

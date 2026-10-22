@@ -145,7 +145,7 @@ export async function sendDueNotifications(
 
   if (!context.push.enabled) {
     context.logger.warn(
-      "Notifications non envoyées : APNs n'est pas configuré (APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY).",
+      "Notifications non envoyées : ni APNs (APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY) ni FCM (FCM_SERVICE_ACCOUNT_JSON) n'est configuré.",
     );
     return report;
   }
@@ -480,7 +480,7 @@ async function deliver(
 
   const tokens = await prisma.pushToken.findMany({
     where: { accountId, session: { expiresAt: { gt: now } } },
-    select: { id: true, token: true, environment: true },
+    select: { id: true, token: true, environment: true, provider: true },
   });
 
   // La bulle **avant** l'envoi : qui touche la notification aussitôt reçue
@@ -499,7 +499,7 @@ async function deliver(
 
   for (const token of tokens) {
     const outcome = await push.send(
-      { token: token.token, environment: token.environment },
+      { token: token.token, environment: token.environment, provider: token.provider },
       {
         deliveryId,
         title: notification.title,
@@ -513,7 +513,12 @@ async function deliver(
       delivered += 1;
     } else if (outcome.kind === "invalid_token") {
       await prisma.pushToken.delete({ where: { id: token.id } }).catch(() => {});
-      context.logger.info({ accountId, reason: outcome.reason }, "Jeton APNs oublié : Apple ne le connaît plus.");
+      context.logger.info(
+        { accountId, provider: token.provider, reason: outcome.reason },
+        token.provider === "fcm"
+          ? "Jeton FCM oublié : Firebase ne le connaît plus."
+          : "Jeton APNs oublié : Apple ne le connaît plus.",
+      );
     } else {
       transientFailure = true;
       context.logger.warn(

@@ -36,6 +36,9 @@ googleId = "1.2.1"
 # StoreKit 2 d'iOS), le carnet imprimé par la feuille de Stripe et Google Pay.
 playBilling = "9.1.0"
 stripe = "23.25.0"
+# Les notifications : Firebase Cloud Messaging (l'APNs d'iOS), sans le plugin
+# `google-services` — `FirebaseApp` s'initialise à la main (`FirebasePush`).
+firebaseMessaging = "25.1.3"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -75,6 +78,7 @@ androidx-credentials-play-services-auth = { module = "androidx.credentials:crede
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleId" }
 play-billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "playBilling" }
 stripe-android = { module = "com.stripe:stripe-android", version.ref = "stripe" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 
 [plugins]
