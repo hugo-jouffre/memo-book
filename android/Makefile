@@ -11,7 +11,7 @@ export ANDROID_HOME ?= $(firstword $(wildcard $(HOME)/Library/Android/sdk $(BREW
 GRADLE := ./gradlew
 ADB := $(ANDROID_HOME)/platform-tools/adb
 
-.PHONY: build test lint release snapshots assets run doctor clean
+.PHONY: build test lint release snapshots assets run emulator doctor clean
 
 # Compile l'app en Debug.
 build:
@@ -47,6 +47,12 @@ assets:
 run:
 	$(GRADLE) :app:installDebug
 	$(ADB) shell am start -n com.memobook.app/.MainActivity $(ARGS)
+
+# L'émulateur du Mac, dans une fenêtre : le Pixel 8 de `docs/android.md`.
+# Le créer la première fois : `sdkmanager "system-images;android-36;google_apis;arm64-v8a"`
+# puis `avdmanager create avd -n MemoBook_Pixel -k "system-images;android-36;google_apis;arm64-v8a" -d pixel_8`.
+emulator:
+	$(ANDROID_HOME)/emulator/emulator -avd MemoBook_Pixel -no-audio -no-boot-anim &
 
 # Le back-end doit tourner pour que l'app ait des données : `make run` ne le
 # démarre pas, il le dit.
