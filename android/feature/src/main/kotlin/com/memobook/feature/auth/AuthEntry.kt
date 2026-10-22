@@ -1,0 +1,18 @@
+package com.memobook.feature.auth
+
+import androidx.compose.runtime.Composable
+import com.memobook.core.Account
+import com.memobook.feature.AppDependencies
+import com.memobook.feature.debug.PortPending
+
+/**
+ * Inscription et connexion par e-mail. `resetToken` : le secret d'un lien « Réinitialiser mon mot de passe » ouvert depuis l'e-mail, que l'écran consomme.
+ *
+ * La porte d'entrée de `RootView` vers cet écran : elle construit le modèle
+ * (`viewModel { dependencies.… }`) et appelle la vue. Sa signature est le
+ * contrat avec `RootView` ; tout le reste se porte depuis `Auth/AuthView.swift`.
+ */
+@Composable
+fun AuthEntry(dependencies: AppDependencies, resetToken: String?, onResetTokenConsumed: () -> Unit, onAuthenticated: (Account) -> Unit, onBack: () -> Unit) {
+    PortPending("Connexion", "Auth/AuthView.swift", onBack = onBack)
+}

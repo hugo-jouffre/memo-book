@@ -2,26 +2,104 @@ package com.memobook.app
 
 import android.app.Application
 import android.os.Build
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.disk.DiskCache
+import coil3.disk.directory
+import coil3.memory.MemoryCache
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.memobook.feature.AppDependencies
+import com.memobook.feature.LaunchSwitches
+import com.memobook.feature.OnboardingStorage
+import com.memobook.feature.PreviewSupport
+import com.memobook.feature.SharedPreferencesAppSettings
+import com.memobook.networking.AndroidConnectivity
+import com.memobook.networking.AndroidLogSink
 import com.memobook.networking.ApiConfiguration
+import com.memobook.networking.ApiError
+import com.memobook.networking.KeystoreTokenStore
+import com.memobook.networking.MemoBookApiClient
+import com.memobook.networking.NetworkLog
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import okhttp3.OkHttpClient
 
 /**
  * Le point d'entrée du processus, comme `MemoBookApp.swift` : il lit la
  * configuration de build et assemble [AppDependencies], une fois.
+ *
+ * **L'assemblage attend la première activité** : les interrupteurs du
+ * lancement (`previewSignedIn`…) arrivent avec son intention, et le bac à sable
+ * reçoit un autre client que l'app — voir [dependencies].
  */
-class MemoBookApplication : Application() {
-    lateinit var dependencies: AppDependencies
-        private set
+class MemoBookApplication : Application(), SingletonImageLoader.Factory {
+    private var built: AppDependencies? = null
+
+    /** La portée de l'app entière : ce qui y est lancé survit aux écrans. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Un seul client HTTP pour l'API et les images : un seul pool de connexions. */
+    private val httpClient by lazy { OkHttpClient() }
 
     override fun onCreate() {
         super.onCreate()
-        dependencies = AppDependencies(apiConfiguration = fromBuildConfiguration())
+        // Le `#if DEBUG` d'iOS : les messages d'erreur pour développeur ne
+        // s'écrivent qu'en Debug.
+        if (BuildConfig.DEBUG) ApiError.developerDiagnostics = ApiError.DeveloperDiagnostics(runsInEmulator())
     }
 
     /**
+     * Les dépendances de ce lancement-ci, construites au premier appel.
+     * **Le raccourci `previewSignedIn` reçoit le jeu d'essai**, et pas seulement
+     * un compte inventé. Sans effet en Release : les interrupteurs n'y sont pas lus.
+     */
+    fun dependencies(switches: LaunchSwitches): AppDependencies = built ?: build(switches).also { built = it }
+
+    private fun build(switches: LaunchSwitches): AppDependencies {
+        val settings = SharedPreferencesAppSettings(this)
+        val session = KeystoreTokenStore(this, account = "session-token")
+        OnboardingStorage.resetIfRequested(switches, settings) { session.clear() }
+
+        val configuration = if (switches.previewSignedIn) null else fromBuildConfiguration()
+        val api = if (configuration == null) {
+            PreviewSupport.api()
+        } else {
+            MemoBookApiClient(
+                configuration = configuration,
+                tokenStore = KeystoreTokenStore(this, account = "device-token"),
+                sessionStore = session,
+                httpClient = httpClient,
+                networkLog = if (BuildConfig.DEBUG) NetworkLog(AndroidLogSink()) else null,
+            )
+        }
+        return AppDependencies(
+            api = api,
+            apiConfiguration = configuration,
+            connectivity = AndroidConnectivity(this, scope),
+            settings = settings,
+            switches = switches,
+            cacheDirectory = cacheDir,
+            filesDirectory = filesDir,
+            scope = scope,
+        )
+    }
+
+    /**
+     * **Les photos sans réseau** (Hugo, 08/10/2026) : toutes les images de
+     * l'app passent par Coil, avec un cache disque de 256 Mo — le cache d'URL
+     * d'iOS, agrandi pour qu'une photo de profil y tienne.
+     */
+    override fun newImageLoader(context: android.content.Context): ImageLoader =
+        ImageLoader.Builder(context)
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = { httpClient })) }
+            .memoryCache { MemoryCache.Builder().maxSizeBytes(32L * 1024 * 1024).build() }
+            .diskCache { DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(256L * 1024 * 1024).build() }
+            .build()
+
+    /**
      * L'adresse de ce build pour cet appareil. Repli local dans l'émulateur
-     * seulement, arrêt net partout ailleurs : un build livré ne doit pas parler
-     * dans le vide en silence (`APIConfiguration.fromBuildConfiguration`, iOS).
+     * seulement, arrêt net partout ailleurs (`APIConfiguration.fromBuildConfiguration`, iOS).
      */
     private fun fromBuildConfiguration(): ApiConfiguration =
         ApiConfiguration.effective(
