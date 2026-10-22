@@ -46,6 +46,8 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    // « Continuer avec Apple » : la page web d'Apple dans un Custom Tab (lot B2).
+    implementation(libs.androidx.browser)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)

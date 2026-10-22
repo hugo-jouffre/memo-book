@@ -31,6 +31,7 @@ exifinterface = "1.4.2"
 # L'entrée par Google : le Credential Manager d'Android, qui rend le jeton
 # d'identité que le serveur vérifie comme celui du SDK Google d'iOS.
 credentials = "1.6.0"
+browser = "1.9.0"
 googleId = "1.2.1"
 # L'argent, isolé dans `:payments` : l'abonnement par Google Play Billing (le
 # StoreKit 2 d'iOS), le carnet imprimé par la feuille de Stripe et Google Pay.
@@ -70,6 +71,7 @@ androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref
 androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
+androidx-browser = { module = "androidx.browser:browser", version.ref = "browser" }
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
 androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleId" }

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
 import type { Env } from "../env.js";
 import { HttpError } from "../lib/httpError.js";
 
@@ -48,14 +48,34 @@ export interface SocialVerifier {
   verifyGoogle(identityToken: string): Promise<VerifiedIdentity>;
 }
 
-export function createSocialVerifier(env: Env): SocialVerifier {
+/**
+ * Les jeux de clés publiques, remplaçables par des clés locales dans les
+ * tests : la vérification elle-même se teste alors sans réseau.
+ */
+export interface SocialKeySets {
+  apple?: KeySet;
+  google?: KeySet;
+}
+
+export function createSocialVerifier(
+  env: Pick<Env, "APPLE_BUNDLE_ID" | "APPLE_SERVICES_ID" | "GOOGLE_IOS_CLIENT_ID" | "GOOGLE_WEB_CLIENT_ID">,
+  keys: SocialKeySets = {},
+): SocialVerifier {
   return {
     async verifyApple(identityToken, nonce) {
       requireConfigured(env.APPLE_BUNDLE_ID, "APPLE_BUNDLE_ID");
 
-      const { payload } = await verify(identityToken, appleKeys, {
+      // Deux audiences légitimes : le bundle ID pour la feuille Apple de
+      // l'iPhone, le Services ID pour la page web d'Apple qu'ouvre Android
+      // (lot B2). Le reste est identique — même émetteur, mêmes clés, même
+      // nonce — et le `sub` aussi, tant que le Services ID est groupé sous
+      // l'App ID : c'est ce qui retrouve le même compte des deux côtés.
+      const audiences = [env.APPLE_BUNDLE_ID, env.APPLE_SERVICES_ID].filter(
+        (value) => value.length > 0,
+      );
+      const { payload } = await verify(identityToken, keys.apple ?? appleKeys, {
         issuer: APPLE_ISSUER,
-        audience: env.APPLE_BUNDLE_ID,
+        audience: audiences,
       });
 
       // Apple range dans le jeton l'empreinte SHA-256 du nonce, en
@@ -79,7 +99,7 @@ export function createSocialVerifier(env: Env): SocialVerifier {
         );
       }
 
-      const { payload } = await verify(identityToken, googleKeys, {
+      const { payload } = await verify(identityToken, keys.google ?? googleKeys, {
         // `jose` accepte une liste : l'app iOS et un futur client web ont
         // chacun leur identifiant, et les deux sont légitimes.
         issuer: GOOGLE_ISSUERS,
@@ -91,7 +111,7 @@ export function createSocialVerifier(env: Env): SocialVerifier {
   };
 }
 
-type KeySet = ReturnType<typeof createRemoteJWKSet>;
+type KeySet = JWTVerifyGetKey;
 
 async function verify(
   token: string,

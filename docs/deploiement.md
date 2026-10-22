@@ -172,6 +172,7 @@ Sur les deux services, API et worker. La liste commentée est dans
 | `DATABASE_URL` | la chaîne Supabase **Session pooler** (port 5432) | Jamais le Transaction pooler, voir l'étape 2. |
 | `S3_*` | voir ci-dessus | Sans elles, le serveur ne démarre pas en production. |
 | `APPLE_BUNDLE_ID` | `com.memobook.app` | Sans elle, « Continuer avec Apple » échoue. |
+| `APPLE_SERVICES_ID` | le Services ID d'Apple Developer ▸ Identifiers ▸ Services IDs, le même que `memobook.appleServicesId` d'`android/gradle.properties` | Vide : « Continuer avec Apple » est coupé sur Android (le bouton y est masqué tant que l'app n'a pas le sien). |
 | `GOOGLE_IOS_CLIENT_ID` | le client iOS, voir `ios/Config/Base.xcconfig` | Sans elle, « Continuer avec Google » échoue. |
 | `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY` | la clé `.p8` d'Apple Developer ▸ Keys | Sans elles, aucune notification ne part — la passe horaire le dit dans les logs. Ces trois noms exactement, sur `api` **et** `worker` ; `npm run apns:check` (via `railway run`) dit si Apple accepte la clé. Voir `docs/notifications.md` § 5. |
 

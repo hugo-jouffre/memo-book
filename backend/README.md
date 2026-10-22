@@ -169,7 +169,9 @@ audience, expiration, plus le nonce côté Apple. Voir
 `services/socialIdentity.ts`. Les audiences attendues se règlent par
 `APPLE_BUNDLE_ID`, `GOOGLE_IOS_CLIENT_ID` et `GOOGLE_WEB_CLIENT_ID` ; sans
 elles, la route concernée refuse de fonctionner plutôt que d'accepter n'importe
-quel jeton.
+quel jeton. `APPLE_SERVICES_ID` ajoute l'audience d'Apple **sur le web**, celle
+d'Android, et ouvre `POST /v1/auth/apple/callback`, où Apple poste sa réponse
+avant que la page la relaie à l'app (`routes/appleWebSignIn.ts`).
 
 Les tokens de session sont opaques et stockés hachés, comme ceux des appareils :
 révoquer, c'est supprimer une ligne. Un JWT resterait valable jusqu'à son

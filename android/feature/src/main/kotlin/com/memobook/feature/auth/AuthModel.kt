@@ -9,6 +9,7 @@ import com.memobook.core.PasswordRule
 import com.memobook.core.ProfileEdit
 import com.memobook.core.Some
 import com.memobook.feature.AppSettings
+import com.memobook.feature.welcome.SocialSignInError
 import com.memobook.networking.ApiError
 import com.memobook.networking.MemoBookApi
 import com.memobook.networking.SocialSignIn
@@ -198,7 +199,11 @@ class AuthModel(
     /**
      * La tentative Apple en cours, le temps de l'aller-retour par la page
      * d'Apple — voir [AppleSignInService]. Le nonce en clair et le `state`
-     * attendent ici le retour `memobook://auth/apple…` du lot B2.
+     * attendent ici le retour `memobook://auth/apple…` ([finishAppleSignIn]).
+     *
+     * En mémoire seulement : le nonce en clair ne s'écrit nulle part. Si
+     * Android tue l'app pendant qu'on est sur la page d'Apple, le retour ne
+     * trouve plus sa tentative et l'écran demande de recommencer.
      */
     var appleAttempt: AppleAttempt? = null
         private set
@@ -210,6 +215,52 @@ class AuthModel(
         val attempt = AppleAttempt(state = UUID.randomUUID().toString(), nonce = SignInNonce())
         appleAttempt = attempt
         return AppleSignInService.authorizationUri(servicesId, redirectUri, attempt.state, attempt.nonce)
+    }
+
+    /**
+     * Le retour de la page d'Apple, relayé par le serveur. Finit la connexion
+     * comme l'iPhone : le jeton et le nonce **en clair** partent à
+     * `POST /v1/auth/apple` par [accept].
+     *
+     * **Le `state` d'abord** : un retour qui ne répond pas à la tentative en
+     * cours n'est pas envoyé — une page tierce pourrait ouvrir
+     * `memobook://auth/apple?…` avec un jeton à elle, pour faire entrer
+     * quelqu'un dans un compte qui n'est pas le sien. Il ne consomme pas la
+     * tentative : la vraie réponse d'Apple peut encore arriver.
+     *
+     * @return le compte, quand la session est ouverte ; `null` sinon — le
+     *   message est dans [State.errorMessage], sauf si l'on a renoncé.
+     */
+    suspend fun finishAppleSignIn(webReturn: AppleWebReturn): Account? {
+        val attempt = appleAttempt
+        if (attempt == null || webReturn.state != attempt.state) {
+            report(AppleSignInError.Unknown)
+            return null
+        }
+        appleAttempt = null
+        return when (webReturn) {
+            is AppleWebReturn.Failed -> {
+                val error = when (webReturn.error) {
+                    // Renoncer n'est pas un échec : rien à dire, comme la feuille d'iOS refermée.
+                    "user_cancelled_authorize" -> null
+                    "invalid_request" -> SocialSignInError.UnusableAppleCredential
+                    else -> AppleSignInError.Failed
+                }
+                error?.let(::report)
+                null
+            }
+            is AppleWebReturn.Authorized -> accept(
+                SocialCredential(
+                    provider = SocialCredential.Provider.Apple,
+                    userIdentifier = unverifiedSubject(webReturn.identityToken) ?: "unknown",
+                    identityToken = webReturn.identityToken,
+                    nonce = attempt.nonce.raw,
+                    firstName = webReturn.firstName,
+                    lastName = webReturn.lastName,
+                    email = webReturn.email,
+                ),
+            )
+        }
     }
 
     /**

@@ -22,7 +22,7 @@ internal interface LocalizedError {
  * jamais un code d'erreur.
  *
  * Les cas d'Apple vivent dans [AppleSignInError], que le retour du web
- * (lot B2) posera : sur Android, Apple n'a pas de feuille du système, donc pas
+ * pose (`AuthModel.finishAppleSignIn`) : sur Android, Apple n'a pas de feuille du système, donc pas
  * d'`ASAuthorizationError`. Le cas « aucun compte Apple sur l'appareil » (1000
  * sur iOS) n'existe pas ici — on se connecte sur la page d'Apple elle-même.
  */

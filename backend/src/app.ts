@@ -11,6 +11,7 @@ import { registerAccountDeletionPageRoutes } from "./routes/accountDeletionPage.
 import { registerDataExportPageRoutes } from "./routes/dataExportPage.js";
 import { registerSharePageRoutes } from "./routes/sharePage.js";
 import { registerAppStoreRoutes, registerAppStoreWebhookRoutes } from "./routes/appStore.js";
+import { registerAppleWebSignInRoutes } from "./routes/appleWebSignIn.js";
 import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerEntryRoutes } from "./routes/entries.js";
@@ -161,6 +162,9 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // Entrée dans un compte : ce sont ces routes qui délivrent le token, elles ne
   // peuvent donc pas en exiger un.
   registerAuthRoutes(app, context);
+  // Le retour de la page web d'Apple (Android, lot B2) : Apple y poste un
+  // formulaire, sans session ni JSON.
+  await registerAppleWebSignInRoutes(app, context);
 
   // La page que le bouton de l'e-mail « mot de passe oublié » ouvre dans un
   // navigateur, et qui relaie vers l'app. Publique par nature : on y arrive

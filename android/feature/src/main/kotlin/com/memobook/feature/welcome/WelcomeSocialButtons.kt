@@ -46,8 +46,8 @@ import com.memobook.feature.auth.LocalizedError
  *
  * ⏳ **Chacun ne s'affiche que si son client existe** ([showsApple],
  * [showsGoogle]) : `memobook.appleServicesId` et `memobook.googleWebClientId`
- * sont vides dans `gradle.properties` tant que les lots A0, B1 et B2 ne sont
- * pas faits.
+ * sont vides dans `gradle.properties` tant que leurs clients n'existent pas
+ * (lot A0) — le serveur sait les recevoir depuis B1 et B2.
  */
 @Composable
 internal fun WelcomeSocialButtons(

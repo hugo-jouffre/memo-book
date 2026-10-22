@@ -64,8 +64,8 @@ import com.memobook.payments.PaymentMethodsPresenter
  *   des jetons que « Continuer avec Google » rend, le `GIDClientID` d'iOS côté
  *   serveur. `null` tant qu'il n'existe pas : le bouton ne s'affiche pas.
  * @param appleServicesId le Services ID d'Apple, pour l'entrée par Apple sur le
- *   web (`AppleSignInService`). `null` tant que le serveur ne sait pas la
- *   recevoir (lot B2) : le bouton ne s'affiche pas.
+ *   web (`AppleSignInService`). `null` tant qu'il n'existe pas : le bouton ne
+ *   s'affiche pas. Le serveur doit connaître le même (`APPLE_SERVICES_ID`).
  * @param scheduleBackgroundFlush planifie le vidage de la file **app fermée** —
  *   au retour du réseau (`null`), ou à la recharge du crédit du jour :
  *   `RecordingOutboxWorker.scheduler(context)` dans l'app, rien dans un test

@@ -65,6 +65,19 @@ const schema = z.object({
    * gratuite. Les routes concernées échouent clairement si elles manquent.
    */
   APPLE_BUNDLE_ID: z.string().default(""),
+  /**
+   * Le **Services ID** d'Apple, l'audience des jetons de « Continuer avec
+   * Apple » sur Android (lot B2, 22/10/2026). Android n'a pas de feuille Apple
+   * du système : l'app passe par la page web d'Apple, qui signe le jeton pour
+   * ce Services ID et non pour le bundle ID. Vide, l'entrée par le web est
+   * coupée : l'audience n'est pas acceptée, et `/v1/auth/apple/callback`
+   * répond 404.
+   *
+   * ⚠️ Groupé sous l'App ID `com.memobook.app` chez Apple, sans quoi Apple
+   * rend un autre `sub` que sur l'iPhone — et la même personne aurait deux
+   * comptes MemoBook.
+   */
+  APPLE_SERVICES_ID: z.string().default(""),
   GOOGLE_IOS_CLIENT_ID: z.string().default(""),
   /** Le client web, si un jour l'app tourne aussi dans un navigateur. */
   GOOGLE_WEB_CLIENT_ID: z.string().default(""),

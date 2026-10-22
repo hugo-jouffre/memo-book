@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -75,6 +76,7 @@ import com.memobook.design.scaled
 import com.memobook.feature.InMemoryAppSettings
 import com.memobook.feature.auth.AppleSignInError
 import com.memobook.feature.auth.AppleSignInService
+import com.memobook.feature.auth.AppleWebReturn
 import com.memobook.feature.auth.AuthModel
 import com.memobook.feature.auth.GoogleSignInService
 import com.memobook.feature.auth.previewApi
@@ -110,7 +112,10 @@ import java.net.URI
  * @param onTermsOfUse « Conditions d'utilisation », dans la mention légale (T151).
  * @param googleWebClientId l'audience des jetons Google. `null` : pas de bouton Google.
  * @param apple le Services ID et l'adresse de retour de l'entrée par Apple sur
- *   le web. `null` : pas de bouton Apple (lot B2).
+ *   le web. `null` : pas de bouton Apple.
+ * @param appleReturn le retour de la page d'Apple, reçu par `RootView`
+ *   (`memobook://auth/apple…`). L'écran le passe à son modèle, qui garde la
+ *   tentative, puis le rend par [onAppleReturnConsumed].
  * @param showsTestingMode le `#if DEBUG` d'iOS : l'entrée de chantier par le
  *   compte de test, dans un build débogable seulement.
  */
@@ -122,11 +127,21 @@ fun WelcomeView(
     onTermsOfUse: () -> Unit = {},
     googleWebClientId: String? = null,
     apple: AppleEntry? = null,
+    appleReturn: AppleWebReturn? = null,
+    onAppleReturnConsumed: () -> Unit = {},
     showsTestingMode: Boolean = false,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // Rendu tout de suite, fini dans la portée de l'écran : rendre le retour
+    // change la clé de cet effet, qui annulerait l'appel au serveur en vol.
+    LaunchedEffect(appleReturn) {
+        val webReturn = appleReturn ?: return@LaunchedEffect
+        onAppleReturnConsumed()
+        scope.launch { model.finishAppleSignIn(webReturn)?.let(onAuthenticated) }
+    }
 
     fun signInWithGoogle() {
         scope.launch {
@@ -145,7 +160,7 @@ fun WelcomeView(
     fun signInWithApple() {
         val entry = apple ?: return
         val page = model.beginAppleSignIn(entry.servicesId, entry.redirectUri)
-        // Le retour (`memobook://auth/apple…`) arrive avec le lot B2 — voir `AppleSignInService`.
+        // Le retour (`memobook://auth/apple…`) revient par `RootView`, puis [appleReturn].
         if (!AppleSignInService.open(context, page)) model.report(AppleSignInError.NotHandled)
     }
 
@@ -209,7 +224,8 @@ fun WelcomeView(
 /**
  * Ce que l'entrée par Apple sur le web demande — voir `AppleSignInService`.
  *
- * @param redirectUri l'adresse du serveur qui reçoit le `form_post` d'Apple (lot B2).
+ * @param redirectUri l'adresse du serveur qui reçoit le `form_post` d'Apple
+ *   (`/v1/auth/apple/callback`, toujours en production).
  */
 data class AppleEntry(val servicesId: String, val redirectUri: URI)
 

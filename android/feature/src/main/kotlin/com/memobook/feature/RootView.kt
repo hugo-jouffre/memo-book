@@ -252,6 +252,8 @@ private fun SignedOutStack(state: RootState) {
                         onAuthenticated = { state.enterApp(it) },
                         onEmail = { state.signedOutPath.add(SignedOutRoute.Email) },
                         onTermsOfUse = { state.signedOutPath.add(SignedOutRoute.TermsOfUse) },
+                        appleReturn = state.pendingAppleReturn,
+                        onAppleReturnConsumed = { state.pendingAppleReturn = null },
                     )
                     SignedOutRoute.Email -> AuthEntry(
                         dependencies = dependencies,
@@ -457,6 +459,12 @@ internal class RootState(val dependencies: AppDependencies) {
     /** Le secret d'un lien de réinitialisation, en attendant que l'écran d'entrée le consomme. */
     var pendingResetToken: String? by mutableStateOf(null)
 
+    /**
+     * Le retour de la page web d'Apple (`memobook://auth/apple…`, lot B2), en
+     * attendant que l'écran d'entrée — qui garde la tentative — le consomme.
+     */
+    var pendingAppleReturn: com.memobook.feature.auth.AppleWebReturn? by mutableStateOf(null)
+
     /** Un lien de réinitialisation ouvert **depuis l'app entrée** : la feuille du nouveau mot de passe. */
     var signedInResetToken: String? by mutableStateOf(null)
 
@@ -594,6 +602,17 @@ internal class RootState(val dependencies: AppDependencies) {
      */
     fun receive(url: String): Boolean {
         val uri = runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return true
+        com.memobook.feature.auth.AppleWebReturn.from(uri)?.let { webReturn ->
+            // La session gardée se vérifie encore : le retour attend de savoir
+            // s'il y a un écran d'entrée pour le recevoir.
+            if (stage is Stage.Restoring) return false
+            // Déjà entré, il ne répond à rien : on l'oublie.
+            if (stage !is Stage.SignedOut) return true
+            pendingAppleReturn = webReturn
+            // C'est l'écran d'accueil qui a ouvert la page d'Apple : on y revient.
+            signedOutPath.clear()
+            return true
+        }
         val notification = com.memobook.core.NotificationLink.from(uri)
         if (notification != null) {
             if (notification is com.memobook.core.NotificationLink.Join) {
