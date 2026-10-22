@@ -51,6 +51,9 @@ import com.memobook.feature.home.TripCover
 import com.memobook.feature.home.dateRangeLabel
 import com.memobook.feature.profile.euros
 import java.math.BigDecimal
+import com.memobook.feature.home.TripStatsRow
+import com.memobook.feature.home.DestinationLabel
+import com.memobook.feature.home.StageBadge
 
 // Les pièces que plusieurs étapes du tunnel se partagent. Le jumeau de
 // `Order/OrderComponents.swift`. Rien ici ne décide de quoi que ce soit : ce

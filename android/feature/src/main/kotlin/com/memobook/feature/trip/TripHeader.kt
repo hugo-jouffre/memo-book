@@ -47,6 +47,8 @@ import com.memobook.design.PlainButtonIndication
 import com.memobook.design.R
 import com.memobook.feature.home.CompanionStack
 import com.memobook.feature.home.TripCoverPlaceholder
+import com.memobook.feature.home.homeCard
+import com.memobook.feature.home.TripStatsRow
 
 /**
  * La couverture d'un voyage : sa photo pleine largeur, ce qu'on y a fait, et

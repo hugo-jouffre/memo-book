@@ -54,11 +54,13 @@ import com.memobook.design.brandHorizontalFade
 import com.memobook.design.isAccessibilityTextSize
 import com.memobook.design.scaled
 import com.memobook.feature.home.TripCoverPlaceholder
+import com.memobook.feature.home.homeCard
 import com.memobook.feature.home.TripDates
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.util.Locale
+import com.memobook.feature.home.CardPressStyle
 
 /**
  * Les étapes du voyage, et les deux filtres qui les trient. Jumeau de

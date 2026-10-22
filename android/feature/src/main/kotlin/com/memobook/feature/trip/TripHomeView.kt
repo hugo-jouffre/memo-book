@@ -62,6 +62,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.IOException
 import kotlin.math.min
+import com.memobook.design.Refreshable
 
 /**
  * L'accueil d'un voyage : où on en est de celui-ci, et la relance de MemoBook

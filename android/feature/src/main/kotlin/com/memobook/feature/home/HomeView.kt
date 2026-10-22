@@ -114,6 +114,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.math.max
 import kotlin.math.min
+import com.memobook.feature.tripsettings.DeleteTripSheet
 
 /**
  * L'accueil : où on en est de ses voyages, et le micro toujours à portée de

@@ -56,6 +56,7 @@ import com.memobook.feature.covers.CoversEntry
 import com.memobook.feature.debug.DesignCatalogueView
 import com.memobook.feature.gallery.GalleryEntry
 import com.memobook.feature.home.HomeEntry
+import com.memobook.feature.home.TripEndReminder
 import com.memobook.feature.legal.LegalDocumentEntry
 import com.memobook.feature.onboarding.LastQuestionsEntry
 import com.memobook.feature.onboarding.LastQuestionsModel
@@ -635,7 +636,14 @@ internal class RootState(val dependencies: AppDependencies) {
     private fun open(link: com.memobook.core.NotificationLink) {
         when (link) {
             com.memobook.core.NotificationLink.Paywall -> showsNotificationPaywall = true
-            com.memobook.core.NotificationLink.Subscription -> path.apply { clear(); add(HomeRoute.ManageSubscription) }
+            // Le rappel de résiliation de fin de voyage : « Mon abonnement », qui
+            // mène au store qui le tient. Le jour se marque **dès le lien** :
+            // l'accueil qui se charge au même moment ne doit pas reposer la
+            // question de son alerte (03/10/2026).
+            com.memobook.core.NotificationLink.Subscription -> {
+                dependencies.settings.putString(TripEndReminder.storageKey, TripEndReminder.today())
+                path.apply { clear(); add(HomeRoute.ManageSubscription) }
+            }
             com.memobook.core.NotificationLink.NewTrip -> path.apply { clear(); add(HomeRoute.TripCreation) }
             is com.memobook.core.NotificationLink.Join -> {
                 pendingInviteCode = link.code
