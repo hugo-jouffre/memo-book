@@ -68,6 +68,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Les messages de Firebase Cloud Messaging : le jeton qui change,
+             la notification à poser (`MemoBookMessagingService`, lot B3). -->
+        <service
+            android:name=".MemoBookMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- Le fichier que l'app photo du système remplit quand on prend une
              photo (`PhotoFlow`, `TakePicture`) : un fichier du cache, prêté le
              temps de la prise de vue. Aucune permission de stockage ni de

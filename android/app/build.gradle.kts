@@ -32,6 +32,12 @@ val versionCodeOverride: Int? = providers.gradleProperty("memobook.versionCode")
 val googleWebClientId: String = providers.gradleProperty("memobook.googleWebClientId").orElse("").get()
 val appleServicesId: String = providers.gradleProperty("memobook.appleServicesId").orElse("").get()
 
+// Le projet Firebase des notifications, sans `google-services.json` : quatre
+// valeurs de `gradle.properties`, vides tant que le projet n'existe pas — aucun
+// jeton ne part alors (`FirebasePush`).
+val firebaseProperties = listOf("applicationId", "apiKey", "projectId", "gcmSenderId")
+    .associateWith { providers.gradleProperty("memobook.firebase.$it").orElse("").get() }
+
 android {
     namespace = "com.memobook.app"
     compileSdk = 37
@@ -45,6 +51,10 @@ android {
         buildConfigField("String", "PRODUCTION_API_BASE_URL", "\"$productionApiBaseUrl\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "APPLE_SERVICES_ID", "\"$appleServicesId\"")
+        buildConfigField("String", "FIREBASE_APPLICATION_ID", "\"${firebaseProperties.getValue("applicationId")}\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseProperties.getValue("apiKey")}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseProperties.getValue("projectId")}\"")
+        buildConfigField("String", "FIREBASE_GCM_SENDER_ID", "\"${firebaseProperties.getValue("gcmSenderId")}\"")
     }
 
     signingConfigs {
@@ -111,6 +121,8 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
+    // `MemoBookMessagingService` : le jeton qui change, le message qui arrive.
+    implementation(libs.firebase.messaging)
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
 }
