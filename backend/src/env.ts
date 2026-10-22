@@ -268,6 +268,36 @@ const schema = z.object({
     .transform((value) => value === "true"),
 
   /**
+   * L'app Android — `com.memobook.app`, comme l'app iOS.
+   *
+   * `ANDROID_APP_CERT_SHA256` : les empreintes SHA-256 des certificats qui
+   * signent l'app, séparées par des virgules — la clé de **signature de Google
+   * Play** (*Play Console ▸ Intégrité de l'app ▸ Signature de l'app*), la clé
+   * d'**importation**, et au besoin la clé de débogage d'un poste. Elles
+   * remplissent `/.well-known/assetlinks.json`, qu'Android lit pour ouvrir les
+   * liens `/j/…` et `/password/reset` **dans l'app** sans demander. Vide, le
+   * fichier ne déclare rien : Android propose seulement d'ouvrir les liens dans
+   * l'app.
+   *
+   * `ANDROID_PLAY_STORE_LISTED` : l'app est publiée sur le Play Store. Tant
+   * que ce n'est pas le cas, la page d'invitation n'envoie pas un téléphone
+   * Android vers une fiche qui n'existe pas, et ne promet pas l'app Android.
+   */
+  ANDROID_APP_CERT_SHA256: z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((fingerprint) => fingerprint.trim().toUpperCase())
+        .filter((fingerprint) => fingerprint !== ""),
+    ),
+  ANDROID_PLAY_STORE_LISTED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+
+  /**
    * Les notifications — APNs, le service de notifications d'Apple. Voir
    * `services/apns.ts` et `docs/notifications.md`.
    *

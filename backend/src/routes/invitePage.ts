@@ -10,10 +10,14 @@ import { normalizeAccessCode } from "../lib/accessCode.js";
  *   un lien universel, déclaré par `apple-app-site-association` (plus bas) et
  *   par l'*Associated Domain* de `ios/project.yml`. L'app rejoint le voyage et
  *   ouvre son écran d'accueil (`InviteLink`, `RootView.onOpenURL`).
+ * - **Sur Android**, c'est un App Link : `/.well-known/assetlinks.json` (plus
+ *   bas) dit à Android que `com.memobook.app` ouvre ces liens, et l'intent
+ *   filter de `android/app/src/main/AndroidManifest.xml` les revendique.
  * - **Elle ne l'est pas** : cette page s'ouvre, et envoie un iPhone ou un iPad
- *   sur la fiche App Store de MemoBook. Le message d'invitation porte aussi le
- *   code en clair : c'est lui qu'on tape dans « Rejoins une aventure » après
- *   l'installation.
+ *   sur la fiche App Store de MemoBook — un téléphone Android sur la fiche du
+ *   Play Store, quand l'app y est publiée (`ANDROID_PLAY_STORE_LISTED`). Le
+ *   message d'invitation porte aussi le code en clair : c'est lui qu'on tape
+ *   dans « Rejoins une aventure » après l'installation.
  *
  * La page ne lit pas la base : elle ne dit pas si le code existe — une page
  * publique qui répondrait différemment selon le code aiderait qui en essaie.
@@ -21,6 +25,9 @@ import { normalizeAccessCode } from "../lib/accessCode.js";
 
 /** L'équipe Apple et l'app — `ios/project.yml`. */
 const APP_ID = "HP2A94889S.com.memobook.app";
+
+/** L'app Android — `applicationId` de `android/app/build.gradle.kts`. */
+export const ANDROID_PACKAGE = "com.memobook.app";
 
 /** Le chemin des invitations, le seul que l'app revendique sur ce domaine. */
 export const INVITE_PATH = "/j";
@@ -48,6 +55,11 @@ export function appStoreUrl(appleId: number | undefined): string {
   return appleId ? `https://apps.apple.com/app/id${appleId}` : "https://apps.apple.com/fr/search?term=MemoBook";
 }
 
+/** La fiche Play Store de MemoBook. */
+export function playStoreUrl(): string {
+  return `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
+}
+
 /** Ce que l'app ouvre quand le lien universel n'a pas joué : `memobook://join?code=…`. */
 export function appInviteUrl(code: string): string {
   return `memobook://join?code=${encodeURIComponent(code)}`;
@@ -65,10 +77,37 @@ export function appSiteAssociation() {
   };
 }
 
-export function renderInvitePage(code: string, storeUrl: string): string {
+/**
+ * Le fichier qu'Android vient lire pour savoir que `com.memobook.app` peut
+ * ouvrir les liens de ce domaine sans demander — les invitations et la page du
+ * mot de passe. Un certificat par empreinte (`ANDROID_APP_CERT_SHA256`) ; sans
+ * empreinte, rien n'est déclaré : une déclaration sans certificat ne vaut rien.
+ */
+export function androidAssetLinks(fingerprints: string[]) {
+  if (fingerprints.length === 0) return [];
+  return [
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: { namespace: "android_app", package_name: ANDROID_PACKAGE, sha256_cert_fingerprints: fingerprints },
+    },
+  ];
+}
+
+/** Où envoyer quelqu'un qui n'a pas l'app : la fiche du store de son téléphone. */
+export interface InviteStores {
+  appStore: string;
+  /** `null` tant que l'app Android n'est pas publiée. */
+  playStore: string | null;
+}
+
+export function renderInvitePage(code: string, stores: InviteStores): string {
   const appUrl = escapeHtml(appInviteUrl(code));
-  const store = escapeHtml(storeUrl);
+  const store = escapeHtml(stores.appStore);
   const shown = escapeHtml(code);
+  const platforms = stores.playStore ? "MemoBook est une app pour iPhone et Android." : "MemoBook est une app pour iPhone.";
+  // Sur Android, le lien `memobook://` passe par un `intent://` : Chrome n'ouvre
+  // un schéma privé qu'ainsi, et il propose le Play Store si l'app manque.
+  const androidStore = stores.playStore ? JSON.stringify(stores.playStore) : "null";
   return `<!doctype html>
 <html lang="fr">
 <head>
@@ -95,9 +134,17 @@ export function renderInvitePage(code: string, storeUrl: string): string {
 </style>
 <script>
   // Sur iPhone et iPad, l'App Store tout de suite : si l'app était là, iOS
-  // l'aurait ouverte sans afficher cette page.
+  // l'aurait ouverte sans afficher cette page. Sur Android, le Play Store, une
+  // fois l'app publiée — un App Link vérifié l'aurait ouverte, lui aussi.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-    window.addEventListener("load", function () { window.location.href = ${JSON.stringify(storeUrl)}; });
+    window.addEventListener("load", function () { window.location.href = ${JSON.stringify(stores.appStore)}; });
+  } else if (/Android/.test(navigator.userAgent)) {
+    var playStore = ${androidStore};
+    window.addEventListener("load", function () {
+      var download = document.getElementById("download");
+      if (playStore) { download.href = playStore; window.location.href = playStore; }
+      document.getElementById("open").href = ${JSON.stringify(androidIntentUrl(`join?code=${encodeURIComponent(code)}`))};
+    });
   }
 </script>
 </head>
@@ -108,13 +155,21 @@ export function renderInvitePage(code: string, storeUrl: string): string {
 <h1>On t’attend pour raconter ce voyage</h1>
 <p>Installe MemoBook, puis entre ce code dans « Rejoins une aventure » :</p>
 <p class="code">${shown}</p>
-<a class="button" href="${store}">Télécharger MemoBook</a>
-<a class="link" href="${appUrl}">J’ai déjà l’app</a>
-<p class="muted">MemoBook est une app pour iPhone.</p>
+<a class="button" id="download" href="${store}">Télécharger MemoBook</a>
+<a class="link" id="open" href="${appUrl}">J’ai déjà l’app</a>
+<p class="muted">${platforms}</p>
 </div>
 </div></main>
 </body>
 </html>`;
+}
+
+/**
+ * Un lien `memobook://<chemin>` sous la forme qu'Android ouvre depuis Chrome :
+ * `intent://<chemin>#Intent;scheme=memobook;package=com.memobook.app;end`.
+ */
+export function androidIntentUrl(path: string): string {
+  return `intent://${path}#Intent;scheme=memobook;package=${ANDROID_PACKAGE};end`;
 }
 
 export function registerInvitePageRoutes(app: FastifyInstance, context: AppContext): void {
@@ -122,10 +177,21 @@ export function registerInvitePageRoutes(app: FastifyInstance, context: AppConte
     reply.header("Cache-Control", "public, max-age=3600").type("application/json").send(appSiteAssociation());
   app.get("/.well-known/apple-app-site-association", association);
   app.get("/apple-app-site-association", association);
+  app.get("/.well-known/assetlinks.json", async (_request, reply) =>
+    reply
+      .header("Cache-Control", "public, max-age=3600")
+      .type("application/json")
+      .send(androidAssetLinks(context.env.ANDROID_APP_CERT_SHA256)),
+  );
 
   app.get<{ Params: { code: string } }>(`${INVITE_PATH}/:code`, { logLevel: "warn" }, async (request, reply) => {
     const code = normalizeAccessCode(request.params.code ?? "");
     reply.header("Cache-Control", "no-store").type("text/html; charset=utf-8");
-    return reply.send(renderInvitePage(code, appStoreUrl(context.env.APP_STORE_APP_APPLE_ID)));
+    return reply.send(
+      renderInvitePage(code, {
+        appStore: appStoreUrl(context.env.APP_STORE_APP_APPLE_ID),
+        playStore: context.env.ANDROID_PLAY_STORE_LISTED ? playStoreUrl() : null,
+      }),
+    );
   });
 }
