@@ -12,6 +12,8 @@ import com.memobook.core.TripDraft
 import com.memobook.core.TripStage
 import com.memobook.core.local
 import com.memobook.feature.chat.OutgoingTurn
+import com.memobook.feature.tripcreation.TripCreationModel
+import com.memobook.feature.tripcreation.TripCreationStep
 import com.memobook.networking.ApiError
 import com.memobook.networking.Connectivity
 import com.memobook.recording.PendingRecordingStore
@@ -24,11 +26,13 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import java.io.IOException
+import java.time.Instant
 import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -46,11 +50,10 @@ import kotlin.test.assertTrue
  * - la conversation s'ouvre sans réseau, et on peut y raconter.
  *
  * Porté de `OfflineTripCreationTests.swift`. Les cas de « Créer un voyage »
- * passent par `TripCreationModel`, qui n'est pas encore porté : ils sont repris
- * **sur la file**, par les deux fonctions que le modèle reçoit — `save`
- * ([RecordingOutbox.saveTrip]) et `sync` ([RecordingOutbox.tripSync]). Restent
- * à porter avec leurs écrans : le départ obligatoire des dates (T238, propre au
- * modèle), et les deux cas de la conversation sans réseau (`ChatModel`).
+ * traversent `TripCreationModel`, branché sur la file comme l'app le branche —
+ * `save` ([RecordingOutbox.saveTrip]) et `sync` ([RecordingOutbox.tripSync]).
+ * Restent à porter avec leur écran : les deux cas de la conversation sans
+ * réseau (`ChatModel`).
  */
 class OfflineTripCreationTest {
     private val dispatcher = StandardTestDispatcher()
@@ -74,10 +77,14 @@ class OfflineTripCreationTest {
         val server = FakeServer()
         val outbox = outbox(server)
         outbox.debugSetOffline(true)
+        val model = creationModel(outbox)
 
-        val trip = outbox.saveTrip(TripDraft(title = "Lisbonne"))
+        walkToTheCodeStep(model, title = "Lisbonne")
 
-        assertEquals("Lisbonne", trip.title, "« Commencer ! » doit avoir un voyage à ouvrir.")
+        assertEquals(TripCreationStep.Companions, model.step, "La création ne doit pas rester bloquée faute de réseau.")
+        assertNull(model.errorMessage)
+        assertEquals("Lisbonne", model.trip?.title, "« Commencer ! » doit avoir un voyage à ouvrir.")
+        assertNull(model.accessCode, "Le code, lui, ne peut venir que du serveur.")
         assertTrue(server.log.isEmpty())
     }
 
@@ -86,22 +93,45 @@ class OfflineTripCreationTest {
         val server = FakeServer()
         val outbox = outbox(server)
         outbox.debugSetOffline(true)
-        val trip = outbox.saveTrip(TripDraft(title = "Lisbonne"))
+        val model = creationModel(outbox)
+        walkToTheCodeStep(model, title = "Lisbonne")
 
-        val waiting = async { outbox.tripSync(trip.id) }
+        val waiting = async { model.awaitAccessCode() }
         outbox.debugSetOffline(false)
-        val sync = waiting.await()
+        waiting.await()
 
-        assertEquals("ABC123", (sync as? TripSync.Created)?.created?.accessCode)
-        assertEquals(listOf("trip:${trip.id}:Lisbonne"), server.log, "Le serveur reprend l'identifiant de l'app.")
+        assertEquals("ABC123", model.accessCode)
+        assertEquals(listOf("trip:${model.trip?.id ?: "?"}:Lisbonne"), server.log, "Le serveur reprend l'identifiant de l'app.")
         assertTrue(outbox.localTrips.value.isEmpty(), "Arrivé, le voyage ne se montre plus que depuis le serveur.")
+    }
+
+    /**
+     * T238 : un voyage a toujours un départ. Ni « Valider » appelé quand même,
+     * ni « Passer » ne franchissent l'étape des dates sans lui.
+     */
+    @Test
+    fun noTripIsSavedWithoutADepartureDate() = runTest(dispatcher) {
+        val model = creationModel(outbox(FakeServer()))
+        model.draft = model.draft.copy(title = "Lisbonne")
+        model.validate()
+        assertEquals(TripCreationStep.Dates, model.step)
+
+        model.validate()
+        model.skip()
+        assertEquals(TripCreationStep.Dates, model.step)
+        assertNull(model.trip)
+
+        model.draft = model.draft.copy(startDate = Instant.now())
+        model.validate()
+        assertEquals(TripCreationStep.Notifications, model.step)
     }
 
     @Test
     fun theIdentifierIsLowercasedLikeTheServerWritesIt() = runTest(dispatcher) {
-        val outbox = outbox(FakeServer())
-        val id = outbox.saveTrip(TripDraft(title = "Lisbonne")).id
+        val model = creationModel(outbox(FakeServer()))
+        walkToTheCodeStep(model, title = "Lisbonne")
 
+        val id = model.trip?.id.orEmpty()
         UUID.fromString(id)
         assertEquals(id.lowercase(), id)
     }
@@ -111,30 +141,38 @@ class OfflineTripCreationTest {
         val server = FakeServer()
         val outbox = outbox(server)
         outbox.debugSetOffline(true)
+        val model = creationModel(outbox)
 
-        val first = outbox.saveTrip(TripDraft(title = "Lisbonne"))
-        // Le modèle revalide le même brouillon, qui porte désormais l'identifiant tiré.
-        outbox.saveTrip(TripDraft(id = first.id, title = "Lisbonne et Porto"))
+        walkToTheCodeStep(model, title = "Lisbonne")
+        val first = model.trip?.id
 
-        assertEquals(listOf("Lisbonne et Porto"), outbox.localTrips.value.map { it.draft.title }, "Revenir en arrière ne crée pas un second voyage.")
+        model.goBack()
+        model.goBack()
+        model.goBack()
+        model.draft = model.draft.copy(title = "Lisbonne et Porto")
+        walkToTheCodeStep(model, title = null)
+
+        assertEquals(first, model.trip?.id, "Revenir en arrière ne crée pas un second voyage.")
+        assertEquals(listOf("Lisbonne et Porto"), outbox.localTrips.value.map { it.draft.title })
 
         outbox.debugSetOffline(false)
         until("le voyage part") { outbox.localTrips.value.isEmpty() }
-        assertEquals(listOf("trip:${first.id}:Lisbonne et Porto"), server.log, "Une seule création, avec le dernier brouillon.")
+        assertEquals(listOf("trip:${first ?: "?"}:Lisbonne et Porto"), server.log, "Une seule création, avec le dernier brouillon.")
     }
 
     @Test
     fun aRefusedTripSaysSoAndOpensNothing() = runTest(dispatcher) {
         val server = FakeServer()
         server.tripRefusal = "La date de fin précède la date de début."
-        val outbox = outbox(server)
+        val model = creationModel(outbox(server))
 
-        val trip = outbox.saveTrip(TripDraft(title = "Lisbonne"))
-        val sync = outbox.tripSync(trip.id)
+        walkToTheCodeStep(model, title = "Lisbonne")
+        model.awaitAccessCode()
 
+        assertTrue(model.wasRejected)
         assertEquals(
-            TripSync.Rejected("Ton voyage « Lisbonne » n’a pas pu être créé. La date de fin précède la date de début."),
-            sync,
+            "Ton voyage « Lisbonne » n’a pas pu être créé. La date de fin précède la date de début.",
+            model.errorMessage,
         )
     }
 
@@ -274,6 +312,24 @@ class OfflineTripCreationTest {
     }
 
     // MARK: - Outils
+
+    private fun creationModel(outbox: RecordingOutbox): TripCreationModel = TripCreationModel(
+        save = { draft -> outbox.saveTrip(draft) },
+        sync = { id -> outbox.tripSync(id) },
+    )
+
+    /**
+     * Le nom, le départ — les dates n'ont plus de « Passer » —, puis « Passer »
+     * sur les notifications : la validation de la troisième enregistre le
+     * voyage.
+     */
+    private suspend fun walkToTheCodeStep(model: TripCreationModel, title: String?) {
+        if (title != null) model.draft = model.draft.copy(title = title)
+        model.validate()
+        model.draft = model.draft.copy(startDate = Instant.now())
+        model.validate()
+        model.skip()
+    }
 
     private fun TestScope.outbox(server: FakeServer): RecordingOutbox = RecordingOutbox(
         store = PendingRecordingStore.temporary(Dispatchers.Unconfined),

@@ -60,7 +60,6 @@ import com.memobook.core.TripDetail
 import com.memobook.core.TripDraft
 import com.memobook.core.TripSettings
 import com.memobook.core.TripSettingsEdit
-import com.memobook.core.TripStage
 import com.memobook.core.TripTheme
 import com.memobook.feature.chat.PreviewChatBox
 import com.memobook.feature.chat.sandboxChatThread
@@ -77,6 +76,7 @@ import com.memobook.feature.order.fixture
 import com.memobook.feature.order.previewRequest
 import com.memobook.feature.profile.fixture
 import com.memobook.feature.trip.fixture
+import com.memobook.feature.tripcreation.fixture
 import com.memobook.feature.tripsettings.fixture
 import com.memobook.networking.ApiError
 import com.memobook.networking.Connectivity
@@ -343,7 +343,7 @@ internal class PreviewApi(
      */
     override suspend fun createTrip(draft: TripDraft): CreatedTrip {
         SandboxNetwork.failIfOffline()
-        val created = createdTripFixture(draft, id = draft.id)
+        val created = CreatedTrip.fixture(draft, id = draft.id)
         synchronized(lock) {
             // Rejouée, la création corrige le voyage au lieu d'en ajouter un.
             createdTrips.removeAll { it.id == created.trip.id }
@@ -353,7 +353,7 @@ internal class PreviewApi(
         return created
     }
 
-    override suspend fun updateTrip(id: String, draft: TripDraft): CreatedTrip = createdTripFixture(draft, id = id)
+    override suspend fun updateTrip(id: String, draft: TripDraft): CreatedTrip = CreatedTrip.fixture(draft, id = id)
 
     /**
      * Le code de la maquette ouvre le premier voyage du jeu d'essai ; tout autre
@@ -1127,32 +1127,6 @@ internal class PreviewApi(
                 updatedAt = now,
                 entries = emptyList(),
                 renders = emptyList(),
-            )
-        }
-
-        /**
-         * Le jeu d'essai de la création : un voyage qui ressemble au brouillon, et
-         * le code d'accès de la maquette.
-         *
-         * ⏳ Le `CreatedTrip.fixture(_:id:)` d'iOS, qui vit dans
-         * `TripCreationModel.swift` et se porte avec la création de voyage :
-         * recopié ici pour que le double ne dépende pas d'un écran. À remplacer
-         * par lui quand il sera porté.
-         *
-         * @param id l'identifiant à garder, quand le brouillon corrige un voyage
-         *   déjà créé. `null` en tire un nouveau.
-         */
-        fun createdTripFixture(draft: TripDraft, id: String?): CreatedTrip {
-            val start = draft.startDate
-            return CreatedTrip(
-                trip = Trip(
-                    id = id ?: UUID.randomUUID().toString().uppercase(),
-                    title = draft.title.ifEmpty { TripDraft.untitled },
-                    stage = if (start != null && start > Instant.now()) TripStage.Upcoming else TripStage.Ongoing,
-                    startDate = draft.startDate,
-                    endDate = draft.endDate,
-                ),
-                accessCode = "JHKFDA",
             )
         }
     }
