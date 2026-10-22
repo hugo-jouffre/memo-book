@@ -59,7 +59,7 @@ Sans ces accès, rien ne s'installe sur un téléphone. **À faire en premier.**
 
 | # | Tâche | État | Pour qui | Fini quand |
 |---|---|---|---|---|
-| A3 | Modèles, client des 72 routes, erreurs en français | 🔄 | Claude | les tests portés d'iOS passent en CI |
+| A3 | Modèles, client des routes, erreurs en français | 🔄 | Claude | les 380 tests portés d'iOS passent en CI |
 | T0a | APK de test téléchargeable à chaque PR | 🔄 | Claude | un APK se télécharge depuis la PR |
 | T0b | Envoi signé sur la piste interne de Google Play | ⏳ | Claude, après les secrets de Hugo | Clara et Paul installent depuis le Play Store |
 | A3b | Bac à sable : `PreviewApi`, personas, interrupteurs de debug, `AppDependencies` | ⏳ | Claude | l'app s'ouvre sur l'accueil du bac à sable, sans réseau |

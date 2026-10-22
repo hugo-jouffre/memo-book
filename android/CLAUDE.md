@@ -98,7 +98,7 @@ ni `*.jks`, ni `*.keystore`, ni `keystore.properties`, ni `google-services.json`
 
 | Module | Jumeau iOS | Rôle |
 |---|---|---|
-| `:core` | `MemoBookCore` | modèles et règles pures. **JVM seule**, aucune dépendance : ses tests tournent sans Android |
+| `:core` | `MemoBookCore` | modèles et règles pures. **JVM seule**, une seule dépendance : `kotlinx.serialization`, le `Codable` de Swift. Ses tests tournent sans Android |
 | `:design` | `MemoBookDesign` | tokens, composants `Brand…`, polices et images de marque |
 | `:networking` | `MemoBookNetworking` | client d'API, adresse, connectivité |
 | `:recording` | `MemoBookRecording` | capture audio |
@@ -124,6 +124,24 @@ Les mots de `docs/vocabulaire.md` valent ici, avec leurs suffixes.
   `MemoBookApplication`, descendu aux écrans. Pas de singleton, pas de Hilt.
 - **`RootView`** traduit les intentions en destinations, comme sur iOS.
 - Coroutines partout où iOS a `async/await`.
+
+## Modèles et JSON
+
+`Coding.kt` est le pendant de `Coding.swift` : `MemoBookJson` lit et écrit tout
+le JSON du serveur, `InstantSerializer` ses dates (`Date` → `Instant`).
+
+- Une énumération qui tolère l'inconnu sur iOS (`case unknown(String)`) est une
+  `sealed interface` à cas `Unknown(raw)`, sérialisée par `RawValueSerializer`
+  (`Status.kt` est le modèle).
+- Un `decodeIfPresent ?? défaut` d'iOS : `DecodeIfPresentSerializer`. Un champ
+  que le décodage synthétisé de Swift exige porte `@Required`, même s'il a une
+  valeur par défaut en Kotlin.
+- Un `String??` (absent ≠ effacé) : `Some<T>`, comme `EntryEdit`.
+- Un type nommé `Companion` se cite `com.memobook.core.Companion` dans une
+  classe : Kotlin y donne ce nom à l'objet compagnon.
+- Une liste du compagnon d'une `sealed interface` qui cite ses propres cas est
+  un `get()`, pas un champ : les cas peuvent se charger avant le compagnon, et
+  la liste y recevrait des `null` (`NarrationPace.selectable`).
 
 ## Design system
 

@@ -76,6 +76,14 @@ la main.
 | **B5** Google Pay et plateforme | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
 | **B6** Page de suppression | une page publique pour demander la suppression d'un compte par e-mail, que Google Play exige de toute app qui crée des comptes | à côté de `dataExportPage.ts` | non |
 
+Côté app, B4 rend aussi indépendant du store ce qui ne connaît qu'Apple :
+`Subscription.managedByAppStore` (dire quel store tient l'abonnement), les états
+`Grace` et `isInBillingRetry` (calqués sur le réessai d'Apple), et
+`applePayMerchantId` dans `PaymentIntentTicket` et `OrderPayment` (B5). Les CGU
+(chapitre 5), la politique de confidentialité (2.4 et 3) et trois réponses de
+la FAQ parlent de l'App Store et de l'iPhone : à réécrire pour Google Play avant
+la fiche Play (A8).
+
 ⚠️ Aujourd'hui, `POST /v1/profile/subscription/cancel` résilie **localement**
 tout abonnement qui n'est pas StoreKit (`routes/profile.ts`) : un abonnement
 Google Play y serait coupé côté serveur et continuerait d'être facturé. B4 le
@@ -128,12 +136,22 @@ voudrait qu'ils pâlissent et s'expliquent.
 
 ### Cœur et bac à sable (A3)
 
-| iOS | État |
-|---|---|
-| Modèles de `MemoBookCore` et leur décodage (états inconnus tolérés) | ⏳ |
-| `MemoBookAPIClient` : les 72 routes, `APIError` et ses messages en français | ⏳ |
-| `TokenStore`, `Connectivity`, `ContentCache` | ⏳ |
-| `PreviewAPI`, `SandboxPersona`, interrupteurs `-previewSignedIn`, `-openOrder`, `-composeBook`, `-lastQuestions`, `-resetOnboarding` (en extras de lancement) | ⏳ |
+Les 44 fichiers de `MemoBookCore` et les 9 de `MemoBookNetworking`, chacun sous
+son nom. 380 tests sur la JVM, portés cas pour cas des suites iOS.
+
+| iOS | Android | État |
+|---|---|---|
+| Modèles de `MemoBookCore` et leur décodage (états inconnus tolérés) | `kotlinx.serialization` ; un état inconnu devient `Unknown(raw)` (`RawValueSerializer`), les `decodeIfPresent ?? défaut` d'iOS des sérialiseurs dédiés | ✅ |
+| Textes : `ChatCopy`, `BookCopy`, `OrderCopy`, CGU, confidentialité, FAQ, aide | recopiés par script, comparés chaîne à chaîne avec le Swift | ✅ |
+| `MemoBookAPIClient` : les routes, `APIError` et ses messages en français | `MemoBookApiClient` (OkHttp, coroutines annulables), `ApiError` ; la bascule vers l'adresse de secours ; `platform: "android"` à l'enregistrement de l'appareil | ✅ |
+| `TokenStore`, `Connectivity`, `NetworkLog` | interfaces pures ; `KeystoreTokenStore` (AES-GCM, clé dans l'AndroidKeyStore), `AndroidConnectivity`, `AndroidLogSink` — **compilés par la CI seulement** | ✅ |
+| `ContentCache` | | ⏳ |
+| `PreviewAPI`, `SandboxPersona`, interrupteurs `-previewSignedIn`, `-openOrder`, `-composeBook`, `-lastQuestions`, `-resetOnboarding` (en extras de lancement) | | ⏳ |
+
+À brancher dans l'app avec le bac à sable : `ApiError.developerDiagnostics` et
+`VoiceMode.forBuild(BuildConfig.DEBUG)`, que `:core` et `:networking` ne peuvent
+pas lire eux-mêmes. `BookCustomisationPreviewManifest.kt` est une recopie de la
+table Swift : la régénérer avec elle (deux tests le vérifient).
 
 ### Comptes et entrée (A4)
 
