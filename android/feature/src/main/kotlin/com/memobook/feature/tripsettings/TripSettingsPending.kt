@@ -136,11 +136,3 @@ internal val TripSettings.dateRangeLabel: String?
             else -> null
         }
     }
-
-// MARK: - À brancher : Profile/SubscriptionSheet.swift (lot du profil)
-
-/** Les mots de l'abonnement — la pastille « Abonné(e) » seulement. */
-internal object SubscriptionCopy {
-    /** La maquette écrit « Abonnée » ; l'app accorde sur ce que le profil sait de la personne (T76). */
-    fun currentBadge(gender: Gender): String = gender.agreed("Abonné")
-}

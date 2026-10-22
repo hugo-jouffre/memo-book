@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.memobook.feature.AppDependencies
 import com.memobook.feature.ProfileIntent
+import com.memobook.feature.order.finishAbandonedOrder
 
 /**
  * Le profil et ses feuilles. `opensSubscription` : « Mon abonnement » ouvert en arrivant (`HomeRoute.ManageSubscription`).

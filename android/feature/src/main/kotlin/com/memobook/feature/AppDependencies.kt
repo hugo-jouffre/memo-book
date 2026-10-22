@@ -263,9 +263,19 @@ class AppDependencies(
      * rester bloqué sur l'échec précédent.
      */
     suspend fun ensureRegistered() {
+        // L'essai en cours ou réussi se partage ; un essai raté se jette, et
+        // l'appel suivant en relance un.
+        registrationLock.withLock { registration }?.let { previous ->
+            try {
+                return previous.await()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                registrationLock.withLock { if (registration === previous) registration = null }
+            }
+        }
         val task = registrationLock.withLock {
-            registration?.takeUnless { it.isCompleted && it.getCompletionExceptionOrNull() != null }
-                ?: scope.async { api.ensureDeviceRegistered() }.also { registration = it }
+            registration ?: scope.async { api.ensureDeviceRegistered() }.also { registration = it }
         }
         task.await()
     }

@@ -93,6 +93,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.net.URI
 import com.memobook.feature.bookpreview.BookCompositionPage
+import com.memobook.feature.profile.SubscriptionCopy
 
 /**
  * Les paramètres d'un voyage : tout ce qui se règle sur le carnet sans quitter
