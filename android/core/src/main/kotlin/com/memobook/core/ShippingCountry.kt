@@ -18,6 +18,9 @@ import java.text.Normalizer
 data class ShippingCountry(val code: String, val name: String) {
     /** L'identité du pays dans une liste : son code, comme `Identifiable` sur iOS. */
     val id: String get() = code
+
+    /** Porte les jeux d'essai de `:feature` (`ShippingCountry.fixtures`), qui s'y écrivent en extensions. */
+    companion object
 }
 
 /**

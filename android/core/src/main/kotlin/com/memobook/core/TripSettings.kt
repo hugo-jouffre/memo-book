@@ -285,6 +285,9 @@ data class TripSettings(
      */
     val guests: List<com.memobook.core.Companion>
         get() = companions.filter { !it.isOwner }
+
+    /** Porte les jeux d'essai de `:feature` (`TripSettings.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 /**

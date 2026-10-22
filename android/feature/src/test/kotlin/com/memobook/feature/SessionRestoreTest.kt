@@ -4,6 +4,7 @@ import com.memobook.core.Account
 import com.memobook.networking.ApiError
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
+import java.nio.file.Files
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -83,5 +84,16 @@ class SessionRestoreTest {
         val (restore, attempts) = resolve(listOf(Result.failure(unreadable)))
         assertEquals(SessionRestore.Unreachable, restore)
         assertEquals(1, attempts)
+    }
+
+    /** Aucune session gardée : rien à vérifier auprès du serveur, la session est fermée. */
+    @Test fun noStoredSessionIsClosed() = runTest {
+        val dependencies = PreviewSupport.dependencies(
+            api = PreviewApi(seeded = false),
+            directory = Files.createTempDirectory("session").toFile(),
+            scope = this,
+        )
+        val restore = dependencies.restoreSession()
+        assertEquals(SessionRestore.Closed, restore)
     }
 }

@@ -392,4 +392,7 @@ data class HomeFeed(
     val pastTrips: List<Trip>
         get() = trips.filter { it.stage == TripStage.Past }
             .sortedByDescending { it.endDate ?: it.startDate ?: Instant.MIN }
+
+    /** Porte les jeux d'essai de `:feature` (`HomeFeed.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
