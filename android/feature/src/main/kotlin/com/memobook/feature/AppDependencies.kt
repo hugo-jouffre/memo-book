@@ -1,10 +1,12 @@
 package com.memobook.feature
 
 import com.memobook.core.Account
+import com.memobook.feature.chat.ChatTransport
 import com.memobook.networking.ApiConfiguration
 import com.memobook.networking.ApiError
 import com.memobook.networking.Connectivity
 import com.memobook.networking.MemoBookApi
+import com.memobook.recording.PendingRecordingStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -14,6 +16,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
 import java.io.File
+import java.time.Instant
 
 /**
  * Les dépendances que les écrans partagent. Un seul point d'assemblage, comme
@@ -41,6 +44,10 @@ import java.io.File
  *   vocaux et les voyages en attente — `filesDir` dans l'app.
  * @param scope la portée de l'app entière : ce qui y est lancé survit aux
  *   écrans (la file des envois, l'enregistrement de l'appareil).
+ * @param scheduleBackgroundFlush planifie le vidage de la file **app fermée** —
+ *   au retour du réseau (`null`), ou à la recharge du crédit du jour :
+ *   `RecordingOutboxWorker.scheduler(context)` dans l'app, rien dans un test
+ *   ou un aperçu. Voir [RecordingOutboxWorker].
  */
 class AppDependencies(
     val api: MemoBookApi,
@@ -51,12 +58,48 @@ class AppDependencies(
     cacheDirectory: File,
     val filesDirectory: File,
     val scope: CoroutineScope,
+    scheduleBackgroundFlush: (Instant?) -> Unit = {},
 ) {
     /**
      * Ce que l'app garde du serveur sur l'appareil — voir [ContentCache].
      * **Deux usages pour une seule pièce** : relire hors ligne, et ouvrir vite.
      */
     internal val content = ContentCache(File(cacheDirectory, "memobook-content"))
+
+    /**
+     * La file de départ des vocaux. Elle vit **ici** et non dans un écran : un
+     * souvenir raconté dans un tunnel doit repartir tout seul au retour du
+     * réseau, quel que soit l'écran affiché à ce moment-là — et même si on
+     * n'est jamais revenu sur l'accueil depuis. Sur Android, même app fermée
+     * ([RecordingOutboxWorker]).
+     *
+     * Tout ce qu'on dit part par la file, et la file parle à la conversation
+     * (`POST /v1/trips/:id/chat`) : le vocal de l'accueil est un tour comme un
+     * autre, avec l'identifiant de sa bulle. Le serveur relit la durée dans le
+     * fichier et la décompte du crédit du jour où le tour **arrive** ; un refus
+     * faute de crédit le garde sur le disque jusqu'à la recharge (03/10/2026).
+     *
+     * Les voyages créés hors ligne passent par elle aussi, et **avant** ce
+     * qu'on y raconte : la création se rejoue sur l'identifiant que l'app a
+     * tiré (`POST /v1/trips`), celui que les tours en attente portent.
+     *
+     * Les deux files dorment dans [filesDirectory] : ce qui n'existe nulle part
+     * ailleurs ne va jamais dans un cache.
+     */
+    val outbox: RecordingOutbox = RecordingOutbox(
+        store = PendingRecordingStore.inLibrary(filesDirectory),
+        trips = PendingTripStore.inLibrary(filesDirectory),
+        connectivity = connectivity,
+        send = { turn, tripId -> ChatTransport.sendNow(turn, tripId, api) },
+        createTrip = { draft -> api.createTrip(draft) },
+        scope = scope,
+        onPending = scheduleBackgroundFlush,
+    ).also {
+        // Au démarrage, et pas à l'ouverture d'un écran : c'est ce qui permet
+        // de savoir qu'on est hors ligne **avant** de dessiner l'accueil, et de
+        // repartir avec ce qu'un lancement précédent avait laissé en file.
+        it.start()
+    }
 
     /** Le bac à sable : le jeu d'essai, aucun jeton, aucun appel qui aboutisse. */
     val isPreviewingSignedIn: Boolean get() = switches.previewSignedIn
@@ -69,12 +112,18 @@ class AppDependencies(
      * déconnexion : les voyages de quelqu'un ne doivent pas apparaître, même
      * une demi-seconde, devant la personne suivante.
      *
-     * **Les vocaux en attente, eux, restent** : si le même compte revient, ils
-     * repartent ; si c'en est un autre, le serveur les refuse et la file le dit.
+     * **Les vocaux en attente, eux, restent.** Ce sont des souvenirs que
+     * personne n'a encore lus : si le même compte revient, ils repartent ; si
+     * c'en est un autre, le serveur les refuse et la file le dit. Les jeter
+     * serait le seul geste irréversible du lot.
      */
     suspend fun forgetAccountContent() {
         content.clearAll()
         accountForgetters.forEach { it() }
+        // Les voyages créés hors ligne restent sur le disque, comme les
+        // vocaux : ils ne se montrent plus, et ne partent plus, tant que leur
+        // compte n'est pas revenu.
+        outbox.setAccount(null)
     }
 
     /**
@@ -111,6 +160,51 @@ class AppDependencies(
     suspend fun rememberAccount(account: Account) {
         content.write(ContentCache.Slot.Account, account)
         accountRememberers.forEach { it(account) }
+        // Ses voyages créés hors ligne réapparaissent, et partent s'il y a du
+        // réseau.
+        outbox.setAccount(account.id)
+    }
+
+    // MARK: - Ce que `RootView` dit à la file
+
+    /**
+     * **Le retour au premier plan** — à appeler par `RootView` à chaque
+     * `ON_RESUME`, comme le `.onChange(of: scenePhase)` d'iOS : « ce qui n'a
+     * pas eu le temps de partir repart au retour dans l'app ». Le moniteur
+     * réseau ne dit rien quand c'est le serveur, et non le réseau, qui
+     * manquait. Sans effet quand la file est vide.
+     */
+    suspend fun flushOutboxOnForeground() {
+        outbox.flush()
+    }
+
+    /**
+     * **L'illimité libère la file** (03/10/2026) — à appeler par `RootView`
+     * quand la session passe en illimité ou que le serveur le confirme : un
+     * achat, une restauration, un abonnement pris sur un autre appareil et que
+     * l'accueil vient d'apprendre. Ce qui attendait le crédit de demain ou
+     * l'illimité repart tout de suite, au lieu d'attendre minuit. Une seconde
+     * fois quand **le serveur** le confirme : juste après l'achat, il peut ne
+     * pas le savoir encore, et refuser de nouveau. La session ne connaît pas la
+     * file, ni la file la session : c'est dans `RootView`, où vivent les deux,
+     * qu'on les relie.
+     */
+    suspend fun releaseCreditHolds() {
+        outbox.releaseCreditHolds()
+    }
+
+    /**
+     * Le vidage que [RecordingOutboxWorker] demande, app fermée. Un processus
+     * que WorkManager vient de lancer n'a pas encore rouvert la session : le
+     * dernier compte gardé ([rememberAccount]) rend ses voyages créés hors
+     * ligne à la file, pour qu'ils partent eux aussi.
+     *
+     * @return il reste quelque chose qui attend le réseau — le travail repassera.
+     */
+    internal suspend fun flushOutboxInBackground(): Boolean {
+        if (outbox.accountId == null) content.read<Account>(ContentCache.Slot.Account)?.let { outbox.setAccount(it.id) }
+        outbox.flush()
+        return outbox.pending.value > 0 || outbox.localTrips.value.isNotEmpty()
     }
 
     /**

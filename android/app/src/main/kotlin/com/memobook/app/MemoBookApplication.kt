@@ -9,9 +9,11 @@ import coil3.disk.directory
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.memobook.feature.AppDependencies
+import com.memobook.feature.AppDependenciesHost
 import com.memobook.feature.LaunchSwitches
 import com.memobook.feature.OnboardingStorage
 import com.memobook.feature.PreviewSupport
+import com.memobook.feature.RecordingOutboxWorker
 import com.memobook.feature.SharedPreferencesAppSettings
 import com.memobook.networking.AndroidConnectivity
 import com.memobook.networking.AndroidLogSink
@@ -33,8 +35,17 @@ import okhttp3.OkHttpClient
  * lancement (`previewSignedIn`…) arrivent avec son intention, et le bac à sable
  * reçoit un autre client que l'app — voir [dependencies].
  */
-class MemoBookApplication : Application(), SingletonImageLoader.Factory {
+class MemoBookApplication : Application(), SingletonImageLoader.Factory, AppDependenciesHost {
     private var built: AppDependencies? = null
+
+    /**
+     * Pour le vidage de la file en arrière-plan (`RecordingOutboxWorker`). Un
+     * processus que WorkManager relance, sans activité, assemble l'app livrée
+     * — sans interrupteur de lancement : en Debug, une activité ouverte
+     * ensuite dans ce même processus garde ces dépendances-là.
+     */
+    override val dependencies: AppDependencies
+        get() = built ?: dependencies(LaunchSwitches.None)
 
     /** La portée de l'app entière : ce qui y est lancé survit aux écrans. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -82,6 +93,7 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory {
             cacheDirectory = cacheDir,
             filesDirectory = filesDir,
             scope = scope,
+            scheduleBackgroundFlush = RecordingOutboxWorker.scheduler(this),
         )
     }
 
