@@ -49,6 +49,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun receiveLink(intent: Intent?) {
+        // Une notification touchée : son lien attend la session dans
+        // `PushNotifications`, l'accusé d'ouverture part au serveur.
+        if ((application as MemoBookApplication).push.didOpen(intent)) return
         intent?.dataString?.let(incomingLinks::receive)
     }
 }

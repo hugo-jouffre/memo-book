@@ -15,6 +15,7 @@ import com.memobook.feature.OnboardingStorage
 import com.memobook.feature.PreviewSupport
 import com.memobook.feature.RecordingOutboxWorker
 import com.memobook.feature.SharedPreferencesAppSettings
+import com.memobook.feature.notifications.PushNotifications
 import com.memobook.payments.PlayBillingSubscriptionStore
 import com.memobook.payments.StripeCustomerSheetPresenter
 import com.memobook.payments.StripePaymentSheetPresenter
@@ -56,6 +57,14 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory, AppDepe
 
     /** La portée de l'app entière : ce qui y est lancé survit aux écrans. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /**
+     * Les notifications, construites tôt : le toucher d'une notification arrive
+     * avec l'intention qui ouvre l'activité, avant `RootView`.
+     */
+    val push by lazy {
+        PushNotifications.create(this, SharedPreferencesAppSettings(this), BuildConfig.DEBUG, BuildConfig.VERSION_NAME, scope)
+    }
 
     /** Un seul client HTTP pour l'API et les images : un seul pool de connexions. */
     private val httpClient by lazy { OkHttpClient() }
@@ -110,6 +119,7 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory, AppDepe
             subscriptions = if (switches.previewSignedIn) StubSubscriptionStore() else PlayBillingSubscriptionStore(this, scope),
             paymentMethods = if (switches.previewSignedIn) StubPaymentMethodsPresenter() else StripeCustomerSheetPresenter(),
             productionApiBaseUrl = runCatching { URI(BuildConfig.PRODUCTION_API_BASE_URL) }.getOrNull(),
+            push = if (switches.previewSignedIn) null else push,
         )
     }
 

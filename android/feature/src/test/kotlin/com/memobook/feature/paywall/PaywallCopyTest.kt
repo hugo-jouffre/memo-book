@@ -5,6 +5,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.memobook.payments.PurchaseOutcome
+import com.memobook.payments.RestoreOutcome
 
 /**
  * Le pied de l'offre et la barre des stories. Le premier cas est porté de

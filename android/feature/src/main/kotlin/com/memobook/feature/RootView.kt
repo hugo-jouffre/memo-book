@@ -61,12 +61,15 @@ import com.memobook.feature.onboarding.LastQuestionsEntry
 import com.memobook.feature.onboarding.LastQuestionsModel
 import com.memobook.feature.onboarding.LaunchView
 import com.memobook.feature.order.OrderEntry
+import com.memobook.feature.notifications.LocalPushNotifications
 import com.memobook.feature.paywall.LocalSubscriptionPurchase
 import com.memobook.feature.paywall.PaywallEntry
 import com.memobook.feature.profile.PasswordResetSheetEntry
 import com.memobook.feature.profile.ProfileEntry
 import com.memobook.feature.recording.RecordingHandoff
+import com.memobook.feature.support.LocalSupportModel
 import com.memobook.feature.support.SupportEntry
+import com.memobook.feature.support.rememberSessionSupportModel
 import com.memobook.feature.trip.TripHomeEntry
 import com.memobook.feature.tripcreation.TripCreationEntry
 import com.memobook.feature.tripsettings.BookCustomisationEntry
@@ -160,6 +163,7 @@ fun RootView(dependencies: AppDependencies, showsDeveloperDetails: Boolean, inco
         LocalSubscriptionSession provides state.subscription,
         LocalAppSettings provides dependencies.settings,
         LocalLaunchOverlayIsVisible provides state.isLaunching,
+        LocalPushNotifications provides dependencies.push,
         LocalHomeReloadRequest provides state.homeReloadRequest,
         // Les voyages créés hors ligne que le serveur n'a pas encore reçus :
         // leurs réglages, leur aperçu et leur commande pâlissent (T239).
@@ -291,6 +295,13 @@ private fun SignedInStack(state: RootState, account: Account) {
     LaunchedEffect(account.id) {
         if (!dependencies.isPreviewingSignedIn) dependencies.deliverUnfinishedTransactions()
     }
+    // Le jeton des notifications, au serveur de **cette** session — sans poser
+    // la question de l'autorisation, qui attend l'étape « Notifications » de la
+    // création d'un voyage.
+    LaunchedEffect(account.id) { dependencies.push?.connect(dependencies.api) }
+    // Une notification touchée app fermée attendait l'accueil.
+    val pendingNotification = dependencies.push?.pendingLink
+    LaunchedEffect(pendingNotification) { state.openPendingNotification() }
     val purchase = remember(account.id) { dependencies.subscriptionPurchase(account.id) }
 
     CompositionLocalProvider(
@@ -298,6 +309,9 @@ private fun SignedInStack(state: RootState, account: Account) {
         LocalTravellerFirstName provides account.firstName,
         LocalSubscriptionPurchase provides purchase,
     ) {
+      // Le support **de la session**, à portée du paywall : « Besoin d'aide ? »
+      // l'ouvre par-dessus l'offre au lieu de la refermer (Hugo, 16/09/2026).
+      CompositionLocalProvider(LocalSupportModel provides rememberSessionSupportModel(dependencies)) {
         val back: () -> Unit = { state.path.removeLastOrNull() }
         NavDisplay(
             backStack = listOf<Any>(HomeRoot) + state.path,
@@ -327,6 +341,7 @@ private fun SignedInStack(state: RootState, account: Account) {
                 onDismiss = { state.showsNotificationPaywall = false },
             )
         }
+      }
     }
 }
 
@@ -550,6 +565,9 @@ internal class RootState(val dependencies: AppDependencies) {
             runCatching { dependencies.api.signOut() }
             dependencies.forgetAccountContent()
             subscription.reset()
+            // Le serveur a oublié le jeton avec la session ; l'app oublie la
+            // session à qui elle l'avait remis.
+            dependencies.push?.disconnect()
             path.clear()
             stage = Stage.SignedOut
         }
@@ -562,6 +580,7 @@ internal class RootState(val dependencies: AppDependencies) {
         if (dependencies.api.hasStoredSession()) return
         dependencies.forgetAccountContent()
         subscription.reset()
+        dependencies.push?.disconnect()
         path.clear()
         stage = Stage.SignedOut
     }
@@ -594,6 +613,18 @@ internal class RootState(val dependencies: AppDependencies) {
         pendingResetToken = token
         if (signedOutPath.isEmpty()) signedOutPath.add(SignedOutRoute.Email)
         return true
+    }
+
+    /**
+     * Une notification touchée : son lien attend dans [PushNotifications.pendingLink]
+     * que l'app soit entrée. Hors session, il attend l'entrée.
+     */
+    fun openPendingNotification() {
+        if (stage !is Stage.SignedIn) return
+        val push = dependencies.push ?: return
+        val link = push.pendingLink ?: return
+        push.pendingLink = null
+        open(link)
     }
 
     /**
@@ -835,6 +866,7 @@ internal class RootState(val dependencies: AppDependencies) {
                 is HomeRoute.BookPreview -> route.memoId
                 is HomeRoute.Order -> route.memoId
                 is HomeRoute.BookCustomisation -> route.tripId
+                is HomeRoute.Covers -> route.tripId
                 else -> null
             }
         }

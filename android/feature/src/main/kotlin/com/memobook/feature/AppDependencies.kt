@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.memobook.feature.notifications.PushNotifications
 import com.memobook.feature.paywall.SubscriptionPurchase
 import com.memobook.payments.TransactionRefused
 import com.memobook.payments.TransactionDelivery
@@ -102,6 +103,12 @@ class AppDependencies(
      * part sur le téléphone de l'invité. `null` dans un test.
      */
     val productionApiBaseUrl: URI? = null,
+    /**
+     * Les notifications de l'app — le jeton, l'autorisation, le toucher.
+     * **Jamais dans le bac à sable** : il n'a pas de session à qui remettre un
+     * jeton. `null` dans un test ou un aperçu.
+     */
+    val push: PushNotifications? = null,
 ) {
     /**
      * Ce que l'app garde du serveur sur l'appareil — voir [ContentCache].
