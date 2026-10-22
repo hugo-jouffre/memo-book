@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Le nom sous l'icône. Le reste de la copie vit dans le code, dans les
+         objets `…Copy`, comme sur iOS : l'app est en français seulement. -->
+    <string name="app_name" translatable="false">MemoBook</string>
+</resources>

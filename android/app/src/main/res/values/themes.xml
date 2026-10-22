@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Le crème dès la première image, avant que Compose dessine : pas
+         d'éclair blanc au lancement. Pas de thème sombre (voir Tokens.kt). -->
+    <style name="Theme.MemoBook" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/memobook_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

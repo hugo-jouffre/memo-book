@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Seules les couleurs que le système dessine avant Compose : le fond du
+         lancement et celui de l'icône. Les autres sont dans `Tokens.kt`. -->
+    <color name="memobook_background">#FCF2E9</color>
+    <color name="memobook_action">#28654B</color>
+</resources>

@@ -4,20 +4,21 @@
 
 🇬🇧 **MemoBook** lets you capture and preserve your memories, simply by recording your voice. Powered by artificial intelligence, your spoken stories are transcribed, enriched, and transformed into a personalized book, ready to be shared and printed!
 
-Ce repo contient le code de l'**app iOS native MemoBook**, développée en Swift avec l'aide de Claude Code, ainsi que le back-end et le template du carnet.
+Ce repo contient le code des **apps natives MemoBook** — iOS en Swift, Android en Kotlin —, développées avec l'aide de Claude Code, ainsi que le back-end et le template du carnet.
 
 ## Structure du dépôt
 
 | Dossier | Rôle |
 |---|---|
 | `ios/` | L'app iOS (SwiftUI). [Documentation](ios/README.md) |
+| `android/` | L'app Android (Jetpack Compose), jumelle de l'app iOS. [Documentation](android/README.md) ; où en est le portage : [`docs/android.md`](docs/android.md) |
 | `backend/` | L'API et le pipeline `transcrire → rédiger → relire → mettre en page → imprimer`. [Documentation](backend/README.md) |
 | `MemoBook Generator/templates/travel-journal/` | Le template PDF et les schémas qui décrivent le format du carnet. **Source de vérité** : le back-end les lit, il ne les duplique pas |
 | `agents/` | Configuration des agents IA et référence du design system. **Source de vérité** : `agent-transcription.md` est chargé tel quel comme prompt système de la rédaction, `agent-conversation.md` comme celui de MEMO dans le chat. Leur historique et leurs décisions : `docs/redaction.md` et `docs/conversation.md` |
 | `MemoBook Generator/` | Le générateur de carnets : l'outil de composition à la main, en attendant l'app. Vocaux WhatsApp transcrits, récit découpé en étapes, JSON et PDF générés. [Documentation](MemoBook%20Generator/README.md) |
 | `docs/` | Documentation transverse : [`modeles-ia.md`](docs/modeles-ia.md) pour quel modèle fait quoi et ce que ça coûte, [`ui-development.md`](docs/ui-development.md) pour les règles des écrans et ce qui reste à régler, [`reglages-utilisateur.md`](docs/reglages-utilisateur.md) pour ce que le voyageur peut régler dans son carnet et qui l'applique, [`ratio-texte-photo.md`](docs/ratio-texte-photo.md) pour la part de surface qu'occupent les photos — le calcul, les layouts de chaque palier et les cas limites, [`notifications.md`](docs/notifications.md) pour les notifications — ce qui part, à qui, quel jour, [`vocabulaire.md`](docs/vocabulaire.md) pour les mots — écran, feuille, parcours, fonctionnalité — et ce qu'ils désignent dans le code |
 
-Clara et Paul n'ont rien à installer : tout se lit sur GitHub, et l'app se teste via TestFlight.
+Clara et Paul n'ont rien à installer : tout se lit sur GitHub, et l'app se teste via TestFlight — et, à la fin du portage, via la piste de test interne du Play Store.
 
 [![Architecture diagram of hugo-jouffre/memo-book](https://gitdiagram.com/hugo-jouffre/memo-book/diagram.png)](https://gitdiagram.com/hugo-jouffre/memo-book?utm_source=readme&utm_medium=picture)
 
@@ -26,11 +27,11 @@ Clara et Paul n'ont rien à installer : tout se lit sur GitHub, et l'app se test
 | Rôle | Personne | Responsabilité |
 |---|---|---|
 | Lead produit | Clara | Specs, design, tenue du board de tickets |
-| Lead technique | Hugo | Pilote les sessions Claude Code, build et publication TestFlight |
-| QA | Paul | Tests et remontée de bugs via TestFlight |
+| Lead technique | Hugo | Pilote les sessions Claude Code, build et publication TestFlight et Play Console |
+| QA | Paul | Tests et remontée de bugs via TestFlight et le test interne du Play Store |
 | Développement | Claude | Code, documentation technique, audits |
 
-Le repo GitHub est la source de vérité du projet. Clara et Paul n'ont pas besoin d'Xcode : ils lisent le code sur GitHub et testent l'app via TestFlight sur iPhone. Les builds et l'envoi TestFlight passent par le Mac de Hugo.
+Le repo GitHub est la source de vérité du projet. Clara et Paul n'ont besoin ni d'Xcode ni d'Android Studio : ils lisent le code sur GitHub et testent l'app via TestFlight sur iPhone. Les builds et l'envoi TestFlight passent par le Mac de Hugo.
 
 ## Stack technique
 
@@ -41,13 +42,14 @@ Le repo GitHub est la source de vérité du projet. Clara et Paul n'ont pas beso
 - **Cible** : iOS 17 minimum
 - **Xcode** : **26.6**, version de référence partagée par toute l'équipe. En changer se décide ensemble : une autre toolchain modifie les règles de concurrence stricte et casse le build d'une machine à l'autre
 - **Projet Xcode** : généré par **XcodeGen** depuis `ios/project.yml`. Le `.xcodeproj` n'est pas versionné — pas de conflit Git sur le pbxproj, et la structure du projet reste lisible en revue de code
+- **Android** : Kotlin et Jetpack Compose, Android 8.0+ (API 26), les mêmes modules et les mêmes noms de fichiers que l'app iOS — conventions dans [`android/CLAUDE.md`](android/CLAUDE.md). AGP, Kotlin et Gradle sont figés dans `android/gradle/` : on en change ensemble, comme d'Xcode
 - **Backend** : ✅ **tranché — Node/TypeScript (Fastify) + PostgreSQL**, plutôt que Supabase ou Firebase. Le pipeline enchaîne des tâches longues (transcription d'un vocal, appel LLM, génération PDF) qui demandent une vraie file d'attente avec reprise sur échec ; c'est ce qu'un BaaS rend le plus pénible. La file est adossée à Postgres (pg-boss) : rien de plus à opérer
 - **Transcription** : API OpenAI (`gpt-4o-transcribe`), langue forcée en français. Hybride avec le framework Speech d'Apple encore possible plus tard
 - **Rédaction** : API Anthropic (`claude-opus-5`), pilotée par `agents/agent-transcription.md`. Passe distincte de la mise en page : le texte est écrit souvenir par souvenir et relu par l'utilisateur avant d'entrer dans le carnet
 - **Conversation** : API Anthropic (`claude-sonnet-5`), pilotée par `agents/agent-conversation.md`. C'est MEMO, dans le chat : il écoute, reformule, pose **une** question et classe ce qu'on lui dit. Un moteur de règles répond à sa place quand il se tait — le fil n'est jamais muet ([`docs/conversation.md`](docs/conversation.md))
 - **Génération de PDF** : APITemplate, sur le template de `MemoBook Generator/templates/travel-journal/`
-- **Paiements** : StoreKit 2 pour l'abonnement mensuel (4,99 €, récit illimité ; sans lui, chaque voyage raconte 5 minutes par jour) ; Stripe pour le carnet imprimé et la cagnotte — voir [`docs/paiements.md`](docs/paiements.md)
-- **CI** : GitHub Actions — typecheck, lint et tests du back-end à chaque PR (`.github/workflows/ci-backend.yml`), compilation et tests de l'app iOS sur un runner macOS (`.github/workflows/ci-ios.yml`). La CI iOS compile en Debug seulement : une archive Release peut casser sur du code qu'elle n'a jamais vu
+- **Paiements** : StoreKit 2 pour l'abonnement mensuel (4,99 €, récit illimité ; sans lui, chaque voyage raconte 5 minutes par jour) ; Stripe pour le carnet imprimé et la cagnotte — voir [`docs/paiements.md`](docs/paiements.md). Sur Android, Google Play Billing vendra le même abonnement (lot B4 de [`docs/android.md`](docs/android.md))
+- **CI** : GitHub Actions — typecheck, lint et tests du back-end à chaque PR (`.github/workflows/ci-backend.yml`), compilation et tests de l'app iOS sur un runner macOS (`.github/workflows/ci-ios.yml`), et de l'app Android sur Linux (`.github/workflows/ci-android.yml`). La CI iOS compile en Debug seulement : une archive Release peut casser sur du code qu'elle n'a jamais vu. La CI Android compile les deux, pour cette raison
 
 Les clés API (OpenAI, APITemplate, etc.) ne vivent **jamais** dans l'app ni dans ce repo — uniquement côté serveur.
 
@@ -90,6 +92,13 @@ avec MEMO, réglages et personnalisations du carnet, couvertures, paywall et cr�
 profil, commande et cagnotte. Ce qui **attend encore une réponse** — écran par écran — est
 dans [`docs/ui-development.md`](docs/ui-development.md).
 
+### Android
+
+Le portage a commencé le 21/10/2026 : l'app Android fera tout ce que fait
+l'app iOS, sur le même serveur, la même base et les mêmes comptes. Dix phases
+côté app (A0 à A9), six lots côté serveur (B1 à B6), et la liste de parité
+écran par écran : [`docs/android.md`](docs/android.md).
+
 ## Workflow Git
 
 - Le code vit sur `main`, branche **protégée**
@@ -101,7 +110,7 @@ dans [`docs/ui-development.md`](docs/ui-development.md).
 
 Les données vocales sont des données personnelles (RGPD) :
 - Consentement micro explicite, demandé au bon moment (pas pendant l'onboarding)
-- Suppression de compte obligatoire (guideline Apple 5.1.1)
+- Suppression de compte obligatoire (guideline Apple 5.1.1) ; Google Play exige en plus une page web pour la demander (lot B6 de [`docs/android.md`](docs/android.md))
 - Clés API et secrets jamais commités dans ce repo
 - Une revue sécurité/RGPD par un développeur externe est recommandée avant le lancement
 

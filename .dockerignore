@@ -1,5 +1,5 @@
 # Le contexte de build est la racine du dépôt — voir `backend/Dockerfile`.
-# Ce fichier est donc ce qui empêche d'y embarquer l'app iOS et les secrets.
+# Ce fichier est donc ce qui empêche d'y embarquer les apps et les secrets.
 
 # ⚠️ Les secrets d'abord. Un `.env` copié dans une image y reste, en clair,
 # lisible par quiconque tire l'image. La configuration de production se pose
@@ -15,12 +15,13 @@
 **/.build
 **/*.log
 
-# L'app iOS n'a rien à faire dans une image de serveur. Pas de guillemets
+# Les apps iOS et Android n'ont rien à faire dans une image de serveur. Pas de guillemets
 # autour des noms à espace : `.dockerignore` les prendrait au pied de la
 # lettre. Le reste de « MemoBook Generator » est exclu pièce par pièce plutôt
 # qu'en bloc : `templates/` doit rester inclus, et Docker ne sait pas
 # ré-inclure un chemin dont un dossier parent est déjà exclu.
 ios
+android
 MemoBook Generator/atelier.sh
 MemoBook Generator/transcribe-whatsapp.sh
 MemoBook Generator/server.mjs

@@ -1,0 +1,57 @@
+name: CI Android
+
+# Le pendant de `ci-ios.yml`. Gradle et ses versions sont versionnés dans
+# `android/` (wrapper, catalogue) : la CI compile exactement ce qu'une machine
+# fraîchement clonée compilerait.
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - '.github/workflows/ci-android.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/ci-android.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Un secret réel commité est une fuite : il ne se rattrape pas en le
+      # retirant, seulement en le révoquant. Le vérifier coûte une seconde.
+      - name: Aucun fichier de secrets dans Git
+        run: |
+          LEAKS=$(git ls-files android | grep -E '(^|/)(secrets\.properties|local\.properties|keystore\.properties|google-services\.json)$|\.(jks|keystore)$' || true)
+          if [ -n "$LEAKS" ]; then
+            echo "::error::Fichiers locaux versionnés : $LEAKS. Ils doivent rester hors de Git (voir android/.gitignore) ; seul secrets.example.properties se commite."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Cache de Gradle, et vérification du wrapper : un gradle-wrapper.jar
+      # modifié ne s'exécute pas.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Debug **et** Release : R8 ne minifie que le Release, et une règle
+      # manquante n'y casse qu'à l'exécution du build. La CI iOS ne compile que
+      # le Debug, et l'archive a cassé sur du code qu'elle n'avait jamais vu.
+      - name: Compiler, tester, relire
+        working-directory: android
+        run: ./gradlew assembleDebug assembleRelease testDebugUnitTest :core:test lintDebug
+
+      - name: Rapports de lint et de tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapports-android
+          path: |
+            android/**/build/reports/
+            android/**/build/test-results/

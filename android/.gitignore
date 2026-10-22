@@ -1,0 +1,22 @@
+# Gradle et Android Studio
+.gradle/
+.kotlin/
+build/
+captures/
+.idea/
+*.iml
+.externalNativeBuild/
+.cxx/
+
+# Propre à chaque machine : le chemin du SDK, les secrets, les clés de signature.
+# Seul le modèle documenté des secrets se commite : secrets.example.properties.
+local.properties
+secrets.properties
+keystore.properties
+*.jks
+*.keystore
+google-services.json
+
+# Sorties de build
+*.apk
+*.aab

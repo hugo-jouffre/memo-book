@@ -3,3 +3,11 @@ backend/test/visual/__goldens__/**/*.png binary -diff -merge
 # Les polices embarquées sont générées, pas éditées.
 "MemoBook Generator/templates/travel-journal/assets/fonts/*.woff2" binary -diff -merge
 "MemoBook Generator/templates/travel-journal/fonts.css" -diff linguist-generated=true
+# Android : le script du wrapper Gradle doit garder ses fins de ligne Unix, sinon
+# `./gradlew` ne se lance plus ; son jar est un binaire.
+android/gradlew text eol=lf
+android/gradlew.bat text eol=crlf
+android/gradle/wrapper/gradle-wrapper.jar binary
+# Les polices de l'app Android sont les copies de celles d'iOS, générées par
+# `ios/Tools/make-brand-fonts.py`.
+android/design/src/main/res/font/*.ttf binary -diff -merge
