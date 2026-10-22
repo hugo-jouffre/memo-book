@@ -1,0 +1,109 @@
+name: Play — piste interne
+
+# L'envoi d'un build Android sur la piste de test **interne** de Google Play,
+# à la main (onglet Actions ▸ « Play — piste interne » ▸ Run workflow). Le
+# pendant de l'envoi TestFlight d'iOS. Clara et Paul installent ensuite depuis
+# le Play Store, sans Android Studio (docs/android-reprise.md, tâche T0b).
+#
+# Cinq secrets du dépôt, qu'Hugo seul peut poser — aucune clé n'entre dans Git :
+#   ANDROID_UPLOAD_KEYSTORE          la clé d'importation (.jks), en base64
+#   ANDROID_UPLOAD_KEYSTORE_PASSWORD
+#   ANDROID_UPLOAD_KEY_ALIAS
+#   ANDROID_UPLOAD_KEY_PASSWORD
+#   PLAY_SERVICE_ACCOUNT_JSON        le compte de service de la Play Developer API
+# Il en manque un : le workflow s'arrête en le nommant, avant de compiler.
+#
+# ⚠️ Google n'accepte d'envoi par l'API qu'une fois **un premier AAB envoyé à
+# la main** depuis la Play Console (Tester ▸ Tests internes ▸ Créer une
+# version). L'artefact `memobook-release-aab` de ce workflow sert à ce premier
+# envoi : il est gardé même quand l'envoi échoue.
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "Ce que ce build apporte (visible des testeurs)"
+        required: false
+        default: ""
+      status:
+        # « draft » tant que la fiche de l'app n'est pas complète dans la Play
+        # Console : Google refuse alors toute autre version (« Only releases
+        # with status draft may be created on draft app »). Le brouillon se
+        # publie ensuite à la main, depuis la console.
+        description: "completed, ou draft tant que la fiche n'est pas complète"
+        required: true
+        default: completed
+        type: choice
+        options: [completed, draft]
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier les secrets
+        env:
+          ANDROID_UPLOAD_KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE }}
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          missing=""
+          for name in ANDROID_UPLOAD_KEYSTORE ANDROID_UPLOAD_KEYSTORE_PASSWORD ANDROID_UPLOAD_KEY_ALIAS ANDROID_UPLOAD_KEY_PASSWORD PLAY_SERVICE_ACCOUNT_JSON; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Secrets manquants :$missing. Voir l'en-tête de .github/workflows/play-internal.yml."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Poser la clé d'importation
+        env:
+          ANDROID_UPLOAD_KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE }}
+        run: echo "$ANDROID_UPLOAD_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+
+      # Le numéro de version croît à chaque envoi : c'est celui du workflow,
+      # décalé pour passer devant les envois faits à la main.
+      - name: Compiler l'AAB signé
+        working-directory: android
+        env:
+          ANDROID_UPLOAD_KEYSTORE_PATH: ${{ runner.temp }}/upload.jks
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: ./gradlew :app:bundleRelease -Pmemobook.versionCode=$((100 + GITHUB_RUN_NUMBER))
+
+      # Par une variable, jamais interpolées dans le script : un texte saisi
+      # n'a pas à pouvoir s'exécuter.
+      - name: Notes de version
+        env:
+          NOTES: ${{ github.event.inputs.notes }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/notes"
+          printf '%s' "$NOTES" > "$RUNNER_TEMP/notes/whatsnew-fr-FR"
+
+      - name: Garder l'AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: memobook-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Envoyer sur la piste interne
+        uses: r0adkll/upload-google-play@v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.memobook.app
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: ${{ github.event.inputs.status }}
+          whatsNewDirectory: ${{ runner.temp }}/notes
