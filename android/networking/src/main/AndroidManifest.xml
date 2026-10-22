@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- `AndroidConnectivity` lit l'état du réseau : la permission voyage avec le
+     module, et la fusion des manifestes la pose dans l'app. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+</manifest>
