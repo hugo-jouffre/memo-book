@@ -82,6 +82,10 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory {
             cacheDirectory = cacheDir,
             filesDirectory = filesDir,
             scope = scope,
+            // Vides dans `gradle.properties` tant que leurs clients n'existent
+            // pas : le bouton du fournisseur ne s'affiche pas.
+            googleWebClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID.ifBlank { null },
+            appleServicesId = BuildConfig.APPLE_SERVICES_ID.ifBlank { null },
         )
     }
 
