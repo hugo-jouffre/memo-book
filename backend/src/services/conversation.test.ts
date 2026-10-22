@@ -51,7 +51,7 @@ function turn(
       state: EMPTY_CONVERSATION_STATE,
       tripContext: null,
     },
-    traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: false },
+    traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: false, platform: "ios" },
     step: null,
     history: [],
     message: {
@@ -162,7 +162,7 @@ describe("le moteur de règles", () => {
   it("répond à un abonné qu'il raconte sans limite, sans lui vendre l'offre", async () => {
     const reply = await memo.reply(
       turn("Il me reste combien de temps aujourd'hui ?", {
-        traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: true },
+        traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: true, platform: "ios" },
         allows: { roseEpineGraine: false, callsToAction: ["open_trip_settings"] },
       }),
     );

@@ -30,7 +30,11 @@ export const CALL_TO_ACTION_KINDS = [
   "open_preview",
   /** Ouvrir le sélecteur de photos. */
   "import_photos",
-  /** Ouvrir la page de MemoBook dans les Réglages d'iOS (accès aux photos). */
+  /**
+   * Ouvrir la page de MemoBook dans les réglages du téléphone (accès aux
+   * photos) : les Réglages de l'iPhone, les Paramètres d'Android — c'est l'app
+   * qui sait lesquels. Le libellé, lui, ne nomme ni l'un ni l'autre (B5).
+   */
   "open_photo_settings",
 ] as const;
 

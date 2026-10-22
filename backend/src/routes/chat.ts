@@ -5,6 +5,7 @@ import type { AppContext } from "../context.js";
 import { JOB_NAMES, type ConverseJob, type TranscribeJob } from "../jobs/index.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
+import { appPlatformOf, platformPayload } from "../services/appPlatform.js";
 import { publicApiBaseUrl } from "../services/avatars.js";
 import {
   chargeDailyCredit,
@@ -438,6 +439,9 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     const accountId = accountIdOf(request);
     const memo = await loadChatMemo(context, request, memoId);
     const now = new Date();
+    // Le téléphone du tour, pour que MEMO parle de ses Réglages ou de ses
+    // Paramètres — retenu sur le tour, que le job relit (`appPlatform.ts`).
+    const platform = platformPayload(appPlatformOf(request));
     const showsAuthors = memo.members.length > 0;
     // Le voyageur raconte le contexte de son voyage : ce qu'il dit ne devient
     // pas un souvenir — `tripContext.ts`. Il se décompte pourtant du crédit du
@@ -565,6 +569,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
               entryId: validatedEntryId ?? revisedEntryId ?? body.entryId ?? null,
               disposition: command ? "command" : null,
               stepId: body.stepId ?? null,
+              ...(platform.platform ? { payload: platform } : {}),
             },
           });
           ids.push(message.id);
@@ -725,6 +730,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
                   durationSeconds: duration,
                 },
                 ...(revisedEntryId ? { revises: revisedEntryId, topic: ORAL_CORRECTION_TOPIC } : {}),
+                ...platform,
               },
             },
           });
@@ -789,10 +795,11 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         if (!first) throw new Error("Aucun souvenir créé.");
 
         const payload: Prisma.InputJsonObject = isAudio
-          ? { levels }
+          ? { levels, ...platform }
           : {
               entryIds: entries.map((entry) => entry.id),
               ...(illustratedEntryId ? { forEntryId: illustratedEntryId } : {}),
+              ...platform,
             };
 
         const message = await tx.chatMessage.create({

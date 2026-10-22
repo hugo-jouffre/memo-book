@@ -53,6 +53,7 @@ type OrderBody = {
     customerId?: string | null;
     ephemeralKeySecret?: string | null;
     applePayMerchantId?: string | null;
+    googlePayEnabled?: boolean;
   } | null;
 };
 
@@ -450,6 +451,19 @@ describe("les cartes du compte", () => {
     const order = await placeOrder();
 
     expect(order.payment?.applePayMerchantId ?? null).toBeNull();
+  });
+
+  it("ne proposent Google Pay que quand le serveur l'allume (B5)", async () => {
+    // Faux par défaut : sans Google Pay activé chez Stripe et l'accès de
+    // production accordé par Google, le bouton échouerait au paiement.
+    expect((await placeOrder()).payment?.googlePayEnabled).toBe(false);
+
+    harness.context.env.GOOGLE_PAY_ENABLED = true;
+    try {
+      expect((await placeOrder()).payment?.googlePayEnabled).toBe(true);
+    } finally {
+      harness.context.env.GOOGLE_PAY_ENABLED = false;
+    }
   });
 
   it("restent hors de la feuille d'une app qui ne dit pas sa version de SDK", async () => {

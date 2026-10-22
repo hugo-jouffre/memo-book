@@ -115,5 +115,8 @@ export async function paymentTicket(
     ephemeralKeySecret,
     // Apple Pay, quand ce compte Stripe en a le certificat — voir `env.ts`.
     applePayMerchantId: context.env.APPLE_PAY_MERCHANT_ID || null,
+    // Google Pay, quand ce compte Stripe y est prêt — voir `env.ts` (B5). Lu
+    // par l'app Android seulement ; iOS ignore la clé.
+    googlePayEnabled: context.env.GOOGLE_PAY_ENABLED,
   };
 }

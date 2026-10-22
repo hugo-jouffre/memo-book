@@ -242,6 +242,24 @@ const schema = z.object({
   APPLE_PAY_MERCHANT_ID: z.string().default(""),
 
   /**
+   * **Google Pay dans la feuille Stripe d'Android** (lot B5, 22/10/2026) — le
+   * jumeau d'`APPLE_PAY_MERCHANT_ID`, servi dans chaque ticket de paiement
+   * (`googlePayEnabled`). **Faux par défaut : la feuille montre les cartes
+   * seules.**
+   *
+   * À passer à `true` seulement quand Google Pay est activé sur ce compte
+   * Stripe (tableau de bord ▸ Paramètres ▸ Moyens de paiement) **et**, pour la
+   * production, que la Google Pay & Wallet Console a accordé l'accès en
+   * production à l'app : sans lui, le bouton paraît et le paiement échoue.
+   * L'environnement de Google Pay (test ou production) suit la clé publique,
+   * côté app. Une variable Railway, pas une livraison sur le Play Store.
+   */
+  GOOGLE_PAY_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+
+  /**
    * L'App Store — **l'abonnement**, acheté par StoreKit. Voir
    * `services/appStore.ts`.
    *

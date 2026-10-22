@@ -1,6 +1,7 @@
 import type { ChatDisposition, ChatMessageKind } from "@prisma/client";
 import type { Env } from "../env.js";
 import type { CoherenceSheet, RedactedNeighbour } from "./redaction.js";
+import type { AppPlatform } from "./appPlatform.js";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   CALLS_TO_ACTION,
@@ -121,6 +122,12 @@ export interface ConversationInput {
      * décrit pas les 5 minutes du jour à qui ne les compte plus.
      */
     isUnlimited: boolean;
+    /**
+     * Le téléphone d'où part ce tour (lot B5, 22/10/2026) : sur Android, MEMO
+     * dit « les Paramètres du téléphone » et « Play Store », pas « les
+     * Réglages de l'iPhone » ni « App Store » — `appPlatform.ts`.
+     */
+    platform: AppPlatform;
   };
   step: {
     id: string;
@@ -461,6 +468,8 @@ export class FakeResponder implements MemoResponder {
   private readonly scripted: Partial<ConversationReply>[];
   /** Combien de fois le modèle a été sollicité — ce qu'un test compte. */
   calls = 0;
+  /** Les tours reçus, dans l'ordre — ce qu'un test relit (la plateforme, B5). */
+  inputs: ConversationInput[] = [];
 
   constructor(scripted: Partial<ConversationReply>[] = []) {
     this.scripted = [...scripted];
@@ -472,6 +481,7 @@ export class FakeResponder implements MemoResponder {
 
   async reply(input: ConversationInput): Promise<ConversationReply> {
     this.calls += 1;
+    this.inputs.push(input);
 
     const command = scriptedReply(input.message.suggestionId, input.message.text ?? "");
     if (command) return command;

@@ -1177,10 +1177,8 @@ describe("un voyage ouvert", () => {
  * pose (`callsToActionAllowed`, puis `validateReply`).
  */
 class OfferingResponder extends FakeResponder {
-  inputs: ConversationInput[] = [];
-
+  // `inputs` vient de `FakeResponder`, qui garde chaque tour depuis le lot B5.
   override async reply(input: ConversationInput): Promise<ConversationReply> {
-    this.inputs.push(input);
     const reply = await super.reply(input);
     return validateReply({ ...reply, disposition: "command", callToActionId: "subscribe" }, input);
   }

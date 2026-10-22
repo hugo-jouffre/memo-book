@@ -73,7 +73,7 @@ la main.
 | **B2** Apple par le web | un Services ID accepté comme audience ; le retour `form_post` d'Apple qui rend le jeton à l'app | `socialIdentity.ts`, `routes/auth.ts` | non |
 | **B3** FCM | `push_tokens.provider` (apns ou fcm) ; `/v1/push-tokens` accepte un jeton FCM sans le passer en minuscules ; un expéditeur FCM derrière `PushSender` | `schema.prisma`, `routes/notifications.ts`, `services/apns.ts`, `services/fcm.ts` | oui |
 | **B4** Google Play Billing — l'app appelle déjà `POST /v1/subscriptions/google-play` (`purchaseToken`, `productId`, `memoId`) | le fournisseur `google_play` ; la route d'achat qui vérifie et **acquitte** le jeton ; le webhook des notifications temps réel ; résiliation, sérialiseurs et rappels selon le store | `schema.prisma`, `services/googlePlay.ts`, `routes/profile.ts`, `appSerializers.ts`, `subscriptionCatalog.ts` | oui |
-| **B5** Google Pay et plateforme — l'app envoie déjà `X-App-Platform: android` | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
+| **B5** Google Pay et plateforme — 🔶 branche `android-serveur-b5` : `X-App-Platform` retenu sur le tour (`payload.platform`), `GOOGLE_PAY_ENABLED` → `googlePayEnabled` du ticket ; le rappel d'abonnement ne vise que l'App Store, inchangé | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
 | **B6** Page de suppression — 🔶 PR #143 : `/account/delete` | une page publique pour demander la suppression d'un compte par e-mail, que Google Play exige de toute app qui crée des comptes | à côté de `dataExportPage.ts` | non |
 
 Côté app, B4 rend aussi indépendant du store ce qui ne connaît qu'Apple :
@@ -204,7 +204,7 @@ régénérer avec elle (deux tests le vérifient).
 | Achat de l'abonnement par Google Play Billing, restauration, achats non livrés — la remise au serveur (`POST /v1/subscriptions/google-play`) attend le lot B4 : le produit ne s'active pas dans la Play Console avant | 🔶 |
 | `SubscriptionSheet` : actuel, continuer, raison, fin — et « Gérer » vers le store qui l'a vendu (Google Play, ou le renvoi vers l'iPhone pour l'App Store) | ✅ |
 | `OrderView` : sept étapes, feuille Stripe, reprise d'un paiement abandonné, `OrderWhatsAppSheet` | ✅ |
-| Google Pay dans la feuille Stripe — prévu, éteint (`googlePayEnabled`) tant que le lot B5 et l'accès production Google Pay manquent | 🔶 |
+| Google Pay dans la feuille Stripe — piloté par le serveur (`googlePayEnabled` du ticket, `GOOGLE_PAY_ENABLED`, B5) ; éteint tant que l'accès production Google Pay manque | 🔶 |
 | Moyens de paiement enregistrés (CustomerSheet de Stripe) | ✅ |
 
 ### Profil, aide, notifications (A8)

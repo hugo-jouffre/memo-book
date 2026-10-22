@@ -15,6 +15,7 @@ import {
   type TripContextTurnInput,
   type TripContextTurnReply,
 } from "./conversation.js";
+import type { AppPlatform } from "./appPlatform.js";
 import { tripDate } from "./localCalendar.js";
 import { describeTripContext, questionFor, type TripContextUpdate } from "./tripContext.js";
 import {
@@ -265,8 +266,28 @@ const KIND_LABELS: Record<CallToActionKind, string> = {
   open_trip_settings: "les réglages du voyage (rythme des relances, crédit du jour, co-voyageurs)",
   open_preview: "l'aperçu du carnet",
   import_photos: "la photothèque, pour ajouter des photos",
-  open_photo_settings: "les Réglages de l'iPhone, pour l'accès aux photos",
+  // Neutre : ce catalogue est dans le prompt système, le même pour tous les
+  // tours (et mis en cache). Le nom des réglages du téléphone, lui, dépend du
+  // tour — `platformLines`.
+  open_photo_settings: "les réglages du téléphone, pour l'accès aux photos",
 };
+
+/**
+ * **Le téléphone de celui qui parle** (lot B5, 22/10/2026), dans « À qui tu
+ * parles » et non dans le prompt système : un même carnet se raconte depuis un
+ * iPhone et depuis un Android, et le prompt système reste le même pour tous —
+ * donc en cache. Les mots exacts de chacun, pour que MEMO n'envoie pas un
+ * voyageur Android chercher les « Réglages de l'iPhone » ou l'App Store.
+ */
+export function platformLines(platform: AppPlatform): string[] {
+  return platform === "android"
+    ? [
+        "Son téléphone : un Android. Dis « les Paramètres du téléphone » (jamais « les Réglages",
+        "de l'iPhone »), « ton téléphone » (jamais « ton iPhone ») et « le Play Store » (jamais",
+        "« l'App Store »).",
+      ]
+    : ["Son téléphone : un iPhone — ses réglages sont « les Réglages de l'iPhone », ses achats passent par l'App Store."];
+}
 
 // ---------------------------------------------------------------------------
 // Ce qu'on donne à lire au modèle
@@ -304,6 +325,7 @@ export function buildUserPrompt(input: ConversationInput): string {
     traveller.isUnlimited
       ? "Abonnement : oui — son récit est illimité, le crédit du jour ne le concerne pas."
       : "Abonnement : non — il raconte sur le crédit du jour du voyage.",
+    ...platformLines(traveller.platform),
   );
 
   if (step) {
