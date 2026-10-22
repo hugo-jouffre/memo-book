@@ -7,6 +7,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -72,7 +73,7 @@ fun BookPreviewSheet(memoId: String?, onBack: (() -> Unit)? = null) {
                     when (stage) {
                         // La même attente que l'écran de l'aperçu : la page qui
                         // se monte, puis la suivante (08/10/2026).
-                        BookPreviewModel.Stage.Composing -> BookCompositionLoop(firstPass = state.compositionProgress)
+                        BookPreviewModel.Stage.Composing -> BookCompositionLoop(firstPass = state.compositionProgress, modifier = Modifier.fillMaxSize())
                         // Pas de plein écran depuis la feuille : il faudrait en
                         // sortir pour y entrer, et on ne reviendrait pas à
                         // l'offre. La commande est donc absente, et non
@@ -99,7 +100,7 @@ fun BookPreviewSheet(memoId: String?, onBack: (() -> Unit)? = null) {
                 ) { BrandSkeleton(width = 96.dp) }
             }
 
-            if (state.documentDidFail) {
+            if (state.document.didFail) {
                 ErrorBanner(BookCopy.Preview.loadFailed, retry = { scope.launch { model.reloadDocument() } })
             }
 
