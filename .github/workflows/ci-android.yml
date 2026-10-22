@@ -45,7 +45,14 @@ jobs:
       # le Debug, et l'archive a cassé sur du code qu'elle n'avait jamais vu.
       - name: Compiler, tester, relire
         working-directory: android
-        run: ./gradlew assembleDebug assembleRelease testDebugUnitTest :core:test lintDebug
+        run: ./gradlew assembleDebug assembleRelease testDebugUnitTest :core:test :tools:test lintDebug
+
+      # Chaque @Preview du design system comparée à son image de référence
+      # (`make snapshots`). Une différence d'un pixel n'est pas une régression :
+      # Robolectric rend le texte un rien autrement d'un système à l'autre.
+      - name: Comparer les captures du design system
+        working-directory: android
+        run: ./gradlew :design:verifyRoborazziDebug
 
       - name: Rapports de lint et de tests
         if: failure()
@@ -55,3 +62,4 @@ jobs:
           path: |
             android/**/build/reports/
             android/**/build/test-results/
+            android/**/build/outputs/roborazzi/

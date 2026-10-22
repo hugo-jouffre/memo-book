@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le symbole système « eye.slash » d'iOS : l'œil barré qui masque à nouveau
+     le mot de passe dans BrandTextField. Redessiné au trait, monochrome, comme
+     system_eye.xml dont il est la paire. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M1.75,12C3.9,7.6 7.6,5.25 12,5.25C16.4,5.25 20.1,7.6 22.25,12C20.1,16.4 16.4,18.75 12,18.75C7.6,18.75 3.9,16.4 1.75,12Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M12,8.6a3.4,3.4 0,1 1,0 6.8a3.4,3.4 0,1 1,0 -6.8z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000" />
+    <path
+        android:pathData="M3.5,3.5L20.5,20.5"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round" />
+</vector>

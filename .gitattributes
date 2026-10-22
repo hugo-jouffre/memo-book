@@ -11,3 +11,8 @@ android/gradle/wrapper/gradle-wrapper.jar binary
 # Les polices de l'app Android sont les copies de celles d'iOS, générées par
 # `ios/Tools/make-brand-fonts.py`.
 android/design/src/main/res/font/*.ttf binary -diff -merge
+# Les captures de référence du design system Android : binaires, comme celles du serveur.
+android/design/src/test/screenshots/*.png binary -diff -merge
+# Le catalogue d'images converti et sa table : générés par `:tools:importBrandAssets`.
+android/design/src/main/res-brand/** linguist-generated=true
+android/design/src/main/kotlin/com/memobook/design/BrandImages.kt linguist-generated=true

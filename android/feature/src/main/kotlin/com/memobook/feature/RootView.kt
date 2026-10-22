@@ -1,6 +1,7 @@
 package com.memobook.feature
 
 import androidx.compose.runtime.Composable
+import com.memobook.feature.debug.DesignCatalogueView
 import com.memobook.feature.onboarding.LaunchView
 
 /**
@@ -11,9 +12,15 @@ import com.memobook.feature.onboarding.LaunchView
  *
  * @param showsDeveloperDetails Vrai dans un build Debug seulement : l'écran dit
  *   alors à quelle adresse l'app parle.
+ * @param opensDesignCatalogue l'interrupteur `designCatalogue` d'un lancement
+ *   Debug : l'app s'ouvre sur l'écran-catalogue du design system.
  */
 @Composable
-fun RootView(dependencies: AppDependencies, showsDeveloperDetails: Boolean) {
+fun RootView(dependencies: AppDependencies, showsDeveloperDetails: Boolean, opensDesignCatalogue: Boolean = false) {
+    if (opensDesignCatalogue) {
+        DesignCatalogueView()
+        return
+    }
     LaunchView(
         developerDetails = if (showsDeveloperDetails) LaunchCopy.apiAddress(dependencies.apiConfiguration) else null,
     )

@@ -11,7 +11,7 @@ export ANDROID_HOME ?= $(firstword $(wildcard $(HOME)/Library/Android/sdk $(BREW
 GRADLE := ./gradlew
 ADB := $(ANDROID_HOME)/platform-tools/adb
 
-.PHONY: build test lint release run doctor clean
+.PHONY: build test lint release snapshots assets run doctor clean
 
 # Compile l'app en Debug.
 build:
@@ -29,6 +29,17 @@ lint:
 # jamais vu.
 release:
 	$(GRADLE) :app:assembleRelease
+
+# Les captures de référence du design system : chaque @Preview de :design,
+# rendue par Robolectric. À relancer après avoir changé un composant, puis
+# regarder les images dans design/src/test/screenshots avant de les commiter.
+snapshots:
+	$(GRADLE) :design:recordRoborazziDebug
+
+# Le catalogue d'images d'iOS recopié dans :design (après un script de
+# ios/Tools qui l'a modifié).
+assets:
+	$(GRADLE) :tools:importBrandAssets
 
 # Installe et lance sur l'émulateur ou le téléphone branché. ARGS passe les
 # extras de lancement, comme les arguments du simulateur iOS :
