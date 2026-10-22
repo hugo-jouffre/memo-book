@@ -20,3 +20,10 @@ dependencies {
     api(libs.kotlinx.serialization.json)
     testImplementation(libs.kotlin.test)
 }
+
+// Les aperçus de personnalisation ont des « é » dans leurs noms de fichiers :
+// sous une locale POSIX, la JVM les lirait en « ? ».
+tasks.test {
+    environment("LC_ALL", "C.UTF-8")
+    jvmArgs("-Dsun.jnu.encoding=UTF-8", "-Dfile.encoding=UTF-8")
+}

@@ -74,7 +74,9 @@ sealed interface NarrationPace {
 
     companion object {
         /** Les cinq rythmes que la feuille propose, dans l'ordre de la maquette. */
-        val selectable: List<NarrationPace> = listOf(Daily, EveryTwoDays, EveryThreeDays, Weekly, Custom)
+        // Un getter, pas un champ : les objets du `sealed interface` peuvent être
+        // chargés avant leur compagnon, et la liste y recevrait des `null`.
+        val selectable: List<NarrationPace> get() = listOf(Daily, EveryTwoDays, EveryThreeDays, Weekly, Custom)
 
         /**
          * Le rythme, depuis ce que la base garde.
