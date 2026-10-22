@@ -1248,6 +1248,9 @@ data class ChatThread(
             )
         },
     )
+
+    /** Porte les jeux d'essai de `:feature` (`ChatThread.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 // MARK: - Ce que l'app envoie

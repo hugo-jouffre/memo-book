@@ -47,10 +47,18 @@ des **extras de l'intention**, lus par `MainActivity` en Debug seulement :
 
 ```bash
 make run ARGS="--ez designCatalogue true"   # l'écran-catalogue du design system
+make run ARGS="--ez previewSignedIn true"   # l'accueil sur le jeu d'essai, sans compte ni réseau
+make run ARGS="--ez previewSignedIn true --ez openOrder true"
+make run ARGS="--ez previewSignedIn true --ez composeBook true"
+make run ARGS="--ez previewSignedIn true --ez lastQuestions true"
+make run ARGS="--ez resetOnboarding true"   # oublie la session et le mot des fondateurs
+make emulator                              # ouvre l'émulateur MemoBook_Pixel dans une fenêtre
 ```
 
-Les interrupteurs d'iOS arrivent avec le bac à sable (phase A3), sous le même
-nom.
+Ce sont les arguments d'iOS sous le même nom, sans le tiret (`LaunchSwitches`,
+dans `OnboardingStorage.kt`). Un extra n'est lu qu'au **lancement à froid** :
+`adb shell am force-stop com.memobook.app` avant, sinon l'activité déjà ouverte
+le reçoit sans le lire.
 
 Gradle demande un JDK 17 ou plus ; le `Makefile` prend celui de Homebrew
 (`brew install openjdk@21`) quand le Java du Mac est plus ancien, et le SDK
@@ -123,7 +131,28 @@ Les mots de `docs/vocabulaire.md` valent ici, avec leurs suffixes.
 - **`AppDependencies`** est le seul point d'assemblage : construit une fois par
   `MemoBookApplication`, descendu aux écrans. Pas de singleton, pas de Hilt.
 - **`RootView`** traduit les intentions en destinations, comme sur iOS.
+  Routes et intentions sont réunies dans **`Navigation.kt`** : c'est le
+  contrat entre les écrans et la racine, cas pour cas celui d'iOS. Les deux
+  piles (l'entrée, puis l'app) sont des `NavDisplay` de Navigation 3 — la pile
+  de `NavigationStack(path:)` —, avec un magasin de `ViewModel` par
+  destination, vidé quand elle quitte la pile.
+- **Chaque écran a sa porte d'entrée**, `…Entry` dans son paquet
+  (`home/HomeEntry.kt`) : elle construit le modèle
+  (`viewModel { dependencies.homeModel() }`) et appelle la vue. `RootView`
+  n'appelle qu'elles.
+- **Les fabriques de modèles** d'`AppDependencies.swift` (`homeModel()`,
+  `tripModel(id:)`…) sont ici des fonctions d'extension, chacune dans le
+  paquet de son écran (`home/HomeDependencies.kt`). Elles lisent `api`,
+  `content`, `cachedSource(slot) { … }` et `cached<T>(slot)`.
+- Ce que `RootView` descend à tous les écrans — les `@Entry` de
+  `EnvironmentValues` — est dans `AppEnvironment.kt` (`LocalTravellerFirstName`,
+  `LocalHomeReloadRequest`…), plus `LocalSubscriptionSession` et
+  `LocalAppSettings` (l'`UserDefaults` d'iOS). Un modèle **partagé par
+  plusieurs destinations** (le support, les couvertures) se range dans
+  `LocalSessionViewModelStoreOwner`, vidé quand le compte change.
 - Coroutines partout où iOS a `async/await`.
+- **L'alerte d'iOS** (`.alert`) est `BrandAlert` : l'`AlertDialog` d'Android
+  est un composant Material.
 
 ## Modèles et JSON
 

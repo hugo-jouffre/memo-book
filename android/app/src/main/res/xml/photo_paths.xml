@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ce que le `FileProvider` de l'app prête aux autres apps, et rien d'autre :
+     - `camera/`, où l'app photo du système écrit la photo qu'on prend
+       (`PhotoFlow`) ;
+     - `books/`, où l'aperçu écrit le PDF du carnet qu'on partage
+       (`BookPreviewModel.exportPdf`, la feuille de partage du système).
+     Le PDF que l'aperçu lit, lui (`book-pages/`), n'est prêté à personne. -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+    <cache-path name="books" path="books/" />
+</paths>

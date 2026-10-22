@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le micro, demandé à l'exécution par `RecordingPermission` au moment où
+     l'on veut parler — jamais au lancement. Déclaré ici, avec ce qui s'en
+     sert : l'app le reçoit par la fusion des manifestes. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+</manifest>

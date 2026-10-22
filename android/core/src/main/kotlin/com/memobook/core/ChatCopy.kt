@@ -537,15 +537,17 @@ object ChatCopy {
 
         /**
          * L'accès aux photos a été refusé. Comme pour le micro, le système ne
-         * redemande pas : le seul recours est l'app Réglages.
+         * redemande pas : le seul recours est l'app Paramètres. (Le sélecteur
+         * de photos d'Android ne demande aucune permission : ce texte ne
+         * s'affiche que si un fabricant l'exige.)
          */
         const val libraryDenied =
             "MemoBook a besoin de tes photos pour les ranger dans ton carnet. " +
-                "Autorise l’accès dans Réglages."
+                "Autorise l’accès dans les Paramètres du téléphone."
 
         const val cameraDenied =
             "MemoBook a besoin de l’appareil photo pour prendre une photo. " +
-                "Autorise l’accès dans Réglages."
+                "Autorise l’accès dans les Paramètres du téléphone."
     }
 
     // MARK: - Les échecs
@@ -645,7 +647,8 @@ object ChatCopy {
         const val camera = "Ajouter une photo"
         const val keyboard = "Écrire au clavier"
         const val microphone = "Enregistrer un vocal"
-        const val microphoneDenied = "Micro refusé — ouvrir les Réglages"
+        // « Paramètres » et non « Réglages » : le nom de l'app sur Android.
+        const val microphoneDenied = "Micro refusé — ouvrir les Paramètres"
         const val pauseRecording = "Mettre l’enregistrement en pause"
         const val resumeRecording = "Reprendre l’enregistrement"
         const val discardRecording = "Jeter cet enregistrement"

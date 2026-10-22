@@ -267,6 +267,9 @@ data class CoverStyle(
         if (family != null && other.family != null) return family == other.family
         return treatment == other.treatment && tint == other.tint
     }
+
+    /** Porte les jeux d'essai de `:feature` (`CoverStyle.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 /** Une photo candidate à la couverture. L'adresse reste du texte, comme dans le JSON. */

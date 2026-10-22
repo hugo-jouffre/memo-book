@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ce que l'argent ajoute au manifeste de l'app. La permission de Google Play
+  Billing (`com.android.vending.BILLING`) et les activités de Stripe — dont le
+  retour d'une redirection, `stripesdk://payment_return_url/com.memobook.app` —
+  arrivent avec leurs bibliothèques.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!--
+          Google Pay dans la feuille de Stripe. Inerte tant que
+          `StripePaymentSheetPresenter(googlePayEnabled = true)` ne l'allume pas.
+        -->
+        <meta-data
+            android:name="com.google.android.gms.wallet.api.enabled"
+            android:value="true" />
+    </application>
+</manifest>

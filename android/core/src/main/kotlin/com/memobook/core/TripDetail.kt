@@ -116,4 +116,7 @@ data class TripDetail(
     /** Les modes de transport employés, sans doublon. */
     val transports: List<TripTransport>
         get() = steps.mapNotNull { it.transport }.distinct()
+
+    /** Porte les jeux d'essai de `:feature` (`TripDetail.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }

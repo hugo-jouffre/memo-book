@@ -119,6 +119,12 @@ import kotlinx.coroutines.launch
  * @param keyboardOptions le `keyboardType` et le `submitLabel` qu'iOS pose de l'extérieur.
  * @param keyboardActions le `onSubmit` : la touche « suivant » change le focus de l'écran.
  * @param contentType le `textContentType` : ce que le remplissage automatique y propose.
+ * @param visualTransformation ce que le champ **montre** de sa valeur, quand ce
+ *   n'est pas ce qu'on tape — les barres de « JJ/MM/AAAA » posées sur les seuls
+ *   chiffres. iOS réécrit la valeur à la frappe ; ici, la réécrire laisserait
+ *   le curseur avant le chiffre qu'on vient de taper : une valeur qui change
+ *   sous le doigt garde la position du curseur, pas sa place dans le texte.
+ *   Ignorée sur un champ secret, que son masque habille déjà.
  */
 @Composable
 fun <F : Any> BrandTextField(
@@ -138,6 +144,7 @@ fun <F : Any> BrandTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     contentType: ContentType? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     // Le mot de passe se dévoile à la demande. Sans ça, corriger une faute de
     // frappe sur un clavier tactile relève du pari.
@@ -246,7 +253,11 @@ fun <F : Any> BrandTextField(
                                 },
                                 keyboardActions = keyboardActions,
                                 singleLine = true,
-                                visualTransformation = if (isSecure && !isRevealed) PasswordVisualTransformation() else VisualTransformation.None,
+                                visualTransformation = when {
+                                    isSecure && !isRevealed -> PasswordVisualTransformation()
+                                    isSecure -> VisualTransformation.None
+                                    else -> visualTransformation
+                                },
                                 cursorBrush = SolidColor(MemoBookColor.action),
                             )
                         }

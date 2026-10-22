@@ -670,6 +670,17 @@ class ApiClientTest {
         assertEquals("X-Time-Zone", MemoBookApiClient.TIME_ZONE_HEADER)
     }
 
+    /** La plateforme part aussi sur chaque appel (lot B5) : MEMO parle du téléphone, pas de l'iPhone. */
+    @Test
+    fun everyRequestNamesThePlatform() = runTest {
+        val client = makeClient()
+        respond(200, """{"memos":[]}""")
+
+        client.memos()
+
+        assertEquals("android", lastRequest.header("X-App-Platform"))
+    }
+
     /**
      * Le refus faute de crédit garde son code **et son solde** jusqu'à la
      * file : c'est `resetsAt` qui dit quand réessayer.
