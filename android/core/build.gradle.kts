@@ -1,7 +1,9 @@
 // Modèles et règles pures, sans Android : comme `MemoBookCore`, ce module ne
-// dépend de rien. Ses tests tournent sur la JVM, sans émulateur.
+// dépend que de la bibliothèque JSON de Kotlin — le `Codable` que Swift a de
+// naissance. Ses tests tournent sur la JVM, sans émulateur.
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -15,5 +17,6 @@ java {
 }
 
 dependencies {
+    api(libs.kotlinx.serialization.json)
     testImplementation(libs.kotlin.test)
 }
