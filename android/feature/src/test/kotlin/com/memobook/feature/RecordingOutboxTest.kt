@@ -4,10 +4,13 @@ package com.memobook.feature
 
 import android.content.ContextWrapper
 import com.memobook.core.ChatAuthor
+import com.memobook.core.ChatContext
 import com.memobook.core.ChatDelivery
 import com.memobook.core.ChatMessage
 import com.memobook.core.ChatMessageBody
 import com.memobook.core.ChatPhotoUpload
+import com.memobook.core.ChatThread
+import com.memobook.core.ChatThreadUpdate
 import com.memobook.core.ChatTurnReceipt
 import com.memobook.core.ChatTurnStatus
 import com.memobook.core.DailyCredit
@@ -18,8 +21,14 @@ import com.memobook.core.Trip
 import com.memobook.core.TripDraft
 import com.memobook.core.TripStage
 import com.memobook.core.VoiceNote
+import com.memobook.feature.chat.ChatAudio
+import com.memobook.feature.chat.ChatModel
+import com.memobook.feature.chat.ChatSendOutcome
+import com.memobook.feature.chat.ChatTransport
 import com.memobook.feature.chat.ChatTurnDelivery
+import com.memobook.feature.chat.ChatTurnState
 import com.memobook.feature.chat.OutgoingTurn
+import com.memobook.feature.chat.PreviewChatBox
 import com.memobook.feature.recording.RecordingHandoff
 import com.memobook.feature.recording.RecordingModel
 import com.memobook.networking.ApiError
@@ -46,6 +55,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -74,10 +84,11 @@ import kotlin.test.fail
  *
  * Porté de `RecordingOutboxTests.swift`, cas pour cas, sauf :
  * - les cas de l'accueil (`HomeModel`, `HomeNotice` : la boîte d'information, le
- *   bac à sable) et de la conversation (`ChatModel` : la bulle posée, les
- *   messages dits hors ligne depuis le fil), qui se porteront avec leurs écrans ;
- *   les deux cas de la bulle qui suit la file sont repris ici **sur la file**,
- *   par l'envoi que `HomeModel.upload` fait ;
+ *   bac à sable), qui se porteront avec leur écran ; les deux cas de la bulle
+ *   qui suit la file sont repris ici **sur la file**, par l'envoi que
+ *   `HomeModel.upload` fait — les deux de la conversation (`ChatModel` : la
+ *   bulle posée, les messages dits hors ligne depuis le fil) sont ici, avec
+ *   elle ;
  * - les deux cas du cache (`ContentCache`), déjà portés dans `ContentCacheTest` ;
  * - la fiche du disque (`PendingTurn`), testée avec elle dans `:recording`
  *   (`PendingRecordingStoreTest`).
@@ -294,6 +305,86 @@ class RecordingOutboxTest {
         launch { outbox.submit(OutgoingTurn.voice(handoff.audio, handoff.levels, id = handoff.id), "trip-rome") }
 
         until("le refus arrive à la bulle") { outbox.lastDelivery.value?.state?.hasFailed == true }
+    }
+
+    /**
+     * La conversation pose la bulle, et **ne décide pas** de son envoi : c'est
+     * la file qui le dit, même quand MEMO a déjà répondu.
+     */
+    @Test
+    fun theConversationPostsTheVocalWithoutOwningItsDelivery() = runTest(dispatcher) {
+        val handoff = RecordingHandoff(audio = silence(), levels = listOf(0.3, 0.7))
+
+        val chat = ChatModel(ChatTransport.local(tripId = "trip-rome", box = PreviewChatBox()), chatAudio(), io = dispatcher)
+        chat.expect(handoff)
+        chat.load()
+
+        val bubble = assertNotNull(chat.messages.firstOrNull { it.id == handoff.id })
+        assertEquals(ChatAuthor.Traveller, bubble.author)
+        assertEquals(
+            ChatDelivery.Sending,
+            bubble.delivery,
+            "Tant que la file n'a rien dit, la bulle ne peut pas se déclarer arrivée.",
+        )
+
+        // Le fil est chargé et au repos : la bulle reste sur l'état que la file
+        // donne — le chat ne l'envoie pas lui-même, elle est déjà partie.
+        assertEquals(ChatTurnState.Idle, chat.turn)
+        assertEquals(ChatDelivery.Sending, chat.messages.firstOrNull { it.id == handoff.id }?.delivery)
+
+        // C'est la file, et elle seule, qui la termine — et pas celle d'un autre
+        // voyage.
+        chat.markDelivery(ChatTurnDelivery(id = handoff.id, tripId = "trip-lisbonne", state = ChatDelivery.Sent))
+        assertEquals(ChatDelivery.Sending, chat.messages.firstOrNull { it.id == handoff.id }?.delivery)
+        chat.markDelivery(ChatTurnDelivery(id = handoff.id, tripId = "trip-rome", state = ChatDelivery.Sent))
+        assertEquals(ChatDelivery.Sent, chat.messages.firstOrNull { it.id == handoff.id }?.delivery)
+    }
+
+    /**
+     * `docs/conversation.md` § 9, de bout en bout : deux messages dits sans
+     * réseau depuis la conversation restent « en cours d'envoi », le composeur
+     * se rouvre entre les deux, on quitte et on revient — ils sont encore là —,
+     * et le retour du réseau les fait partir dans l'ordre, une fois, avec la
+     * bulle qui passe « envoyée » toute seule.
+     */
+    @Test
+    fun messagesSentOfflineFromTheConversationStayAndLeaveInOrder() = runTest(dispatcher) {
+        val sender = Sender()
+        val network = Channel<Boolean>(Channel.UNLIMITED)
+        val outbox = outbox(sender, connectivity = Connectivity { network.receiveAsFlow() })
+        outbox.start()
+        network.send(false)
+        until("la file se sait hors ligne") { !outbox.isOnline.value }
+
+        val chat = ChatModel(transport(through = outbox, tripId = "trip-1"), chatAudio(), io = dispatcher)
+        chat.load()
+
+        chat.draft = "Un"
+        chat.sendDraft()
+        until("le premier attend") { outbox.pending.value == 1 }
+        until("le composeur se rouvre") { chat.turn == ChatTurnState.Idle }
+        chat.draft = "Deux"
+        chat.sendDraft()
+        until("le second attend") { outbox.pending.value == 2 }
+
+        val ids = chat.messages.map { it.id }
+        assertEquals(2, ids.size)
+        assertTrue(chat.messages.all { it.delivery == ChatDelivery.Sending }, "Attendre le réseau n'est pas échouer.")
+        assertNull(chat.errorMessage)
+
+        // On quitte, on revient : ce qui attend est encore dans le fil.
+        chat.teardown()
+        val reopened = ChatModel(transport(through = outbox, tripId = "trip-1"), chatAudio(), io = dispatcher)
+        reopened.load()
+        assertEquals(ids, reopened.messages.map { it.id })
+        assertTrue(reopened.messages.all { it.delivery == ChatDelivery.Sending })
+
+        network.send(true)
+        until("la file se vide") { outbox.pending.value == 0 }
+        until("les bulles passent envoyées", timeoutMs = 3_000) { reopened.messages.all { it.delivery == ChatDelivery.Sent } }
+
+        assertEquals(ids, sender.sentIds, "Dans l'ordre, et une seule fois.")
+        assertEquals(listOf(1, 2), reopened.messages.mapNotNull { it.seq }, "Le rang que le serveur leur a donné.")
     }
 
     /**
@@ -705,6 +796,30 @@ class RecordingOutboxTest {
 
     /** Les entrées-sorties sur place : elles restent dans le temps virtuel du test. */
     private fun temporaryStore() = PendingRecordingStore.temporary(Dispatchers.Unconfined)
+
+    /** Le micro, le lecteur et la voix de la conversation, sur un contexte vide : rien n'y tourne ici. */
+    private fun chatAudio(): ChatAudio = ChatAudio(ContextWrapper(null), Files.createTempDirectory("chat-audio").toFile())
+
+    /** La conversation branchée sur la file, comme `AppDependencies.chatModel` la branche. */
+    private fun transport(through: RecordingOutbox, tripId: String): ChatTransport = ChatTransport(
+        load = {
+            ChatThread(id = tripId, title = "Rome 2026", context = ChatContext(tripId = tripId, stepId = null), now = Instant.now())
+        },
+        poll = { ChatThreadUpdate(messages = emptyList(), turn = ChatTurnStatus.Idle, now = Instant.now()) },
+        send = { turn ->
+            when (val delivery = through.submit(turn, tripId)) {
+                is RecordingOutbox.Delivery.Delivered -> ChatSendOutcome.Received(
+                    delivery.receipt ?: ChatTurnReceipt(messages = emptyList(), turn = ChatTurnStatus.Idle, now = Instant.now()),
+                )
+                RecordingOutbox.Delivery.Queued -> ChatSendOutcome.Queued
+                is RecordingOutbox.Delivery.Rejected -> throw RecordingOutbox.Rejection(message = delivery.message)
+            }
+        },
+        editTranscript = { _, _ -> throw ApiError.Server(statusCode = 0, code = null, message = "Pas ici.") },
+        media = { ByteArray(0) },
+        waiting = { through.waiting(tripId) },
+        deliveries = { through.turnDeliveries() },
+    )
 
     /** Un vocal de quatre secondes, tel que l'accueil le confie. */
     private fun testTurn(): OutgoingTurn = OutgoingTurn.voice(
