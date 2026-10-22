@@ -39,6 +39,12 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    // « Continuer avec Google » : le Credential Manager, et son pont vers les
+    // services Google du téléphone, sans lequel Android 13 et moins n'ont rien
+    // à proposer.
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)

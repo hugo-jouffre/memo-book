@@ -57,6 +57,7 @@ import com.memobook.feature.gallery.GalleryEntry
 import com.memobook.feature.home.HomeEntry
 import com.memobook.feature.legal.LegalDocumentEntry
 import com.memobook.feature.onboarding.LastQuestionsEntry
+import com.memobook.feature.onboarding.LastQuestionsModel
 import com.memobook.feature.onboarding.LaunchView
 import com.memobook.feature.order.OrderEntry
 import com.memobook.feature.paywall.PaywallEntry
@@ -72,7 +73,6 @@ import com.memobook.feature.welcome.WelcomeEntry
 import com.memobook.networking.ApiError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
@@ -447,7 +447,7 @@ internal class RootState(val dependencies: AppDependencies) {
         // Un compte qui vient d'être ouvert passe d'abord par les « Dernières
         // questions » (Clara, 26/09/2026) — une seule fois, jamais dans le bac à sable.
         val asksLastQuestions = dependencies.switches.lastQuestions ||
-            (!isPreview && LastQuestionsPolicy.shouldAsk(account, dependencies.settings))
+            (!isPreview && LastQuestionsModel.shouldAsk(account, dependencies.settings))
         if (asksLastQuestions && stage != Stage.LastQuestions(account)) {
             signedOutPath.clear()
             stage = Stage.LastQuestions(account)
@@ -458,7 +458,7 @@ internal class RootState(val dependencies: AppDependencies) {
     }
 
     fun finishLastQuestions(account: Account) {
-        LastQuestionsPolicy.markAnswered(account, dependencies.settings)
+        LastQuestionsModel.markAnswered(account, dependencies.settings)
         remember(account)
         openApp(account)
     }
@@ -807,25 +807,5 @@ internal class RootState(val dependencies: AppDependencies) {
 
         /** Un identifiant qui est celui d'une ressource du serveur — un UUID. */
         fun isResourceId(id: String): Boolean = runCatching { UUID.fromString(id) }.isSuccess && id.length == 36
-    }
-}
-
-/**
- * Les « Dernières questions » : à qui les poser, et s'en souvenir. Le
- * `LastQuestionsModel.shouldAsk`/`markAnswered` d'iOS — ici, parce que
- * `RootView` décide avant que l'écran existe. Le portage de
- * `LastQuestionsView` peut le remplacer par sa propre règle.
- */
-internal object LastQuestionsPolicy {
-    private const val KEY_PREFIX = "lastQuestionsAnswered."
-
-    /** Un compte ouvert il y a moins de dix minutes, et qui n'a pas encore répondu. */
-    fun shouldAsk(account: Account, settings: AppSettings, now: Instant = Instant.now()): Boolean {
-        if (settings.getBoolean(KEY_PREFIX + account.id)) return false
-        return Duration.between(account.createdAt, now) < Duration.ofMinutes(10)
-    }
-
-    fun markAnswered(account: Account, settings: AppSettings) {
-        settings.putBoolean(KEY_PREFIX + account.id, true)
     }
 }

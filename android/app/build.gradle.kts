@@ -26,6 +26,12 @@ val uploadKeystore: String? = System.getenv("ANDROID_UPLOAD_KEYSTORE_PATH")?.tak
 // CI le passe (le numéro du workflow), un poste garde 1.
 val versionCodeOverride: Int? = providers.gradleProperty("memobook.versionCode").orNull?.toIntOrNull()
 
+// Les deux identifiants des entrées par fournisseur, vides tant que leurs
+// clients n'existent pas : le bouton correspondant ne s'affiche pas. Voir
+// `gradle.properties`.
+val googleWebClientId: String = providers.gradleProperty("memobook.googleWebClientId").orElse("").get()
+val appleServicesId: String = providers.gradleProperty("memobook.appleServicesId").orElse("").get()
+
 android {
     namespace = "com.memobook.app"
     compileSdk = 37
@@ -37,6 +43,8 @@ android {
         versionCode = versionCodeOverride ?: 1
         versionName = "0.1.0"
         buildConfigField("String", "PRODUCTION_API_BASE_URL", "\"$productionApiBaseUrl\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+        buildConfigField("String", "APPLE_SERVICES_ID", "\"$appleServicesId\"")
     }
 
     signingConfigs {

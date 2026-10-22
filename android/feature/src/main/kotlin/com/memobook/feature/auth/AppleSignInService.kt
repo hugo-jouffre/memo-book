@@ -1,0 +1,78 @@
+package com.memobook.feature.auth
+
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import androidx.core.net.toUri
+import java.net.URI
+import java.net.URLEncoder
+
+/**
+ * L'entrée par Apple **sur Android**, qui n'a pas de feuille Apple du système :
+ * elle passe par la page web d'Apple. Pas de jumeau Swift — sur iOS, c'est
+ * `SignInWithAppleButton` dans `WelcomeSocialButtons`.
+ *
+ * ⏳ **Le bouton reste masqué** tant que `memobook.appleServicesId` est vide
+ * (`gradle.properties`) : le serveur ne sait pas encore recevoir le retour
+ * d'Apple (lot B2), et le Services ID n'existe pas (lot A0).
+ *
+ * ### Le flux prévu
+ *
+ * 1. L'app tire un [SignInNonce] et un `state`, et ouvre
+ *    `https://appleid.apple.com/auth/authorize` ([authorizationUri]) avec le
+ *    **Services ID** pour `client_id`, l'empreinte du nonce, `scope=name email`
+ *    et `response_mode=form_post`. Un Custom Tab de préférence (bibliothèque
+ *    `androidx.browser`, à déclarer avec B2) ; le navigateur par défaut sinon.
+ * 2. Apple poste sa réponse (`id_token`, `state`, et `user` — le nom et
+ *    l'adresse, **à la toute première autorisation seulement**) au serveur,
+ *    sur l'adresse de retour déclarée sur le Services ID — une route du lot B2.
+ *    Apple n'accepte pas un schéma privé à cet endroit : c'est pour ça que le
+ *    serveur s'interpose.
+ * 3. Le serveur renvoie l'app par `memobook://auth/apple?…` avec ce qu'Apple
+ *    lui a posté. `RootView` le reçoit comme les autres liens ; l'écran
+ *    d'entrée vérifie le `state`, en fait un [SocialCredential] avec le nonce
+ *    **en clair** qu'il a gardé, et le passe à `AuthModel.accept` — qui l'envoie
+ *    à `POST /v1/auth/apple` comme l'iPhone. Le serveur y vérifie le jeton
+ *    contre les clés d'Apple, l'audience (le Services ID, accepté par B2 à côté
+ *    de l'App ID) et le nonce.
+ *
+ * ⚠️ **Un seul compte Apple pour une personne** : le Services ID doit être
+ * groupé sous l'App ID `com.memobook.app`, sans quoi Apple rendrait un autre
+ * `sub` que sur l'iPhone — et un second compte MemoBook (`docs/android.md`,
+ * « Les risques »).
+ */
+internal object AppleSignInService {
+    /**
+     * L'adresse de la page d'autorisation d'Apple, pour cette tentative.
+     *
+     * @param redirectUri l'adresse du serveur qui reçoit le `form_post` (B2).
+     * @param state un jeton à usage unique, recopié par Apple dans sa réponse :
+     *   il dit que le retour répond bien à **cette** demande.
+     */
+    fun authorizationUri(servicesId: String, redirectUri: URI, state: String, nonce: SignInNonce): String {
+        val query = listOf(
+            "client_id" to servicesId,
+            "redirect_uri" to redirectUri.toString(),
+            "response_type" to "code id_token",
+            "response_mode" to "form_post",
+            // Apple ne les donne qu'à la toute première autorisation, et les
+            // ignore poliment ensuite. Les demander coûte donc une seule fois.
+            "scope" to "name email",
+            "state" to state,
+            // Haché, jamais en clair : ce qui part chez Apple ne doit pas
+            // suffire à rejouer la tentative.
+            "nonce" to nonce.hashed,
+        ).joinToString("&") { (key, value) -> "$key=${URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")}" }
+        return "$AUTHORIZE_URL?$query"
+    }
+
+    /** Ouvre la page d'Apple. `false` si aucun navigateur ne peut l'ouvrir. */
+    fun open(context: Context, authorizationUri: String): Boolean = try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, authorizationUri.toUri()))
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
+    }
+
+    private const val AUTHORIZE_URL = "https://appleid.apple.com/auth/authorize"
+}

@@ -41,6 +41,12 @@ import java.io.File
  *   vocaux et les voyages en attente — `filesDir` dans l'app.
  * @param scope la portée de l'app entière : ce qui y est lancé survit aux
  *   écrans (la file des envois, l'enregistrement de l'appareil).
+ * @param googleWebClientId l'identifiant client **web** de Google — l'audience
+ *   des jetons que « Continuer avec Google » rend, le `GIDClientID` d'iOS côté
+ *   serveur. `null` tant qu'il n'existe pas : le bouton ne s'affiche pas.
+ * @param appleServicesId le Services ID d'Apple, pour l'entrée par Apple sur le
+ *   web (`AppleSignInService`). `null` tant que le serveur ne sait pas la
+ *   recevoir (lot B2) : le bouton ne s'affiche pas.
  */
 class AppDependencies(
     val api: MemoBookApi,
@@ -51,6 +57,8 @@ class AppDependencies(
     cacheDirectory: File,
     val filesDirectory: File,
     val scope: CoroutineScope,
+    val googleWebClientId: String? = null,
+    val appleServicesId: String? = null,
 ) {
     /**
      * Ce que l'app garde du serveur sur l'appareil — voir [ContentCache].
