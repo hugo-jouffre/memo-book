@@ -7,6 +7,7 @@ import { isDatabaseUnavailable } from "./lib/databasePool.js";
 import { HttpError } from "./lib/httpError.js";
 import { createRequireAccount, registerAuthDecorator } from "./plugins/auth.js";
 import { registerAccountRoutes } from "./routes/accounts.js";
+import { registerAccountDeletionPageRoutes } from "./routes/accountDeletionPage.js";
 import { registerDataExportPageRoutes } from "./routes/dataExportPage.js";
 import { registerSharePageRoutes } from "./routes/sharePage.js";
 import { registerAppStoreRoutes, registerAppStoreWebhookRoutes } from "./routes/appStore.js";
@@ -166,6 +167,10 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // sans session, c'est pour en ouvrir une.
   registerPasswordResetPageRoutes(app);
   registerInvitePageRoutes(app, context);
+
+  // La page qui dit comment supprimer son compte, que Google Play demande
+  // (lot B6) : publique, on la lit sans l'app ni session.
+  registerAccountDeletionPageRoutes(app, context);
 
   // La page du lien « Télécharger mes données », et l'archive derrière son
   // bouton. Publiques aussi : on y arrive depuis une boîte mail, et c'est le

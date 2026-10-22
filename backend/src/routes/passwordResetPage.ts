@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { androidIntentUrl } from "./invitePage.js";
 
 /**
  * La page derrière le bouton « Réinitialiser mon mot de passe » de l'e-mail.
@@ -12,6 +13,8 @@ import type { FastifyInstance } from "fastify";
  * Le jour du lien universel (`apple-app-site-association` servi par ce même
  * domaine, *Associated Domain* dans `project.yml`), iOS ouvrira l'app avant
  * même d'arriver ici ; la page restera le repli pour un appareil sans l'app.
+ * Sur Android, l'App Link vérifié (`assetlinks.json`) fait de même ; sans lui,
+ * la page ouvre l'app par un `intent://`, la seule forme que Chrome ouvre.
  *
  * La page ne touche pas à la base : elle ne consomme rien, ne dit pas si le
  * secret est encore bon — c'est l'app qui le dira, et une page publique qui
@@ -84,13 +87,22 @@ export function renderPasswordResetPage(token: string): string {
   return page(
     `<h1>Réinitialise ton mot de passe</h1>
 <p>On ouvre MemoBook pour que tu choisisses ton nouveau mot de passe.</p>
-<a class="button" href="${appUrl}">Ouvrir MemoBook</a>
-<p class="muted">Si rien ne se passe, appuie sur le bouton. Si l’app ne s’ouvre toujours pas, c’est qu’elle n’est pas installée sur cet appareil : ouvre ce lien depuis l’iPhone où MemoBook est installé.</p>`,
+<a class="button" id="open" href="${appUrl}">Ouvrir MemoBook</a>
+<p class="muted">Si rien ne se passe, appuie sur le bouton. Si l’app ne s’ouvre toujours pas, c’est qu’elle n’est pas installée sur cet appareil : ouvre ce lien depuis le téléphone où MemoBook est installé.</p>`,
     // L'ouverture automatique : Safari propose « Ouvrir dans MemoBook ? ».
-    // Sans JavaScript, le bouton fait la même chose.
-    `<script>window.addEventListener("load", function () { window.location.href = ${JSON.stringify(
-      appPasswordResetUrl(token),
-    )}; });</script>`,
+    // Sans JavaScript, le bouton fait la même chose. Sur Android, le bouton
+    // et l'ouverture passent par un `intent://`.
+    `<script>
+  var target = ${JSON.stringify(appPasswordResetUrl(token))};
+  if (/Android/.test(navigator.userAgent)) target = ${JSON.stringify(
+    androidIntentUrl(`password/reset?token=${encodeURIComponent(token)}`),
+  )};
+  window.addEventListener("load", function () {
+    var button = document.getElementById("open");
+    if (button) button.href = target;
+    window.location.href = target;
+  });
+</script>`,
   );
 }
 
