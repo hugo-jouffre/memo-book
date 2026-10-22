@@ -682,6 +682,11 @@ class MemoBookApiClient(
             // requête. Lu à chaque appel et non une fois pour toutes : l'avion
             // atterrit pendant que l'app est ouverte.
             .add(TIME_ZONE_HEADER, ZoneId.systemDefault().id)
+            // **La plateforme, sur chaque appel** — l'en-tête du lot B5
+            // (`docs/android.md`) : MEMO dira « les paramètres du téléphone »
+            // et non « les Réglages de l'iPhone », et le serveur saura vers
+            // quel store envoyer. Un serveur qui ne le lit pas encore l'ignore.
+            .add(PLATFORM_HEADER, PLATFORM)
 
         store(credential)?.let { store ->
             val token = store.read() ?: throw ApiError.NotAuthenticated
@@ -961,6 +966,8 @@ class MemoBookApiClient(
          * sur chaque appel — voir [makeRequest].
          */
         const val TIME_ZONE_HEADER = "X-Time-Zone"
+        const val PLATFORM_HEADER = "X-App-Platform"
+        const val PLATFORM = "android"
 
         private const val JSON = "application/json"
         private val METHODS_WITH_BODY = setOf("POST", "PUT", "PATCH")
