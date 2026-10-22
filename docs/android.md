@@ -22,7 +22,7 @@ plateformes demanderait de réécrire une app iOS déjà livrée.
 | File des envois | `RecordingOutbox`, vidée au retour dans l'app | la même, vidée par WorkManager — elle survit aussi à l'arrière-plan | rien |
 | Vocal | AAC 44,1 kHz mono, `.m4a`, `audio/mp4` | le même fichier, par `MediaRecorder` | rien |
 | Transcription en direct, lecture à voix haute | `SFSpeechRecognizer`, `AVSpeechSynthesizer`, `fr-FR` | `SpeechRecognizer` sur l'appareil, `TextToSpeech`, `fr-FR` | rien |
-| Connexion | Apple natif, SDK Google, e-mail | Google par Credential Manager, Apple par le web, e-mail | B1, B2 |
+| Connexion | Apple natif, SDK Google, e-mail | Google par Credential Manager, e-mail — pas d'Apple (22/10/2026) | B1 |
 | Abonnement | StoreKit 2, `com.memobook.app.subscription.monthly`, 4,99 € | Google Play Billing, **même identifiant**, vérifié par le serveur | B4 |
 | Carnet imprimé | Stripe PaymentSheet, Apple Pay | Stripe PaymentSheet Android, Google Pay | B5 |
 | Notifications | APNs | Firebase Cloud Messaging, mêmes types et mêmes liens | B3 |
@@ -44,11 +44,11 @@ d'un produit, d'un serveur et d'un code déjà tranchés.
 
 | Phase | Semaines | Contenu | Fini quand | Attend |
 |---|---|---|---|---|
-| **A0** Comptes et clés | 1–2 | Play Console ; client OAuth Android (SHA-1 debug, upload, signature Play) ; Firebase ; compte de service Play ; Services ID Apple ; clé d'upload hors du dépôt ; téléphones de test ; `api.memo-book.com` tranché | chaque clé existe et est rangée avec celles d'iOS | Hugo |
+| **A0** Comptes et clés | 1–2 | Play Console ; client OAuth Android (SHA-1 debug, upload, signature Play) ; Firebase ; compte de service Play ; clé d'upload hors du dépôt ; téléphones de test ; `api.memo-book.com` tranché | chaque clé existe et est rangée avec celles d'iOS | Hugo |
 | **A1** Socle | 1 | projet Gradle aux modules d'iOS, tokens, polices, adresse du serveur, CI | CI verte, l'app s'ouvre dans l'émulateur | — |
 | **A2** Design system | 1–3 | les 36 composants `Brand…`, import des 178 images, tests de capture | un écran-catalogue montre chaque composant | — |
 | **A3** Cœur, client, bac à sable | 2–3 | modèles, client des 72 routes, erreurs, jeton, connectivité, cache, `PreviewApi` et interrupteurs de debug | les tests Core et Networking portés passent | — |
-| **A4** Comptes et entrée | 3–4 | lancement, accueil d'entrée, e-mail, Google, Apple, mot de passe oublié, dernières questions, déconnexion, suppression | les deux comptes de test entrent sur un Pixel ; l'e-mail de réinitialisation ouvre l'app | B1, B2 |
+| **A4** Comptes et entrée | 3–4 | lancement, accueil d'entrée, e-mail, Google, mot de passe oublié, dernières questions, déconnexion, suppression | les deux comptes de test entrent sur un Pixel ; l'e-mail de réinitialisation ouvre l'app | B1 |
 | **A5** Le récit | 4–6 | accueil, nouveau carnet, rejoindre, création de voyage hors ligne, écran du voyage, conversation avec MEMO, enregistrement et crédit du jour, file des envois, cache | un vocal enregistré hors ligne sur Android arrive une fois dans le fil iPhone du même voyage | — |
 | **A6** Le carnet | 6–7 | réglages du voyage, personnalisation, couvertures, composition, lecteur PDF, partage, galerie | un voyage donne le même PDF sur les deux | — |
 | **A7** L'argent | 7–8 | paywall, abonnement Play, feuille d'abonnement, tunnel de commande Stripe et Google Pay, cartes, suivi | un achat de test sur Android rend illimité le même compte sur iPhone | B4, B5 |
@@ -69,11 +69,11 @@ la main.
 
 | Lot | Ce qui change | Fichiers | Migration |
 |---|---|---|---|
-| **B1** Liens et Google — 🔶 PR #143 : `assetlinks.json`, pages d'invitation et de mot de passe ; reste `GOOGLE_WEB_CLIENT_ID` | `GOOGLE_WEB_CLIENT_ID` posé sur Railway (l'audience des jetons Android) ; `/.well-known/assetlinks.json` ; `/j/:code` et `/password/reset` savent mener au Play Store ou dans l'app, sans dire « iPhone » | `env.ts`, `invitePage.ts`, `passwordResetPage.ts` | non |
-| **B2** Apple par le web | un Services ID accepté comme audience ; le retour `form_post` d'Apple qui rend le jeton à l'app | `socialIdentity.ts`, `routes/auth.ts` | non |
+| **B1** Liens et Google — ✅ PR #143 ; `GOOGLE_WEB_CLIENT_ID` posé sur Railway et dans `gradle.properties` le 22/10 (client « MemoBook Backend ») ; le client Android (`com.memobook.app` + SHA-1 de debug) est créé, ceux des clés d'upload et de Play viennent avec la Play Console | `GOOGLE_WEB_CLIENT_ID` posé sur Railway (l'audience des jetons Android) ; `/.well-known/assetlinks.json` ; `/j/:code` et `/password/reset` savent mener au Play Store ou dans l'app, sans dire « iPhone » | `env.ts`, `invitePage.ts`, `passwordResetPage.ts` | non |
+| ~~B2~~ Apple par le web — **abandonné** (Hugo, 22/10/2026) : pas d'entrée Apple sur Android. Le travail est gardé sur la branche `android-serveur-b2` | — | — | non |
 | **B3** FCM — 🔶 branche `android-serveur-b3` (migration `20261022140000_jetons_fcm` dans son propre commit) ; reste le projet Firebase (A0) et ses variables | `push_tokens.provider` (apns ou fcm) ; `/v1/push-tokens` accepte un jeton FCM (`provider: "fcm"` ou `platform: "android"`) sans le passer en minuscules ; un expéditeur FCM HTTP v1 (compte de service, JWT RS256, sans SDK) derrière `PushSender`, qui choisit APNs ou FCM par jeton ; `UNREGISTERED` oublie le jeton ; `FCM_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID`, `npm run fcm:check`. Côté app : `FirebasePush.kt` et `MemoBookMessagingService`, sans `google-services` | `schema.prisma`, `routes/notifications.ts`, `services/apns.ts`, `services/fcm.ts` | oui |
-| **B4** Google Play Billing — l'app appelle déjà `POST /v1/subscriptions/google-play` (`purchaseToken`, `productId`, `memoId`) | le fournisseur `google_play` ; la route d'achat qui vérifie et **acquitte** le jeton ; le webhook des notifications temps réel ; résiliation, sérialiseurs et rappels selon le store | `schema.prisma`, `services/googlePlay.ts`, `routes/profile.ts`, `appSerializers.ts`, `subscriptionCatalog.ts` | oui |
-| **B5** Google Pay et plateforme — 🔶 branche `android-serveur-b5` : `X-App-Platform` retenu sur le tour (`payload.platform`), `GOOGLE_PAY_ENABLED` → `googlePayEnabled` du ticket ; le rappel d'abonnement ne vise que l'App Store, inchangé | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
+| **B4** Google Play Billing — 🔶 branche `android-serveur-b4` (migration `20261022150000_abonnement_google_play` dans son propre commit) : `POST /v1/subscriptions/google-play`, `POST /v1/webhooks/google-play`, `subscription.store` et `manageUrl` au profil ; reste le compte de service Play et Pub/Sub (A0) | le fournisseur `google_play` ; la route d'achat qui vérifie et **acquitte** le jeton ; le webhook des notifications temps réel ; résiliation, sérialiseurs et rappels selon le store | `schema.prisma`, `services/googlePlay.ts`, `routes/profile.ts`, `appSerializers.ts`, `subscriptionCatalog.ts` | oui |
+| **B5** Google Pay et plateforme — 🔶 branche `android-serveur-b5` : `X-App-Platform` retenu sur le tour (`payload.platform`), `GOOGLE_PAY_ENABLED` → `googlePayEnabled` du ticket ; le rappel d'abonnement parle du Play Store à un abonné Play (B4) | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
 | **B6** Page de suppression — 🔶 PR #143 : `/account/delete` | une page publique pour demander la suppression d'un compte par e-mail, que Google Play exige de toute app qui crée des comptes | à côté de `dataExportPage.ts` | non |
 
 Côté app, B4 rend aussi indépendant du store ce qui ne connaît qu'Apple :
@@ -84,10 +84,9 @@ Côté app, B4 rend aussi indépendant du store ce qui ne connaît qu'Apple :
 la FAQ parlent de l'App Store et de l'iPhone : à réécrire pour Google Play avant
 la fiche Play (A8).
 
-⚠️ Aujourd'hui, `POST /v1/profile/subscription/cancel` résilie **localement**
-tout abonnement qui n'est pas StoreKit (`routes/profile.ts`) : un abonnement
-Google Play y serait coupé côté serveur et continuerait d'être facturé. B4 le
-corrige avant tout achat Android.
+`POST /v1/profile/subscription/cancel` ne coupe plus localement un abonnement
+Google Play (B4) : il note la raison, comme pour StoreKit, et la résiliation se
+fait dans le Play Store (`subscription.manageUrl`).
 
 ## La liste de parité
 
@@ -166,7 +165,7 @@ régénérer avec elle (deux tests le vérifient).
 | `WelcomeView` et les carnets d'exemple | ✅ |
 | `AuthView` (inscription, connexion), `SocialCompletionView` | ✅ |
 | Google par Credential Manager — bouton masqué tant que `memobook.googleWebClientId` est vide (A0, B1) | 🔶 |
-| Apple par le web — bouton masqué tant que `memobook.appleServicesId` est vide (A0, B2) | 🔶 |
+| Pas d'Apple sur Android (22/10/2026) : un compte ouvert par Apple sur l'iPhone entre par « Mot de passe oublié » | ✅ |
 | `PasswordRecoverySheet`, `PasswordResetView` et le lien de l'e-mail (`memobook://` et App Link `/password/reset`) | ✅ |
 | `LastQuestionsView` | ✅ |
 | Déconnexion, `DeleteAccountSheet` | ✅ |
@@ -243,7 +242,6 @@ plateforme :
   cesse de réessayer / ne le retentera pas », « dans ton compte Google Play ».
 - Le paywall : « compte Google », « Play Store › Paiements et abonnements ›
   Abonnements » ; une erreur de vérification : « Le Play Store… ».
-- « Continuer avec Apple » (iOS laisse le bouton système écrire le sien).
 
 ### Ce qui ne se porte pas
 
@@ -255,6 +253,18 @@ plateforme :
   l'import Polarsteps, le Tricount, les six connecteurs, l'ouverture d'un carnet
   de la galerie.
 
+## Les décisions
+
+Validées par Clara et Hugo le 22/10/2026 :
+
+- **L'enregistrement** : forme d'onde seule, sans transcription en direct.
+- **Les mots d'Android** : « téléphone », « Paramètres du téléphone », « Play
+  Store » partout où iOS dit iPhone, Réglages ou App Store (l'app et MEMO, B5).
+- **La suppression du compte** : la page `/account/delete` (B6) supprime sous
+  30 jours.
+- **Pas d'Apple sur Android** : ni bouton ni lot B2 ; un compte Apple de
+  l'iPhone entre par « Mot de passe oublié ».
+
 ## Les risques
 
 - **Un micro, deux écoutes.** Sur iOS, la transcription en direct lit le son de
@@ -265,11 +275,13 @@ plateforme :
   qu'un retour visuel ; celle du serveur ne change pas. **Porté en forme
   d'onde seule** (l'option recommandée de `android-reprise.md`) ; l'interface
   du transcripteur est en place pour l'option Android 13+ si Clara la choisit
-  (`SpeechTranscriber.kt` dit comment).
-- **Deux comptes Apple pour une personne.** La connexion Apple par le web ne
-  rend le même identifiant que si le Services ID est groupé sous l'App ID
-  `com.memobook.app`. À faire en A0, à vérifier avec un compte Apple existant
-  avant A4.
+  (`SpeechTranscriber.kt` dit comment). Clara et Hugo ont validé la forme
+  d'onde seule le 22/10/2026.
+- **Un compte Apple de l'iPhone sur Android.** Android n'a pas d'entrée Apple :
+  la personne choisit « Mot de passe oublié » avec l'adresse de son compte (le
+  relais `privaterelay.appleid.com` si elle l'a masquée : il transfère
+  l'e-mail), et le serveur l'envoie même à un compte sans mot de passe
+  (`services/passwordReset.ts`). À vérifier en A4 avec un compte Apple masqué.
 - **Payer deux fois.** Voir plus haut : Android masque « S'abonner » à tout
   compte illimité, quel que soit le store.
 - **Material contre le papier.** Les composants Material tirent les écrans hors

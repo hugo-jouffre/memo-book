@@ -8,12 +8,12 @@ conventions) : Claude les lit tout seul, vous n'avez pas à les lire.
 
 ## Ce que veut dire « qui marche » le 6 novembre
 
-Le plan complet (paiements, Google, Apple, notifications…) prend environ dix
+Le plan complet (paiements, Google, notifications…) prend environ dix
 semaines. En deux, on vise **le cœur du produit**, sur un compte existant :
 
 | Dans le périmètre du 6/11 | Après le 6/11 |
 |---|---|
-| Se connecter par e-mail, créer un compte, se déconnecter | Connexion Google et Apple (lots B1, B2) |
+| Se connecter par e-mail, créer un compte, se déconnecter | Connexion Google (lot B1) ; pas d'Apple sur Android |
 | L'accueil : ses voyages, en créer un, en rejoindre un par code | Abonnement Google Play (B4) — un compte déjà abonné sur iPhone reste illimité sur Android |
 | Raconter : vocal, texte, photo, la conversation avec MEMO | Commande du carnet imprimé, Stripe, Google Pay (B5) |
 | Le crédit du jour (5 min) et les envois hors ligne | Notifications push (B3) |
@@ -72,7 +72,7 @@ c'est **la vérification sur téléphone**, les clés de Hugo et les lots serveu
 | R2 | Les fins de parcours : un vocal hors ligne arrive une fois sur iPhone ; un voyage créé sur Android y apparaît ; le même PDF des deux côtés | ⏳ | Paul | les trois sont vrais |
 | B3 | Notifications FCM (projet Firebase d'abord) | ⏳ | Claude, après Hugo | chacun des neuf types ouvre son écran |
 | B4 | Abonnement Google Play côté serveur (compte de service Play d'abord) | ⏳ | Claude, après Hugo | un achat de test rend illimité le même compte sur iPhone |
-| B2 | Apple par le web (Services ID d'abord) | ⏳ | Claude, après Hugo | un compte Apple d'iPhone entre sur Android |
+| ~~B2~~ | Apple par le web — abandonné le 22/10/2026 | — | — | un compte Apple d'iPhone entre par « Mot de passe oublié » |
 | B5 | Plateforme dans les réponses de MEMO, Google Pay | ⏳ | Claude | MEMO dit « Paramètres du téléphone » sur Android |
 | A8b | CGU, confidentialité et FAQ réécrites pour Google Play | ⏳ | Claude ; Clara relit | la fiche Play peut citer ses textes |
 | A9 | Fiche Play, classification, sécurité des données | ⏳ | Clara | l'app passe l'examen de Google |
