@@ -127,10 +127,9 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory, AppDepe
             cacheDirectory = cacheDir,
             filesDirectory = filesDir,
             scope = scope,
-            // Vides dans `gradle.properties` tant que leurs clients n'existent
-            // pas : le bouton du fournisseur ne s'affiche pas.
+            // Vide dans `gradle.properties` tant que son client n'existe pas :
+            // le bouton Google ne s'affiche pas.
             googleWebClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID.ifBlank { null },
-            appleServicesId = BuildConfig.APPLE_SERVICES_ID.ifBlank { null },
             scheduleBackgroundFlush = RecordingOutboxWorker.scheduler(this),
             // Le bac à sable ne paie rien : ses doubles n'appellent personne.
             payments = if (switches.previewSignedIn) StubPaymentPresenter() else StripePaymentSheetPresenter(),

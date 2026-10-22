@@ -52,12 +52,6 @@ object WelcomeCopy {
     const val hello = "Hello ! 👋"
     const val helloDetail = "Nous allons t’accompagner dans tes récits."
 
-    /**
-     * Le libellé du bouton Apple. Sur iOS, `SignInWithAppleButton(.continue)`
-     * écrit le sien, dans la langue de l'appareil ; Android n'a pas de bouton
-     * Apple du système, l'app écrit donc le mot qu'Apple y met en français.
-     */
-    const val apple = "Continuer avec Apple"
     const val google = "Continuer avec Google"
     const val email = "S’inscrire avec un e-mail"
     const val legal = "En continuant, tu acceptes nos conditions d’utilisation."

@@ -63,9 +63,6 @@ import com.memobook.payments.PaymentMethodsPresenter
  * @param googleWebClientId l'identifiant client **web** de Google — l'audience
  *   des jetons que « Continuer avec Google » rend, le `GIDClientID` d'iOS côté
  *   serveur. `null` tant qu'il n'existe pas : le bouton ne s'affiche pas.
- * @param appleServicesId le Services ID d'Apple, pour l'entrée par Apple sur le
- *   web (`AppleSignInService`). `null` tant que le serveur ne sait pas la
- *   recevoir (lot B2) : le bouton ne s'affiche pas.
  * @param scheduleBackgroundFlush planifie le vidage de la file **app fermée** —
  *   au retour du réseau (`null`), ou à la recharge du crédit du jour :
  *   `RecordingOutboxWorker.scheduler(context)` dans l'app, rien dans un test
@@ -81,7 +78,6 @@ class AppDependencies(
     val filesDirectory: File,
     val scope: CoroutineScope,
     val googleWebClientId: String? = null,
-    val appleServicesId: String? = null,
     scheduleBackgroundFlush: (Instant?) -> Unit = {},
     /**
      * Qui ouvre une feuille de paiement — la feuille Stripe, ou un double qui
