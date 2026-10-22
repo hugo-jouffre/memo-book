@@ -92,6 +92,7 @@ import com.memobook.feature.profile.dayAndMonth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.net.URI
+import com.memobook.feature.bookpreview.BookCompositionPage
 
 /**
  * Les paramètres d'un voyage : tout ce qui se règle sur le carnet sans quitter
@@ -841,7 +842,7 @@ private fun PdfPreviewRow(action: () -> Unit) {
         // Generator/templates/travel-journal/print.json`). Fixe, hors taille
         // de police : une image n'est pas du texte.
         BookCompositionPage(
-            progress = 1.0,
+            progress = 1f,
             modifier = Modifier.size(width = PdfThumbnail.width, height = PdfThumbnail.width * PdfThumbnail.ratio),
         )
         BrandChevron()

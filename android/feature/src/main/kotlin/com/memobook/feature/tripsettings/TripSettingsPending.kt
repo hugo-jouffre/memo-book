@@ -137,15 +137,6 @@ internal val TripSettings.dateRangeLabel: String?
         }
     }
 
-// MARK: - À brancher : BookPreview/BookCompositionPage.swift (lot de l'aperçu)
-
-/** La page de la composition, figée à `progress`. Ici, une page de papier nue. */
-@Composable
-internal fun BookCompositionPage(@Suppress("UNUSED_PARAMETER") progress: Double, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(4.dp)
-    Box(modifier.background(MemoBookColor.surface, shape).border(1.dp, MemoBookColor.hairline, shape).padding(4.dp))
-}
-
 // MARK: - À brancher : Profile/SubscriptionSheet.swift (lot du profil)
 
 /** Les mots de l'abonnement — la pastille « Abonné(e) » seulement. */
