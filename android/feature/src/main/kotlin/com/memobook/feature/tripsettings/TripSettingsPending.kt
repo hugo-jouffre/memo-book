@@ -225,36 +225,3 @@ internal object SubscriptionCopy {
     /** La maquette écrit « Abonnée » ; l'app accorde sur ce que le profil sait de la personne (T76). */
     fun currentBadge(gender: Gender): String = gender.agreed("Abonné")
 }
-
-// MARK: - À brancher : Notifications/PushNotifications.swift (lot partagé, `notifications/PushNotifications.kt`)
-
-/** Ce qu'Android laisse passer — la même énumération que `notifications/PushNotifications.kt`. */
-enum class NotificationAuthorization { NotDetermined, Denied, Authorized }
-
-/** Les notifications de l'app, réduites à l'autorisation. */
-@Stable
-class PushNotifications {
-    var authorization: NotificationAuthorization by mutableStateOf(NotificationAuthorization.NotDetermined)
-        private set
-
-    fun refreshAuthorization() = Unit
-
-    suspend fun requestAuthorization(askSystem: suspend () -> Boolean): Boolean = askSystem()
-
-    companion object {
-        /** La page des notifications de MemoBook dans les Paramètres du téléphone. */
-        fun openSystemSettings(context: Context) {
-            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            runCatching { context.startActivity(intent) }
-        }
-    }
-}
-
-/** La question du système. Ici, sans fenêtre : rien n'est demandé. */
-@Composable
-fun rememberNotificationPermissionRequest(): suspend () -> Boolean = remember { suspend { false } }
-
-/** `null` hors de l'app : rien n'y demande l'autorisation pour de vrai. */
-val LocalPushNotifications = staticCompositionLocalOf<PushNotifications?> { null }

@@ -71,6 +71,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import com.memobook.feature.notifications.rememberNotificationPermissionRequest
+import com.memobook.feature.notifications.LocalPushNotifications
+import com.memobook.feature.notifications.NotificationAuthorization
+import com.memobook.feature.notifications.PushNotifications
 
 // Les feuilles des paramètres d'un voyage. Jumeau de
 // `TripSettings/TripSettingsSheets.swift` ; l'énumération des feuilles,
