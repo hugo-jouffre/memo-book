@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le symbole système « point.topleft.down.to.point.bottomright.curvepath »
+     d'iOS, celui de la distance d'un voyage (`TripStatItem`) : deux étapes,
+     en haut à gauche et en bas à droite, reliées par un chemin qui serpente.
+     Redessiné au trait, monochrome — la couleur se pose à l'usage. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M5,8.2C5,14.5 19,9.5 19,15.8"
+        android:strokeWidth="2"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M5,5.2m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M19,18.8m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+</vector>
