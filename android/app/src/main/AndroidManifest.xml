@@ -8,6 +8,17 @@
          d'un voyage, la bulle de la conversation (`PushNotifications`). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- « Partager sur Whatsapp », dans la feuille de partage de l'aperçu du
+         carnet : le geste n'apparaît que si WhatsApp est là pour l'ouvrir
+         (`ShareAction.whatsApp`). Android 11 et plus ne laissent voir que les
+         apps qu'on déclare — le `LSApplicationQueriesSchemes` d'iOS. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="whatsapp" />
+        </intent>
+    </queries>
+
     <!-- Portrait seulement, comme sur l'iPhone — Android 16 l'ignore sur les
          grands écrans, et c'est voulu.
          Aucune sauvegarde : `allowBackup` la coupe avant Android 12, les règles
@@ -60,7 +71,8 @@
         <!-- Le fichier que l'app photo du système remplit quand on prend une
              photo (`PhotoFlow`, `TakePicture`) : un fichier du cache, prêté le
              temps de la prise de vue. Aucune permission de stockage ni de
-             caméra : l'app photo fait le reste. -->
+             caméra : l'app photo fait le reste. Le même prête aussi le PDF du
+             carnet qu'on partage (`books/`, voir res/xml/photo_paths.xml). -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.photos"
