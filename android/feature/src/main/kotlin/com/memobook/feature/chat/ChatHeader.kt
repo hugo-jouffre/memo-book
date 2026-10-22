@@ -55,6 +55,7 @@ import com.memobook.design.R
 import com.memobook.design.brandShadow
 import com.memobook.design.scaled
 import com.memobook.feature.trip.dimmedWhileAwaitingServer
+import com.memobook.feature.home.CardPressStyle
 
 /**
  * Les mesures que le chat partage entre son écran, son squelette et sa barre

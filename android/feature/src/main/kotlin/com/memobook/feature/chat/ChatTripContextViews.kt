@@ -50,6 +50,7 @@ import com.memobook.design.SwiftMotion
 import com.memobook.design.isAccessibilityTextSize
 import com.memobook.design.isReduceMotionEnabled
 import com.memobook.design.scaled
+import com.memobook.feature.home.CardPressStyle
 
 /**
  * La pastille « Contexte du voyage 2/5 », posée sous l'en-tête du fil tant que

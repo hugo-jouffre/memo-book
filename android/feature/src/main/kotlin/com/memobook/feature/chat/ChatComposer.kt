@@ -98,6 +98,7 @@ import com.memobook.design.scaled
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import com.memobook.feature.home.CardPressStyle
 
 /**
  * Ce qui est posé en bas de l'écran : les réponses que MEMO propose, et de quoi
