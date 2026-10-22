@@ -392,8 +392,11 @@ internal fun CalendarDayNumber(day: LocalDate, isEndpoint: Boolean) {
 @Preview(locale = "fr-rFR", name = "Plage", widthDp = 390, heightDp = 520)
 @Composable
 private fun BrandRangeCalendarPreview() {
+    // Une plage fixe, passée : la capture de référence ne change pas avec le
+    // jour, et l'anneau d'aujourd'hui n'y paraît jamais.
+    val day = LocalDate.of(2026, 7, 14)
     var selection by remember {
-        mutableStateOf(DateRangeSelection(start = LocalDate.now(), end = LocalDate.now().plusDays(9)))
+        mutableStateOf(DateRangeSelection(start = day, end = day.plusDays(9)))
     }
     val locale = calendarLocale()
     Column(

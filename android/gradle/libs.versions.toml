@@ -9,6 +9,10 @@ composeBom = "2026.09.00"
 activityCompose = "1.13.0"
 coreKtx = "1.19.1"
 junit = "4.13.2"
+# Le JSON du serveur (le `Codable` d'iOS), le réseau, les coroutines (`async/await`).
+kotlinxSerialization = "1.11.0"
+kotlinxCoroutines = "1.11.0"
+okhttp = "5.5.1"
 # Le convertisseur SVG → VectorDrawable d'Android Studio ; sa version suit celle d'AGP (9.4.1 → 32.4.1).
 sdkCommon = "32.4.1"
 # Les captures d'écran du design system : chaque @Preview devient un test.
@@ -35,11 +39,17 @@ roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose"
 roborazzi-preview-scanner = { module = "io.github.takahirom.roborazzi:roborazzi-compose-preview-scanner-support", version.ref = "roborazzi" }
 preview-scanner = { module = "io.github.sergio-sastre.ComposablePreviewScanner:android", version.ref = "previewScanner" }
 android-sdk-common = { module = "com.android.tools:sdk-common", version.ref = "sdkCommon" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }

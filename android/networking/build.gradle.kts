@@ -1,6 +1,7 @@
 // Le client d'API — comme `MemoBookNetworking`, il ne dépend que de `core`.
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -14,7 +15,11 @@ android {
 }
 
 dependencies {
-    implementation(project(":core"))
+    api(project(":core"))
+    api(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.okhttp)
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

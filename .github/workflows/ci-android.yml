@@ -54,6 +54,16 @@ jobs:
         working-directory: android
         run: ./gradlew :design:verifyRoborazziDebug
 
+      # L'APK Debug de chaque PR, à installer sur un téléphone Android pour la
+      # tester sans Android Studio (docs/android-reprise.md). Sur un téléphone,
+      # il parle à la production : l'adresse du Mac n'y mène nulle part.
+      - name: APK de test
+        uses: actions/upload-artifact@v4
+        with:
+          name: memobook-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
       - name: Rapports de lint et de tests
         if: failure()
         uses: actions/upload-artifact@v4

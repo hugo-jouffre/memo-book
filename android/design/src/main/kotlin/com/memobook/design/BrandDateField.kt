@@ -282,8 +282,10 @@ private fun RowScope.PickerDayCell(day: LocalDate, isSelected: Boolean, isInRang
 @Preview(locale = "fr-rFR", name = "Dates", widthDp = 390, heightDp = 260)
 @Composable
 private fun BrandDateFieldPreview() {
+    // Une date fixe : une capture de référence ne change pas avec le jour.
+    val day = LocalDate.of(2026, 7, 14)
     var start by remember { mutableStateOf<LocalDate?>(null) }
-    var end by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
+    var end by remember { mutableStateOf<LocalDate?>(day) }
     Column(
         Modifier
             .fillMaxSize()
@@ -293,6 +295,6 @@ private fun BrandDateFieldPreview() {
     ) {
         BrandDateField("Date de début", start, { start = it }, range = LocalDate.MIN..(end ?: LocalDate.MAX))
         BrandDateField("Date de fin (optionnel)", end, { end = it }, range = (start ?: LocalDate.MIN)..LocalDate.MAX)
-        BrandDateField("Date de départ", LocalDate.now(), {}, range = LocalDate.MIN..LocalDate.MAX, isClearable = false)
+        BrandDateField("Date de départ", day, {}, range = LocalDate.MIN..LocalDate.MAX, isClearable = false)
     }
 }

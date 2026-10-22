@@ -1,0 +1,239 @@
+package com.memobook.core
+
+// La Politique de confidentialité, recopiée du site memobook.fr (Hugo,
+// 17/09/2026), en onze chapitres. Le jumeau de
+// `MemoBookCore/PrivacyPolicy.swift` ; la forme est dans [LegalDocument].
+//
+// Deux endroits du texte source ont été corrigés sur retour de Clara
+// (26/09/2026), et non en silence (R8) :
+//   - le chapitre 3 annonçait « les prestataires techniques suivants : » sans
+//     la liste, que le site porte dans un tableau non fourni — la voici (T152) ;
+//   - le chapitre 9 se terminait par un point-virgule (T153).
+//
+// Deux sections ajoutées le 03/10/2026 (Hugo), avec l'abonnement mensuel et
+// le crédit du jour : les données d'achat reçues de l'App Store (2.4) et le
+// compteur d'usage quotidien par voyage (2.5), plus Apple parmi les
+// destinataires.
+//
+// Le 19/10/2026 (Hugo, D6) : l'ancien § 2.1, le formulaire bêta-testeur qui
+// promettait « votre premier carnet gratuit », est retiré — les suivants ont
+// glissé d'un rang —, et Stripe, qui encaisse les carnets imprimés, rejoint
+// les destinataires. Le reste décrit toujours le site (T203). ⚠️ **C'est le site
+// qui fait foi** : memobook.fr doit publier les mêmes ajouts.
+//
+// ⚠️ Recopiée **telle quelle** de l'app iOS, App Store et Apple compris (2.4,
+// chapitre 3) : le texte propre à Google Play est une décision juridique à
+// part, pas un détail de portage.
+
+object PrivacyPolicy {
+    private const val contactLink = LegalContact.emailLink
+
+    /**
+     * Le document : le titre de l'écran et les dix chapitres, dans l'ordre du
+     * site — moins « Cookies » : une app n'en pose pas, et Apple ne demande
+     * aucune politique de cookies, seulement celle-ci (Hugo, 29/09/2026,
+     * T154). Voir `docs/archive/ui-development-journal.md` § 32. Le titre est
+     * celui de la page du site, là où la ligne du profil qui y mène dit
+     * seulement « Confidentialité ».
+     *
+     * `by lazy`, comme un `static let` Swift : les chapitres sont déclarés plus
+     * bas, et un `val` simple les lirait avant leur initialisation.
+     */
+    val document: LegalDocument by lazy {
+        LegalDocument(
+            id = "confidentialite",
+            title = "Politique de confidentialité",
+            chapters = listOf(
+                introduction, collectedData, recipients, transfers, security, rights,
+                complaint, minors, changes, contact,
+            ),
+        )
+    }
+
+    // 1. Introduction
+
+    val introduction = LegalChapter(
+        id = "confidentialite.introduction",
+        number = 1,
+        title = "Introduction",
+        blocks = listOf(
+            LegalBlock.Paragraph("Hugo Jouffre, opérant sous le nom de MemoBook (micro-entrepreneur, SIRET : 815\u00A0246\u00A0442, 28 rue Tête d’Or, 69006 Lyon), attache une grande importance à la protection de vos données personnelles."),
+            LegalBlock.Paragraph("La présente Politique de confidentialité décrit quelles données nous collectons, pourquoi nous les collectons, comment nous les utilisons, combien de temps nous les conservons, et quels sont vos droits conformément au Règlement Général sur la Protection des Données (RGPD — Règlement UE 2016/679) et à la loi française Informatique et Libertés."),
+            LegalBlock.Heading("Responsable du traitement :"),
+            LegalBlock.Paragraph("Hugo Jouffre — $contactLink — 28 rue Tête d’Or, 69006 Lyon"),
+        )
+    )
+
+    // 2. Données collectées et finalités
+
+    val collectedData = LegalChapter(
+        id = "confidentialite.donnees-collectees",
+        number = 2,
+        title = "Données collectées et finalités",
+        blocks = listOf(
+            LegalBlock.Heading("2.1 Données de navigation et de mesure d’audience"),
+            LegalBlock.Lines(listOf(
+                "**Données collectées :** adresse IP anonymisée, pages visitées, durée de visite, type d’appareil et de navigateur, provenance (via cookies Google Analytics et Hotjar)",
+                "**Finalité :** analyser l’utilisation du site pour améliorer l’expérience utilisateur",
+                "**Base légale :** consentement (article 6.1.a du RGPD) — vous acceptez ces cookies via le bandeau de consentement",
+                "**Durée de conservation :** 13 mois maximum (Google Analytics) / 1 an (Hotjar)",
+            )),
+
+            LegalBlock.Heading("2.2 Données publicitaires"),
+            LegalBlock.Lines(listOf(
+                "**Données collectées :** données comportementales de navigation transmises à Meta via le Meta Pixel (pages visitées, actions effectuées), permettant de mesurer l’efficacité de nos publicités Facebook et Instagram",
+                "**Finalité :** mesure des campagnes publicitaires et reciblage publicitaire",
+                "**Base légale :** consentement (article 6.1.a du RGPD)",
+                "**Durée de conservation :** jusqu’à 90 jours chez Meta",
+            )),
+
+            LegalBlock.Heading("2.3 Données techniques (Webflow)"),
+            LegalBlock.Lines(listOf(
+                "**Données collectées :** cookies techniques de session nécessaires au bon fonctionnement du site",
+                "**Finalité :** assurer le fonctionnement et la sécurité du site",
+                "**Base légale :** intérêt légitime et nécessité technique (article 6.1.f du RGPD) — ces cookies ne nécessitent pas de consentement",
+                "**Durée de conservation :** durée de la session de navigation",
+            )),
+
+            LegalBlock.Heading("2.4 Abonnement souscrit dans l’application (App Store)"),
+            LegalBlock.Lines(listOf(
+                "**Données collectées :** identifiants de transaction App Store (achat d’origine et renouvellements), abonnement souscrit, statut de l’abonnement, dates d’achat, de renouvellement et de fin de période. Aucune donnée bancaire : le paiement est traité par Apple, qui ne nous transmet ni vos moyens de paiement ni vos coordonnées bancaires",
+                "**Finalité :** ouvrir et maintenir l’accès illimité, l’honorer jusqu’à la fin de la période payée après une résiliation, vous rappeler que vous pouvez résilier quand votre dernier voyage en cours se termine, et répondre à vos demandes d’assistance",
+                "**Base légale :** exécution du contrat (article 6.1.b du RGPD)",
+                "**Durée de conservation :** tant que votre compte existe ; ces données sont supprimées avec lui",
+            )),
+
+            LegalBlock.Heading("2.5 Compteur d’usage quotidien (crédit du jour)"),
+            LegalBlock.Lines(listOf(
+                "**Données collectées :** pour chaque voyage et chaque jour, la durée cumulée des enregistrements vocaux et le nombre de caractères des textes envoyés, ainsi que le fuseau horaire de votre téléphone, qui fixe l’heure de minuit",
+                "**Finalité :** appliquer la limite d’utilisation gratuite (le crédit du jour de 5 minutes par voyage) et vous indiquer ce qu’il reste",
+                "**Base légale :** exécution du contrat (article 6.1.b du RGPD)",
+                "**Durée de conservation :** tant que le voyage existe ; le compteur est supprimé avec lui",
+            )),
+        )
+    )
+
+    // 3. Destinataires des données
+
+    val recipients = LegalChapter(
+        id = "confidentialite.destinataires",
+        number = 3,
+        title = "Destinataires des données",
+        blocks = listOf(
+            LegalBlock.Paragraph("Vos données peuvent être transmises aux prestataires techniques suivants dans le cadre strict des finalités décrites ci-dessus :"),
+            // La liste donnée par Clara (T152). « Hotter Ltd » dans son
+            // message : Hotjar Ltd, l'éditeur de Hotjar, que le ticket citait.
+            //
+            // Apple ajoutée le 03/10/2026 : c'est l'App Store qui encaisse
+            // l'abonnement et nous en transmet l'état (2.4). Stripe le
+            // 19/10/2026 (D6) : c'est lui qui encaisse un carnet commandé.
+            LegalBlock.Bullets(listOf(
+                "Webflow Inc.",
+                "Google LLC (Analytics)",
+                "Hotjar Ltd",
+                "Meta Platforms Inc.",
+                "Apple Distribution International Ltd. (App Store, paiement de l’abonnement)",
+                "Stripe Payments Europe Ltd. (paiement des carnets imprimés)",
+            )),
+            LegalBlock.Paragraph("Aucune de vos données n’est vendue à des tiers. Aucune donnée n’est partagée à des fins commerciales sans votre consentement explicite."),
+        )
+    )
+
+    // 4. Transferts hors Union européenne
+
+    val transfers = LegalChapter(
+        id = "confidentialite.transferts",
+        number = 4,
+        title = "Transferts hors Union européenne",
+        blocks = listOf(
+            LegalBlock.Paragraph("Certains de nos prestataires (Webflow, Google, Meta) sont basés aux États-Unis. Ces transferts sont encadrés par des clauses contractuelles types (CCT) approuvées par la Commission européenne, conformément à l’article 46 du RGPD, garantissant un niveau de protection adéquat de vos données."),
+        )
+    )
+
+    // 5. Sécurité des données
+
+    val security = LegalChapter(
+        id = "confidentialite.securite",
+        number = 5,
+        title = "Sécurité des données",
+        blocks = listOf(
+            LegalBlock.Paragraph("Hugo Jouffre met en œuvre les mesures techniques et organisationnelles appropriées pour protéger vos données contre tout accès non autorisé, perte, altération ou divulgation. Le site est hébergé sur une infrastructure sécurisée (Webflow) avec connexion chiffrée HTTPS."),
+            LegalBlock.Paragraph("Vos numéros de téléphone collectés via le formulaire bêta sont stockés dans un outil sécurisé accessible uniquement par les fondateurs de MemoBook (Hugo Jouffre et Paul Jouffre)."),
+        )
+    )
+
+    // 6. Vos droits
+
+    val rights = LegalChapter(
+        id = "confidentialite.droits",
+        number = 6,
+        title = "Vos droits",
+        blocks = listOf(
+            LegalBlock.Paragraph("Conformément au RGPD et à la loi Informatique et Libertés, vous disposez des droits suivants concernant vos données personnelles :"),
+            LegalBlock.Bullets(listOf(
+                "**Droit d’accès :** obtenir la confirmation que des données vous concernant sont traitées, et en recevoir une copie.",
+                "**Droit de rectification :** corriger des données inexactes ou incomplètes vous concernant.",
+                "**Droit à l’effacement (« droit à l’oubli ») :** demander la suppression de vos données, sous réserve de nos obligations légales.",
+                "**Droit à la limitation du traitement :** demander la suspension du traitement de vos données dans certains cas.",
+                "**Droit à la portabilité :** recevoir vos données dans un format structuré et lisible par machine.",
+                "**Droit d’opposition :** vous opposer à tout moment au traitement de vos données fondé sur notre intérêt légitime, notamment à des fins de publicité.",
+                "**Droit de retirer votre consentement :** lorsque le traitement est fondé sur votre consentement, vous pouvez le retirer à tout moment sans que cela nuise à la licéité du traitement effectué avant ce retrait.",
+            )),
+            LegalBlock.Paragraph("Pour exercer vos droits, contactez-nous par email à : $contactLink, en précisant votre identité. Nous nous engageons à répondre dans un délai d’un mois."),
+        )
+    )
+
+    // 7. Droit de réclamation
+
+    val complaint = LegalChapter(
+        id = "confidentialite.reclamation",
+        number = 7,
+        title = "Droit de réclamation",
+        blocks = listOf(
+            LegalBlock.Paragraph("Si vous estimez que vos droits ne sont pas respectés, vous avez le droit de déposer une réclamation auprès de la Commission Nationale de l’Informatique et des Libertés (CNIL) :"),
+            LegalBlock.Lines(listOf(
+                "CNIL — 3 Place de Fontenoy, TSA 80715, 75334 Paris Cedex 07",
+                "Site : [https://www.cnil.fr](https://www.cnil.fr)",
+                "Formulaire de plainte en ligne : [https://www.cnil.fr/fr/plaintes](https://www.cnil.fr/fr/plaintes)",
+            )),
+        )
+    )
+
+    // 8. Mineurs
+
+    val minors = LegalChapter(
+        id = "confidentialite.mineurs",
+        number = 8,
+        title = "Mineurs",
+        blocks = listOf(
+            LegalBlock.Paragraph("MemoBook est accessible à partir de 4 ans. Dans le cadre du RGPD, le traitement des données d’un enfant de moins de 16 ans n’est licite que si le titulaire de la responsabilité parentale a donné son consentement. En soumettant un numéro de téléphone via notre formulaire pour un enfant de moins de 16 ans, le parent ou tuteur légal confirme avoir donné son accord."),
+        )
+    )
+
+    // 9. Modifications de la politique
+
+    val changes = LegalChapter(
+        id = "confidentialite.modifications",
+        number = 9,
+        title = "Modifications de la politique",
+        blocks = listOf(
+            LegalBlock.Paragraph("Cette politique peut être mise à jour à tout moment pour refléter des changements dans nos pratiques ou la réglementation applicable. La date de mise à jour est systématiquement indiquée en haut de la page. Nous vous encourageons à la consulter régulièrement."),
+        )
+    )
+
+    // 10. Contact
+
+    val contact = LegalChapter(
+        id = "confidentialite.contact",
+        number = 10,
+        title = "Contact",
+        blocks = listOf(
+            LegalBlock.Paragraph("Pour toute question relative à la protection de vos données personnelles :"),
+            LegalBlock.Lines(listOf(
+                "Hugo Jouffre",
+                "28 rue Tête d’Or, 69006 Lyon",
+                contactLink,
+            )),
+        )
+    )
+}
