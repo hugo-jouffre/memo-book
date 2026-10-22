@@ -1,0 +1,13 @@
+-- L'abonnement Google Play (lot B4, app Android) : un troisième fournisseur à
+-- côté de StoreKit et de Stripe.
+--
+-- Rien d'autre à ajouter pour retrouver un abonnement par son jeton d'achat
+-- Play : il va dans `subscriptions.providerSubscriptionId`, déjà unique (et
+-- donc indexé) — la place de l'`originalTransactionId` d'Apple. Un jeton
+-- survit aux renouvellements ; un réabonnement ou un changement d'offre en
+-- donne un nouveau, qui pointe l'ancien (`linkedPurchaseToken`) : c'est une
+-- nouvelle ligne, et l'ancienne se ferme. Chaque commande payée
+-- (`GPA.…`, `GPA.…..0`) va dans `subscription_transactions.transactionId`.
+--
+-- Additive : les builds iOS en circulation ne lisent jamais cette valeur.
+ALTER TYPE "SubscriptionProvider" ADD VALUE 'google_play';
