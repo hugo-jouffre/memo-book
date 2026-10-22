@@ -37,6 +37,7 @@ dependencies {
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.exifinterface)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     // « Continuer avec Google » : le Credential Manager, et son pont vers les

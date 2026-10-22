@@ -359,7 +359,7 @@ object UpcomingTripCopy {
      */
     fun daysUntilDeparture(start: Instant?, today: Instant, zone: ZoneId = ZoneId.systemDefault()): Int? {
         start ?: return null
-        val days = ChronoUnit.DAYS.between(LocalDate.ofInstant(today, zone), LocalDate.ofInstant(start, zone)).toInt()
+        val days = ChronoUnit.DAYS.between(today.atZone(zone).toLocalDate(), start.atZone(zone).toLocalDate()).toInt()
         return days.takeIf { it > 0 }
     }
 }

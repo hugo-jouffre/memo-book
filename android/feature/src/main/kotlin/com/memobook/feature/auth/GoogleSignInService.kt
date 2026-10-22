@@ -7,6 +7,8 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
@@ -47,6 +49,12 @@ internal object GoogleSignInService {
             CredentialManager.create(activity).getCredential(activity, request)
         } catch (_: GetCredentialCancellationException) {
             return null
+        } catch (_: NoCredentialException) {
+            // Aucun compte Google sur le téléphone, ou les services Google
+            // absents : la fenêtre n'a rien à montrer.
+            throw GoogleSignInError.NoPresenter
+        } catch (_: GetCredentialException) {
+            throw GoogleSignInError.NoPresenter
         }
 
         // Deux types pour le même jeton : celui de la feuille du bouton

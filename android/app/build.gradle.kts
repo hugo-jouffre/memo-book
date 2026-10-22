@@ -89,6 +89,11 @@ android {
     // le paquet par langue — un téléphone réglé en anglais recevrait sinon les
     // textes anglais des bibliothèques, et non les français que l'app affiche.
     androidResources { localeFilters += setOf("fr") }
+
+    // Le lint de l'app relit aussi `:core`, module JVM que le lint d'Android
+    // ne regarde pas seul : une API Java trop récente pour Android 8 (un
+    // `LocalDate.ofInstant`) y passerait sinon jusqu'au téléphone.
+    lint { checkDependencies = true }
     bundle { language { enableSplit = false } }
 }
 

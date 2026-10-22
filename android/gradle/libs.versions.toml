@@ -26,6 +26,8 @@ lifecycle = "2.11.0"
 navigation3 = "1.2.0"
 coil = "3.6.3"
 work = "2.12.0"
+# Le sens d'une photo prise ou choisie : la version d'AndroidX, juste sur tous les Android.
+exifinterface = "1.4.2"
 # L'entrée par Google : le Credential Manager d'Android, qui rend le jeton
 # d'identité que le serveur vérifie comme celui du SDK Google d'iOS.
 credentials = "1.6.0"
@@ -65,6 +67,7 @@ androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", 
 androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "navigation3" }
 androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }

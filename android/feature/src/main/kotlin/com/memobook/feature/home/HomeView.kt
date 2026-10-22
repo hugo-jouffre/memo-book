@@ -999,7 +999,7 @@ object TripEndReminder {
      * Aujourd'hui, `AAAA-MM-JJ` — en temps universel, comme le
      * `.iso8601.year().month().day()` d'iOS, dont le fuseau par défaut est GMT.
      */
-    fun today(now: Instant = Instant.now()): String = LocalDate.ofInstant(now, ZoneOffset.UTC).toString()
+    fun today(now: Instant = Instant.now()): String = now.atOffset(ZoneOffset.UTC).toLocalDate().toString()
 
     /** Ouvre la page des abonnements de Google Play — l'app Play Store, ou le navigateur sans elle. */
     fun openPlaySubscriptions(context: Context) {
