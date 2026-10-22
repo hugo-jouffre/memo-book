@@ -271,6 +271,9 @@ data class PrintOrder(
             val max = estimatedMaxDays ?: return null
             return DayRange(min = min, max = max)
         }
+
+    /** Porte les jeux d'essai de `:feature` (`PrintOrder.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 /** Un carnet avec tout son contenu — la réponse de `GET /v1/memos/:id`. */

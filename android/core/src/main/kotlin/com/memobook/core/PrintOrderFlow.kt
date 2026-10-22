@@ -161,6 +161,9 @@ data class OrderContext(
         ShippingSpeed.Standard -> standardDays
         ShippingSpeed.Express -> expressDays
     }
+
+    /** Porte les jeux d'essai de `:feature` (`OrderContext.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 /** Deux bornes plutôt qu'une date : un imprimeur annonce un délai, pas un rendez-vous. */
@@ -230,6 +233,9 @@ data class OrderQuote(
     val estimatedMaxDays: Int,
 ) {
     val estimatedDays: DayRange get() = DayRange(min = estimatedMinDays, max = estimatedMaxDays)
+
+    /** Porte les jeux d'essai de `:feature` (`OrderQuote.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 // MARK: - Ce qu'on envoie
@@ -415,4 +421,7 @@ data class NewPrintOrderRequest(
         shipping = draft.shipping,
         copyOptions = draft.copyOptions,
     )
+
+    /** Porte les jeux d'essai de `:feature` (`NewPrintOrderRequest.previewRequest`), qui s'y écrivent en extensions. */
+    companion object
 }

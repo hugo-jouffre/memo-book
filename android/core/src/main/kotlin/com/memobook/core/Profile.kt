@@ -175,7 +175,10 @@ data class Connector(
     val promise: String,
     @Required val isEnabled: Boolean = false,
     val logoAssetName: String? = null,
-)
+) {
+    /** Porte les jeux d'essai de `:feature` (`Connector.fixtures`), qui s'y écrivent en extensions. */
+    companion object
+}
 
 /**
  * L'abonnement, tel que les feuilles le présentent.
@@ -953,6 +956,9 @@ data class TravellerProfile(
             }
         }
     }
+
+    /** Porte les jeux d'essai de `:feature` (`TravellerProfile.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 /**

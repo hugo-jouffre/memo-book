@@ -63,7 +63,7 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory {
 
         val configuration = if (switches.previewSignedIn) null else fromBuildConfiguration()
         val api = if (configuration == null) {
-            PreviewSupport.api()
+            PreviewSupport.api(switches)
         } else {
             MemoBookApiClient(
                 configuration = configuration,

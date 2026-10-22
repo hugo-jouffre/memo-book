@@ -176,6 +176,9 @@ data class TravelStatistics(
             overall == other.overall &&
             currentTrip == other.currentTrip &&
             pendingDetections == other.pendingDetections
+
+    /** Porte les jeux d'essai de `:feature` (`TravelStatistics.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 /**

@@ -50,6 +50,9 @@ data class PlacedPrintOrder(val order: PrintOrder, val payment: OrderPayment) {
             encoder.encodeOrderAtRoot(value.order, value.payment)
         }
     }
+
+    /** Porte les jeux d'essai de `:feature` (`PlacedPrintOrder.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 /**

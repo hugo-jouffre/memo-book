@@ -93,4 +93,7 @@ data class Gallery(
      *  prochain prévu. C'est lui qui décide du bouton du bas — « Continuer mon
      *  voyage » plutôt que « Créer mon voyage ». `null` quand il n'y en a aucun. */
     val resumableTripId: String? = null,
-)
+) {
+    /** Porte les jeux d'essai de `:feature` (`Gallery.fixture`…), qui s'y écrivent en extensions. */
+    companion object
+}

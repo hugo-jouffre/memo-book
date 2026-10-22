@@ -82,6 +82,9 @@ data class BookCustomisation(
     /** « 2 / étape », ou « Aucune » quand le quota est nul. */
     val decorationLabel: String
         get() = if (decorationQuota == 0) "Aucune" else "$decorationQuota / étape"
+
+    /** Porte les jeux d'essai de `:feature` (`BookCustomisation.fixture`…), qui s'y écrivent en extensions. */
+    companion object
 }
 
 /**
