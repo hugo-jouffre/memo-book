@@ -11,6 +11,7 @@ import { registerAccountDeletionPageRoutes } from "./routes/accountDeletionPage.
 import { registerDataExportPageRoutes } from "./routes/dataExportPage.js";
 import { registerSharePageRoutes } from "./routes/sharePage.js";
 import { registerAppStoreRoutes, registerAppStoreWebhookRoutes } from "./routes/appStore.js";
+import { registerGooglePlayRoutes, registerGooglePlayWebhookRoutes } from "./routes/googlePlay.js";
 import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerEntryRoutes } from "./routes/entries.js";
@@ -153,6 +154,9 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // Apple non plus : ses notifications d'abonnement sont des JWS, et c'est leur
   // chaîne de certificats qui les authentifie.
   registerAppStoreWebhookRoutes(app, context);
+  // Google Play non plus : Pub/Sub pousse ses notifications avec un jeton
+  // OIDC (ou le secret de l'URL), vérifié par la route.
+  registerGooglePlayWebhookRoutes(app, context);
 
   // L'écran de bienvenue s'affiche avant toute connexion : sa route ne peut pas
   // en exiger une.
@@ -203,6 +207,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerChatRoutes(accountRoutes, context);
     registerBookPreviewRoutes(accountRoutes, context);
     registerAppStoreRoutes(accountRoutes, context);
+    registerGooglePlayRoutes(accountRoutes, context);
     registerPaymentMethodRoutes(accountRoutes, context);
     registerNotificationRoutes(accountRoutes, context);
     registerSupportRoutes(accountRoutes, context);

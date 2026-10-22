@@ -8,7 +8,7 @@ Ce que le dépôt encaisse, par quel rail, et comment le vérifier.
 >
 > | Ce qu'on vend | Rail | Pourquoi |
 > |---|---|---|
-> | Abonnement mensuel (récit illimité) | **StoreKit 2** | Service numérique → Apple impose l'achat intégré |
+> | Abonnement mensuel (récit illimité) | **StoreKit 2** (iPhone), **Google Play Billing** (Android) | Service numérique → le store impose l'achat intégré |
 > | Carnet imprimé | **Stripe** | Bien physique → l'achat intégré est **interdit** |
 
 **La cagnotte est retirée** (Hugo, 06/10/2026 — « on supprime la cagnotte ») :
@@ -678,6 +678,111 @@ Côté Xcode, **rien à cocher** : l'achat intégré n'a pas d'entitlement.
    sans fichier StoreKit : **un mois dure 5 minutes**, on voit arriver les
    renouvellements, la coupure et l'expiration dans les logs de Railway.
 3. **TestFlight** : le même sandbox, sur le binaire de production.
+
+## L'abonnement Google Play (Android, lot B4)
+
+Le même produit, **`com.memobook.app.subscription.monthly`**, plan de base
+mensuel à 4,99 €, sur le paquet `com.memobook.app`. L'identifiant est écrit
+deux fois : `GOOGLE_PLAY_PRODUCT_IDS` (`subscriptionCatalog.ts`) et
+`PlayCatalog` (`android/payments`).
+
+```
+App ─ launchBillingFlow(obfuscatedAccountId: id du compte)
+  └─ feuille de Google Play ─→ jeton d'achat (opaque, non signé)
+       └─ POST /v1/subscriptions/google-play ─→ subscriptionsv2.get chez Google
+            ─→ subscriptions + registre ─→ :acknowledge ─→ profil
+                 (l'app n'acquitte jamais : non acquitté, elle le renvoie au lancement)
+
+Google ─ Pub/Sub push ─ POST /v1/webhooks/google-play
+  └─ achat, renouvellement, résiliation, délai de grâce, suspension, pause,
+     expiration, révocation, remboursement (voidedPurchaseNotification)
+```
+
+**Ce qui change par rapport à Apple** (`services/googlePlay.ts`) :
+
+- **Le jeton ne prouve rien** : le serveur relit l'abonnement chez Google à
+  chaque fois — à l'achat comme à chaque notification, qui ne porte qu'un type
+  et un jeton. C'est la lecture qui fait foi, pas la notification.
+- **Acquitter dans les trois jours**, sinon Google rembourse. Le serveur le
+  fait après avoir ouvert l'abonnement ; un acquittement raté ne fait pas
+  échouer la route (l'app renverra l'achat non acquitté, et la notification
+  retente). Un achat qu'aucun compte ne porte n'est **pas** acquitté.
+- **Un réabonnement change de jeton** : nouvelle ligne `subscriptions`, et
+  celle du jeton remplacé (`linkedPurchaseToken`) se ferme.
+- Une ligne par jeton (`providerSubscriptionId`), une ligne de
+  `subscription_transactions` par commande payée (`GPA.…`, `GPA.…..0`).
+
+| Chez Google | `subscriptions.status` | Accès |
+|---|---|---|
+| `ACTIVE`, renouvellement armé | `active` | oui |
+| `CANCELED` (résilié, période en cours) | `cancelled` | jusqu'à `renewsAt` |
+| `IN_GRACE_PERIOD` | `past_due` | oui |
+| `ON_HOLD`, `PAUSED` | `expired` | non |
+| `EXPIRED` | `expired` | non |
+| révoqué, remboursé | `expired` | non, dès la révocation |
+| `PENDING` | rien d'écrit — 422 `purchase_pending` | non |
+
+Les codes que l'app attend (`AppDependencies.deliveringTransaction`) :
+**400** jeton inconnu ou autre produit, **403** achat fait depuis un autre
+compte MemoBook (`obfuscatedExternalAccountId`), **409** abonnement déjà
+rattaché à un autre compte — définitifs ; **422** en attente de paiement,
+**503** Google injoignable ou serveur non configuré — l'app réessaiera. Un
+achat **sans** id de compte (code promo utilisé dans le Play Store) ou au nom
+d'un compte supprimé se rattache au compte qui l'envoie, comme chez Apple.
+
+**Google seul résilie**, comme Apple : `POST /v1/profile/subscription/cancel`
+n'enregistre que la raison d'un abonnement Play. Le profil dit quel store tient
+l'abonnement — `subscription.store` (`app_store`, `google_play` ou nul) et
+`subscription.manageUrl`, à côté de `managedByAppStore` que les builds iOS
+lisent tel quel —, l'accueil aussi (`traveller.subscriptionStore`). Le rappel
+de fin de voyage, les notifications de renouvellement et l'e-mail comptent
+l'abonnement Play ; l'e-mail donne le chemin du Play Store et son lien.
+
+### Configuration
+
+| Variable | Où | Note |
+|---|---|---|
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Railway (`api`, et `worker` s'il lit un jour des achats) | La clé JSON d'un compte de service, tout le fichier. Vide : la route d'achat répond 503 `google_play_unavailable` |
+| `GOOGLE_PLAY_PACKAGE_NAME` | défaut `com.memobook.app` | |
+| `GOOGLE_PLAY_PUSH_AUDIENCE` | Railway (`api`) | L'audience du jeton OIDC réglée sur l'abonnement push |
+| `GOOGLE_PLAY_PUSH_SERVICE_ACCOUNT` | Railway (`api`) | L'adresse du compte de service qui signe le push. Exigée avec l'audience |
+| `GOOGLE_PLAY_WEBHOOK_SECRET` | Railway (`api`) | À défaut d'OIDC : l'URL du push porte `?secret=…` |
+
+Sans authentification posée, le webhook répond 503 `webhook_not_configured` :
+Pub/Sub garde les messages sept jours.
+
+### Ce qui se fait chez Google
+
+1. **Google Cloud** (le projet lié à la Play Console) : activer *Google Play
+   Android Developer API* et *Cloud Pub/Sub API* ; créer un compte de service,
+   une clé JSON → `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`.
+2. **Play Console ▸ Utilisateurs et autorisations** : inviter ce compte de
+   service, avec « Afficher les données financières » et « Gérer les commandes
+   et les abonnements ».
+3. **Pub/Sub** : un sujet (`play-rtdn`), où
+   `google-play-developer-notifications@system.gserviceaccount.com` a le rôle
+   *Pub/Sub Publisher* ; un abonnement **push** vers
+   `https://api-production-9f35a.up.railway.app/v1/webhooks/google-play`,
+   *Activer l'authentification* avec un compte de service (son adresse →
+   `GOOGLE_PLAY_PUSH_SERVICE_ACCOUNT`) et une audience (→
+   `GOOGLE_PLAY_PUSH_AUDIENCE`, par défaut l'URL elle-même).
+4. **Play Console ▸ Monétiser ▸ Configuration de la monétisation** : le nom du
+   sujet, puis *Envoyer une notification de test* — le log `Notification Google
+   Play de test reçue.` le confirme.
+5. **Monétiser ▸ Abonnements** : le produit, son plan de base mensuel, et ne
+   l'activer qu'une fois ce qui précède en place.
+6. **Testeurs de licence** (*Paramètres ▸ Test de licence*) : leurs achats
+   arrivent avec `environment = Sandbox`, et un mois y dure 5 minutes.
+
+Vérifier que le déployé reçoit, sans rien écrire :
+
+```bash
+curl -s -X POST https://api-production-9f35a.up.railway.app/v1/webhooks/google-play \
+  -H 'content-type: application/json' -d '{}'
+```
+
+`unauthorized` : la route est là et refuse ce que Pub/Sub n'a pas signé ;
+`webhook_not_configured` : il manque les variables.
 
 ## Ce qui n'existe pas encore
 

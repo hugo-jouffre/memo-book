@@ -786,7 +786,7 @@ describe("se désabonner, partout (07/10/2026)", () => {
       renewsAt: overrides.renewsAt,
     });
     const soon = new Date("2026-10-20T12:00:00Z");
-    expect(armedAppleRenewal([line({ renewsAt: soon })], now)).toEqual({ renewsAt: soon });
+    expect(armedAppleRenewal([line({ renewsAt: soon })], now)).toEqual({ renewsAt: soon, store: "app_store" });
     expect(armedAppleRenewal([line({ status: "cancelled", autoRenews: false, renewsAt: soon })], now)).toBeNull();
     // Échue depuis cinq jours, sans nouvelles : finie.
     expect(armedAppleRenewal([line({ renewsAt: new Date("2026-10-02T12:00:00Z") })], now)).toBeNull();

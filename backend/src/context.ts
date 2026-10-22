@@ -5,6 +5,7 @@ import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
 import { splitPoolBudget, withConnectionLimit } from "./lib/databasePool.js";
 import { SchemaGuard } from "./lib/schemaGuard.js";
 import { createAppStoreVerifier, type AppStoreVerifier } from "./services/appStore.js";
+import { createGooglePlay, type GooglePlay } from "./services/googlePlay.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createResponder, type MemoResponder } from "./services/conversation.js";
@@ -46,6 +47,8 @@ export interface AppContext {
   payments: PaymentGateway;
   /** L'abonnement : vérifie ce qu'Apple signe — voir `services/appStore.ts`. */
   appStore: AppStoreVerifier;
+  /** L'abonnement sur Android : lit et acquitte les achats Google Play — voir `services/googlePlay.ts`. */
+  googlePlay: GooglePlay;
   /** Les notifications, par APNs — voir `services/apns.ts`. */
   push: PushSender;
 }
@@ -90,6 +93,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     renderer: createBookRenderer(env),
     payments: createPaymentGateway(env),
     appStore: createAppStoreVerifier(env),
+    googlePlay: createGooglePlay(env),
     push: createPushSender(env, logger),
   };
 

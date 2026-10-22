@@ -278,7 +278,8 @@ export function subscriptionReminderBookLine(message: Pick<SubscriptionReminderM
  * voit pas.
  *
  * **Doux, et utile** : le voyage est fini, l'abonnement ne sert plus d'ici le
- * prochain, voici comment le couper sur l'iPhone, et ce qu'il garde — l'illimité
+ * prochain, voici comment le couper (sur l'iPhone, ou dans le Play Store pour
+ * un abonnement pris sur Android), et ce qu'il garde — l'illimité
  * jusqu'au bout de ce qu'il a payé, ses carnets pour toujours. Pas d'urgence,
  * pas de reproche : on lui rend un service, on ne le relance pas.
  */
@@ -294,7 +295,13 @@ export function renderSubscriptionReminderMail(
   const renewal =
     `Ton abonnement MemoBook, lui, se renouvelle tout seul. Si tu n’en as plus besoin d’ici ton prochain ` +
     `voyage, pense à le couper : tu gardes l’illimité ${until}.`;
-  const path = "Réglages ▸ ton nom ▸ Abonnements ▸ MemoBook, puis « Annuler l’abonnement »";
+  // **Le chemin du store qui le tient** (lot B4) : un abonné Android ne lit
+  // pas « Réglages ▸ ton nom » ni « Sur ton iPhone ».
+  const onPlay = message.store === "google_play";
+  const path = onPlay
+    ? "Play Store ▸ ton profil ▸ Paiements et abonnements ▸ Abonnements ▸ MemoBook, puis « Résilier l’abonnement »"
+    : "Réglages ▸ ton nom ▸ Abonnements ▸ MemoBook, puis « Annuler l’abonnement »";
+  const where = onPlay ? "Sur ton téléphone Android" : "Sur ton iPhone";
 
   const text = [
     "MemoBook",
@@ -307,7 +314,7 @@ export function renderSubscriptionReminderMail(
     "",
     renewal,
     "",
-    `Sur ton iPhone : ${path}. Ou directement ici :`,
+    `${where} : ${path}. Ou directement ici :`,
     manageUrl,
     "",
     "Tu peux aussi le faire en un geste depuis l’accueil de l’app.",
@@ -346,7 +353,7 @@ export function renderSubscriptionReminderMail(
 <tr>
 <td style="padding:0 24px 24px;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:${COLORS.background};border-radius:14px;">
-<tr><td style="padding:16px 20px;font-family:${font};font-size:14px;line-height:21px;color:${COLORS.ink};"><strong style="font-weight:600;">Sur ton iPhone</strong><br>${escapeHtml(path)}.</td></tr>
+<tr><td style="padding:16px 20px;font-family:${font};font-size:14px;line-height:21px;color:${COLORS.ink};"><strong style="font-weight:600;">${escapeHtml(where)}</strong><br>${escapeHtml(path)}.</td></tr>
 </table>
 </td>
 </tr>
