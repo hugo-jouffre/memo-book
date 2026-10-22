@@ -154,7 +154,9 @@ private fun ToggleCardText(title: String, detail: String, modifier: Modifier) {
  * texte, comme sur iOS. Il bascule au toucher et au glissé, et TalkBack
  * l'annonce « activé » ou « désactivé ».
  *
- * Partagé par [BrandToggleCard] et la ligne à interrupteur de [BrandRowGroup].
+ * Partagé par [BrandToggleCard], la ligne à interrupteur de [BrandRowGroup],
+ * et l'option d'un exemplaire du tunnel de commande (`OrderToggleCard`, le
+ * `Toggle` d'iOS posé dans sa propre carte) : c'est pour elle qu'il est public.
  *
  * @param onIsOnChange `null` : il ne prend plus le doigt — une carte indisponible.
  * @param isTapTarget `false` quand c'est la ligne entière qui bascule le réglage
@@ -162,7 +164,7 @@ private fun ToggleCardText(title: String, detail: String, modifier: Modifier) {
  * @param contentDescription ce que TalkBack nomme, quand il est sa propre cible.
  */
 @Composable
-internal fun BrandSwitch(
+fun BrandSwitch(
     isOn: Boolean,
     onIsOnChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
