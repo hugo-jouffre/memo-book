@@ -142,6 +142,8 @@ enum WalletEntryKind {
 enum SubscriptionProvider {
   storekit
   stripe
+  /// L'app Android (lot B4) : le jeton d'achat Play dans `providerSubscriptionId`.
+  google_play
 }
 
 enum SubscriptionStatus {
@@ -163,6 +165,13 @@ enum ExpenseSource {
 enum PushEnvironment {
   sandbox
   production
+}
+
+/// Qui sait joindre un jeton : APNs pour un iPhone, Firebase Cloud Messaging
+/// pour un téléphone Android (lot B3, 22/10/2026).
+enum PushProvider {
+  apns
+  fcm
 }
 
 /// Les notifications que le serveur envoie — `docs/notifications.md`. Une
@@ -439,7 +448,7 @@ model Session {
   @@map("sessions")
 }
 
-/// Un téléphone qui accepte les notifications, tel qu'Apple le désigne.
+/// Un téléphone qui accepte les notifications, tel qu'Apple — ou Firebase — le désigne.
 ///
 /// **Rattaché à la session, pas seulement au compte.** Se déconnecter supprime
 /// la session, donc le jeton avec elle : un téléphone rendu, prêté ou partagé
@@ -459,8 +468,14 @@ model PushToken {
 
   /// Le jeton APNs, en hexadécimal, tel que `didRegisterForRemoteNotifications`
   /// le donne. Ce n'est pas un secret : il ne sert qu'avec la clé du serveur.
+  ///
+  /// Un jeton FCM, lui, s'écrit tel que Firebase le donne — lettres, chiffres,
+  /// `:`, `-`, `_` — et **ne se met pas en minuscules** : la casse en fait partie.
   token       String          @unique
+  /// `sandbox` ou `production` pour APNs. FCM ne connaît qu'un serveur : la
+  /// valeur y est retenue pour le support, sans servir à l'envoi.
   environment PushEnvironment
+  provider    PushProvider    @default(apns)
   /// La version de l'app qui l'a envoyé (`0.1.0 (8)`), pour le support.
   appVersion  String?
 
@@ -1746,8 +1761,11 @@ model Subscription {
   /// Le pas de facturation, « week » ou « month ».
   interval   String @default("month")
 
-  /// La référence chez le fournisseur : abonnement Stripe, ou transaction
-  /// d'origine StoreKit.
+  /// La référence chez le fournisseur : abonnement Stripe, transaction
+  /// d'origine StoreKit, ou jeton d'achat Google Play.
+  ///
+  /// Chez Google, un réabonnement donne un **nouveau** jeton : c'est une
+  /// nouvelle ligne, et celle de l'ancien jeton se ferme (`googlePlaySubscriptions.ts`).
   ///
   /// ⚠️ **Chez Apple, elle survit aux interruptions.** Un identifiant Apple qui
   /// se réabonne plus tard garde le même `originalTransactionId` : la ligne
@@ -1755,8 +1773,8 @@ model Subscription {
   /// garde l'historique de chaque période payée.
   providerSubscriptionId String? @unique
 
-  /// Le produit App Store (`com.memobook.app.subscription.weekly`). Nul pour
-  /// une ligne qui ne vient pas de StoreKit.
+  /// Le produit App Store ou Google Play (`com.memobook.app.subscription.monthly`,
+  /// le même identifiant des deux côtés). Nul pour une ligne Stripe.
   productId         String?
   /// Le renouvellement est-il encore armé chez Apple ? `false` dès que la
   /// personne l'a coupé dans les réglages iOS — l'abonnement court alors
