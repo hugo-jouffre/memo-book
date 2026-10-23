@@ -78,4 +78,24 @@ struct LegalDocumentTests {
         #expect(document.chapter(id: first.id) == first)
         #expect(document.chapter(id: "\(document.id).inconnu") == nil)
     }
+
+    /// MemoBook est réservé aux 16 ans et plus (Hugo, 23/10/2026) : les deux
+    /// documents le disent.
+    @Test("L’âge minimum est de 16 ans")
+    func theMinimumAgeIsSixteen() {
+        let access = TermsOfUse.access.texts()
+        #expect(access.contains { $0.contains("au moins 16 ans") })
+        #expect(!access.contains { $0.contains("4 ans") })
+        #expect(PrivacyPolicy.minors.texts().contains { $0.contains("au moins 16 ans") })
+    }
+
+    /// La politique décrit l'app : chaque prestataire qui reçoit des données
+    /// de l'app est nommé.
+    @Test("Chaque prestataire de l’app est un destinataire")
+    func everyAppProcessorIsARecipient() {
+        let recipients = PrivacyPolicy.recipients.texts()
+        for name in ["Railway", "Supabase", "Anthropic", "OpenAI", "APITemplate", "Resend", "Stripe", "Firebase", "Google Play", "App Store"] {
+            #expect(recipients.contains { $0.contains(name) }, "\(name)")
+        }
+    }
 }

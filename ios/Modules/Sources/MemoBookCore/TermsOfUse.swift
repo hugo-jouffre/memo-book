@@ -64,7 +64,7 @@ public enum TermsOfUse {
         number: 3,
         title: "Accès au service et âge minimum",
         blocks: [
-            .paragraph("L’utilisation de MemoBook est autorisée à partir de 4 ans. Pour les utilisateurs mineurs de moins de 16 ans, l’accord d’un parent ou tuteur légal est requis. En utilisant le service, vous confirmez que vous êtes soit majeur, soit que vous avez obtenu cette autorisation parentale."),
+            .paragraph("MemoBook est réservé aux personnes âgées d’au moins 16 ans. En créant un compte, vous confirmez avoir 16 ans ou plus. Un parent peut raconter les souvenirs de voyage de ses enfants depuis son propre compte ; un enfant de moins de 16 ans ne peut pas ouvrir de compte."),
         ]
     )
 
