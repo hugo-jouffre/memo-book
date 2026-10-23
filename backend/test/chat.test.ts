@@ -149,6 +149,7 @@ beforeEach(async () => {
   await resetDatabase(harness.prisma);
   owner = await registerAccount(harness.app, "hugo@memobook.app");
   responder.calls = 0;
+  responder.inputs = [];
   redactor.doubts = [];
   redactor.inputs = [];
 });
@@ -181,13 +182,16 @@ async function readThread(memoId: string, authorization = owner.authorization, s
 async function say(
   memoId: string,
   text: string,
-  extra: { id?: string; suggestionId?: string; entryId?: string; authorization?: string } = {},
+  extra: { id?: string; suggestionId?: string; entryId?: string; authorization?: string; platform?: string } = {},
 ) {
   const id = extra.id ?? randomUUID();
   const response = await harness.app.inject({
     method: "POST",
     url: `/v1/trips/${memoId}/chat`,
-    headers: { authorization: extra.authorization ?? owner.authorization },
+    headers: {
+      authorization: extra.authorization ?? owner.authorization,
+      ...(extra.platform ? { "x-app-platform": extra.platform } : {}),
+    },
     payload: {
       id,
       kind: "text",
@@ -542,6 +546,34 @@ async function readSteps(memoId: string) {
   return response.json<{ steps: { id: string; number: number; entryIds: string[]; photoUrl: string | null }[] }>()
     .steps;
 }
+
+describe("le téléphone du tour (lot B5, 22/10/2026)", () => {
+  it("retient Android sur le tour, et le job le dit à MEMO", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const { id } = await say(memo.id, "On a pris le train de nuit jusqu'à Naples, couchettes à six.", {
+      platform: "android",
+    });
+
+    const message = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+    expect(message.payload).toMatchObject({ platform: "android" });
+    expect(responder.inputs.at(-1)?.message.id).toBe(id);
+    expect(responder.inputs.at(-1)?.traveller.platform).toBe("android");
+  });
+
+  it("sans l'en-tête, c'est un iPhone, et le tour reste tel qu'il était", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const { id } = await say(memo.id, "On a pris le train de nuit jusqu'à Naples, couchettes à six.");
+    const unknown = await say(memo.id, "Arrivés à l'aube, café serré sur le port avant le ferry.", {
+      platform: "windows-phone",
+    });
+
+    const message = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+    expect((message.payload as { platform?: unknown } | null)?.platform).toBeUndefined();
+    const byId = new Map(responder.inputs.map((input) => [input.message.id, input]));
+    expect(byId.get(id)?.traveller.platform).toBe("ios");
+    expect(byId.get(unknown.id)?.traveller.platform).toBe("ios");
+  });
+});
 
 describe("modifier à l'oral (Hugo, 12/10/2026)", () => {
   it("le vocal qui suit corrige la fiche au lieu de faire un souvenir de plus", async () => {

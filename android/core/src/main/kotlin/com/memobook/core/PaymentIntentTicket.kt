@@ -28,8 +28,12 @@ import java.util.Locale
  * @property applePayMerchantId **Apple Pay, quand le serveur le dit** :
  *   l'identifiant marchand, posé sur Railway une fois le certificat Apple Pay du
  *   compte Stripe en place. Absent, la feuille montre les cartes seules — mieux
- *   qu'un bouton Apple Pay qui échouerait après Face ID. Propre à iOS : la
- *   feuille Android (Google Pay) aura son propre réglage.
+ *   qu'un bouton Apple Pay qui échouerait après Face ID. Propre à iOS.
+ * @property googlePayEnabled **Google Pay, quand le serveur le dit** (lot B5,
+ *   22/10/2026) : `GOOGLE_PAY_ENABLED` sur Railway, une fois Google Pay activé
+ *   sur le compte Stripe et l'accès en production accordé par Google. Absent
+ *   d'un serveur plus ancien : faux, et la feuille montre les cartes seules.
+ *   Propre à Android — le jumeau de [applePayMerchantId].
  */
 @Serializable
 data class PaymentIntentTicket(
@@ -40,6 +44,7 @@ data class PaymentIntentTicket(
     val customerId: String? = null,
     val ephemeralKeySecret: String? = null,
     val applePayMerchantId: String? = null,
+    val googlePayEnabled: Boolean = false,
 ) {
     /** Le montant tel qu'on l'écrit à l'écran — « 107,88 € » (`fr_FR`, comme iOS). */
     val formattedAmount: String

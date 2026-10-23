@@ -4,11 +4,13 @@ import {
   AnthropicResponder,
   buildUserPrompt,
   callToActionCatalogue,
+  platformLines,
   replySchema,
   suggestionCatalogue,
   toReply,
   tripContextSchema,
 } from "./conversationAnthropic.js";
+import { loadConversationRules } from "../lib/templates.js";
 import { EMPTY_TRIP_CONTEXT, questionFor } from "./tripContext.js";
 import {
   EMPTY_CONVERSATION_STATE,
@@ -44,7 +46,7 @@ function turn(overrides: Partial<ConversationInput> = {}): ConversationInput {
       state: EMPTY_CONVERSATION_STATE,
       tripContext: null,
     },
-    traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: false },
+    traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: false, platform: "ios" },
     step: null,
     history: [],
     message: {
@@ -152,7 +154,7 @@ describe("le prompt", () => {
   it("dit au modèle si celui qui parle raconte déjà sans limite", () => {
     expect(buildUserPrompt(turn())).toContain("Abonnement : non");
     expect(
-      buildUserPrompt(turn({ traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: true } })),
+      buildUserPrompt(turn({ traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: true, platform: "ios" } })),
     ).toContain("Abonnement : oui");
   });
 
@@ -202,9 +204,32 @@ describe("le prompt", () => {
     expect(prompt).toContain("N'invente rien");
   });
 
+  it("dit à MEMO le téléphone de celui qui parle — les Réglages d'un iPhone, les Paramètres d'un Android", () => {
+    const iphone = buildUserPrompt(turn());
+    expect(iphone).toContain("Son téléphone : un iPhone");
+    expect(iphone).toContain("Réglages de l'iPhone");
+    expect(iphone).not.toContain("Android");
+
+    const android = buildUserPrompt(
+      turn({ traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: false, platform: "android" } }),
+    );
+    expect(android).toContain("Son téléphone : un Android");
+    expect(android).toContain("« les Paramètres du téléphone »");
+    expect(android).toContain("« le Play Store »");
+    // Les mots d'iPhone n'y paraissent que pour être interdits.
+    expect(platformLines("android").join(" ")).toMatch(/jamais « les Réglages\s+de l'iPhone »/);
+    expect(platformLines("android").join(" ")).toMatch(/jamais\s+« l'App Store »/);
+  });
+
+  it("garde le prompt système le même sur les deux téléphones : il est en cache", () => {
+    expect(callToActionCatalogue()).not.toMatch(/iPhone|Android|App Store|Play Store/);
+    expect(suggestionCatalogue()).not.toMatch(/iPhone|Android|App Store|Play Store/);
+    expect(loadConversationRules()).not.toMatch(/iPhone|Android|App Store|Play Store/);
+  });
+
   it("dit à MEMO qu'ils sont plusieurs sur le carnet", () => {
     expect(
-      buildUserPrompt(turn({ traveller: { firstName: "Hugo", memberCount: 3, isUnlimited: false } })),
+      buildUserPrompt(turn({ traveller: { firstName: "Hugo", memberCount: 3, isUnlimited: false, platform: "ios" } })),
     ).toContain("Ils sont 3 sur ce carnet");
   });
 });

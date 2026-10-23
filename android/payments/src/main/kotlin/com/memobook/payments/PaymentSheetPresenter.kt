@@ -94,19 +94,19 @@ object StripeSDK {
  * @param merchantCountryCode le pays du **marchand**, pas du client. `FR` parce
  *   que c'est là qu'est le compte Stripe ; le client, lui, peut payer depuis
  *   n'importe où.
- * @param googlePayEnabled **Google Pay, faux par défaut.** Le jumeau de
- *   `applePayMerchantId` : sur iOS, c'est le serveur qui dit qu'Apple Pay est
- *   prêt (`PaymentIntentTicket.applePayMerchantId`). Le serveur n'envoie pas
- *   encore d'interrupteur Google Pay (lot B5) : jusque-là, c'est
- *   `AppDependencies` qui l'allume, une fois Google Pay activé dans le tableau
- *   de bord Stripe et l'accès en production accordé par la Google Pay & Wallet
- *   Console. Allumé trop tôt, la feuille montrerait un bouton qui échoue.
- *   Quand B5 arrive, `ticket.googlePay ?: googlePayEnabled`, comme iOS.
+ *
+ * **Google Pay vient du serveur, avec chaque paiement** (lot B5, 22/10/2026) —
+ * `PaymentIntentTicket.googlePayEnabled`, comme Apple Pay sur iOS
+ * (`applePayMerchantId`). Le serveur l'allume (`GOOGLE_PAY_ENABLED`) une fois
+ * Google Pay activé dans le tableau de bord Stripe et l'accès en production
+ * accordé par la Google Pay & Wallet Console : allumé trop tôt, la feuille
+ * montrerait un bouton qui échoue. L'allumer, ou le couper en urgence, est une
+ * variable Railway, pas une livraison. Un serveur plus ancien ne l'envoie pas :
+ * cartes seules.
  */
 class StripePaymentSheetPresenter(
     private val merchantName: String = "MemoBook",
     private val merchantCountryCode: String = "FR",
-    private val googlePayEnabled: Boolean = false,
 ) : PaymentPresenter {
     private class Attached(val sheet: PaymentSheet, val context: Context)
 
@@ -149,17 +149,21 @@ class StripePaymentSheetPresenter(
             builder.customer(PaymentSheet.CustomerConfiguration(customerId, ephemeralKey))
         }
 
-        if (googlePayEnabled) {
-            builder.googlePay(
-                PaymentSheet.GooglePayConfiguration(
-                    environment = StripeSDK.googlePayEnvironment(ticket.publishableKey),
-                    countryCode = merchantCountryCode,
-                    currencyCode = ticket.currency.uppercase(),
-                ),
-            )
-        }
+        googlePay(ticket)?.let(builder::googlePay)
         return builder.build()
     }
+
+    /** Google Pay pour ce paiement, ou rien si le ticket ne l'allume pas. */
+    internal fun googlePay(ticket: PaymentIntentTicket): PaymentSheet.GooglePayConfiguration? =
+        if (ticket.googlePayEnabled) {
+            PaymentSheet.GooglePayConfiguration(
+                environment = StripeSDK.googlePayEnvironment(ticket.publishableKey),
+                countryCode = merchantCountryCode,
+                currencyCode = ticket.currency.uppercase(),
+            )
+        } else {
+            null
+        }
 
     internal fun attach(sheet: PaymentSheet, context: Context) {
         attached = Attached(sheet, context)

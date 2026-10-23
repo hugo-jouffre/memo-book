@@ -1,6 +1,7 @@
 # Notifications
 
-Les notifications envoyées par APNs : ce qui part, à qui, quel jour, et
+Les notifications envoyées par APNs aux iPhone, et par Firebase Cloud
+Messaging (FCM) aux téléphones Android depuis le lot B3 : ce qui part, à qui, quel jour, et
 pourquoi. La source est la feuille Notion « Notifications » (Clara). Ce document
 dit comment elle est appliquée, et ce qui reste à trancher.
 
@@ -149,12 +150,13 @@ d'une notification sur quatre est ouverte.
 
 | Pièce | Où |
 |---|---|
-| Jetons des téléphones | `push_tokens`, rattachés **à la session** : se déconnecter les supprime |
+| Jetons des téléphones | `push_tokens`, rattachés **à la session** : se déconnecter les supprime. `provider` dit qui sait les joindre : `apns` (défaut, chaque iPhone) ou `fcm` (Android) |
 | Journal des envois | `notification_deliveries` : les clés uniques, les plafonds, `openedAt` |
 | Calendrier scolaire | `school_holidays`, recopié chaque jour depuis data.education.gouv.fr (`fr-en-calendrier-scolaire`, Licence Ouverte), qui publie déjà l'année suivante |
 | Passe d'envoi | tâche pg-boss `memobook.send-notifications`, à la 35e minute de chaque heure (`services/notifications.ts`). Elle envoie aussi l'e-mail de fin de voyage (`sendTripEndEmails`), indépendamment d'APNs |
 | Recopie du calendrier | tâche `memobook.sync-school-holidays`, à 5 h 40 UTC. Une panne du site garde le calendrier de la veille |
 | Envoi APNs | `services/apns.ts` : HTTP/2 et JWT ES256, sans dépendance. Un jeton qu'Apple ne connaît plus est supprimé ; une panne passagère libère la clé pour que la passe suivante réessaie |
+| Envoi FCM | `services/fcm.ts` : l'API HTTP v1, un compte de service qui signe un JWT RS256 échangé contre un jeton d'accès OAuth, sans SDK. `RoutingPushSender` (`apns.ts`) envoie chaque jeton à son fournisseur. `UNREGISTERED` et `SENDER_ID_MISMATCH` oublient le jeton ; le reste est une panne passagère |
 
 Côté app (`ios/Modules/Sources/MemoBookFeature/Notifications/`) :
 
@@ -170,6 +172,26 @@ Côté app (`ios/Modules/Sources/MemoBookFeature/Notifications/`) :
   (`POST /v1/notifications/:id/opened`), qui en tient compte dans le rythme.
 - Si tout est coupé dans les Réglages d'iOS, la feuille « Notifications » le dit
   et propose d'y aller (T245).
+
+Côté Android (`android/feature/.../notifications/`, lot B3), les mêmes moments,
+les mêmes liens :
+
+- Le jeton vient de Firebase (`FirebasePushTokenSource`, et
+  `MemoBookMessagingService.onNewToken` quand il change) et part à
+  `POST /v1/push-tokens` avec `provider: "fcm"`. **Il n'est pas mis en
+  minuscules** : un jeton FCM est sensible à la casse, un jeton APNs non. Le
+  serveur prend aussi `platform: "android"` pour dire FCM ; sans l'un ni
+  l'autre, c'est APNs, comme pour chaque iPhone déjà livré.
+- **Le serveur envoie un message de données seulement**, sans clé
+  `notification` : `title`, `body`, `link`, `deliveryId`, `threadId`, les clés
+  de la charge APNs, en chaînes (un lien absent est une clé absente). Android
+  le remet toujours à l'app, ouverte ou fermée, et c'est elle qui pose la
+  notification — canal « MemoBook », toucher vers `MainActivity` avec les
+  extras `link` et `deliveryId` que `PushNotifications.didOpen(intent)` lit.
+  Priorité `high`, durée de vie d'un jour, comme `apns-expiration`.
+- Firebase s'initialise à la main, **sans le plugin `google-services` ni
+  `google-services.json`** : les quatre valeurs `memobook.firebase.*` de
+  `android/gradle.properties`. Vides, aucun jeton ne part et rien ne plante.
 
 ## 5. Configuration (Hugo)
 
@@ -202,9 +224,37 @@ Côté app (`ios/Modules/Sources/MemoBookFeature/Notifications/`) :
    `renewal_reminder` et `trip_end_email`) s'appliquent seules au déploiement
    (Pre-deploy Command, `docs/deploiement.md`).
 
+**FCM, pour Android** (lot B3), une fois le projet Firebase créé (lot A0) :
+
+6. **Console Firebase ▸ Paramètres du projet ▸ Vos applications** : ajouter
+   l'app Android `com.memobook.app`, puis recopier dans
+   `android/gradle.properties` l'ID d'application, la clé API Web, l'ID du
+   projet et le numéro du projet (`memobook.firebase.*`). Aucun n'est un
+   secret. **Ne pas** ajouter `google-services.json` au dépôt : l'app s'en passe.
+7. **Paramètres du projet ▸ Comptes de service ▸ Générer une nouvelle clé
+   privée** : le JSON téléchargé est un secret. Sur Railway, services `api` et
+   `worker` : `FCM_SERVICE_ACCOUNT_JSON` (le JSON entier, sur une ligne) et
+   `FCM_PROJECT_ID` (facultatif : vide, le `project_id` du JSON sert).
+   L'API « Firebase Cloud Messaging API (V1) » doit être activée dans la
+   Google Cloud Console du projet.
+8. **Vérifier**, sans rien envoyer à personne :
+
+   ```bash
+   cd backend && railway run --service worker --environment production -- npm run fcm:check
+   ```
+
+   `INVALID_ARGUMENT — compte de service accepté`, c'est bon : Google a
+   accepté le compte et refusé seulement le faux jeton du test.
+9. **La migration** `20261022140000_jetons_fcm` s'applique seule au
+   déploiement.
+
 Sans clé, rien ne casse : en développement les notifications sont journalisées
 au lieu de partir, en production la passe ne fait rien et le dit dans les logs,
-**sans rien marquer comme envoyé**.
+**sans rien marquer comme envoyé**. APNs et FCM sont indépendants : avec la
+seule clé d'Apple, les iPhone reçoivent les leurs, et un téléphone Android
+compte comme une panne passagère — la notification n'est pas marquée envoyée
+pour lui, et la première passe après la pose des clés FCM la reprend dans la
+journée.
 
 Pour essayer dans le simulateur, sans serveur : glisser sur le simulateur un
 fichier `.apns` qui contient `"Simulator Target Bundle": "com.memobook.app"`, un

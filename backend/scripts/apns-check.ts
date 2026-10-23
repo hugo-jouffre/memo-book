@@ -44,7 +44,7 @@ const sender = new ApnsPushSender(
 let accepted = true;
 for (const environment of ["sandbox", "production"] as const) {
   const outcome = await sender.send(
-    { token: "0".repeat(64), environment },
+    { token: "0".repeat(64), environment, provider: "apns" },
     { deliveryId: "apns-check", title: "apns-check", body: "apns-check", link: null, threadId: "apns-check" },
   );
   const reason = outcome.kind === "sent" ? "envoyée ?!" : outcome.reason;

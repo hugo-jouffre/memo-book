@@ -20,6 +20,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
@@ -83,8 +84,8 @@ class OrderPaymentResumeTest {
      * Apple Pay arrive du serveur, avec le paiement : la feuille d'iOS ne le
      * montre que s'il est là — un serveur sans certificat Apple Pay n'en envoie
      * pas. Le ticket le porte aussi sur Android, où la feuille ne le lit pas :
-     * Google Pay y est un réglage de `:payments`, et un ticket sans identifiant
-     * paie par carte.
+     * elle lit `googlePayEnabled` (B5), et un ticket sans identifiant paie par
+     * carte.
      */
     @Test fun applePayComesFromTheServerWithThePayment() {
         val withApplePay = MemoBookJson.decodeFromString(
@@ -99,6 +100,28 @@ class OrderPaymentResumeTest {
 
         val cardsOnly = assertIs<OrderSettlement.Card>(ticket.settlement, "carte attendue")
         assertNull(cardsOnly.ticket.applePayMerchantId)
+    }
+
+    /**
+     * Google Pay arrive du serveur de la même façon (lot B5) — et un serveur
+     * d'avant B5, qui ne l'envoie pas, laisse la feuille aux cartes seules.
+     */
+    @Test fun googlePayComesFromTheServerWithThePayment() {
+        val withGooglePay = MemoBookJson.decodeFromString(
+            OrderPayment.serializer(),
+            """
+            {"amountCents":4990,"currency":"eur","clientSecret":"pi_x_secret_y",
+            "publishableKey":"pk_test_x","applePayMerchantId":null,"googlePayEnabled":true}
+            """.trimIndent(),
+        )
+        val card = assertIs<OrderSettlement.Card>(withGooglePay.settlement, "carte attendue")
+        assertTrue(card.ticket.googlePayEnabled)
+
+        val olderServer = MemoBookJson.decodeFromString(
+            OrderPayment.serializer(),
+            """{"amountCents":4990,"currency":"eur","clientSecret":"pi_x_secret_y","publishableKey":"pk_test_x"}""",
+        )
+        assertFalse(assertIs<OrderSettlement.Card>(olderServer.settlement, "carte attendue").ticket.googlePayEnabled)
     }
 
     /**

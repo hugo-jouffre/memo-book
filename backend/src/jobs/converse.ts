@@ -43,6 +43,7 @@ import {
   refundSilentVoice,
   silentVoiceLine,
 } from "../services/dailyCredit.js";
+import { platformOfPayload, platformPayload } from "../services/appPlatform.js";
 import { photoBudgetFor } from "../services/photoBudget.js";
 import { measurePhoto } from "../services/photoOrientation.js";
 import { photosForTarget, tripDays } from "../services/pageTarget.js";
@@ -299,6 +300,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
       firstName: message.account?.firstName?.trim() || null,
       memberCount: 1 + activeMembers,
       isUnlimited: authorIsUnlimited,
+      platform: platformOfPayload(message.payload),
     },
     step: step
       ? {
@@ -1100,6 +1102,8 @@ async function attachSamplePhotos(
         payload: {
           entryIds: entries.map((entry) => entry.id),
           ...(targetId ? { forEntryId: targetId } : {}),
+          // Le téléphone de la puce qui les a demandées.
+          ...platformPayload(platformOfPayload(message.payload)),
         },
       },
     });

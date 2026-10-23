@@ -20,6 +20,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.memobook.core.NotificationLink
 import com.memobook.core.PushEnvironment
+import com.memobook.core.PushProvider
 import com.memobook.core.PushTokenRegistration
 import com.memobook.feature.AppSettings
 import com.memobook.networking.MemoBookApi
@@ -45,11 +46,12 @@ import java.util.TimeZone
  * - le lien touché attend dans [pendingLink] que l'accueil soit là pour ouvrir
  *   l'écran qu'il désigne.
  *
- * **Sans Firebase pour l'instant** (lot B3 : le projet Firebase n'existe pas
- * encore, et le serveur ne sait pas encore envoyer à FCM). Le jeton passe par
- * [PushTokenSource], dont l'implémentation FCM ([FirebasePushTokenSource]) ne
- * fait rien : l'autorisation, le lien en attente et l'accusé d'ouverture
- * marchent déjà, le jeton suivra.
+ * **Le jeton vient de Firebase Cloud Messaging** (lot B3, 22/10/2026), par
+ * [PushTokenSource] — [FirebasePushTokenSource] dans l'app, un double dans les
+ * tests — et part au serveur avec le fournisseur `fcm`. Le message reçu est
+ * posé par `MemoBookMessagingService` ([PushNotificationPoster]). Sans projet
+ * Firebase (`memobook.firebase.*` vides), aucun jeton ne vient : l'autorisation,
+ * le lien en attente et l'accusé d'ouverture marchent sans lui.
  *
  * L'intégrateur le construit une fois (dans `MemoBookApplication` ou
  * `RootView`, avec [create]), le pose dans [LocalPushNotifications], le branche
@@ -220,6 +222,7 @@ class PushNotifications(
             environment = environment,
             timeZone = TimeZone.getDefault().id,
             appVersion = appVersion,
+            provider = PushProvider.Fcm,
         )
         try {
             api.registerPushToken(registration)
@@ -248,7 +251,7 @@ class PushNotifications(
             scope: CoroutineScope,
         ): PushNotifications = PushNotifications(
             permission = AndroidNotificationPermission(context.applicationContext, settings),
-            tokens = FirebasePushTokenSource,
+            tokens = FirebasePushTokenSource { FirebasePush.isReady(context) },
             environment = PushEnvironment.current(isDebug),
             appVersion = appVersion,
             scope = scope,
@@ -349,30 +352,6 @@ interface PushTokenSource {
      * tout de suite ou plus tard — et de nouveau chaque fois qu'il change.
      */
     fun register(onToken: (String) -> Unit)
-}
-
-/**
- * Le jeton de Firebase Cloud Messaging.
- *
- * TODO(B3) : rien n'est branché tant que le projet Firebase n'existe pas
- * (`google-services.json`, jamais versionné) et que le serveur ne sait pas
- * envoyer à FCM (`push_tokens.provider`, `services/fcm.ts`). Le lot B3 :
- * - déclare `firebase-messaging` dans `gradle/libs.versions.toml` et `:app` ;
- * - ici, `FirebaseMessaging.getInstance().token.addOnSuccessListener(onToken)` ;
- * - un `FirebaseMessagingService` dont `onNewToken` appelle
- *   `PushNotifications.didRegister`, et `onMessageReceived` pose la
- *   notification — canal « MemoBook », `PendingIntent` vers `MainActivity`
- *   avec les extras [PushNotifications.EXTRA_LINK] et
- *   [PushNotifications.EXTRA_DELIVERY_ID] — pour qu'elle s'affiche aussi app
- *   ouverte, comme le `willPresent` d'iOS ;
- * - le jeton partira tel quel (FCM ne se met pas en minuscules) avec le
- *   fournisseur `fcm`.
- *
- * Jusque-là, aucun jeton ne part : l'autorisation, le lien en attente et
- * l'accusé d'ouverture marchent sans lui.
- */
-object FirebasePushTokenSource : PushTokenSource {
-    override fun register(onToken: (String) -> Unit) = Unit
 }
 
 /**

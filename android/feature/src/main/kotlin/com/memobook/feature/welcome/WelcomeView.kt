@@ -73,22 +73,24 @@ import com.memobook.design.SwiftMotion
 import com.memobook.design.isAccessibilityTextSize
 import com.memobook.design.scaled
 import com.memobook.feature.InMemoryAppSettings
-import com.memobook.feature.auth.AppleSignInError
-import com.memobook.feature.auth.AppleSignInService
 import com.memobook.feature.auth.AuthModel
 import com.memobook.feature.auth.GoogleSignInService
 import com.memobook.feature.auth.previewApi
 import com.memobook.feature.auth.rememberLast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import java.net.URI
 
 /**
- * L'écran d'entrée de MemoBook : ce que l'app fait, en trois mots, et les deux
- * façons d'entrer sans taper quoi que ce soit. Jumeau de `WelcomeView.swift`.
+ * L'écran d'entrée de MemoBook : ce que l'app fait, en trois mots, et la façon
+ * d'entrer sans taper quoi que ce soit. Jumeau de `WelcomeView.swift`.
  *
- * **C'est la seule porte de l'app**, et c'est ce qui a changé : Apple et Google
- * ne vivent plus dans le formulaire, ils vivent ici. Le formulaire — inscription
+ * **Sur Android, l'entrée est Google ou l'e-mail** : pas de « Continuer avec
+ * Apple », contrairement à l'iPhone (Hugo, 22/10/2026). Un compte ouvert par
+ * Apple sur l'iPhone entre ici par « Mot de passe oublié », depuis le
+ * formulaire — voir `WelcomeSocialButtons`.
+ *
+ * **C'est la seule porte de l'app**, et c'est ce qui a changé : Google ne vit
+ * plus dans le formulaire, il vit ici. Le formulaire — inscription
  * et connexion par e-mail — est devenu un écran poussé, qu'on atteint par
  * « S'inscrire avec un e-mail » et qu'on quitte par une flèche de retour.
  *
@@ -100,7 +102,7 @@ import java.net.URI
  * haut de l'écran habité.
  *
  * **Rien n'attend le réseau.** Aucun appel n'est fait ici : l'écran est
- * entièrement dessiné par l'app, et les deux boutons n'ouvrent leur feuille
+ * entièrement dessiné par l'app, et le bouton Google n'ouvre sa feuille
  * qu'au doigt. C'est le premier écran, celui qu'on voit avant d'avoir un
  * compte : il doit apparaître à l'ouverture de l'app, pas après un
  * aller-retour.
@@ -109,8 +111,6 @@ import java.net.URI
  * @param onEmail « S'inscrire avec un e-mail » — l'écran poussé qui porte le formulaire.
  * @param onTermsOfUse « Conditions d'utilisation », dans la mention légale (T151).
  * @param googleWebClientId l'audience des jetons Google. `null` : pas de bouton Google.
- * @param apple le Services ID et l'adresse de retour de l'entrée par Apple sur
- *   le web. `null` : pas de bouton Apple (lot B2).
  * @param showsTestingMode le `#if DEBUG` d'iOS : l'entrée de chantier par le
  *   compte de test, dans un build débogable seulement.
  */
@@ -121,7 +121,6 @@ fun WelcomeView(
     onEmail: () -> Unit,
     onTermsOfUse: () -> Unit = {},
     googleWebClientId: String? = null,
-    apple: AppleEntry? = null,
     showsTestingMode: Boolean = false,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -140,13 +139,6 @@ fun WelcomeView(
                 model.report(error)
             }
         }
-    }
-
-    fun signInWithApple() {
-        val entry = apple ?: return
-        val page = model.beginAppleSignIn(entry.servicesId, entry.redirectUri)
-        // Le retour (`memobook://auth/apple…`) arrive avec le lot B2 — voir `AppleSignInService`.
-        if (!AppleSignInService.open(context, page)) model.report(AppleSignInError.NotHandled)
     }
 
     fun signInAsTestAccount() {
@@ -191,10 +183,8 @@ fun WelcomeView(
                     Card(
                         state = state,
                         isCompact = isCompact,
-                        showsApple = apple != null,
                         showsGoogle = googleWebClientId != null,
                         showsTestingMode = showsTestingMode,
-                        onApple = ::signInWithApple,
                         onGoogle = ::signInWithGoogle,
                         onEmail = onEmail,
                         onTermsOfUse = onTermsOfUse,
@@ -205,13 +195,6 @@ fun WelcomeView(
         }
     }
 }
-
-/**
- * Ce que l'entrée par Apple sur le web demande — voir `AppleSignInService`.
- *
- * @param redirectUri l'adresse du serveur qui reçoit le `form_post` d'Apple (lot B2).
- */
-data class AppleEntry(val servicesId: String, val redirectUri: URI)
 
 /** Les mesures de la mise en page, celles de la maquette. */
 private object WelcomeLayout {
@@ -279,10 +262,8 @@ private fun Hero(modifier: Modifier = Modifier) {
 private fun Card(
     state: AuthModel.State,
     isCompact: Boolean,
-    showsApple: Boolean,
     showsGoogle: Boolean,
     showsTestingMode: Boolean,
-    onApple: () -> Unit,
     onGoogle: () -> Unit,
     onEmail: () -> Unit,
     onTermsOfUse: () -> Unit,
@@ -320,7 +301,7 @@ private fun Card(
         ) {
             TitleBlock()
             FeaturesBlock()
-            AuthBlock(state, showsApple, showsGoogle, showsTestingMode, onApple, onGoogle, onEmail, onTermsOfUse, onTestingMode)
+            AuthBlock(state, showsGoogle, showsTestingMode, onGoogle, onEmail, onTermsOfUse, onTestingMode)
         }
     }
 }
@@ -426,10 +407,8 @@ private fun SocialProof() {
 @Composable
 private fun AuthBlock(
     state: AuthModel.State,
-    showsApple: Boolean,
     showsGoogle: Boolean,
     showsTestingMode: Boolean,
-    onApple: () -> Unit,
     onGoogle: () -> Unit,
     onEmail: () -> Unit,
     onTermsOfUse: () -> Unit,
@@ -442,10 +421,8 @@ private fun AuthBlock(
         }
 
         WelcomeSocialButtons(
-            showsApple = showsApple,
             showsGoogle = showsGoogle,
             enabled = !state.isWorking,
-            onApple = onApple,
             onGoogle = onGoogle,
         )
 
@@ -545,7 +522,6 @@ private fun WelcomeViewPreview() {
         onAuthenticated = {},
         onEmail = {},
         googleWebClientId = "aperçu",
-        apple = AppleEntry("aperçu", URI("https://exemple.com")),
         showsTestingMode = true,
     )
 }
@@ -554,12 +530,12 @@ private fun WelcomeViewPreview() {
 @Composable
 private fun WelcomeViewSmallPreview() {
     val model = remember { AuthModel(previewApi(), InMemoryAppSettings()) }
-    WelcomeView(model, onAuthenticated = {}, onEmail = {}, googleWebClientId = "aperçu", apple = AppleEntry("aperçu", URI("https://exemple.com")))
+    WelcomeView(model, onAuthenticated = {}, onEmail = {}, googleWebClientId = "aperçu")
 }
 
 @Preview(locale = "fr-rFR", name = "Accueil — AX3", widthDp = 390, heightDp = 844, fontScale = 2f)
 @Composable
 private fun WelcomeViewAccessibilityPreview() {
     val model = remember { AuthModel(previewApi(), InMemoryAppSettings()) }
-    WelcomeView(model, onAuthenticated = {}, onEmail = {}, googleWebClientId = "aperçu", apple = AppleEntry("aperçu", URI("https://exemple.com")))
+    WelcomeView(model, onAuthenticated = {}, onEmail = {}, googleWebClientId = "aperçu")
 }

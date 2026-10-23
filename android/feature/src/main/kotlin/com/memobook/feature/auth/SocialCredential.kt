@@ -1,9 +1,5 @@
 package com.memobook.feature.auth
 
-import java.security.MessageDigest
-import java.security.SecureRandom
-import java.util.Base64
-
 /**
  * Ce qu'une entrée par fournisseur tiers rapporte, une fois le fournisseur
  * d'accord. C'est le seul objet que l'écran d'entrée transmet ensuite au
@@ -37,39 +33,5 @@ data class SocialCredential(
     enum class Provider(val rawValue: String) {
         Apple("apple"),
         Google("google"),
-    }
-}
-
-/**
- * Le nonce de Sign in with Apple : un secret à usage unique, tiré ici, envoyé
- * haché à Apple, et gardé en clair le temps de l'échange.
- *
- * Apple recopie l'empreinte dans le jeton d'identité qu'il signe. Le serveur
- * rehache le nonce en clair que l'app lui transmet et compare : si les deux
- * concordent, ce jeton a bien été demandé par cette app, pour cette tentative
- * précise. C'est ce qui empêche de rejouer un jeton intercepté ailleurs.
- *
- * Sans nonce, le jeton reste signé par Apple, donc authentique — mais plus
- * rien ne dit qu'il a été émis *pour nous*.
- */
-class SignInNonce(
-    /** La valeur en clair, celle qui part vers notre serveur. */
-    val raw: String = random(),
-) {
-    /** L'empreinte, celle qui part vers Apple. */
-    val hashed: String
-        get() = MessageDigest.getInstance("SHA-256")
-            .digest(raw.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
-
-    private companion object {
-        /**
-         * 32 octets de hasard cryptographique. `base64url` parce que la valeur
-         * finit dans un JWT, où « + » et « / » demanderaient un échappement.
-         */
-        fun random(): String {
-            val bytes = ByteArray(32).also(SecureRandom()::nextBytes)
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-        }
     }
 }

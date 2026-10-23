@@ -76,3 +76,60 @@ export const APP_STORE_PRODUCTS: Readonly<
 export function isAcceptedAppStoreProduct(productId: string): boolean {
   return Object.hasOwn(APP_STORE_PRODUCTS, productId);
 }
+
+/**
+ * Les produits Google Play — l'app Android (lot B4, 22/10/2026).
+ *
+ * **Le même identifiant que l'App Store**, posé dans *Play Console ▸
+ * Monétiser ▸ Abonnements* avec un plan de base mensuel à 4,99 €. L'app porte
+ * la même valeur (`PlayCatalog`, `android/payments`) ; les deux doivent rester
+ * identiques. Google ne laisse pas non plus réutiliser un identifiant supprimé.
+ *
+ * Pas d'hebdomadaire ici : il n'a jamais été vendu sur Android.
+ */
+export const GOOGLE_PLAY_PRODUCT_IDS = {
+  monthlySubscription: APP_STORE_PRODUCT_IDS.monthlySubscription,
+} as const;
+
+/** Ce que chaque produit Play accepté vaut, et à quel rythme il se renouvelle. */
+export const GOOGLE_PLAY_PRODUCTS: Readonly<
+  Record<string, { interval: "month" | "week"; priceCents: number }>
+> = {
+  [GOOGLE_PLAY_PRODUCT_IDS.monthlySubscription]: { interval: "month", priceCents: SUBSCRIPTION_MONTHLY_CENTS },
+};
+
+/** Ce produit Play ouvre-t-il l'abonnement ? */
+export function isAcceptedGooglePlayProduct(productId: string): boolean {
+  return Object.hasOwn(GOOGLE_PLAY_PRODUCTS, productId);
+}
+
+/** Le paquet de l'app Android — celui de la fiche Play et de ses abonnements. */
+export const GOOGLE_PLAY_PACKAGE = "com.memobook.app";
+
+/**
+ * La page des abonnements d'Apple — sur un iPhone, elle ouvre Réglages ▸ ton
+ * nom ▸ Abonnements. Un abonnement App Store ne se coupe que là : Apple ne
+ * laisse aucune app résilier à la place de son client.
+ */
+export const APPLE_SUBSCRIPTIONS_URL = "https://apps.apple.com/account/subscriptions";
+
+/**
+ * La page des abonnements de Google Play pour ce produit — ce que l'app
+ * Android ouvre pour résilier (`SubscriptionSheet.playSubscriptionsUrl`, la
+ * même adresse), et le bouton de l'e-mail de fin de voyage. Comme chez Apple,
+ * seul le store résilie.
+ */
+export function googlePlaySubscriptionsUrl(
+  productId: string = GOOGLE_PLAY_PRODUCT_IDS.monthlySubscription,
+  packageName: string = GOOGLE_PLAY_PACKAGE,
+): string {
+  return (
+    "https://play.google.com/store/account/subscriptions" +
+    `?sku=${encodeURIComponent(productId)}&package=${encodeURIComponent(packageName)}`
+  );
+}
+
+/** Où se gère l'abonnement que tient ce store. */
+export function storeManageUrl(store: "app_store" | "google_play", productId?: string | null): string {
+  return store === "google_play" ? googlePlaySubscriptionsUrl(productId ?? undefined) : APPLE_SUBSCRIPTIONS_URL;
+}

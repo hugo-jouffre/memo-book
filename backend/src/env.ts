@@ -242,6 +242,24 @@ const schema = z.object({
   APPLE_PAY_MERCHANT_ID: z.string().default(""),
 
   /**
+   * **Google Pay dans la feuille Stripe d'Android** (lot B5, 22/10/2026) — le
+   * jumeau d'`APPLE_PAY_MERCHANT_ID`, servi dans chaque ticket de paiement
+   * (`googlePayEnabled`). **Faux par défaut : la feuille montre les cartes
+   * seules.**
+   *
+   * À passer à `true` seulement quand Google Pay est activé sur ce compte
+   * Stripe (tableau de bord ▸ Paramètres ▸ Moyens de paiement) **et**, pour la
+   * production, que la Google Pay & Wallet Console a accordé l'accès en
+   * production à l'app : sans lui, le bouton paraît et le paiement échoue.
+   * L'environnement de Google Pay (test ou production) suit la clé publique,
+   * côté app. Une variable Railway, pas une livraison sur le Play Store.
+   */
+  GOOGLE_PAY_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+
+  /**
    * L'App Store — **l'abonnement**, acheté par StoreKit. Voir
    * `services/appStore.ts`.
    *
@@ -266,6 +284,39 @@ const schema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+
+  /**
+   * Google Play — **l'abonnement sur Android** (lot B4). Voir
+   * `services/googlePlay.ts` et `docs/paiements.md`.
+   *
+   * `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` : la clé JSON d'un compte de service
+   * Google Cloud, **tout le fichier** (sur une ligne ; les `\n` de la clé
+   * privée restent tels quels). *Google Cloud ▸ IAM ▸ Comptes de service ▸
+   * Clés ▸ Ajouter une clé ▸ JSON*, puis ce compte invité dans *Play Console ▸
+   * Utilisateurs et autorisations* avec « Afficher les données financières »
+   * et « Gérer les commandes et les abonnements ». C'est le seul secret : il
+   * lit et acquitte les achats. Vide, `POST /v1/subscriptions/google-play`
+   * répond 503 `google_play_unavailable`, et rien d'autre ne change.
+   *
+   * `GOOGLE_PLAY_PACKAGE_NAME` : le paquet dont on lit les achats — un jeton
+   * d'une autre app n'y existe pas, et Google le refuse.
+   *
+   * Le webhook (`POST /v1/webhooks/google-play`, notifications temps réel
+   * poussées par Pub/Sub) s'authentifie de l'une de deux façons :
+   * - **le jeton OIDC du push** (recommandé) : `GOOGLE_PLAY_PUSH_AUDIENCE`,
+   *   l'audience réglée sur l'abonnement Pub/Sub (par défaut, l'URL du
+   *   webhook), et `GOOGLE_PLAY_PUSH_SERVICE_ACCOUNT`, l'adresse du compte de
+   *   service qui signe le push ;
+   * - **un secret partagé**, à défaut : `GOOGLE_PLAY_WEBHOOK_SECRET`, que
+   *   l'URL du push porte en `?secret=…`.
+   * Les deux vides, le webhook répond 503 `webhook_not_configured` : Pub/Sub
+   * réessaie pendant sept jours, rien n'est perdu le temps de la poser.
+   */
+  GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: z.string().default(""),
+  GOOGLE_PLAY_PACKAGE_NAME: z.string().default("com.memobook.app"),
+  GOOGLE_PLAY_PUSH_AUDIENCE: z.string().default(""),
+  GOOGLE_PLAY_PUSH_SERVICE_ACCOUNT: z.string().default(""),
+  GOOGLE_PLAY_WEBHOOK_SECRET: z.string().default(""),
 
   /**
    * L'app Android — `com.memobook.app`, comme l'app iOS.
@@ -320,6 +371,23 @@ const schema = z.object({
   APNS_KEY_ID: z.string().default(""),
   APNS_TEAM_ID: z.string().default(""),
   APNS_PRIVATE_KEY: z.string().default(""),
+
+  /**
+   * Les notifications Android — Firebase Cloud Messaging, API HTTP v1. Voir
+   * `services/fcm.ts` et `docs/notifications.md` (lot B3, 22/10/2026).
+   *
+   * - `FCM_SERVICE_ACCOUNT_JSON` — le fichier JSON d'un compte de service,
+   *   téléchargé dans *Console Firebase ▸ Paramètres du projet ▸ Comptes de
+   *   service ▸ Générer une nouvelle clé privée*, collé tel quel sur une ligne.
+   *   C'est un secret : il signe au nom du projet.
+   * - `FCM_PROJECT_ID` — l'identifiant du projet Firebase (*Paramètres du
+   *   projet ▸ Général*). Vide, celui du JSON (`project_id`) sert.
+   *
+   * Vides, comme APNs : journalisées en développement, rien ne part en
+   * production. Les iPhone, eux, continuent de recevoir les leurs.
+   */
+  FCM_SERVICE_ACCOUNT_JSON: z.string().default(""),
+  FCM_PROJECT_ID: z.string().default(""),
 });
 
 export type Env = z.infer<typeof schema> & {

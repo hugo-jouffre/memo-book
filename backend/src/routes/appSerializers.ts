@@ -17,9 +17,15 @@ import { CONNECTOR_CATALOG } from "../services/connectorCatalog.js";
 import { serializeDailyCredit, type DailyCredit } from "../services/dailyCredit.js";
 import { unitPriceCents } from "../services/printPricing.js";
 import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCountries.js";
-import { SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
+import { storeManageUrl, SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
 import { displayablePhotoUrl } from "./tripPhotos.js";
-import { accountSubscriptionOf, grantsUnlimitedAccess, subscriptionStateOf } from "../services/subscriptions.js";
+import {
+  accountSubscriptionOf,
+  grantsUnlimitedAccess,
+  STORE_PROVIDERS,
+  storeOf,
+  subscriptionStateOf,
+} from "../services/subscriptions.js";
 import { avatarUrlOf } from "../services/avatars.js";
 import { renderPhase } from "./serializers.js";
 import { effectiveGender } from "../services/genderInference.js";
@@ -333,11 +339,16 @@ export function serializeTraveller(
     // vient de s'achever. C'est ce qui permet à l'accueil d'ouvrir l'alerte
     // système « ton abonnement s'est arrêté » — voir `justEndedSubscription`.
     subscriptionEndedOn: iso(justEndedSubscription(subscriptions, now)),
-    // **Le rappel de fin de voyage** (01/10/2026) : l'abonnement App Store se
-    // renouvelle encore alors qu'aucun voyage ne court. Apple ne laisse pas
+    // **Le rappel de fin de voyage** (01/10/2026) : l'abonnement App Store (ou
+    // Google Play, depuis le lot B4) se renouvelle encore alors qu'aucun
+    // voyage ne court. Apple ne laisse pas
     // l'app le couper à la place de la personne ; l'accueil le lui propose,
     // en un geste. L'abonnement ne s'arrête jamais de lui-même.
     subscriptionOutlivesTrip: outlivesEveryTrip(subscriptions, trips, now),
+    // Le store qui tient l'abonnement en cours — `app_store`, `google_play`,
+    // ou nul (lot B4, 22/10/2026). Le rappel s'ouvre vers **ce** store : un
+    // iPhone ne coupe pas un abonnement pris sur Android, ni l'inverse.
+    subscriptionStore: current.subscription ? storeOf(current.subscription.provider) : null,
     // Raconte-t-il sans limite ? La même règle que le crédit du jour
     // (`grantsUnlimitedAccess`) : le verrou du micro et le paywall de l'accueil
     // en dépendent.
@@ -357,7 +368,7 @@ export function serializeTraveller(
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Un abonnement App Store **qui va se renouveler**, et plus aucun voyage en
+ * Un abonnement App Store ou Google Play **qui va se renouveler**, et plus aucun voyage en
  * cours. Un voyage sans date de fin compte comme en cours : on ne pousse pas
  * à résilier quelqu'un qui n'a pas dit quand il rentrait.
  */
@@ -369,7 +380,8 @@ function outlivesEveryTrip(
   // Armé **et vivant** : un `EXPIRED` perdu en route laisse la ligne `active`,
   // et il n'y a rien à couper (`subscriptionStateOf`).
   const renews = subscriptions.some(
-    (entry) => entry.provider === "storekit" && subscriptionStateOf(entry, now) === "active",
+    (entry) =>
+      (STORE_PROVIDERS as readonly string[]).includes(entry.provider) && subscriptionStateOf(entry, now) === "active",
   );
   if (!renews) return false;
 
@@ -614,6 +626,7 @@ export function serializeProfile(
   const current = accountSubscriptionOf(subscriptions, now);
   const subscription = current.subscription ?? undefined;
   const isSubscribed = current.state === "active" || current.state === "grace";
+  const store = subscription ? storeOf(subscription.provider) : null;
   // L'abonnement qui ouvre l'illimité aujourd'hui — vivant, ou résilié avec
   // un mois encore payé. C'est **lui seul** qui porte un prix à afficher :
   // un ancien abonné de la semaine revoit l'offre du mois, pas l'ancien tarif.
@@ -692,6 +705,13 @@ export function serializeProfile(
       // d'abonnements d'iOS, pas par une route d'ici — voir
       // `POST /v1/profile/subscription/cancel`.
       managedByAppStore: subscription?.provider === "storekit",
+      // **Le store qui le tient** (lot B4, 22/10/2026) : `app_store`,
+      // `google_play`, ou nul — un abonnement Stripe, ou rien. À côté de
+      // `managedByAppStore`, que les builds iOS lisent tel quel. Un abonnement
+      // Google Play ne se résilie pas plus d'ici qu'un abonnement Apple : la
+      // route n'enregistre que la raison, et l'app ouvre `manageUrl`.
+      store,
+      manageUrl: store ? storeManageUrl(store, subscription?.productId) : null,
       hasEndedBefore:
         !isSubscribed &&
         subscriptions.some((entry) => {

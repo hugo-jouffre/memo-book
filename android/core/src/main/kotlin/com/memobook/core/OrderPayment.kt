@@ -113,6 +113,7 @@ private fun Encoder.encodeOrderAtRoot(order: PrintOrder, payment: OrderPayment?)
  *   serveur n'a pas ses clés Stripe — voir [OrderSettlement.Unavailable].
  * @property customerId les cartes du compte, pour la feuille — voir [PaymentIntentTicket].
  * @property applePayMerchantId Apple Pay, quand le serveur le propose — voir [PaymentIntentTicket].
+ * @property googlePayEnabled Google Pay, quand le serveur le propose — voir [PaymentIntentTicket].
  */
 @Serializable
 data class OrderPayment(
@@ -123,6 +124,7 @@ data class OrderPayment(
     val customerId: String? = null,
     val ephemeralKeySecret: String? = null,
     val applePayMerchantId: String? = null,
+    val googlePayEnabled: Boolean = false,
 ) {
     /** Ce qu'il reste à faire pour que la commande soit payée. */
     val settlement: OrderSettlement
@@ -143,6 +145,7 @@ data class OrderPayment(
                     customerId = customerId,
                     ephemeralKeySecret = ephemeralKeySecret,
                     applePayMerchantId = applePayMerchantId,
+                    googlePayEnabled = googlePayEnabled,
                 ),
             )
         }

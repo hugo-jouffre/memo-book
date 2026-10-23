@@ -17,10 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import java.net.URI
 import java.time.Duration
 import java.time.Instant
-import java.util.UUID
 
 /**
  * L'état du formulaire d'entrée, et les règles qui décident si « Continuer »
@@ -193,23 +191,6 @@ class AuthModel(
                 ),
             )
         }
-    }
-
-    /**
-     * La tentative Apple en cours, le temps de l'aller-retour par la page
-     * d'Apple — voir [AppleSignInService]. Le nonce en clair et le `state`
-     * attendent ici le retour `memobook://auth/apple…` du lot B2.
-     */
-    var appleAttempt: AppleAttempt? = null
-        private set
-
-    data class AppleAttempt(val state: String, val nonce: SignInNonce)
-
-    /** Une nouvelle tentative Apple, et l'adresse de la page à ouvrir. Un nonce ne vaut que pour une tentative. */
-    fun beginAppleSignIn(servicesId: String, redirectUri: URI): String {
-        val attempt = AppleAttempt(state = UUID.randomUUID().toString(), nonce = SignInNonce())
-        appleAttempt = attempt
-        return AppleSignInService.authorizationUri(servicesId, redirectUri, attempt.state, attempt.nonce)
     }
 
     /**

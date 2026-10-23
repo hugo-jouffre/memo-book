@@ -12,6 +12,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -60,6 +61,20 @@ class StripeSDKTest {
         val outcome = StripePaymentSheetPresenter().present(ticket)
 
         assertEquals(PaymentOutcome.Failed(PaymentError.NoPresenter.errorDescription), outcome)
+    }
+
+    /**
+     * Google Pay ne paraît dans la feuille que si le ticket le dit (lot B5) :
+     * c'est le serveur qui sait si Google a accordé l'accès en production.
+     */
+    @Test
+    fun googlePayFollowsTheTicket() {
+        val presenter = StripePaymentSheetPresenter()
+
+        // Un serveur d'avant B5 n'envoie rien : cartes seules.
+        assertNull(presenter.googlePay(ticket))
+        // Son environnement suit la clé publique (`googlePayEnvironment`, plus haut).
+        assertNotNull(presenter.googlePay(ticket.copy(googlePayEnabled = true)))
     }
 
     @Test

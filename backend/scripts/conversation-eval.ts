@@ -122,6 +122,7 @@ function toInput(scene: Scene): ConversationInput {
       firstName: scene.traveller?.firstName ?? "Hugo",
       memberCount: scene.traveller?.memberCount ?? 1,
       isUnlimited,
+      platform: "ios",
     },
     step: scene.step
       ? {

@@ -2,6 +2,7 @@ import { connect, constants, type ClientHttp2Session } from "node:http2";
 import { importPKCS8, SignJWT, type CryptoKey } from "jose";
 import type { Logger } from "pino";
 import type { Env } from "../env.js";
+import { FcmPushSender, readFcmCredentials } from "./fcm.js";
 
 /**
  * L'envoi d'une notification à un téléphone, par **APNs** — le service de
@@ -17,13 +18,22 @@ import type { Env } from "../env.js";
  * `memobook://` que `NotificationLink` sait lire, et `deliveryId`, que l'app
  * renvoie à `POST /v1/notifications/:id/opened`. Renommer l'une, c'est casser
  * le toucher sur tous les téléphones déjà livrés.
+ *
+ * **Android passe par FCM** (`services/fcm.ts`, lot B3, 22/10/2026), derrière
+ * le même [PushSender] : [RoutingPushSender] envoie chaque jeton à son
+ * fournisseur, et la tâche d'envoi ne sait pas lequel.
  */
 
 export type PushEnvironment = "sandbox" | "production";
 
+/** Qui sait joindre un jeton : APNs pour un iPhone, FCM pour un téléphone Android. */
+export type PushProvider = "apns" | "fcm";
+
 export interface PushDestination {
   token: string;
+  /** Le serveur APNs du jeton. Sans effet pour FCM, qui n'en a qu'un. */
   environment: PushEnvironment;
+  provider: PushProvider;
 }
 
 export interface PushMessage {
@@ -254,7 +264,7 @@ export class LoggingPushSender implements PushSender {
     this.sent.push({ destination, message });
     this.logger?.info(
       { token: `${destination.token.slice(0, 8)}…`, title: message.title, link: message.link },
-      `Notification (non envoyée, APNs non configuré) : ${message.body}`,
+      `Notification (non envoyée, ${destination.provider === "fcm" ? "FCM" : "APNs"} non configuré) : ${message.body}`,
     );
     return { kind: "sent" };
   }
@@ -266,11 +276,40 @@ export class LoggingPushSender implements PushSender {
 export class DisabledPushSender implements PushSender {
   readonly enabled = false;
 
+  constructor(private readonly reason = "APNs n'est pas configuré.") {}
+
   async send(): Promise<PushOutcome> {
-    return { kind: "failed", reason: "APNs n'est pas configuré." };
+    return { kind: "failed", reason: this.reason };
   }
 
   async close(): Promise<void> {}
+}
+
+/**
+ * APNs et FCM derrière un seul expéditeur : chaque jeton part chez son
+ * fournisseur. Il peut envoyer dès que l'un des deux le peut — un serveur qui
+ * n'a encore que la clé d'Apple notifie les iPhone. Un jeton Android sans FCM
+ * échoue alors comme une panne passagère (`failed`) : la notification n'est
+ * pas marquée envoyée, et la première passe après la pose des clés la reprend
+ * dans la journée.
+ */
+export class RoutingPushSender implements PushSender {
+  constructor(
+    private readonly apns: PushSender,
+    private readonly fcm: PushSender,
+  ) {}
+
+  get enabled(): boolean {
+    return this.apns.enabled || this.fcm.enabled;
+  }
+
+  send(destination: PushDestination, message: PushMessage): Promise<PushOutcome> {
+    return (destination.provider === "fcm" ? this.fcm : this.apns).send(destination, message);
+  }
+
+  async close(): Promise<void> {
+    await Promise.all([this.apns.close(), this.fcm.close()]);
+  }
 }
 
 /**
@@ -289,6 +328,10 @@ export function normalizePrivateKey(raw: string): string {
 }
 
 export function createPushSender(env: Env, logger: Logger): PushSender {
+  return new RoutingPushSender(createApnsSender(env, logger), createFcmSender(env, logger));
+}
+
+function createApnsSender(env: Env, logger: Logger): PushSender {
   const configured =
     env.APNS_KEY_ID !== "" && env.APNS_TEAM_ID !== "" && env.APNS_PRIVATE_KEY !== "";
 
@@ -305,6 +348,24 @@ export function createPushSender(env: Env, logger: Logger): PushSender {
   }
 
   if (env.NODE_ENV === "production") return new DisabledPushSender();
+  return new LoggingPushSender(env.NODE_ENV === "test" ? null : logger);
+}
+
+/**
+ * FCM, comme APNs : vide, journalisé hors production et coupé en production.
+ * Posé mais illisible, il est coupé partout et le dit au démarrage — un JSON
+ * mal collé sur Railway ne doit pas empêcher l'API de servir.
+ */
+function createFcmSender(env: Env, logger: Logger): PushSender {
+  const read = readFcmCredentials(env.FCM_SERVICE_ACCOUNT_JSON, env.FCM_PROJECT_ID);
+
+  if (read && "credentials" in read) return new FcmPushSender(read.credentials, logger);
+  if (read && "error" in read) {
+    logger.error(`FCM coupé : ${read.error}`);
+    return new DisabledPushSender(`FCM coupé : ${read.error}`);
+  }
+
+  if (env.NODE_ENV === "production") return new DisabledPushSender("FCM n'est pas configuré.");
   return new LoggingPushSender(env.NODE_ENV === "test" ? null : logger);
 }
 
