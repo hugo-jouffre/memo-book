@@ -208,6 +208,62 @@
   }
 
   /**
+   * La rédaction d'une étape, appelée directement chez le fournisseur choisi.
+   *
+   * Seul appel de l'atelier à porter un **prompt système** : les règles
+   * d'écriture (`agents/agent-transcription.md`) font autorité et ne se
+   * mélangent pas au récit du voyageur. Côté Anthropic elles sont mises en
+   * cache — identiques d'une étape à l'autre, elles ne sont facturées plein
+   * tarif qu'à la première de la série.
+   */
+  async function rediger(corps) {
+    const anthropic = corps.fournisseur === "anthropic";
+    const cle = ((anthropic ? corps.cleAnthropic : corps.cleOpenai) || "").trim();
+    if (!cle) throw new Error(`Aucune clé ${anthropic ? "Anthropic" : "OpenAI"}`);
+    const modele = corps.modele || (anthropic ? "claude-opus-5" : "gpt-4o");
+
+    const reponse = anthropic
+      ? await fetch(`${BASE_ANTHROPIC}/messages`, {
+          method: "POST",
+          headers: {
+            "x-api-key": cle,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: modele,
+            // La lecture du vocal compte dans ce plafond : un texte coupé au
+            // milieu d'une phrase est pire qu'une erreur franche.
+            max_tokens: 16000,
+            system: [
+              { type: "text", text: corps.systeme, cache_control: { type: "ephemeral" } },
+            ],
+            messages: [{ role: "user", content: corps.message }],
+          }),
+        })
+      : await fetch(`${BASE_OPENAI}/chat/completions`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${cle}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            model: modele,
+            messages: [
+              { role: "system", content: corps.systeme },
+              { role: "user", content: corps.message },
+            ],
+            response_format: { type: "json_object" },
+          }),
+        });
+
+    if (!reponse.ok) throw new Error(await messageErreur(reponse));
+    const donnees = await reponse.json();
+    const brut = anthropic
+      ? donnees.content.filter((b) => b.type === "text").map((b) => b.text).join("\n")
+      : donnees.choices?.[0]?.message?.content || "";
+    return globalThis.extraireJson(brut);
+  }
+
+  /**
    * Analyse d'une étape pour la mise en page : la consigne, puis chaque photo
    * précédée de son identifiant. Mêmes fournisseurs et mêmes clés que le
    * découpage ; le corps des messages est construit par `messagesAnalyse`,
@@ -262,5 +318,5 @@
     });
   }
 
-  globalThis.MoteurNavigateur = { transcrire, decouper, analyser, image };
+  globalThis.MoteurNavigateur = { transcrire, decouper, rediger, analyser, image };
 })();

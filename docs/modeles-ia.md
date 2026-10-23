@@ -30,6 +30,7 @@ Voilà l'état des lieux, une fois OpenAI parti :
 | **Transcription** d'un vocal | `services/transcription.ts` | `gpt-4o-transcribe` | ⚠️ **sans compte** — premier maillon, à rebrancher |
 | **Structuration** avant rendu | `services/structuring.ts` | `gpt-4o` | ⚠️ **sans compte** |
 | **Rédaction** d'un souvenir | `services/redaction.ts` | Claude Opus 5 | en place |
+| **Rédaction** d'une étape, dans l'atelier | `MemoBook Generator/public/app.js` (`redigerEtapes`) | Claude Opus 5, appelé depuis la page | en place depuis le 23/10/2026 — sortie **non** contrainte par schéma (§ 6) |
 | **Conversation** — MEMO | `services/conversationAnthropic.ts` | Claude Sonnet 5 | en place |
 | **Mise en page** | `services/bookPdf.ts` + APITemplate | pas de modèle | en place |
 | **Photo** | `agents/agent-photo.md` | — | phase 2 |

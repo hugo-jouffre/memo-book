@@ -24,7 +24,7 @@ tourner » plus bas.
 | `transcribe-whatsapp.sh` | La transcription, en ligne de commande. **C'est lui qui travaille**, même quand l'appel vient de la page |
 | `server.mjs` | Le serveur local : sert la page, lance le script, relaie les appels de modèle |
 | `public/` | La page elle-même — c'est ce dossier qui est publié en ligne |
-| `public/partage.js` | Ce qui doit rester identique en local et en ligne : renommage, format du fichier groupé, consigne de découpage |
+| `public/partage.js` | Ce qui doit rester identique en local et en ligne : renommage, format du fichier groupé, consignes de découpage et de rédaction |
 | `public/moteur-navigateur.js` | La transcription sans serveur, pour la version hébergée |
 | `templates/travel-journal/` | Le gabarit du PDF envoyé à APITemplate — voir plus bas et [`docs/apitemplate.md`](../docs/apitemplate.md) |
 | `TRANSCRIPTION.md` | Le script en ligne de commande : options, coût, alternative gratuite en local |
@@ -59,10 +59,16 @@ tourner » plus bas.
    Chaque étape porte quatre outils : monter, descendre, **dupliquer** et
    supprimer. La duplication recopie souvenirs et photos avec de nouveaux
    identifiants : modifier la copie ne touche pas l'original.
-7. **Génère le JSON** — le bouton passe à « Génération en cours… », puis la
+7. **Les pages s'écrivent** — à la génération, chaque étape passe par
+   l'écrivain de MemoBook avant la mise en page : la transcription brute entre,
+   la page que le voyageur aurait écrite sort. Elle apparaît au-dessus des
+   vocaux dont elle est tirée, se corrige au clavier — une page corrigée à la
+   main n'est plus jamais réécrite — et **Réécrire** la refait. Voir
+   « Rédaction » plus bas.
+8. **Génère le JSON** — le bouton passe à « Génération en cours… », puis la
    fenêtre d'enregistrement s'ouvre. Le panneau du bas montre ensuite ce qui
    vient d'être écrit.
-8. **Génère le carnet** *(Beta)* — le JSON part chez APITemplate, sur le
+9. **Génère le carnet** *(Beta)* — le JSON part chez APITemplate, sur le
    template de `templates/travel-journal/`, et le PDF s'ouvre dans un onglet.
 
 ### La console
@@ -248,18 +254,85 @@ Les modèles par défaut sont ceux de `backend/src/env.ts` — `gpt-4o` et
 réglages à côté du pipeline et du script. Le champ « Modèle de découpage »
 prend le pas dessus.
 
-Le modèle **ne réécrit rien** : il découpe, titre et date. Le texte du
-voyageur est repris au mot près, comme dans le reste de la chaîne.
+Le modèle **ne réécrit rien** au découpage : il découpe, titre et date. La
+réécriture, elle, a sa propre étape, juste en dessous.
+
+## Rédaction
+
+Jusqu'au 23/10/2026, l'atelier imprimait la **transcription brute** : le texte
+du carnet était la sortie de Whisper, avec ses hésitations, ses reprises et ses
+mots mal entendus. Les règles d'écriture de MemoBook ne lui étaient jamais
+passées — elles ne vivaient que dans le pipeline.
+
+Depuis, chaque étape passe par l'écrivain avant la mise en page, avec le même
+prompt système que l'app : [`agents/agent-transcription.md`](../agents/agent-transcription.md),
+chargé tel quel depuis la branche `main` sur GitHub. Le modifier dans le dépôt
+change ce que l'atelier écrit, sans toucher au code — même contrat que les
+stickers, les contours de carte et le gabarit : **ce qui est servi est ce qui
+est sur `main`**, une règle retouchée n'arrive donc ici qu'une fois fusionnée.
+
+Ce que l'écrivain reçoit, étape par étape : le carnet (titre, destination,
+dates, voyageurs), la **fiche de cohérence** qu'il tient lui-même d'une étape à
+la suivante — prénoms, graphies, personne, temps, voix du narrateur —, les
+titres déjà employés, les **trois dernières pages écrites**, puis les vocaux de
+l'étape. C'est pour cette mémoire que les étapes s'écrivent **l'une après
+l'autre**, et non trois à la fois comme l'analyse : sans elle, le carnet
+changerait de voix d'une page à l'autre.
+
+Deux différences assumées avec le pipeline, parce que la chaîne n'est pas la
+même :
+
+- **ni encart ni quiz ici.** Ils viennent de l'analyse d'étape, que la mise en
+  page lit déjà ; les demander deux fois donnerait deux séries de fun facts
+  dans le même carnet ;
+- **une étape = tous ses vocaux**, là où le pipeline rédige un vocal à la fois.
+  Ils arrivent groupés, chacun daté, et l'écrivain en fait une page d'un tenant.
+
+Dans la colonne, la page écrite s'affiche **au-dessus** des vocaux dont elle est
+tirée. Elle se corrige au clavier — une page corrigée à la main fait autorité et
+n'est plus jamais réécrite, comme `Entry.editedText` dans l'app — et
+**Réécrire** la jette pour qu'elle se refasse à la génération suivante. Un
+passage que l'écrivain n'a pas compris ne s'imprime pas : il est cité sous la
+page et dans la console.
+
+Une page est **gardée** tant que ses vocaux, son lieu et la destination ne
+changent pas ; elle voyage avec l'étape dans le fichier d'avancement. Les dates
+n'entrent pas dans ce calcul : elles se déduisent toutes seules des vocaux et
+bougent encore après la rédaction — une page réécrite, et facturée, parce
+qu'une date de fin s'est remplie derrière serait un appel pour rien.
+
+**Le fournisseur** est le sien, séparé de celui du découpage : **Anthropic /
+`claude-opus-5` par défaut**, parce que c'est avec lui que l'app écrit
+(`ANTHROPIC_REDACTION_MODEL`, [`docs/modeles-ia.md`](../docs/modeles-ia.md)) et
+que les deux carnets doivent avoir la même plume. Le découpage, lui, reste sur
+OpenAI : une seule clé suffit pour que l'atelier soit complet. Sans clé
+Anthropic, les pages sont écrites par l'autre fournisseur plutôt que pas du
+tout, et la console le dit.
+
+**Ce que ça coûte** : un appel de modèle par étape, en plus de l'analyse, avec
+les 40 Ko de règles en prompt système. Côté Anthropic elles sont mises en cache
+— facturées plein tarif à la première étape de la série seulement. Compter 1 à
+2 $ pour un carnet d'une dizaine d'étapes, sur le compte Anthropic prépayé que
+l'app partage. La case « Écrire les pages avant la mise en page », dans les
+réglages, revient à la transcription brute.
+
+Quand la rédaction ne peut pas se faire — pas de clé, règles injoignables,
+modèle en échec —, **le carnet se fait quand même** avec la transcription
+brute, et la console le dit.
 
 ## Réglages
 
 | Réglage | Effet |
 |---|---|
-| Clé API OpenAI | Transcription, et découpage si le fournisseur est OpenAI |
+| Clé API OpenAI | Transcription, et découpage ou rédaction si le fournisseur est OpenAI |
+| Clé API Anthropic | Rédaction des pages par défaut, et découpage si le fournisseur est Anthropic |
 | Modèle de transcription | `gpt-4o-transcribe` par défaut, `gpt-4o-mini-transcribe` pour moitié prix, `whisper-1` pour des horodatages |
 | Langue forcée | `fr` par défaut. **À garder** : sur un vocal court truffé de noms étrangers, la détection automatique bascule régulièrement en anglais |
 | Vocabulaire soufflé | Prénoms, noms de lieux, mots locaux — passé au `--prompt` du script |
-| Modèle de découpage | `gpt-4o` par défaut ; suit le fournisseur quand on en change |
+| Modèle de découpage | `gpt-4o` par défaut ; suit le fournisseur quand on en change. Sert aussi à l'analyse et à la rédaction |
+| Écrire les pages avant la mise en page | Coché par défaut. Décoché, le carnet imprime la transcription brute des vocaux |
+| Rédaction des pages | **Anthropic** par défaut, comme l'app. Repli sur l'autre fournisseur quand sa clé manque |
+| Modèle de rédaction | `claude-opus-5` par défaut ; suit le fournisseur quand on en change |
 | Dossier sur le disque | Transcrit un dossier existant sans rien déposer dans le navigateur |
 | Refaire les vocaux déjà transcrits | Le `--force` du script : ignore le cache |
 
@@ -437,6 +510,8 @@ rendu, le chemin reste le pipeline.
 - Un vocal de plus de 25 Mo est refusé par l'API. Le script le signale et
   passe au suivant ; pour le découper :
   `ffmpeg -i long.oga -f segment -segment_time 1800 -c copy partie-%02d.oga`.
+- La rédaction attend les règles d'écriture servies par GitHub : hors ligne,
+  l'atelier retombe sur la transcription brute plutôt que d'écrire au hasard.
 - Les photos sont portées en base64 dans l'état de la page : au-delà de
   quelques dizaines, le navigateur devient lourd. Décoche « Inclure les images
   en base64 » pour un JSON léger.

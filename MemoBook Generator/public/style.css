@@ -576,6 +576,22 @@ a.btn {
   border-radius: 0.25rem;
 }
 
+/* La page écrite se distingue des vocaux dont elle est tirée : c'est elle qui
+   s'imprime. Fond clair et texte de lecture, les vocaux restent en dessous. */
+.page-ecrite {
+  background: var(--paper);
+  border-color: var(--ink);
+}
+
+.page-ecrite textarea {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.page-ecrite .aide {
+  margin: 0 0 0.375rem;
+}
+
 .souvenir textarea {
   border: none;
   background: transparent;

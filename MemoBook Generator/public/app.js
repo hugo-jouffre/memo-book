@@ -206,6 +206,22 @@ const REGLAGES_DEFAUT = {
   vocabulaire: "",
   fournisseurDecoupage: "openai",
   modeleDecoupage: "gpt-4o",
+  /**
+   * Écrire la page de chaque étape avant la mise en page
+   * (`agents/agent-transcription.md`), au lieu d'imprimer la transcription
+   * brute. Un appel de modèle par étape, en plus de l'analyse.
+   */
+  redaction: true,
+  /**
+   * La rédaction a son propre fournisseur, et c'est **Anthropic** : l'app
+   * écrit avec Claude Opus 5 (`ANTHROPIC_REDACTION_MODEL`, `docs/modeles-ia.md`),
+   * et l'atelier doit écrire comme l'app — sans quoi les deux carnets n'ont pas
+   * la même plume. Les 40 Ko de règles y sont aussi mises en cache d'une étape
+   * à l'autre. Le découpage, lui, reste sur OpenAI : une seule clé suffit pour
+   * que l'atelier soit complet (Hugo, 23/10/2026).
+   */
+  fournisseurRedaction: "anthropic",
+  modeleRedaction: "claude-opus-5",
   dossierDisque: "",
   cleApitemplate: "",
   templateApitemplate: "7a177b23210099d6",
@@ -236,6 +252,9 @@ function chargerReglages() {
   // enregistrée avant que le modèle ait un défaut ne doit pas rester creuse.
   if (!reglages.modeleDecoupage?.trim()) {
     reglages.modeleDecoupage = MODELE_PAR_FOURNISSEUR[reglages.fournisseurDecoupage] || "gpt-4o";
+  }
+  if (!reglages.modeleRedaction?.trim()) {
+    reglages.modeleRedaction = MODELE_PAR_FOURNISSEUR[reglages.fournisseurRedaction] || "claude-opus-5";
   }
   return reglages;
 }
@@ -324,6 +343,10 @@ const etat = {
   indexDetail: null,
   /** Les rues et l'eau des cartes de ville (OpenStreetMap), par clé de vue (`Carte.cleDeVue`). */
   ruesDesVilles: {},
+  /** Les règles d'écriture (`agents/agent-transcription.md`), lues une fois sur GitHub. */
+  reglesRedaction: null,
+  /** La fiche de cohérence du carnet, tenue d'une étape à l'autre par l'écrivain. */
+  ficheCoherence: null,
   /** Message sous « Générer le carnet » : { type: "info" | "erreur", texte }. */
   carnetStatut: null,
   etapes: [],
@@ -1575,7 +1598,12 @@ function etapesPourMiseEnPage(photoDe) {
   }));
 }
 
-const recitDe = (etape) => etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
+/**
+ * Le récit d'une étape tel qu'il s'imprime : la page écrite par l'écrivain
+ * (`redigerEtapes`) quand elle existe et qu'elle correspond encore aux vocaux,
+ * la transcription brute sinon — sans clé, sans règles, ou rédaction coupée.
+ */
+const recitDe = (etape) => pageEcrite(etape) || brutDe(etape);
 
 /**
  * Les pages du livre tel qu'il part chez Pumbo : celles du PDF **en version
@@ -3148,6 +3176,238 @@ async function importerFichePumbo(fichier) {
   rendreColonne();
 }
 
+/* ----------------------------------------------------------- rédaction --- */
+
+/**
+ * Les règles d'écriture — `agents/agent-transcription.md`, celui de `main`.
+ *
+ * Le fichier **est** le prompt système, comme pour le backend
+ * (`loadWritingRules`, `backend/src/services/redaction.ts`) : le modifier dans
+ * le dépôt change ce que l'atelier écrit, sans toucher au code. Même contrat
+ * que les stickers et les contours de carte : ce qui est servi est ce qui est
+ * sur `main`, une règle retouchée n'arrive donc ici qu'une fois fusionnée.
+ */
+const REGLES_REDACTION_URL =
+  "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/agents/agent-transcription.md";
+
+async function chargerReglesRedaction() {
+  if (etat.reglesRedaction) return etat.reglesRedaction;
+  const reponse = await fetch(REGLES_REDACTION_URL);
+  if (!reponse.ok) throw new Error(`règles d'écriture indisponibles (HTTP ${reponse.status})`);
+  const texte = await reponse.text();
+  if (texte.trim().length < 1000) throw new Error("règles d'écriture illisibles");
+  etat.reglesRedaction = texte;
+  return texte;
+}
+
+/** Une clé pour ce fournisseur — collée dans les réglages, ou tenue par le serveur local. */
+const cleDisponible = (fournisseur) =>
+  Boolean(
+    fournisseur === "anthropic"
+      ? etat.reglages.cleAnthropic?.trim() || etat.config?.cleServeur?.anthropic
+      : etat.reglages.cleOpenai?.trim() || etat.config?.cleServeur?.openai,
+  );
+
+const autreFournisseur = (fournisseur) => (fournisseur === "anthropic" ? "openai" : "anthropic");
+
+/** Le serveur relaie en local ; en ligne la page appelle l'API elle-même. */
+async function appelRedaction(corps) {
+  if (etat.mode === "navigateur") return MoteurNavigateur.rediger(corps);
+  return appelJson("/api/rediger", corps);
+}
+
+/**
+ * À changer quand `consigneRedactionEtape` demande autre chose : les pages
+ * déjà écrites se refont.
+ */
+const VERSION_REDACTION = "1";
+
+/**
+ * Ce dont dépend la page écrite : ses vocaux, son lieu, la destination. Tant
+ * que la clé ne bouge pas, la page est gardée — d'une génération à l'autre
+ * comme d'une session à l'autre, puisqu'elle voyage avec l'étape dans le
+ * fichier d'avancement.
+ *
+ * Les dates n'y entrent pas, bien qu'elles soient dans la consigne : elles se
+ * déduisent toutes seules des vocaux (`majDatesAuto`) et bougent encore après
+ * la rédaction. Une page réécrite — et facturée — parce qu'une date de fin
+ * s'est remplie derrière, c'est un appel pour rien. Une date corrigée à la
+ * main qui change vraiment le récit : « Réécrire ».
+ */
+function cleRedaction(etape) {
+  const contenu = [
+    VERSION_REDACTION,
+    etape.lieu || "",
+    etat.carnet.destination || "",
+    brutDe(etape),
+  ].join("|");
+  let h = 0;
+  for (let i = 0; i < contenu.length; i += 1) h = (Math.imul(31, h) + contenu.charCodeAt(i)) | 0;
+  return `${contenu.length}-${(h >>> 0).toString(36)}`;
+}
+
+/** Les vocaux de l'étape bout à bout, tels que la machine les a entendus. */
+const brutDe = (etape) => etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
+
+/** La page écrite de l'étape, si elle correspond encore à ses vocaux. */
+const pageEcrite = (etape) =>
+  etape.redaction && (etape.redaction.manuelle || etape.redaction.cle === cleRedaction(etape))
+    ? etape.redaction.texte
+    : null;
+
+/**
+ * Écrit la page de chaque étape qui ne l'a pas encore été : la transcription
+ * brute entre, la page que le voyageur aurait écrite sort
+ * (`agents/agent-transcription.md`, § « Ton rôle »).
+ *
+ * **Une étape après l'autre**, et pas trois à la fois comme l'analyse : chaque
+ * page reçoit la fiche de cohérence et les trois dernières pages écrites, sans
+ * quoi le carnet changerait de voix, de temps et de graphie d'une étape à la
+ * suivante (§ 3).
+ *
+ * Sans clé, ou si le modèle échoue, le carnet se fait quand même : l'étape
+ * garde sa transcription brute. On le dit, sans bloquer.
+ */
+async function redigerEtapes(statut = () => {}) {
+  if (!etat.reglages.redaction) return { faites: 0, echecs: 0 };
+  const aFaire = etat.etapes.filter((e) => brutDe(e) && !pageEcrite(e));
+  if (!aFaire.length) return { faites: 0, echecs: 0 };
+
+  // Anthropic par défaut, pour écrire comme l'app. Mais une clé manquante ne
+  // doit pas faire retomber tout le carnet sur la transcription brute : si
+  // l'autre fournisseur a une clé, la rédaction se fait avec lui, et on le dit.
+  const voulu = etat.reglages.fournisseurRedaction;
+  const fournisseur = cleDisponible(voulu)
+    ? voulu
+    : cleDisponible(autreFournisseur(voulu))
+      ? autreFournisseur(voulu)
+      : null;
+  if (!fournisseur) {
+    statut("Pas de clé de modèle : le carnet garde la transcription brute des vocaux.");
+    noter("Pas de clé de modèle : aucune page rédigée, le carnet imprime la transcription brute.", "err");
+    return { faites: 0, echecs: aFaire.length };
+  }
+  const modele =
+    fournisseur === voulu ? etat.reglages.modeleRedaction : MODELE_PAR_FOURNISSEUR[fournisseur];
+  if (fournisseur !== voulu) {
+    noter(
+      `Pas de clé ${voulu === "anthropic" ? "Anthropic" : "OpenAI"} : les pages sont écrites par ${modele}. ` +
+        "L'app, elle, écrit avec claude-opus-5.",
+    );
+  }
+
+  let regles;
+  try {
+    regles = await chargerReglesRedaction();
+  } catch (erreur) {
+    // Les règles sont la rédaction : sans elles, mieux vaut la transcription
+    // brute qu'une page écrite au hasard.
+    noter(`Rédaction impossible : ${erreur.message}. Le carnet garde la transcription brute.`, "err");
+    debugCarnet("règles d'écriture indisponibles", erreur);
+    return { faites: 0, echecs: aFaire.length };
+  }
+
+  let faites = 0;
+  let echecs = 0;
+  let premiereErreur = null;
+  // La fiche de cohérence passe d'une étape à la suivante : c'est la mémoire
+  // longue du carnet (prénoms, graphies, personne, temps, voix du narrateur).
+  let fiche = etat.ficheCoherence || FICHE_COHERENCE_VIDE;
+  const precedentes = [];
+  const titresEmployes = [];
+
+  statut(`Rédaction des pages… 0 / ${aFaire.length}`);
+  for (const etape of etat.etapes) {
+    const index = etat.etapes.indexOf(etape);
+    const deja = pageEcrite(etape);
+    // Une étape déjà écrite ne se refait pas, mais elle donne quand même le ton
+    // et le titre à celles qui suivent.
+    if (deja) {
+      precedentes.push({ titre: etape.titre, lieu: etape.lieu, texte: deja });
+      if (etape.titre) titresEmployes.push(etape.titre);
+      continue;
+    }
+    if (!brutDe(etape)) continue;
+
+    try {
+      const { systeme, message } = consigneRedactionEtape({
+        regles,
+        carnet: {
+          titre: etat.carnet.titre,
+          destination: etat.carnet.destination,
+          dateDebut: etat.carnet.dateDebut,
+          dateFin: etat.carnet.dateFin,
+          voyageurs: listeVoyageurs(),
+          rencontres: etat.rencontres,
+        },
+        etape,
+        numero: index + 1,
+        total: etat.etapes.length,
+        vocaux: etape.souvenirs
+          .filter((s) => s.texte?.trim())
+          .map((s) => ({ nom: s.audioNom || "", date: s.date || "", texte: s.texte })),
+        fiche,
+        precedentes,
+        titresEmployes,
+      });
+      const resultat = await appelRedaction({
+        fournisseur,
+        modele,
+        cleOpenai: etat.reglages.cleOpenai,
+        cleAnthropic: etat.reglages.cleAnthropic,
+        systeme,
+        message,
+      });
+
+      const texte = String(resultat?.text || "").trim();
+      if (!texte) throw new Error("le modèle n'a renvoyé aucun texte");
+      etape.redaction = {
+        cle: cleRedaction(etape),
+        texte,
+        titre: String(resultat?.title || "").trim(),
+        doutes: Array.isArray(resultat?.doubts) ? resultat.doubts.filter((d) => typeof d === "string") : [],
+      };
+      // Un titre posé à la main ne se fait pas écraser (`manuel`), les autres
+      // viennent de l'écrivain : c'est lui qui a lu le vocal en entier.
+      if (etape.redaction.titre && !etape.manuel?.titre) etape.titre = etape.redaction.titre;
+      if (resultat?.coherenceSheet) {
+        fiche = resultat.coherenceSheet;
+        etat.ficheCoherence = fiche;
+      }
+      if (etape.redaction.doutes.length) {
+        noter(
+          `« ${etape.titre || etape.lieu || `étape ${index + 1}`} » : passage${etape.redaction.doutes.length > 1 ? "s" : ""} pas compris, laissé${etape.redaction.doutes.length > 1 ? "s" : ""} de côté — ${etape.redaction.doutes.join(" · ")}`,
+        );
+      }
+      precedentes.push({ titre: etape.titre, lieu: etape.lieu, texte });
+      if (etape.titre) titresEmployes.push(etape.titre);
+      faites += 1;
+    } catch (erreur) {
+      echecs += 1;
+      premiereErreur ||= erreur;
+      debugCarnet(`rédaction de l'étape « ${etape.titre || etape.lieu} » impossible`, erreur);
+    }
+    statut(`Rédaction des pages… ${faites + echecs} / ${aFaire.length}`);
+  }
+
+  if (echecs) {
+    noter(
+      `Rédaction impossible pour ${echecs} étape(s) sur ${aFaire.length} — elles gardent leur transcription brute : ${premiereErreur?.message || premiereErreur}`,
+      "err",
+    );
+  }
+  if (faites) apresChangement();
+  return { faites, echecs };
+}
+
+/** Réécrire une étape : la page actuelle part, la suivante se fait à la génération. */
+function reecrireEtape(id) {
+  const etape = etat.etapes.find((e) => e.id === id);
+  if (!etape) return;
+  delete etape.redaction;
+  apresChangement();
+}
+
 /* ------------------------------------------- analyse d'étape et cartes --- */
 
 const CONTOURS_CARTE_URL =
@@ -3395,8 +3655,12 @@ function dessinerCarteChapitre(requete) {
   return Carte.renderMapDataUri(etat.contoursCarte, requete);
 }
 
-/** Ce qui précède la mise en page : l'analyse des étapes et les contours de carte. */
+/** Ce qui précède la mise en page : la rédaction, l'analyse des étapes et les contours de carte. */
 async function preparerMiseEnPage(statut) {
+  // La rédaction d'abord, seule : l'analyse lit le récit (`recitDe`) pour
+  // rattacher chaque photo à son paragraphe — elle doit lire le texte imprimé,
+  // pas la transcription brute.
+  await redigerEtapes(statut);
   await Promise.all([analyserEtapes(statut), chargerContoursCarte(), chargerStickers()]);
   await Promise.all([chargerContoursDetail(), chargerRuesDesVilles()]);
   // La netteté et l'exposition de chaque photo : quand une étape en a trop,
@@ -3857,6 +4121,54 @@ function selecteurEtapePhoto(photoId, etapeIdActuelle) {
   return select;
 }
 
+/**
+ * La page écrite d'une étape : ce qui s'imprimera, au-dessus des vocaux dont
+ * elle est tirée. Modifiable — une page corrigée à la main fait autorité et
+ * n'est plus jamais réécrite, comme `Entry.editedText` dans l'app.
+ */
+function carteRedaction(etape) {
+  const texte = pageEcrite(etape);
+  const doutes = etape.redaction?.doutes || [];
+  return h(
+    "div",
+    { class: "souvenir page-ecrite" },
+    h(
+      "div",
+      { class: "souvenir-meta" },
+      h("span", { class: "etiquette" }, "Page écrite"),
+      etape.redaction?.manuelle && h("span", {}, "corrigée à la main"),
+      h("span", {}, `${texte.length} signes`),
+      h(
+        "span",
+        { class: "fin" },
+        bouton("Réécrire", {
+          petit: true,
+          titre: "Jette cette page : elle se réécrit à la prochaine génération",
+          surClic: () => reecrireEtape(etape.id),
+        }),
+      ),
+    ),
+    doutes.length
+      ? h(
+          "p",
+          { class: "aide" },
+          `Passage${doutes.length > 1 ? "s" : ""} que l'écrivain n'a pas compris, laissé${doutes.length > 1 ? "s" : ""} de côté : ${doutes.join(" · ")}`,
+        )
+      : null,
+    h("textarea", {
+      value: texte,
+      rows: Math.min(18, Math.max(3, Math.ceil(texte.length / 70))),
+      oninput: (ev) => {
+        // Pas de rendu ici : le DOM affiche déjà la frappe, et re-rendre
+        // volerait le curseur au milieu d'une phrase.
+        etape.redaction = { ...etape.redaction, texte: ev.target.value, manuelle: true };
+        majStats();
+        marquerGroupePerime();
+      },
+    }),
+  );
+}
+
 function carteSouvenir(s, conteneurId) {
   return h(
     "div",
@@ -4069,9 +4381,12 @@ function rendreReglages() {
     onchange: enregistrer("cleAnthropic"),
   });
 
+  // La clé Anthropic sert au découpage comme à la rédaction : elle se montre
+  // dès que l'un des deux la demande — et la rédaction la demande par défaut.
+  const veutAnthropic = () => r.fournisseurDecoupage === "anthropic" || r.fournisseurRedaction === "anthropic";
   const blocAnthropic = h(
     "label",
-    { class: "champ", hidden: r.fournisseurDecoupage !== "anthropic" },
+    { class: "champ", hidden: !veutAnthropic() },
     h("span", {}, "Clé API Anthropic"),
     champSecret(champCleAnthropic),
   );
@@ -4089,13 +4404,34 @@ function rendreReglages() {
         r.modeleDecoupage = MODELE_PAR_FOURNISSEUR[ev.target.value] || "";
         champModele.value = r.modeleDecoupage;
         sauverReglages();
-        blocAnthropic.hidden = ev.target.value !== "anthropic";
+        blocAnthropic.hidden = !veutAnthropic();
       },
     },
     h("option", { value: "openai" }, "OpenAI (même clé)"),
     h("option", { value: "anthropic" }, "Anthropic (comme le pipeline)"),
   );
   selectFournisseur.value = r.fournisseurDecoupage;
+
+  const champModeleRedaction = h("input", {
+    value: r.modeleRedaction,
+    oninput: enregistrer("modeleRedaction"),
+  });
+
+  const selectFournisseurRedaction = h(
+    "select",
+    {
+      onchange: (ev) => {
+        r.fournisseurRedaction = ev.target.value;
+        r.modeleRedaction = MODELE_PAR_FOURNISSEUR[ev.target.value] || "";
+        champModeleRedaction.value = r.modeleRedaction;
+        sauverReglages();
+        blocAnthropic.hidden = !veutAnthropic();
+      },
+    },
+    h("option", { value: "anthropic" }, "Anthropic (comme l'app)"),
+    h("option", { value: "openai" }, "OpenAI (même clé que la transcription)"),
+  );
+  selectFournisseurRedaction.value = r.fournisseurRedaction;
 
   const selectModeleTranscription = h(
     "select",
@@ -4210,6 +4546,35 @@ function rendreReglages() {
     h("label", { class: "champ" }, h("span", {}, "Découpage en étapes"), selectFournisseur),
     blocAnthropic,
     h("label", { class: "champ" }, h("span", {}, "Modèle de découpage"), champModele),
+    h(
+      "label",
+      { class: "case", style: { marginTop: "0.5rem" } },
+      h("input", {
+        type: "checkbox",
+        checked: Boolean(r.redaction),
+        onchange: (ev) => {
+          r.redaction = ev.target.checked;
+          sauverReglages();
+          rendreColonne();
+        },
+      }),
+      " Écrire les pages avant la mise en page",
+    ),
+    h(
+      "p",
+      { class: "aide" },
+      "Décoché, le carnet imprime la transcription brute des vocaux — avec les hésitations et les mots mal entendus. ",
+      "Coché, chaque étape passe par l'écrivain de MemoBook (agents/agent-transcription.md, branche main sur GitHub), ",
+      "comme dans l'app : un appel de modèle par étape, et la page se garde tant que ses vocaux ne changent pas.",
+    ),
+    h("label", { class: "champ" }, h("span", {}, "Rédaction des pages"), selectFournisseurRedaction),
+    h("label", { class: "champ" }, h("span", {}, "Modèle de rédaction"), champModeleRedaction),
+    h(
+      "p",
+      { class: "aide" },
+      "L'app écrit avec claude-opus-5 : c'est le défaut ici aussi, pour que les deux carnets aient la même plume. ",
+      "Sans clé Anthropic, les pages sont écrites par l'autre fournisseur plutôt que pas du tout — la console le dit.",
+    ),
   );
 }
 
@@ -4704,6 +5069,7 @@ function rendreEtapes() {
       ),
       e.photos.length > 0 &&
         h("div", { class: "grille-photos" }, e.photos.map((p) => cartePhoto(p, e.id))),
+      pageEcrite(e) && carteRedaction(e),
       h("div", { class: "pile" }, e.souvenirs.map((s) => carteSouvenir(s, e.id))),
       !e.souvenirs.length &&
         !e.photos.length &&

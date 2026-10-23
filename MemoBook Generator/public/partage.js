@@ -98,6 +98,28 @@
     }
   }
 
+  /**
+   * La fiche de cohérence d'un carnet qui commence — même forme que
+   * `EMPTY_COHERENCE_SHEET` (`backend/src/services/redaction.ts`) : c'est
+   * l'écrivain qui la remplit, étape après étape.
+   */
+  const FICHE_COHERENCE_VIDE = {
+    people: [],
+    places: [],
+    lexicon: [],
+    narration: { person: "", tense: "" },
+    figures: [],
+    voice: [],
+  };
+
+  /**
+   * Le barème des tailles d'étape, repris de `STEP_SIZES`
+   * (`backend/src/services/payloadValidator.ts`) : la mise en page de
+   * l'atelier compte sur les mêmes bornes (`SIGNES_PAR_PARAGRAPHE`, 379).
+   */
+  const BAREME_ETAPE =
+    "S 200–379 (1 paragraphe), M 380–559 (2 paragraphes), L 560–899 (3 paragraphes), XL 900–1440 (4 paragraphes)";
+
   function consigneDecoupage(blocs, indications, dejaTitrees, dejaConnus) {
     const lignes = blocs
       .map(
@@ -154,6 +176,148 @@ ${lignes}
 Réponds uniquement par un objet JSON, sans texte autour et sans balises de code :
 {"carnet":{"titre":"","destination":"","date_debut":"AAAA-MM-JJ","date_fin":"AAAA-MM-JJ","voyageurs":["",""],"rencontres":["",""]},
  "etapes":[{"titre":"","lieu":"","date_debut":"AAAA-MM-JJ","date_fin":"AAAA-MM-JJ","debut":0,"fin":4}]}`;
+  }
+
+
+  /**
+   * La rédaction d'une étape — l'écrivain de MemoBook, dans l'atelier.
+   *
+   * Jusqu'ici l'atelier ne réécrivait rien : le texte du carnet était la
+   * transcription brute, avec ses reprises et ses tics (Hugo, 23/10/2026).
+   * Cette consigne branche la même rédaction que le backend, avec le même
+   * prompt système — `agents/agent-transcription.md`, chargé tel quel — et le
+   * même message : le carnet, la fiche de cohérence, les étapes déjà écrites,
+   * puis la transcription. Voir `backend/src/services/redaction.ts`
+   * (`buildRedactionPrompt`), dont ceci est la version de l'atelier.
+   *
+   * Deux différences assumées avec le backend, parce que l'atelier n'a pas la
+   * même chaîne :
+   *
+   * - **pas d'encart ni de quiz ici.** Ils viennent de l'analyse d'étape
+   *   (`consigneAnalyseEtape`), que la mise en page lit déjà ; les demander
+   *   deux fois donnerait deux séries de fun facts dans le même carnet ;
+   * - **une étape = tous ses vocaux**, là où le backend rédige un vocal à la
+   *   fois. Les vocaux arrivent donc groupés, chacun daté, et l'écrivain en
+   *   fait une page d'un tenant.
+   *
+   * `regles` est le contenu du fichier d'agent, qui devient le prompt système.
+   * Renvoie `{ systeme, message }`.
+   */
+  function consigneRedactionEtape({ regles, carnet, etape, numero, total, vocaux, fiche, precedentes, titresEmployes }) {
+    const systeme = [
+      "Tu es l'écrivain de MemoBook. D'un souvenir raconté à l'oral, tu fais la page de",
+      "carnet de voyage que le voyageur aurait écrite lui-même : tu comprends d'abord ce",
+      "qu'il a vécu et ce qu'il voulait en dire, puis tu l'écris.",
+      "",
+      "Les règles ci-dessous font autorité et s'appliquent intégralement, sans exception.",
+      "Elles priment sur tes habitudes de rédaction. En cas de conflit entre deux règles,",
+      "la hiérarchie des quatre principes tranche.",
+      "",
+      "Tu réponds uniquement par l'objet JSON demandé.",
+      "",
+      "---",
+      "",
+      String(regles || "").trim(),
+    ].join("\n");
+
+    const lignes = ["## Le carnet"];
+    if (carnet?.titre) lignes.push(`Titre : ${carnet.titre}`);
+    if (carnet?.destination) lignes.push(`Destination : ${carnet.destination}`);
+    const sejour = [carnet?.dateDebut, carnet?.dateFin].filter(Boolean);
+    if (sejour.length) lignes.push(`Dates du voyage : ${sejour.join(" → ")}`);
+    if (carnet?.voyageurs?.length) lignes.push(`Voyageurs : ${carnet.voyageurs.join(", ")}`);
+    if (carnet?.rencontres?.length) lignes.push(`Rencontres déjà repérées : ${carnet.rencontres.join(", ")}`);
+
+    lignes.push(
+      "",
+      "## Qui raconte",
+      carnet?.voyageurs?.length
+        ? `Le narrateur est l'un d'eux — le plus souvent ${carnet.voyageurs[0]}. S'il parle de lui à la troisième personne, c'est de lui-même (§ 1.3).`
+        : "Le narrateur : prénom inconnu. N'en invente pas.",
+    );
+
+    lignes.push(
+      "",
+      "## Fiche de cohérence",
+      precedentes?.length
+        ? "Relis-la avant d'écrire, complète-la après. Ne change aucune graphie déjà fixée."
+        : "Première étape du carnet : la fiche est vide, c'est toi qui l'ouvres. Les choix que tu fais ici (personne, temps, appellations) engagent tout le carnet.",
+      "```json",
+      JSON.stringify(fiche || FICHE_COHERENCE_VIDE, null, 2),
+      "```",
+    );
+
+    const titres = (titresEmployes || []).filter(Boolean);
+    if (titres.length) {
+      lignes.push(
+        "",
+        "## Ce que le carnet a déjà employé",
+        `Titres, dans l'ordre : ${titres.map((t) => `« ${t} »`).join(" · ")}`,
+      );
+    }
+
+    const recentes = (precedentes || []).slice(-3);
+    if (recentes.length) {
+      lignes.push(
+        "",
+        recentes.length === 1
+          ? "## L'étape précédente, déjà écrite"
+          : `## Les ${recentes.length} étapes précédentes, déjà écrites`,
+        "Elles donnent le ton, le rythme et la voix à tenir, et les fils qui restent ouverts.",
+        "Ne les résume pas, ne les reprends pas : enchaîne. La dernière phrase de la dernière",
+        "étape et la première phrase de la tienne ne doivent pas se recouvrir.",
+      );
+      for (const voisine of recentes) {
+        lignes.push("", `### ${voisine.titre || "(sans titre)"}${voisine.lieu ? ` — ${voisine.lieu}` : ""}`, voisine.texte);
+      }
+    }
+
+    const jours = [etape?.dateDebut, etape?.dateFin].filter(Boolean);
+    lignes.push(
+      "",
+      "## L'étape à rédiger",
+      `Étape n°${numero} sur ${total}${etape?.titre ? ` — « ${etape.titre} »` : ""}${jours.length ? `, ${[...new Set(jours)].join(" → ")}` : ""}`,
+      etape?.lieu ? `Lieu : ${etape.lieu}` : "Lieu : non précisé par le voyageur",
+      "",
+      (vocaux || []).length > 1
+        ? "Ses vocaux, dans l'ordre. Ils racontent **une seule** étape : fais-en une page d'un tenant, sans marquer les coutures."
+        : "Son vocal.",
+      "Transcription brute, faite par une machine qui entend mal les noms propres et l'argot (§ 1.2) :",
+    );
+    for (const vocal of vocaux || []) {
+      lignes.push(
+        "",
+        `### ${vocal.nom || "vocal"}${vocal.date ? ` — envoyé le ${vocal.date}` : ""}`,
+        "```",
+        String(vocal.texte || "").trim(),
+        "```",
+      );
+    }
+
+    lignes.push(
+      "",
+      "## Rappels",
+      "- Lis d'abord, écris ensuite : `understanding` se remplit avant `text`, et c'est lui qui décide",
+      "  de la page — son cœur, son ton, ce que veut dire chaque passage (§ 1).",
+      `- \`text\` : une taille du barème — ${BAREME_ETAPE} —, et **379 caractères au plus par`,
+      "  paragraphe**, séparés par une ligne vide. Un dépassement casse la mise en page.",
+      "- Texte nu dans `text` : ni HTML, ni Markdown, ni emoji.",
+      "- Tout ce que tu écris dans `text` se retrouve dans la transcription. La culture générale",
+      "  n'entre pas dans le récit : dans cet atelier, les encarts et le quiz sont écrits ailleurs,",
+      "  ne les produis pas ici.",
+      "- `title` : le titre de l'étape, dans la voix du voyageur. Reprends celui qui est déjà posé",
+      "  s'il tient, propose mieux sinon.",
+      "- Un mot que tu n'as pas compris ne s'imprime pas et n'entre pas dans la fiche : il va dans",
+      "  `doubts`, que tu laisses vide quand tout est clair.",
+      "",
+      "Réponds uniquement par un objet JSON, sans texte autour et sans balises de code :",
+      '{"understanding":{"heart":"","tone":"","readings":[{"heard":"","meaning":""}]},',
+      ' "title":"","text":"",',
+      ' "coherenceSheet":{"people":[{"canonicalName":"","notes":""}],"places":[{"canonicalName":"","notes":""}],"lexicon":[{"term":"","notes":""}],"narration":{"person":"","tense":""},"figures":[{"label":"","value":""}],"voice":[""]},',
+      ' "doubts":[""]}',
+    );
+
+    return { systeme, message: lignes.join("\n") };
   }
 
   /**
@@ -314,7 +478,9 @@ Réponds uniquement par un objet JSON, sans texte autour :
     construireTexteGroupe,
     extraireJson,
     consigneDecoupage,
+    consigneRedactionEtape,
     consigneAnalyseEtape,
+    FICHE_COHERENCE_VIDE,
     messagesAnalyse,
   };
 
