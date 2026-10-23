@@ -34,6 +34,7 @@ statistiques, et ses doutes.
 |---|---|
 | La façon d'écrire | `agents/agent-transcription.md` — puis rejouer le banc (§ 3) |
 | Ce qu'il sait du voyage | `buildRedactionPrompt` dans `backend/src/services/redaction.ts`, et `backend/src/jobs/redact.ts` qui va le chercher |
+| Ce qu'il sait du voyage **dans l'atelier** | `consigneRedactionEtape` dans `MemoBook Generator/public/partage.js`, et `redigerEtapes` dans `public/app.js` |
 | Ce qu'il rend | `REDACTION_SCHEMA` dans `redaction.ts` |
 | La bulle qui cite ses doutes | `validationQuestionFor` dans `backend/src/services/conversationCopy.ts` |
 | Les noms soufflés au transcripteur | `transcriptionHintFor` dans `backend/src/services/transcription.ts` |
@@ -106,6 +107,47 @@ mesurerait plus rien. On illustre avec des voyages inventés (Lisbonne, l'Algarv
 Clara, Tom).
 
 ## 4. Journal
+
+### 23/10/2026 — L'atelier écrit, lui aussi
+
+**Le constat** (Hugo). Les PDF générés depuis l'atelier en ligne
+(`hugo-jouffre.github.io/memo-book/`) donnaient un texte qui « ne suit pas
+vraiment les consignes ». Il ne les suivait pas du tout : l'atelier n'avait
+aucune étape de rédaction. La transcription Whisper traversait toute la chaîne
+sans être réécrite — le découpage disait lui-même « tu ne réécris rien », et
+l'analyse d'étape ne réécrit pas davantage. Les règles de cet agent ne
+voyaient jamais l'atelier : seul le job `redact` les chargeait.
+
+**Ce qui a été fait.** L'atelier écrit maintenant la page de chaque étape avant
+la mise en page, avec ce même fichier en prompt système, chargé depuis `main`
+sur GitHub — la version atelier de `buildRedactionPrompt` s'appelle
+`consigneRedactionEtape` (`MemoBook Generator/public/partage.js`), et la boucle
+`redigerEtapes` (`public/app.js`) tient la fiche de cohérence d'une étape à
+l'autre, comme le job. Le récit imprimé (`recitDe`) est la page écrite quand
+elle existe, la transcription brute sinon : sans clé, règles injoignables ou
+modèle en échec, le carnet se fait quand même.
+
+**Le modèle.** La rédaction a son propre fournisseur dans l'atelier, séparé de
+celui du découpage : Anthropic / `claude-opus-5` par défaut, celui de l'app
+(Hugo, 23/10/2026) — deux carnets, une seule plume. Le découpage reste sur
+OpenAI, pour qu'une seule clé suffise à faire tourner l'atelier. Sans clé
+Anthropic, les pages sont écrites par l'autre fournisseur plutôt que pas du
+tout, et la console le dit.
+
+**Les écarts avec le pipeline, voulus.** L'atelier ne demande ni encart ni quiz
+à l'écrivain — ils viennent de son analyse d'étape, que sa mise en page lit
+déjà, et deux sources donneraient deux séries de fun facts dans le même carnet.
+Et il rédige **une étape = tous ses vocaux**, là où le job rédige un vocal à la
+fois : l'atelier ne connaît que des étapes.
+
+**Ce qui reste ouvert**
+
+- Les sorties ne sont pas contraintes par un schéma côté atelier : le JSON est
+  relu par `extraireJson`, comme le découpage. Un modèle qui répond à côté fait
+  retomber l'étape sur sa transcription brute.
+- Le banc (§ 3) ne couvre pas ce chemin : il rejoue le job, pas l'atelier.
+- Une page corrigée à la main dans l'atelier ne remonte nulle part — elle vit
+  dans le fichier d'avancement, pas dans `Entry.editedText`.
 
 ### 02/10/2026 — Comprendre avant d'écrire
 
@@ -183,4 +225,7 @@ Prime) et ajoutait des bons mots (« une sieste stratégique »).
 | 02/10/2026 | Un nom propre nouveau se garde ; seul un prénom qui ressemble à celui d'un compagnon est suspect | reco Claude |
 | 02/10/2026 | Les règles des textes du carnet entier sortent du prompt, dans `agent-transcription-carnet.md` | reco Claude |
 | 02/10/2026 | Un paragraphe : 379 caractères, comme la validation du carnet | reco Claude |
+| 23/10/2026 | L'atelier rédige lui aussi, avec le même prompt système chargé depuis `main` — il imprimait la transcription brute | Hugo |
+| 23/10/2026 | Dans l'atelier, encarts et quiz restent à l'analyse d'étape : une seule source par carnet | reco Claude |
+| 23/10/2026 | La rédaction de l'atelier a son propre fournisseur : `claude-opus-5`, comme l'app, pendant que le découpage reste sur OpenAI | Hugo |
 | 02/10/2026 | Toute modification des règles se mesure sur le banc, avant et après ; l'historique s'écrit ici, jamais dans le prompt | Hugo, reco Claude |
