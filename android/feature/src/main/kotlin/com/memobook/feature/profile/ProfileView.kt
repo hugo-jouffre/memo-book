@@ -241,10 +241,17 @@ internal fun ProfileView(
         if (isHeldByPlay) subscription.updating(isActive = true, cancelledAt = null) else subscription
     }
 
-    // L'abonnement va se renouveler chez Apple : supprimer le compte ne
+    // L'abonnement va se renouveler chez un store : supprimer le compte ne
     // l'arrêtera pas, et la feuille de suppression doit le dire — **à lui
-    // seul** (03/10/2026). Sans profil chargé, on le dit, par prudence.
-    val renewsAtApple = effectiveSubscription?.let { it.managedByAppStore && it.cancelledAt == null && it.isUnlimited } ?: true
+    // seul** (03/10/2026), avec le nom du store qui le tient
+    // (`subscription.store`, lot B4). Sans profil chargé, on le dit, par
+    // prudence, avec les mots d'avant.
+    val renewingStore: Subscription.Store? = if (effectiveSubscription == null) {
+        Subscription.Store.AppStore
+    } else {
+        val store = if (isHeldByPlay) Subscription.Store.GooglePlay else effectiveSubscription.heldBy
+        store.takeIf { effectiveSubscription.cancelledAt == null && effectiveSubscription.isUnlimited }
+    }
 
     // Le compte raconte-t-il sans limite — lu sur le modèle **et** sur le
     // dernier geste de la session (un achat, une résiliation, le bac à
@@ -484,7 +491,7 @@ internal fun ProfileView(
         ) {
             DeleteAccountSheet(
                 hasOngoingTrip = profile?.currentTrip != null,
-                mentionsSubscription = renewsAtApple,
+                renewingStore = renewingStore,
                 isDeleting = state.isDeletingAccount,
                 onKeep = { isConfirmingDeletion = false },
                 onDelete = {

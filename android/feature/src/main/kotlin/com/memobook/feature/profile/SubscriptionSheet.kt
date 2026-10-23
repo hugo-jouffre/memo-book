@@ -219,7 +219,7 @@ internal fun SubscriptionSheet(
         }
         managesAtStore = true
         try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SubscriptionSheet.playSubscriptionsUrl)))
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SubscriptionSheet.playManageUrl(subscription))))
         } catch (_: ActivityNotFoundException) {
             managesAtStore = false
         }
@@ -424,20 +424,40 @@ internal object SubscriptionSheet {
 
     /**
      * Qui tient l'abonnement. Un achat que Google Play tient et que le serveur
-     * n'a pas reçu d'abord ; puis Apple, quand le serveur le dit ; puis Google
-     * Play, quand il connaît un abonnement sur ce téléphone ; sinon le serveur
-     * seul.
+     * n'a pas reçu d'abord ; puis **ce que le serveur dit**
+     * (`subscription.store`, lot B4) — y compris « aucun store » ; enfin, d'un
+     * serveur ou d'un cache d'avant B4 qui ne le dit pas, la lecture d'avant :
+     * Apple quand `managedByAppStore` le dit, Google Play quand il connaît un
+     * abonnement sur ce téléphone, sinon le serveur seul.
      *
-     * ⏳ Lot B4 : le serveur dira lui-même quel store tient l'abonnement
-     * (`managedByAppStore` deviendra « tenu par un store ») ; d'ici là, c'est
-     * Google Play qui le dit sur l'appareil.
+     * Le serveur passe avant Google Play : un abonnement que Google Play
+     * connaît sur ce téléphone peut être celui d'un autre compte MemoBook.
      */
-    fun store(subscription: Subscription?, isHeldByPlay: Boolean, playKnows: Boolean): Store = when {
-        isHeldByPlay -> Store.GooglePlay
-        subscription?.managedByAppStore == true -> Store.AppStore
-        playKnows -> Store.GooglePlay
-        else -> Store.App
+    fun store(subscription: Subscription?, isHeldByPlay: Boolean, playKnows: Boolean): Store {
+        if (isHeldByPlay) return Store.GooglePlay
+        subscription?.servedStore?.let { served ->
+            return when (served.value) {
+                Subscription.Store.AppStore -> Store.AppStore
+                Subscription.Store.GooglePlay -> Store.GooglePlay
+                null -> Store.App
+            }
+        }
+        return when {
+            subscription?.managedByAppStore == true -> Store.AppStore
+            playKnows -> Store.GooglePlay
+            else -> Store.App
+        }
     }
+
+    /**
+     * La page du Play Store qu'ouvre « Gérer » : celle que le serveur sert
+     * (`subscription.manageUrl`) pour un abonnement qu'il sait tenu par Google
+     * Play, sinon la nôtre — un achat qu'il n'a pas encore reçu, un serveur
+     * d'avant B4. Jamais la page d'Apple : Android n'y a pas de porte.
+     */
+    fun playManageUrl(subscription: Subscription?): String =
+        subscription?.manageUrl?.takeIf { subscription?.servedStore?.value == Subscription.Store.GooglePlay }
+            ?: playSubscriptionsUrl
 
     /**
      * Le dernier jour du mois déjà payé, quand il en reste un.
@@ -473,7 +493,7 @@ internal object SubscriptionSheet {
         subscription: Subscription?,
         graceEnd: Instant?,
         isBillingRetry: Boolean,
-        isHeldByStore: Boolean = subscription?.managedByAppStore == true,
+        isHeldByStore: Boolean = subscription?.heldBy != null,
     ): SubscriptionCopy.PaidAhead = when {
         isBillingRetry -> SubscriptionCopy.PaidAhead.BillingRetry
         isHeldByStore && graceEnd == null -> SubscriptionCopy.PaidAhead.HeldByApple
@@ -778,7 +798,7 @@ internal object SubscriptionCopy {
      * « Confirmer ma résiliation » d'un abonnement pris sur un iPhone : la
      * raison est partie, mais seul Apple coupe le renouvellement. ⚠️ **Phrase
      * propre à Android**, sur le modèle de celle de la suppression du compte
-     * (`DeleteAccountCopy.subscriptionWarning`) — à relire par Clara.
+     * (`DeleteAccountCopy.subscriptionWarning(AppStore)`) — à relire par Clara.
      */
     const val cancelAtApple =
         "Ton abonnement a été pris sur un iPhone : il se résilie chez Apple, dans les réglages de ton iPhone. MemoBook ne peut pas le couper depuis ce téléphone."

@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.memobook.core.Subscription
 import com.memobook.design.BrandButton
 import com.memobook.design.BrandSheet
 import com.memobook.design.BrandText
@@ -41,18 +42,18 @@ import com.memobook.design.MemoBookSpacing
  *
  * @param hasOngoingTrip un voyage est en cours : la feuille propose alors de le
  *   clore plutôt que de tout effacer.
- * @param mentionsSubscription un abonnement App Store va se renouveler : la
- *   feuille rappelle que supprimer le compte ne l'arrête pas. **À lui seul**
- *   (03/10/2026) — le dire à tout le monde demandait à un compte gratuit de
- *   couper un abonnement qu'il n'a pas. Un abonnement Google Play aura sa
- *   phrase avec le lot B4.
+ * @param renewingStore le store chez qui un abonnement va se renouveler : la
+ *   feuille rappelle que supprimer le compte ne l'arrête pas, et dit où le
+ *   couper. **À lui seul** (03/10/2026) — le dire à tout le monde demandait à
+ *   un compte gratuit de couper un abonnement qu'il n'a pas. `null` : rien à
+ *   couper.
  * @param isDeleting la suppression est partie. Le bouton rouge tourne et plus
  *   rien ne se touche : la demande est définitive, elle ne part pas deux fois.
  */
 @Composable
 internal fun DeleteAccountSheet(
     hasOngoingTrip: Boolean,
-    mentionsSubscription: Boolean = true,
+    renewingStore: Subscription.Store? = Subscription.Store.AppStore,
     isDeleting: Boolean,
     onKeep: () -> Unit,
     onDelete: () -> Unit,
@@ -60,7 +61,7 @@ internal fun DeleteAccountSheet(
     BrandSheet(DeleteAccountCopy.title) {
         Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.m)) {
             BrandText(
-                DeleteAccountCopy.body(hasOngoingTrip = hasOngoingTrip, mentionsSubscription = mentionsSubscription),
+                DeleteAccountCopy.body(hasOngoingTrip = hasOngoingTrip, renewingStore = renewingStore),
                 MemoBookFont.body,
                 Modifier.fillMaxWidth(),
             )
@@ -91,12 +92,17 @@ internal object DeleteAccountCopy {
         "Tes voyages, tes souvenirs et tes carnets seront effacés, ainsi que tes commandes. Les voyages que tu partages restent à tes co-voyageurs, avec les souvenirs que tu y as racontés. C’est immédiat et sans retour."
 
     /**
-     * Pour qui a un abonnement App Store qui va se renouveler — voir
-     * `mentionsSubscription`. Il parle de l'iPhone parce que l'abonnement y a
-     * été pris, même lu sur Android.
+     * Pour qui a un abonnement qui va se renouveler — voir `renewingStore`.
+     * Celui de l'App Store parle de l'iPhone parce que l'abonnement y a été
+     * pris, même lu sur Android.
      */
-    const val subscriptionWarning =
-        "Ton abonnement, lui, se résilie chez Apple : supprimer ton compte ne l’arrête pas, pense à le couper dans les réglages de ton iPhone."
+    fun subscriptionWarning(store: Subscription.Store): String = when (store) {
+        Subscription.Store.AppStore ->
+            "Ton abonnement, lui, se résilie chez Apple : supprimer ton compte ne l’arrête pas, pense à le couper dans les réglages de ton iPhone."
+        // ⚠️ Phrase propre à Android, à relire par Clara.
+        Subscription.Store.GooglePlay ->
+            "Ton abonnement, lui, se résilie dans le Play Store : supprimer ton compte ne l’arrête pas, pense à le couper dans Play Store › Paiements et abonnements › Abonnements."
+    }
 
     /** La porte de sortie qui n'existe que s'il y a un voyage en cours à clore. */
     const val closeTripInstead =
@@ -104,12 +110,12 @@ internal object DeleteAccountCopy {
 
     /**
      * Le paragraphe de la feuille : ce qui s'efface, l'abonnement à couper
-     * chez Apple s'il y en a un, et la porte de sortie s'il y a un voyage.
+     * chez son store s'il y en a un, et la porte de sortie s'il y a un voyage.
      */
-    fun body(hasOngoingTrip: Boolean, mentionsSubscription: Boolean): String =
+    fun body(hasOngoingTrip: Boolean, renewingStore: Subscription.Store?): String =
         buildList {
             add(erasure)
-            if (mentionsSubscription) add(subscriptionWarning)
+            renewingStore?.let { add(subscriptionWarning(it)) }
             if (hasOngoingTrip) add(closeTripInstead)
         }.joinToString(" ")
 
@@ -121,7 +127,7 @@ internal object DeleteAccountCopy {
 @Composable
 private fun DeleteAccountSheetPreview() {
     Box(Modifier.fillMaxSize().background(MemoBookColor.background), contentAlignment = Alignment.BottomCenter) {
-        DeleteAccountSheet(hasOngoingTrip = false, mentionsSubscription = false, isDeleting = false, onKeep = {}, onDelete = {})
+        DeleteAccountSheet(hasOngoingTrip = false, renewingStore = null, isDeleting = false, onKeep = {}, onDelete = {})
     }
 }
 
