@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- `FirebasePush` poste les notifications depuis ce module : la permission
+         est déclarée ici pour que lint la voie (elle l'est aussi dans `:app`,
+         la fusion des manifestes n'en garde qu'une). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+</manifest>
