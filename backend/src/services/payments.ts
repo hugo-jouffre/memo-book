@@ -108,6 +108,13 @@ export interface PaymentGateway {
    * compte qui n'achète jamais rien n'a pas à exister chez Stripe.
    */
   createCustomer(input: { accountId: string; email: string | null }): Promise<string>;
+  /**
+   * Supprime le client Stripe d'un compte supprimé : son adresse, son nom et
+   * ses cartes enregistrées partent avec lui. Les paiements passés restent chez
+   * Stripe, détachés — c'est Stripe qui les garde, pas nous. Un client déjà
+   * supprimé compte comme supprimé : l'appel se rejoue sans risque.
+   */
+  deleteCustomer(customerId: string): Promise<void>;
   /** Relit une intention : ce qu'elle attend encore, et de quoi la reprendre. */
   retrieveIntent(intentId: string): Promise<IntentState>;
   /**
@@ -214,6 +221,16 @@ export class StripePaymentGateway implements PaymentGateway {
       { idempotencyKey: `customer:${input.accountId}` },
     );
     return customer.id;
+  }
+
+  async deleteCustomer(customerId: string): Promise<void> {
+    try {
+      await this.stripe.customers.del(customerId);
+    } catch (cause) {
+      // Déjà supprimé — par un essai précédent, ou depuis le tableau de bord.
+      if (cause instanceof Stripe.errors.StripeError && cause.code === "resource_missing") return;
+      throw cause;
+    }
   }
 
   async retrieveIntent(intentId: string): Promise<IntentState> {
@@ -381,6 +398,8 @@ export class FakePaymentGateway implements PaymentGateway {
     const digest = createHash("sha256").update(input.accountId).digest("hex").slice(0, 24);
     return `cus_fake_${digest}`;
   }
+
+  async deleteCustomer(): Promise<void> {}
 
   async retrieveIntent(intentId: string): Promise<IntentState> {
     const intent = this.intents.get(intentId);

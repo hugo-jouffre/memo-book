@@ -111,7 +111,7 @@ export async function structureRender(
           const published = await publisher.publish(filename, sourceUrl);
           await prisma.mediaAsset.update({
             where: { id: entry.media.id },
-            data: { cdnUrl: published.cdnUrl },
+            data: { cdnUrl: published.cdnUrl, cdnAssetId: published.assetId },
           });
           photoUrl = published.cdnUrl;
         }

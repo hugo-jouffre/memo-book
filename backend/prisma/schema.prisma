@@ -1377,6 +1377,11 @@ model MediaAsset {
   /// Durée en secondes, pour les audios.
   durationSeconds Float?
   cdnUrl          String?
+  /// L'identifiant du fichier chez Webflow, rendu avec `cdnUrl`. C'est par lui
+  /// que la copie publique s'efface quand le souvenir, le voyage ou le compte
+  /// part (`services/deletion.ts`). Nul pour une photo jamais publiée, et pour
+  /// celles publiées avant le 23/10/2026.
+  cdnAssetId      String?
 
   /// La clé de l'original, quand `storageKey` pointe vers une version
   /// agrandie. L'original est toujours conservé : un agrandissement raté doit

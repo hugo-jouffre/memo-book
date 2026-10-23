@@ -35,11 +35,31 @@ export const JOB_NAMES = {
   sendNotifications: "memobook.send-notifications",
   /** Le calendrier scolaire du ministère, recopié chaque jour. */
   syncSchoolHolidays: "memobook.sync-school-holidays",
+  /**
+   * L'effacement d'une trace chez un prestataire (Stripe, Webflow,
+   * APITemplate, S3) après une suppression — voir `jobs/eraseTrace.ts`.
+   */
+  eraseTrace: "memobook.erase-trace",
 } as const;
 
 const LIVE_JOBS: ReadonlySet<string> = new Set([JOB_NAMES.transcribe, JOB_NAMES.redact, JOB_NAMES.converse]);
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
+
+/**
+ * Les jobs qui insistent plus que les autres. Par défaut, trois essais à
+ * 30 s, 1 min et 2 min : assez pour un réseau qui hoquette, pas pour un
+ * prestataire en panne une après-midi.
+ *
+ * **L'effacement chez un prestataire ne doit pas abandonner en dix minutes** :
+ * c'est une promesse faite à quelqu'un qui a supprimé son compte. Douze essais,
+ * à une minute puis au double à chaque fois (pg-boss tire l'attente entre une
+ * et deux fois ce délai) : le dernier part au moins trois jours après le
+ * premier.
+ */
+const RETRY_POLICIES: Partial<Record<JobName, PgBoss.SendOptions>> = {
+  [JOB_NAMES.eraseTrace]: { retryLimit: 12, retryDelay: 60, retryBackoff: true },
+};
 
 /**
  * Les tâches planifiées **qui n'existent plus**, et dont pg-boss garde
@@ -148,7 +168,7 @@ export class PgBossQueue implements JobQueue {
         "La file de travaux n'a pas encore démarré. Réessaie dans un instant.",
       );
     }
-    await this.boss.send(name, payload);
+    await this.boss.send(name, payload, RETRY_POLICIES[name] ?? {});
   }
 
   async schedule(name: JobName, cron: string): Promise<void> {

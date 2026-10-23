@@ -10,7 +10,7 @@ import { replyToOf } from "../services/mailer.js";
  * l'application ▸ Sécurité des données*).
  *
  * **Deux chemins, et l'app d'abord.** Dans l'app, *Profil ▸ Supprimer mon
- * compte* efface tout, tout de suite (`DELETE /v1/account`,
+ * compte* efface tout, tout de suite (`DELETE /v1/accounts/me`,
  * `services/deletion.ts`). Sans l'app — téléphone perdu, app désinstallée —,
  * un e-mail depuis l'adresse du compte : c'est elle qui prouve que la demande
  * vient de son titulaire, sans formulaire qui permettrait de supprimer le
