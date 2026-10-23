@@ -228,7 +228,7 @@ public struct ProfileView: View {
         .brandSheet(isPresented: $isConfirmingDeletion) {
             DeleteAccountSheet(
                 hasOngoingTrip: model.profile?.currentTrip != nil,
-                mentionsSubscription: renewsAtApple,
+                renewingStore: renewingStore,
                 isDeleting: model.isDeletingAccount,
                 onKeep: { isConfirmingDeletion = false },
                 onDelete: {
@@ -280,18 +280,22 @@ public struct ProfileView: View {
             subscription.isActive = true
             subscription.cancelledAt = nil
             subscription.managedByAppStore = true
+            subscription.servedStore = .some(.appStore)
         }
         return subscription
     }
 
-    /// L'abonnement va se renouveler chez Apple : supprimer le compte ne
+    /// L'abonnement va se renouveler chez un store : supprimer le compte ne
     /// l'arrêtera pas, et la feuille de suppression doit le dire — **à lui
-    /// seul** (03/10/2026). Le dire à un compte qui n'a jamais souscrit, la
-    /// plupart depuis le crédit du jour, lui demandait de couper ce qu'il n'a
-    /// pas. Sans profil chargé, on le dit, par prudence.
-    private var renewsAtApple: Bool {
-        guard let subscription = effectiveSubscription else { return true }
-        return subscription.managedByAppStore && subscription.cancelledAt == nil && subscription.isUnlimited
+    /// seul** (03/10/2026), avec le nom du store qui le tient
+    /// (`subscription.store`, lot B4). Le dire à un compte qui n'a jamais
+    /// souscrit, la plupart depuis le crédit du jour, lui demandait de couper
+    /// ce qu'il n'a pas. Sans profil chargé, on le dit, par prudence, avec les
+    /// mots d'Apple.
+    private var renewingStore: Subscription.Store? {
+        guard let subscription = effectiveSubscription else { return .appStore }
+        guard subscription.cancelledAt == nil, subscription.isUnlimited else { return nil }
+        return subscription.heldBy
     }
 
     /// Charge le profil — et, **quand un achat attend encore le serveur**,

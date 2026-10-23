@@ -92,7 +92,25 @@ struct SubscriptionSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private var isManagedByAppStore: Bool { subscription?.managedByAppStore == true }
+    @Environment(\.openURL) private var openURL
+
+    /// Ce que l'iPhone ne peut pas faire pour un abonnement pris sur Android,
+    /// dit sous les boutons de l'étape où l'on a touché.
+    @State private var storeNotice: String?
+
+    /// Apple tient l'abonnement — le store que le serveur dit
+    /// (`subscription.store`, lot B4), sinon `managedByAppStore`.
+    private var isManagedByAppStore: Bool { subscription?.heldBy == .appStore }
+
+    /// **Pris sur Android** (lot B4) : ni StoreKit ni la route du serveur ne le
+    /// coupent — seul le Play Store. La raison part quand même, et la feuille
+    /// dit où le couper, comme l'app Android le dit d'un abonnement de
+    /// l'App Store.
+    private var isHeldByGooglePlay: Bool { subscription?.heldBy == .googlePlay }
+
+    /// Le store qui réessaie un prélèvement raté, pour les phrases de la
+    /// résiliation.
+    private var holder: SubscriptionCopy.Holder { isHeldByGooglePlay ? .googlePlay : .apple }
 
     enum Step: Hashable {
         case current
@@ -162,7 +180,7 @@ struct SubscriptionSheet: View {
         Self.paidAhead(of: subscription, graceEnd: graceEnd, isBillingRetry: isBillingRetry)
     }
 
-    /// Le prélèvement raté d'abord ; puis un abonnement tenu par Apple dont
+    /// Le prélèvement raté d'abord ; puis un abonnement tenu par un store dont
     /// on ne connaît pas la fin de période — un achat que le serveur n'a pas
     /// encore reçu, le plus souvent : couper le renouvellement chez Apple ne
     /// coupe jamais la période en cours ; sinon, le cas ordinaire.
@@ -172,7 +190,7 @@ struct SubscriptionSheet: View {
         isBillingRetry: Bool
     ) -> SubscriptionCopy.PaidAhead {
         if isBillingRetry { return .billingRetry }
-        if subscription?.managedByAppStore == true, graceEnd == nil { return .heldByApple }
+        if subscription?.heldBy != nil, graceEnd == nil { return .heldByApple }
         return .settled
     }
 
@@ -186,6 +204,8 @@ struct SubscriptionSheet: View {
             }
         }
         .animation(.smooth(duration: 0.3), value: currentStep)
+        // Le message d'un store reste à l'étape où l'on a touché.
+        .onChange(of: currentStep) { _, _ in storeNotice = nil }
         .onAppear {
             if enteredInBillingRetry == nil { enteredInBillingRetry = Self.isBillingRetry(subscription) }
         }
@@ -237,6 +257,9 @@ struct SubscriptionSheet: View {
                     BrandButton(SubscriptionCopy.subscribeAgain, style: .accent, fillsWidth: true) {
                         resubscribe()
                     }
+                    if let storeNotice {
+                        BrandNotice(storeNotice, tone: .information)
+                    }
                 } else {
                     SubscriptionCallout(
                         title: SubscriptionCopy.autoCancelTitle(destination: subscription?.tripDestination),
@@ -252,14 +275,26 @@ struct SubscriptionSheet: View {
     }
 
     /// Se réinscrire pendant le mois payé. Chez Apple, c'est **réarmer** le
-    /// renouvellement — dans la même feuille d'iOS.
+    /// renouvellement — dans la même feuille d'iOS. Chez Google Play, sur sa
+    /// page, depuis le téléphone Android.
     private func resubscribe() {
         if isManagedByAppStore {
             manageAtApple()
+        } else if isHeldByGooglePlay {
+            storeNotice = SubscriptionCopy.resubscribeAtPlay
+            openPlaySubscriptions()
         } else {
             onActivate()
             step = .current
         }
+    }
+
+    /// La page des abonnements de Google Play que le serveur sert
+    /// (`subscription.manageUrl`) — dans le navigateur : elle s'y ouvre aussi,
+    /// avec le compte Google. Rien quand le serveur ne l'a pas servie.
+    private func openPlaySubscriptions() {
+        guard let url = subscription?.manageUrl else { return }
+        openURL(url)
     }
 
     // MARK: - Résiliation 1 — « Ton voyage continue »
@@ -271,7 +306,8 @@ struct SubscriptionSheet: View {
                 tripTitle: subscription?.tripTitle,
                 graceEnd: graceEnd,
                 interval: paidInterval,
-                paidAhead: paidAhead
+                paidAhead: paidAhead,
+                holder: holder
             )
         ) {
             VStack(spacing: MemoBookSpacing.s) {
@@ -298,7 +334,8 @@ struct SubscriptionSheet: View {
             paragraphs: SubscriptionCopy.reasonParagraphs(
                 graceEnd: graceEnd,
                 interval: paidInterval,
-                paidAhead: paidAhead
+                paidAhead: paidAhead,
+                holder: holder
             )
         ) {
             VStack(spacing: MemoBookSpacing.m) {
@@ -325,6 +362,12 @@ struct SubscriptionSheet: View {
                         if isManagedByAppStore {
                             onRecordReason(reason)
                             manageAtApple()
+                        } else if isHeldByGooglePlay {
+                            // La route ne coupe pas un abonnement Google Play
+                            // (B4) : « C'est validé » mentirait.
+                            onRecordReason(reason)
+                            storeNotice = SubscriptionCopy.cancelAtPlay
+                            openPlaySubscriptions()
                         } else {
                             onCancel(reason)
                             step = .done
@@ -335,6 +378,10 @@ struct SubscriptionSheet: View {
                     // confirmer sans raison passait à côté du seul retour que
                     // cette feuille rapporte.
                     .disabled(reason == nil)
+
+                    if let storeNotice {
+                        BrandNotice(storeNotice, tone: .information)
+                    }
                 }
             }
         }
@@ -348,7 +395,8 @@ struct SubscriptionSheet: View {
             paragraphs: SubscriptionCopy.doneParagraphs(
                 graceEnd: graceEnd,
                 interval: paidInterval,
-                paidAhead: paidAhead
+                paidAhead: paidAhead,
+                holder: holder
             )
         ) {
             VStack(spacing: MemoBookSpacing.s) {
@@ -456,14 +504,38 @@ enum SubscriptionCopy {
         case billingRetry
     }
 
-    /// Le prélèvement raté, dit tel quel : Apple réessaie, et l'illimité tient
+    /// Qui réessaie un prélèvement raté — **le store qui a vendu
+    /// l'abonnement**. Apple, presque toujours ; Google Play pour un abonnement
+    /// pris sur Android (lot B4), lu ici sans pouvoir y toucher. Le jumeau de
+    /// `SubscriptionCopy.Holder` d'Android.
+    enum Holder {
+        case apple
+        case googlePlay
+
+        var storeName: String {
+            switch self {
+            case .apple: "Apple"
+            case .googlePlay: "Google Play"
+            }
+        }
+
+        /// Où l'on met à jour son moyen de paiement.
+        var paymentSettings: String {
+            switch self {
+            case .apple: "dans les réglages de ton compte Apple"
+            case .googlePlay: "dans ton compte Google Play"
+            }
+        }
+    }
+
+    /// Le prélèvement raté, dit tel quel : le store réessaie, et l'illimité tient
     /// en attendant — jusqu'à la fin du délai quand le serveur la connaît.
-    private static func paymentFailed(until graceEnd: Date?) -> String {
+    private static func paymentFailed(until graceEnd: Date?, holder: Holder = .apple) -> String {
         guard let graceEnd else {
-            return "Ton dernier prélèvement n’est pas passé : Apple réessaie, et te laisse raconter sans limite en attendant."
+            return "Ton dernier prélèvement n’est pas passé : \(holder.storeName) réessaie, et te laisse raconter sans limite en attendant."
         }
         return
-            "Ton dernier prélèvement n’est pas passé : Apple réessaie, et te laisse raconter sans limite jusqu’au \(graceEnd.dayAndMonth)."
+            "Ton dernier prélèvement n’est pas passé : \(holder.storeName) réessaie, et te laisse raconter sans limite jusqu’au \(graceEnd.dayAndMonth)."
     }
 
     // — « Mon abonnement »
@@ -526,7 +598,8 @@ enum SubscriptionCopy {
         tripTitle: String?,
         graceEnd: Date?,
         interval: Subscription.Interval = .month,
-        paidAhead: PaidAhead = .settled
+        paidAhead: PaidAhead = .settled,
+        holder: Holder = .apple
     ) -> [String] {
         let opening =
             if let tripTitle, !tripTitle.isEmpty {
@@ -537,7 +610,7 @@ enum SubscriptionCopy {
         let consequence =
             switch paidAhead {
             case .billingRetry:
-                "\(paymentFailed(until: graceEnd)) Si tu coupes maintenant, Apple cesse de réessayer, et \(dailyCreditBack)."
+                "\(paymentFailed(until: graceEnd, holder: holder)) Si tu coupes maintenant, \(holder.storeName) cesse de réessayer, et \(dailyCreditBack)."
             case .heldByApple where graceEnd == nil:
                 "Si tu coupes maintenant, tu racontes sans limite jusqu’à la fin de la période déjà réglée. Ensuite, \(dailyCreditBack)."
             case .settled, .heldByApple:
@@ -579,7 +652,8 @@ enum SubscriptionCopy {
     static func reasonParagraphs(
         graceEnd: Date?,
         interval: Subscription.Interval = .month,
-        paidAhead: PaidAhead = .settled
+        paidAhead: PaidAhead = .settled,
+        holder: Holder = .apple
     ) -> [String] {
         var paragraphs = [
             "Aide-nous à faire évoluer l’application.",
@@ -588,7 +662,7 @@ enum SubscriptionCopy {
         switch paidAhead {
         case .billingRetry:
             paragraphs.append(
-                "Si c’est le prélèvement qui bloque, mets à jour ton moyen de paiement dans les réglages de ton compte Apple : l’abonnement repartira tout seul."
+                "Si c’est le prélèvement qui bloque, mets à jour ton moyen de paiement \(holder.paymentSettings) : l’abonnement repartira tout seul."
             )
             return paragraphs
         case .heldByApple where graceEnd == nil:
@@ -628,14 +702,15 @@ enum SubscriptionCopy {
     static func doneParagraphs(
         graceEnd: Date?,
         interval: Subscription.Interval = .month,
-        paidAhead: PaidAhead = .settled
+        paidAhead: PaidAhead = .settled,
+        holder: Holder = .apple
     ) -> [String] {
         let keepsBook = "et tu gardes accès à ton carnet de bord pour le relire quand tu veux."
         switch paidAhead {
         case .billingRetry:
             return [
                 "L’abonnement ne se renouvellera pas.",
-                "Ton dernier prélèvement n’était pas passé : Apple ne le retentera pas.",
+                "Ton dernier prélèvement n’était pas passé : \(holder.storeName) ne le retentera pas.",
                 "Ensuite, \(dailyCreditBack), \(keepsBook)",
             ]
         case .heldByApple where graceEnd == nil:
@@ -702,6 +777,18 @@ enum SubscriptionCopy {
     static let endedResubscribe = "Me réabonner"
     static let backHome = "Revenir à l’accueil"
     static let subscribeAgain = "S’inscrire à nouveau"
+
+    // — Un abonnement de Google Play, lu sur l'iPhone (lot B4)
+
+    /// « Confirmer ma résiliation » d'un abonnement pris sur Android : la
+    /// raison est partie, mais seul le Play Store coupe le renouvellement. La
+    /// jumelle de `cancelAtApple` d'Android — à relire par Clara.
+    static let cancelAtPlay =
+        "Ton abonnement a été pris sur un téléphone Android : il se résilie dans le Play Store, depuis ton téléphone Android ou sur play.google.com. MemoBook ne peut pas le couper depuis cet iPhone."
+
+    /// « S’inscrire à nouveau », même cas. À relire par Clara.
+    static let resubscribeAtPlay =
+        "Ton abonnement a été pris sur un téléphone Android : il se réactive dans le Play Store, depuis ton téléphone Android ou sur play.google.com. MemoBook ne peut pas le relancer depuis cet iPhone."
 }
 
 // MARK: - Aperçus

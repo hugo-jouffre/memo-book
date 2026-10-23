@@ -387,4 +387,74 @@ final class SubscriptionGraceTests: XCTestCase {
         let active = #"{ "id": "t", "firstName": "Camille", "isUnlimited": true, "subscriptionState": "active" }"#
         XCTAssertNil(try JSONDecoder.memoBook.decode(Traveller.self, from: Data(active.utf8)).unlimitedUntil)
     }
+
+    // MARK: Le store qui tient l'abonnement (lot B4, 22/10/2026)
+
+    /// Le serveur dit le store et la page où le gérer : on les lit tels quels.
+    func testTheServedStoreAndManageUrlAreRead() throws {
+        let play = try decodedSubscription(
+            #""store": "google_play", "manageUrl": "https://play.google.com/store/account/subscriptions?sku=x&package=com.memobook.app""#
+        )
+        XCTAssertEqual(play.servedStore, .some(.googlePlay))
+        XCTAssertEqual(play.heldBy, .googlePlay)
+        XCTAssertEqual(
+            play.manageUrl?.absoluteString,
+            "https://play.google.com/store/account/subscriptions?sku=x&package=com.memobook.app"
+        )
+
+        let apple = try decodedSubscription(#""managedByAppStore": true, "store": "app_store", "manageUrl": null"#)
+        XCTAssertEqual(apple.heldBy, .appStore)
+        XCTAssertNil(apple.manageUrl)
+    }
+
+    /// `"store": null` n'est pas l'absence : le serveur dit qu'aucun store ne
+    /// le tient, et un vieux `managedByAppStore` ne le contredit pas.
+    func testAServedNullStoreMeansNoStore() throws {
+        let stripe = try decodedSubscription(#""isActive": true, "managedByAppStore": false, "store": null"#)
+        XCTAssertEqual(stripe.servedStore, .some(nil))
+        XCTAssertNil(stripe.heldBy)
+    }
+
+    /// Un serveur d'avant B4, ou une valeur inconnue : la lecture d'avant —
+    /// l'App Store quand `managedByAppStore` le dit, aucun store sinon.
+    func testWithoutAServedStoreTheOldFlagAnswers() throws {
+        let oldApple = try decodedSubscription(#""managedByAppStore": true"#)
+        XCTAssertNil(oldApple.servedStore)
+        XCTAssertEqual(oldApple.heldBy, .appStore)
+
+        XCTAssertNil(try decodedSubscription(#""tripTitle": "Rome""#).heldBy)
+
+        let unknown = try decodedSubscription(#""managedByAppStore": true, "store": "huawei""#)
+        XCTAssertNil(unknown.servedStore)
+        XCTAssertEqual(unknown.heldBy, .appStore)
+    }
+
+    /// Le cache relit ce qu'il a écrit : le store servi — `null` compris —,
+    /// la page, et l'absence d'un serveur d'avant B4.
+    func testTheStoreSurvivesTheCache() throws {
+        func roundTrip(_ subscription: Subscription) throws -> Subscription {
+            try JSONDecoder.memoBook.decode(Subscription.self, from: JSONEncoder.memoBook.encode(subscription))
+        }
+        let play = try decodedSubscription(#""store": "google_play", "manageUrl": "https://play.google.com/x""#)
+        let cachedPlay = try roundTrip(play)
+        XCTAssertEqual(cachedPlay.servedStore, .some(.googlePlay))
+        XCTAssertEqual(cachedPlay.manageUrl, play.manageUrl)
+
+        XCTAssertEqual(try roundTrip(decodedSubscription(#""store": null"#)).servedStore, .some(nil))
+        XCTAssertNil(try roundTrip(decodedSubscription(#""managedByAppStore": true"#)).servedStore)
+    }
+
+    /// L'accueil sait quel store tient l'abonnement : le rappel de fin de
+    /// voyage ne propose pas la feuille d'Apple à un abonné Google Play.
+    func testTheHomeKnowsWhichStoreHoldsTheSubscription() throws {
+        let json = #"{ "id": "t", "firstName": "Camille", "subscriptionOutlivesTrip": true, "subscriptionStore": "google_play" }"#
+        let traveller = try JSONDecoder.memoBook.decode(Traveller.self, from: Data(json.utf8))
+        XCTAssertEqual(traveller.subscriptionStore, .googlePlay)
+
+        let old = #"{ "id": "t", "firstName": "Camille" }"#
+        XCTAssertNil(try JSONDecoder.memoBook.decode(Traveller.self, from: Data(old.utf8)).subscriptionStore)
+
+        let unknown = #"{ "id": "t", "firstName": "Camille", "subscriptionStore": "huawei" }"#
+        XCTAssertNil(try JSONDecoder.memoBook.decode(Traveller.self, from: Data(unknown.utf8)).subscriptionStore)
+    }
 }

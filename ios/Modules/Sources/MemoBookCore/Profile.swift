@@ -316,8 +316,43 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// Ça décide de la résiliation : Apple ne laisse aucune app la faire à la
     /// place de son client, donc la feuille enregistre la raison puis ouvre la
     /// gestion des abonnements d'iOS. Faux pour un compte qui n'a rien souscrit,
-    /// ou quand un serveur plus ancien ne sert pas le champ.
+    /// ou quand un serveur plus ancien ne sert pas le champ. Depuis le lot B4,
+    /// c'est ``servedStore`` qui dit quel store le tient ; ce drapeau n'est
+    /// plus que le repli — voir ``heldBy``.
     public var managedByAppStore: Bool
+
+    /// Les deux stores qui vendent l'abonnement — `subscription.store` du
+    /// serveur (lot B4, 22/10/2026).
+    public enum Store: String, Codable, Sendable, Hashable {
+        /// Acheté sur un iPhone, par StoreKit.
+        case appStore = "app_store"
+        /// Acheté sur Android, par Google Play Billing.
+        case googlePlay = "google_play"
+    }
+
+    /// **Le store qui tient l'abonnement, dit par le serveur** :
+    /// `.some(.appStore)`, `.some(.googlePlay)`, ou `.some(nil)` pour un
+    /// abonnement que le serveur tient seul (Stripe) ou pas d'abonnement du
+    /// tout. `nil` quand le serveur ne sert pas le champ — un serveur ou un
+    /// cache d'avant B4, une valeur que cette version ne connaît pas.
+    public var servedStore: Store??
+
+    /// **Où se gère l'abonnement** — `subscription.manageUrl` : la page des
+    /// abonnements du Play Store pour un abonnement pris sur Android, celle
+    /// d'Apple pour l'App Store, `nil` sans store.
+    public var manageUrl: URL?
+
+    /// **Qui tient l'abonnement** : le store que le serveur dit
+    /// (``servedStore``), sinon — un serveur ou un cache d'avant B4 —
+    /// l'App Store quand ``managedByAppStore`` le dit. `nil` : le serveur le
+    /// tient seul, ou il n'y a rien à tenir.
+    ///
+    /// **Un abonnement pris sur Android ne se gère pas d'ici** : ni StoreKit ni
+    /// la route du serveur ne le coupent — seul le Play Store.
+    public var heldBy: Store? {
+        if let servedStore { return servedStore }
+        return managedByAppStore ? .appStore : nil
+    }
 
     /// La période qu'un prix paie.
     public enum Interval: String, Codable, Sendable, Hashable {
@@ -344,6 +379,8 @@ public struct Subscription: Codable, Sendable, Hashable {
         paidThrough: Date? = nil,
         hasEndedBefore: Bool = false,
         managedByAppStore: Bool = false,
+        servedStore: Store?? = nil,
+        manageUrl: URL? = nil,
         servedIsUnlimited: Bool? = nil,
         servedState: State? = nil,
         autoRenews: Bool? = nil,
@@ -360,6 +397,8 @@ public struct Subscription: Codable, Sendable, Hashable {
         self.paidThrough = paidThrough
         self.hasEndedBefore = hasEndedBefore
         self.managedByAppStore = managedByAppStore
+        self.servedStore = servedStore
+        self.manageUrl = manageUrl
         self.servedIsUnlimited = servedIsUnlimited
         self.servedState = servedState
         self.autoRenews = autoRenews
@@ -370,6 +409,9 @@ public struct Subscription: Codable, Sendable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case price, interval, isActive, tripDestination, tripTitle, endsOn
         case cancelledAt, paidThrough, hasEndedBefore, managedByAppStore
+        /// Le store servi — ``servedStore``.
+        case store
+        case manageUrl
         /// Le verdict du serveur — ``servedIsUnlimited``.
         case isUnlimited
         /// L'état tranché par le serveur — ``servedState``.
@@ -405,6 +447,18 @@ public struct Subscription: Codable, Sendable, Hashable {
         hasEndedBefore = try container.decodeIfPresent(Bool.self, forKey: .hasEndedBefore) ?? false
         managedByAppStore =
             try container.decodeIfPresent(Bool.self, forKey: .managedByAppStore) ?? false
+        // `null` servi n'est pas l'absence : le serveur dit qu'aucun store ne le
+        // tient. Une valeur inconnue vaut l'absence — le repli répond.
+        if !container.contains(.store) {
+            servedStore = nil
+        } else if try container.decodeNil(forKey: .store) {
+            servedStore = .some(nil)
+        } else if let store = try? container.decode(Store.self, forKey: .store) {
+            servedStore = .some(store)
+        } else {
+            servedStore = nil
+        }
+        manageUrl = (try? container.decodeIfPresent(URL.self, forKey: .manageUrl)) ?? nil
         servedIsUnlimited = try container.decodeIfPresent(Bool.self, forKey: .isUnlimited)
         // Une valeur que cette version ne connaît pas ne fait pas tomber le
         // profil : le recalcul d'avant répond à sa place.
@@ -426,6 +480,12 @@ public struct Subscription: Codable, Sendable, Hashable {
         try container.encodeIfPresent(paidThrough, forKey: .paidThrough)
         try container.encode(hasEndedBefore, forKey: .hasEndedBefore)
         try container.encode(managedByAppStore, forKey: .managedByAppStore)
+        switch servedStore {
+        case .none: break
+        case .some(.none): try container.encodeNil(forKey: .store)
+        case .some(.some(let store)): try container.encode(store, forKey: .store)
+        }
+        try container.encodeIfPresent(manageUrl, forKey: .manageUrl)
         try container.encodeIfPresent(servedIsUnlimited, forKey: .isUnlimited)
         try container.encodeIfPresent(servedState, forKey: .state)
         try container.encodeIfPresent(autoRenews, forKey: .autoRenews)
