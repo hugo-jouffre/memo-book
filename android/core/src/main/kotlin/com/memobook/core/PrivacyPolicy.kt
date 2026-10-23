@@ -21,9 +21,10 @@ package com.memobook.core
 // les destinataires. Le reste décrit toujours le site (T203). ⚠️ **C'est le site
 // qui fait foi** : memobook.fr doit publier les mêmes ajouts.
 //
-// ⚠️ Recopiée **telle quelle** de l'app iOS, App Store et Apple compris (2.4,
-// chapitre 3) : le texte propre à Google Play est une décision juridique à
-// part, pas un détail de portage.
+// **La version Google Play** (A8b, 23/10/2026) : recopiée de l'app iOS, sauf
+// le § 2.4 (les données d'achat reçues de Google Play, et de l'App Store pour
+// un abonnement pris sur un iPhone) et le chapitre 3, où Google rejoint les
+// destinataires. Chaque phrase changée est listée dans la PR, pour Clara.
 
 object PrivacyPolicy {
     private const val contactLink = LegalContact.emailLink
@@ -95,9 +96,9 @@ object PrivacyPolicy {
                 "**Durée de conservation :** durée de la session de navigation",
             )),
 
-            LegalBlock.Heading("2.4 Abonnement souscrit dans l’application (App Store)"),
+            LegalBlock.Heading("2.4 Abonnement souscrit dans l’application (Google Play)"),
             LegalBlock.Lines(listOf(
-                "**Données collectées :** identifiants de transaction App Store (achat d’origine et renouvellements), abonnement souscrit, statut de l’abonnement, dates d’achat, de renouvellement et de fin de période. Aucune donnée bancaire : le paiement est traité par Apple, qui ne nous transmet ni vos moyens de paiement ni vos coordonnées bancaires",
+                "**Données collectées :** jeton d’achat et identifiant de commande Google Play (achat d’origine et renouvellements) — ou identifiants de transaction App Store pour un abonnement souscrit sur un iPhone —, abonnement souscrit, statut de l’abonnement, dates d’achat, de renouvellement et de fin de période. Aucune donnée bancaire : le paiement est traité par Google (ou par Apple), qui ne nous transmet ni vos moyens de paiement ni vos coordonnées bancaires",
                 "**Finalité :** ouvrir et maintenir l’accès illimité, l’honorer jusqu’à la fin de la période payée après une résiliation, vous rappeler que vous pouvez résilier quand votre dernier voyage en cours se termine, et répondre à vos demandes d’assistance",
                 "**Base légale :** exécution du contrat (article 6.1.b du RGPD)",
                 "**Durée de conservation :** tant que votre compte existe ; ces données sont supprimées avec lui",
@@ -127,12 +128,16 @@ object PrivacyPolicy {
             // Apple ajoutée le 03/10/2026 : c'est l'App Store qui encaisse
             // l'abonnement et nous en transmet l'état (2.4). Stripe le
             // 19/10/2026 (D6) : c'est lui qui encaisse un carnet commandé.
+            // Google le 23/10/2026 (A8b) : Google Play encaisse l'abonnement
+            // pris sur Android, et Firebase Cloud Messaging porte les
+            // notifications. Apple reste : un abonnement pris sur iPhone.
             LegalBlock.Bullets(listOf(
                 "Webflow Inc.",
                 "Google LLC (Analytics)",
                 "Hotjar Ltd",
                 "Meta Platforms Inc.",
-                "Apple Distribution International Ltd. (App Store, paiement de l’abonnement)",
+                "Google Ireland Limited (Google Play, paiement de l’abonnement ; Firebase Cloud Messaging, envoi des notifications)",
+                "Apple Distribution International Ltd. (App Store, paiement d’un abonnement souscrit sur un iPhone)",
                 "Stripe Payments Europe Ltd. (paiement des carnets imprimés)",
             )),
             LegalBlock.Paragraph("Aucune de vos données n’est vendue à des tiers. Aucune donnée n’est partagée à des fins commerciales sans votre consentement explicite."),
