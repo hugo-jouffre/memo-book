@@ -31,6 +31,11 @@ formulaire ci-dessous, avec d'autres cases.
    les métadonnées EXIF (aucune lecture dans `backend/src`). Retirer la
    position côté app (`ExifInterface` avant l'envoi) reste un lot à part.
 
+6. **Google dans les textes Android** (PR #149) : Google Commerce Limited vend
+   l'abonnement, Google Ireland Limited fournit la connexion, FCM et Sheets ;
+   un remboursement se demande à Google dans les 48 heures, à MemoBook
+   au-delà.
+
 ### Reste à vérifier avant de saisir
 
 - **L'identifiant publicitaire.** Aucun SDK de publicité ni d'analytique dans
@@ -38,8 +43,6 @@ formulaire ci-dessous, avec d'autres cases.
   publicitaire ? », après avoir vérifié que le manifeste fusionné du Release
   ne déclare pas `com.google.android.gms.permission.AD_ID`
   (`android/app/build/intermediates/merged_manifests/release/`).
-- **L'entité Google et le remboursement** des textes Android (PR #149) : la
-  proposition est dans la PR, à confirmer par Hugo dans la Play Console.
 
 ## La fiche
 
