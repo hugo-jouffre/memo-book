@@ -99,6 +99,6 @@ sealed interface LegalBlock {
  * Écrite une fois, liée partout.
  */
 object LegalContact {
-    const val email = "hugo.jouffre.freelance@gmail.com"
+    const val email = "contact@memo-book.com"
     const val emailLink = "[$email](mailto:$email)"
 }

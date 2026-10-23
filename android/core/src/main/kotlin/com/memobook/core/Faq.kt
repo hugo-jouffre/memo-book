@@ -765,7 +765,7 @@ object Faq {
                     "Il est personnel : ce que tu racontes ne prend plus rien au crédit du jour, et tes co-voyageurs qui ne sont pas abonnés continuent de partager le leur.",
                     "Il se renouvelle chaque mois par ton compte Google Play. Tu le résilies quand tu veux dans le Play Store, à « Paiements et abonnements », et l’illimité reste ouvert jusqu’à la fin du mois déjà payé. Pris sur un iPhone, il se résilie dans les réglages de l’iPhone.",
                     "Quand ton dernier voyage en cours se termine, on te rappelle que tu peux le résilier en un geste.",
-                    "Un mois commencé est dû ; pour un remboursement, fais la demande depuis ton historique de commandes Google Play, sur play.google.com, ou écris-nous.",
+                    "Un mois commencé est dû ; pour un remboursement dans les 48 heures qui suivent l’achat, fais la demande depuis ton historique de commandes Google Play, sur play.google.com ; au-delà, écris-nous.",
                 )
             ),
             FaqEntry(

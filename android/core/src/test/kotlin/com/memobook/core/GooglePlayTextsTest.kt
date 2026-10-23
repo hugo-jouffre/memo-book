@@ -17,8 +17,13 @@ class GooglePlayTextsTest {
         is LegalBlock.Bullets -> lines
     }
 
+    /**
+     * Les CGU seulement : la politique de confidentialité est la même sur les
+     * deux stores (23/10/2026), et parle d'Apple pour la connexion et les
+     * notifications de l'iPhone.
+     */
     private val legalSentences: List<String>
-        get() = listOf(TermsOfUse.document, PrivacyPolicy.document)
+        get() = listOf(TermsOfUse.document)
             .flatMap { it.chapters }
             .flatMap { chapter -> chapter.blocks.flatMap { it.texts() } }
 
@@ -43,8 +48,9 @@ class GooglePlayTextsTest {
     }
 
     /**
-     * Apple et l'iPhone ne se disent plus que d'un abonnement pris sur un
-     * iPhone — jamais comme le store de cette app.
+     * Dans les CGU et la FAQ d'Android, Apple et l'iPhone ne se disent plus
+     * que d'un abonnement pris sur un iPhone — jamais comme le store de cette
+     * app.
      */
     @Test
     fun appleIsOnlyNamedForAnIphoneSubscription() {

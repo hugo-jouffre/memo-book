@@ -77,7 +77,7 @@ object TermsOfUse {
         number = 3,
         title = "Accès au service et âge minimum",
         blocks = listOf(
-            LegalBlock.Paragraph("L’utilisation de MemoBook est autorisée à partir de 4 ans. Pour les utilisateurs mineurs de moins de 16 ans, l’accord d’un parent ou tuteur légal est requis. En utilisant le service, vous confirmez que vous êtes soit majeur, soit que vous avez obtenu cette autorisation parentale."),
+            LegalBlock.Paragraph("MemoBook est réservé aux personnes âgées d’au moins 16 ans. En créant un compte, vous confirmez avoir 16 ans ou plus. Un parent peut raconter les souvenirs de voyage de ses enfants depuis son propre compte ; un enfant de moins de 16 ans ne peut pas ouvrir de compte."),
         )
     )
 
@@ -157,7 +157,7 @@ object TermsOfUse {
             )),
 
             LegalBlock.Heading("Remboursement"),
-            LegalBlock.Paragraph("Une période commencée est due : la résiliation n’entraîne aucun remboursement au prorata de la période en cours. Les demandes de remboursement suivent les règles de Google Play : elles se font depuis l’historique des commandes de votre compte Google Play ([play.google.com](https://play.google.com)), ou en nous écrivant à $contactLink. Celles d’un abonnement souscrit sur un iPhone sont traitées par Apple, depuis [reportaproblem.apple.com](https://reportaproblem.apple.com)."),
+            LegalBlock.Paragraph("Une période commencée est due : la résiliation n’entraîne aucun remboursement au prorata de la période en cours. Les demandes de remboursement suivent les règles de Google Play : dans les 48 heures qui suivent un achat, elles se font depuis l’historique des commandes de votre compte Google Play ([play.google.com](https://play.google.com), Paiements et abonnements, puis « Signaler un problème ») ; au-delà, écrivez-nous à $contactLink : nous étudions chaque demande et pouvons rembourser depuis Google Play. Celles d’un abonnement souscrit sur un iPhone sont traitées par Apple, depuis [reportaproblem.apple.com](https://reportaproblem.apple.com)."),
         )
     )
 
