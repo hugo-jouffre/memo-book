@@ -9,40 +9,37 @@ Le pendant iOS est [`soumission-app-store.md`](soumission-app-store.md) : les
 étiquettes de confidentialité d'App Store Connect disent la même chose que le
 formulaire ci-dessous, avec d'autres cases.
 
-## ⚠️ À trancher avant de saisir
+## Décisions du 23/10/2026 (Hugo)
 
-1. **La politique de confidentialité ne décrit pas l'app.** Elle décrit le
-   site (Webflow, Google Analytics, Hotjar, Meta), plus l'abonnement et le
-   crédit du jour. Elle ne dit rien des vocaux, des photos, des textes, du
-   profil (date de naissance, téléphone, genre, adresse), ni des prestataires
-   qui les traitent : Railway (hébergement), le stockage S3, Anthropic et
-   OpenAI (conversation, transcription, rédaction), Resend (e-mails), Stripe
-   (déjà cité), Google Firebase Cloud Messaging (déjà cité depuis A8b). Google
-   exige que la politique couvre **tout** ce que le formulaire ci-dessous
-   déclare, et la refuse sinon. Ça vaut aussi pour l'App Store. C'est une
-   réécriture juridique, pas un lot de portage : à faire par Hugo et Clara
-   avant d'envoyer la fiche à l'examen.
-2. **L'adresse de la politique de confidentialité.** La Play Console demande
-   une URL publique, hors PDF. Celle du site memobook.fr, à confirmer, et à
-   mettre à jour en même temps que le texte de l'app.
-3. **Le public cible.** Les CGU ouvrent l'app dès 4 ans, avec l'accord des
-   parents. Cocher une tranche de moins de 13 ans fait entrer l'app dans le
-   programme Familles de Google (règles plus strictes sur les SDK, les
-   publicités, les données). Recommandation : **16-17 ans et 18 ans et
-   plus**, ce qui colle à l'âge du consentement RGPD des CGU, et dire dans la
-   fiche que l'app n'est pas conçue pour les enfants. Sinon, revoir les CGU.
-4. **La localisation dans les photos.** L'app envoie les octets de la photo
-   tels quels. Le sélecteur de photos d'Android retire en principe les
-   coordonnées GPS, mais une photo prise **par l'appareil photo** depuis l'app
-   peut les garder. Le serveur ne les lit pas (aucune lecture EXIF dans
-   `backend/src`). Je recommande de déclarer « Photos » seulement, et de
-   retirer les métadonnées de position côté app dans un lot à part (une
-   ligne d'`ExifInterface` avant l'envoi). Vérifie ce point avant d'agir.
-5. **L'identifiant publicitaire.** Aucun SDK de publicité ni d'analytique dans
-   l'app. Répondre **Non** à « Votre app utilise-t-elle un identifiant
-   publicitaire ? », après avoir vérifié que le manifeste fusionné du Release
-   ne déclare pas `com.google.android.gms.permission.AD_ID`
-   (`android/app/build/intermediates/merged_manifests/release/`).
+1. **La politique de confidentialité décrit l'app.** Réécrite dans les deux
+   apps (`PrivacyPolicy.swift`, `PrivacyPolicy.kt`, un seul texte pour les
+   deux stores) : comptes, récits, IA, commandes, abonnement, notifications,
+   assistance, avec chaque prestataire. Clara la relit ; **memobook.fr doit
+   publier le même texte avant l'envoi de la fiche à l'examen**, puisque la
+   Console demande l'URL du site.
+2. **L'adresse de la politique de confidentialité** : la page du site
+   memobook.fr, une fois le nouveau texte publié. URL exacte à reporter
+   ci-dessous par Hugo.
+3. **Public cible : 16 ans et plus.** Cocher **16-17 ans** et **18 ans et
+   plus**, rien en dessous : l'app reste hors du programme Familles. Les CGU
+   (chapitre 3) et la politique (chapitre 8) disent désormais 16 ans, sur les
+   deux apps.
+4. **Contact public : `contact@memo-book.com`**, sur la fiche et dans les
+   textes légaux (`LegalContact`, les deux apps).
+5. **La position GPS des photos : plus tard.** Ce qui est déclaré ci-dessous
+   (« Photos », pas de « Position ») reste vrai tant que le serveur ne lit pas
+   les métadonnées EXIF (aucune lecture dans `backend/src`). Retirer la
+   position côté app (`ExifInterface` avant l'envoi) reste un lot à part.
+
+### Reste à vérifier avant de saisir
+
+- **L'identifiant publicitaire.** Aucun SDK de publicité ni d'analytique dans
+  l'app. Répondre **Non** à « Votre app utilise-t-elle un identifiant
+  publicitaire ? », après avoir vérifié que le manifeste fusionné du Release
+  ne déclare pas `com.google.android.gms.permission.AD_ID`
+  (`android/app/build/intermediates/merged_manifests/release/`).
+- **L'entité Google et le remboursement** des textes Android (PR #149) : la
+  proposition est dans la PR, à confirmer par Hugo dans la Play Console.
 
 ## La fiche
 
@@ -97,9 +94,9 @@ est pas, Google refuse une fiche qui promet ce que l'app ne fait pas.
 | Type | Application |
 | Catégorie | Voyages et infos locales |
 | Tags | carnet de voyage, journal, souvenirs (au choix de la Console) |
-| Adresse e-mail | **publique sur la fiche** : une adresse MemoBook plutôt que celle de `LegalContact` (une adresse Gmail personnelle). À choisir par Hugo |
+| Adresse e-mail | `contact@memo-book.com` (publique sur la fiche) |
 | Site web | https://memobook.fr |
-| Politique de confidentialité | voir « À trancher », point 2 |
+| Politique de confidentialité | la page de memobook.fr, une fois le nouveau texte publié (décision 2) |
 
 ### Notes de version 0.1.0
 
@@ -168,7 +165,7 @@ serveur de MemoBook ou à un SDK de l'app.
 | Les utilisateurs peuvent-ils demander la suppression de leurs données ? | **Oui** | Profil ▸ Supprimer mon compte, et la page web |
 | URL de suppression du compte | `https://api-production-9f35a.up.railway.app/account/delete` | lot B6, suppression sous 30 jours |
 | Suppression partielle (sans supprimer le compte) | **Oui** | supprimer un voyage ou une étape |
-| Les données sont-elles partagées avec des tiers ? | **Non**, pour chaque type | les prestataires (Railway, S3, Anthropic, OpenAI, Resend, Stripe, Google FCM) traitent pour le compte de MemoBook : Google ne compte pas un prestataire comme un « partage ». Ils doivent figurer dans la politique de confidentialité (« À trancher », point 1) |
+| Les données sont-elles partagées avec des tiers ? | **Non**, pour chaque type | les prestataires (Railway, S3, Anthropic, OpenAI, Resend, Stripe, Google FCM) traitent pour le compte de MemoBook : Google ne compte pas un prestataire comme un « partage ». Ils doivent figurer dans la politique de confidentialité (décision 1) |
 | L'app suit-elle des engagements du programme Familles ? | Non | voir le public cible |
 
 ### Les types de données
@@ -197,7 +194,7 @@ d'audience, ni à la prévention de la fraude.
 | Identifiants de l'appareil ou autres | Identifiants de l'appareil ou autres | Oui | **Obligatoire** | Fonctionnement | le jeton d'appareil (`POST /v1/devices`) et le jeton Firebase Cloud Messaging des notifications |
 
 **Ce qui n'est pas collecté** : position (approximative ou précise ; la
-destination d'un voyage est un texte tapé, voir aussi « À trancher », point 4),
+destination d'un voyage est un texte tapé, voir aussi la décision 5),
 contacts, agenda, santé et forme, historique de navigation, historique des
 recherches, applications installées, fichiers et documents, vidéos, musique,
 journaux de plantage (aucun SDK de rapport de plantage), identifiant
@@ -210,7 +207,7 @@ publicitaire.
 | Accès à l'app | Connexion requise : le compte gratuit **`demo@memo-book.com`**, avec le mot de passe des comptes de test (`TEST_PASSWORD`, `backend/prisma/seed.ts`), à ne pas écrire ici. Mêmes notes qu'App Review, la fin adaptée : l'abonnement se teste avec un testeur de licence, et « Résilier » ouvre la page des abonnements du Play Store |
 | Annonces | Non, l'app ne contient pas d'annonces |
 | Classification du contenu (IARC) | Catégorie « Toutes les autres apps ». Aucune violence, sexualité, langage grossier, substance, jeu d'argent. **Interactions entre utilisateurs : oui** (les co-voyageurs d'un même voyage voient ce que chacun raconte). Pas de partage de position. Achats numériques : oui (l'abonnement) |
-| Public cible | voir « À trancher », point 3 |
+| Public cible | **16-17 ans** et **18 ans et plus** (décision 3) ; l'app n'est pas conçue pour les enfants |
 | App d'actualités, app gouvernementale, fonctionnalités financières, santé | Non |
 | Déclaration sur les autorisations | `RECORD_AUDIO` (les vocaux), `POST_NOTIFICATIONS` : aucune n'est sensible au sens de Google. Pas d'accès à la photothèque : le sélecteur de photos du système n'en demande pas |
 
@@ -220,6 +217,6 @@ publicitaire.
   interne : connexion, un vocal, une photo, l'aperçu, « Résilier » qui ouvre
   le Play Store.
 - Une photo prise par l'appareil photo depuis l'app : ses métadonnées de
-  position arrivent-elles sur le serveur (point 4) ?
+  position arrivent-elles sur le serveur (décision 5) ?
 - Les captures elles-mêmes, une fois prises dans l'émulateur : les regarder à
   côté de l'iPhone avant de les envoyer.
