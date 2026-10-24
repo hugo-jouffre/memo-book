@@ -61,9 +61,10 @@ import java.util.Locale
 //      français seul aujourd'hui ; l'identifiant est déjà là pour porter le
 //      reste.
 //
-// ⚠️ Recopiée **telle quelle** de l'app iOS, iPhone et Apple compris
-// (`faq.photos.provenance`, `faq.donnees.suppression-compte`,
-// `faq.prix.abonnement`) : le texte propre à Google Play est un lot à part.
+// **La version Android** (A8b, 23/10/2026) : recopiée de l'app iOS, sauf
+// trois réponses qui nommaient l'iPhone ou Apple (`faq.photos.provenance`,
+// `faq.donnees.suppression-compte`, `faq.prix.abonnement`), réécrites pour le
+// téléphone et Google Play. Chaque phrase changée est listée dans la PR.
 
 /**
  * Les valeurs qui bougent, et que les réponses appellent par leur nom.
@@ -480,7 +481,7 @@ object Faq {
                 question = "Je peux importer des photos prises avec un appareil photo ?",
                 answer = listOf(
                     "Oui, dès qu’elles sont dans la photothèque de ton téléphone.",
-                    "Pour retrouver celles d’un jour précis, utilise la recherche du sélecteur de photos de ton iPhone.",
+                    "Pour retrouver celles d’un jour précis, fais défiler le sélecteur de photos de ton téléphone jusqu’aux dates de ton voyage : elles y sont rangées de la plus récente à la plus ancienne.",
                 )
             ),
             FaqEntry(
@@ -715,7 +716,7 @@ object Faq {
                 answer = listOf(
                     "Depuis ton profil, à « Supprimer mon compte ».",
                     "La suppression est définitive : tes voyages, souvenirs, photos et enregistrements sont effacés, mais les voyages que tu partages restent à tes co-voyageurs, avec ce que tu y as raconté.",
-                    "Ton abonnement, lui, se résilie dans les réglages de ton iPhone. Pour seulement faire une pause, supprime plutôt un voyage précis depuis ses paramètres.",
+                    "Ton abonnement, lui, se résilie dans le Play Store, à « Paiements et abonnements » (ou dans les réglages de ton iPhone si tu l’as pris là-bas). Pour seulement faire une pause, supprime plutôt un voyage précis depuis ses paramètres.",
                 )
             ),
             FaqEntry(
@@ -762,9 +763,9 @@ object Faq {
                 answer = listOf(
                     "Il coûte {{prix_abo_mensuel}} par mois et rend ton récit illimité, à l’oral comme à l’écrit, sur tous tes voyages.",
                     "Il est personnel : ce que tu racontes ne prend plus rien au crédit du jour, et tes co-voyageurs qui ne sont pas abonnés continuent de partager le leur.",
-                    "Il se renouvelle chaque mois par ton identifiant Apple. Tu le résilies quand tu veux dans les réglages de ton iPhone, et l’illimité reste ouvert jusqu’à la fin du mois déjà payé.",
+                    "Il se renouvelle chaque mois par ton compte Google Play. Tu le résilies quand tu veux dans le Play Store, à « Paiements et abonnements », et l’illimité reste ouvert jusqu’à la fin du mois déjà payé. Pris sur un iPhone, il se résilie dans les réglages de l’iPhone.",
                     "Quand ton dernier voyage en cours se termine, on te rappelle que tu peux le résilier en un geste.",
-                    "Un mois commencé est dû ; pour un remboursement, c’est Apple qui décide, depuis reportaproblem.apple.com.",
+                    "Un mois commencé est dû ; pour un remboursement dans les 48 heures qui suivent l’achat, fais la demande depuis ton historique de commandes Google Play, sur play.google.com ; au-delà, écris-nous.",
                 )
             ),
             FaqEntry(

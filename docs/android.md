@@ -81,8 +81,8 @@ Côté app, B4 rend aussi indépendant du store ce qui ne connaît qu'Apple :
 `Grace` et `isInBillingRetry` (calqués sur le réessai d'Apple), et
 `applePayMerchantId` dans `PaymentIntentTicket` et `OrderPayment` (B5). Les CGU
 (chapitre 5), la politique de confidentialité (2.4 et 3) et trois réponses de
-la FAQ parlent de l'App Store et de l'iPhone : à réécrire pour Google Play avant
-la fiche Play (A8).
+la FAQ parlaient de l'App Store et de l'iPhone : leur version Google Play est
+écrite côté Android (A8b, 23/10/2026), à relire par Clara.
 
 `POST /v1/profile/subscription/cancel` ne coupe plus localement un abonnement
 Google Play (B4) : il note la raison, comme pour StoreKit, et la résiliation se
@@ -213,7 +213,7 @@ régénérer avec elle (deux tests le vérifient).
 | `ProfileView` : nom, photo, adresse, genre, notifications du compte, mot de passe, connecteurs (à venir), suivi de commande, statistiques, export | ✅ |
 | `SupportView` : FAQ, votes, formulaire | ✅ |
 | `LegalDocumentView` : conditions et confidentialité | ✅ |
-| Textes légaux et FAQ qui parlent de l'App Store et de l'iPhone (CGU chap. 5, confidentialité 2.4 et 3, trois réponses) : à réécrire pour Google Play avant la fiche Play | ⏳ |
+| Textes légaux et FAQ en version Google Play (CGU chap. 5, confidentialité 2.4 et 3, trois réponses), relus par Clara ; les versions iOS ne changent pas | 🔶 |
 | Notifications : permission `POST_NOTIFICATIONS` au même moment qu'iOS, `ChatNotificationsNudge`, ouverture du bon écran, accusé d'ouverture | ✅ |
 | Le jeton FCM et la notification d'un message reçu (`FirebasePush.kt`, `MemoBookMessagingService`, lot B3) : `FirebaseApp` initialisé à la main depuis `memobook.firebase.*` de `gradle.properties`, sans `google-services.json` ; message de données seulement, canal « MemoBook », toucher vers `MainActivity` avec `link` et `deliveryId`. Vides tant que le projet Firebase (A0) n'existe pas : aucun jeton ne part | 🔶 |
 

@@ -2,6 +2,7 @@ package com.memobook.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -107,6 +108,24 @@ class LegalDocumentTest {
             val first = document.chapters[0]
             assertEquals(first, document.chapter(first.id))
             assertNull(document.chapter("${document.id}.inconnu"))
+        }
+    }
+
+    /** MemoBook est réservé aux 16 ans et plus (Hugo, 23/10/2026) : les deux documents le disent. */
+    @Test
+    fun theMinimumAgeIsSixteen() {
+        val access = TermsOfUse.access.texts()
+        assertTrue(access.any { it.contains("au moins 16 ans") }, access.toString())
+        assertFalse(access.any { it.contains("4 ans") }, access.toString())
+        assertTrue(PrivacyPolicy.minors.texts().any { it.contains("au moins 16 ans") })
+    }
+
+    /** La politique décrit l'app : chaque prestataire qui reçoit des données de l'app est nommé. */
+    @Test
+    fun everyAppProcessorIsARecipient() {
+        val recipients = PrivacyPolicy.recipients.texts()
+        for (name in listOf("Railway", "Supabase", "Anthropic", "OpenAI", "APITemplate", "Resend", "Stripe", "Firebase", "Google Play", "App Store")) {
+            assertTrue(recipients.any { it.contains(name) }, name)
         }
     }
 }
