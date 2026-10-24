@@ -233,7 +233,7 @@ public enum PrivacyPolicy {
                 "**Droit d’opposition :** vous opposer à tout moment au traitement de vos données fondé sur notre intérêt légitime, notamment à des fins de publicité.",
                 "**Droit de retirer votre consentement :** lorsque le traitement est fondé sur votre consentement, vous pouvez le retirer à tout moment sans que cela nuise à la licéité du traitement effectué avant ce retrait.",
             ]),
-            .paragraph("Depuis l’app, vous pouvez à tout moment corriger votre profil, recevoir une copie de vos données (Profil, « Exporter mes données » : un lien valable 7 jours vous est envoyé par e-mail) et supprimer votre compte (Profil, « Supprimer mon compte »). La suppression est immédiate et définitive : votre compte, vos voyages et les fichiers que nous stockons sont effacés, à l’exception des voyages partagés avec d’autres participants, qui leur restent avec ce que vous y avez raconté. Les copies de photos diffusées par Webflow et le PDF d’un carnet fabriqué par APITemplate.io sont supprimés sur simple demande."),
+            .paragraph("Depuis l’app, vous pouvez à tout moment corriger votre profil, recevoir une copie de vos données (Profil, « Exporter mes données » : un lien valable 7 jours vous est envoyé par e-mail) et supprimer votre compte (Profil, « Supprimer mon compte »). La suppression est immédiate et définitive : votre compte, vos voyages et les fichiers que nous stockons sont effacés, à l’exception des voyages partagés avec d’autres participants, qui leur restent avec ce que vous y avez raconté. Les copies de photos diffusées par Webflow, le PDF de vos carnets chez APITemplate.io et votre fiche client chez Stripe sont effacés avec lui, dans les minutes qui suivent."),
             .paragraph("Pour exercer vos droits, ou pour supprimer votre compte sans l’app, contactez-nous par email à : \(contactLink), en précisant votre identité. Nous nous engageons à répondre dans un délai d’un mois."),
         ]
     )
@@ -273,7 +273,7 @@ public enum PrivacyPolicy {
         title: "Modifications de la politique",
         blocks: [
             .paragraph("Cette politique peut être mise à jour à tout moment pour refléter des changements dans nos pratiques ou la réglementation applicable. La date de mise à jour est indiquée ci-dessous. Nous vous encourageons à la consulter régulièrement."),
-            .paragraph("Dernière mise à jour : 23 octobre 2026."),
+            .paragraph("Dernière mise à jour : 24 octobre 2026."),
         ]
     )
 
