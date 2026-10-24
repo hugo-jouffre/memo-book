@@ -53,7 +53,7 @@ d'un produit, d'un serveur et d'un code déjà tranchés.
 | **A6** Le carnet | 6–7 | réglages du voyage, personnalisation, couvertures, composition, lecteur PDF, partage, galerie | un voyage donne le même PDF sur les deux | — |
 | **A7** L'argent | 7–8 | paywall, abonnement Play, feuille d'abonnement, tunnel de commande Stripe et Google Pay, cartes, suivi | un achat de test sur Android rend illimité le même compte sur iPhone | B4, B5 |
 | **A8** Profil, aide, notifications | 8–9 | profil et ses neuf feuilles, statistiques, export, aide, textes légaux, FCM | chacun des neuf types de notification ouvre son écran | B3 |
-| **A9** Recette et Play | 9–10 | la recette iOS rejouée sur Android, fiche Play, sécurité des données, URL de suppression, test interne → fermé → production | Clara et Paul installent l'app depuis la piste interne | B6, A0 |
+| **A9** Recette et Play | 9–10 | la recette iOS rejouée sur Android, fiche Play et sécurité des données (`fiche-play-store.md`), URL de suppression, test interne → fermé → production | Clara et Paul installent l'app depuis la piste interne | B6, A0 |
 
 Le compte développeur Play est un compte **organisation**, créé le 21/10/2026 :
 il est dispensé du test fermé (12 testeurs pendant 14 jours) qu'un compte
@@ -222,7 +222,7 @@ régénérer avec elle (deux tests le vérifient).
 | Sujet | État |
 |---|---|
 | La recette iOS rejouée : deux comptes, petit et grand téléphone, police à 200 %, TalkBack | ⏳ |
-| Fiche Play en français, classification, sécurité des données | ⏳ |
+| Fiche Play en français, classification, sécurité des données : textes et réponses prêts dans [`fiche-play-store.md`](fiche-play-store.md), à saisir par Hugo | 🔶 |
 | URL de suppression : `/account/delete` (PR #143) | 🔶 |
 | Envoi signé sur la piste interne : `.github/workflows/play-internal.yml`, attend les cinq secrets de Hugo | 🔶 |
 | Piste interne → production (pas de test fermé obligatoire pour un compte organisation) | ⏳ |
