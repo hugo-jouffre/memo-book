@@ -1,3 +1,4 @@
+import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
@@ -22,11 +23,11 @@ struct DeleteAccountSheet: View {
     /// de tout effacer.
     let hasOngoingTrip: Bool
 
-    /// Un abonnement App Store va se renouveler : la feuille rappelle que
-    /// supprimer le compte ne l'arrête pas. **À lui seul** (03/10/2026) — le
-    /// dire à tout le monde demandait à un compte gratuit de couper un
-    /// abonnement qu'il n'a pas.
-    var mentionsSubscription = true
+    /// Le store chez qui un abonnement va se renouveler : la feuille rappelle
+    /// que supprimer le compte ne l'arrête pas, et dit où le couper. **À lui
+    /// seul** (03/10/2026) — le dire à tout le monde demandait à un compte
+    /// gratuit de couper un abonnement qu'il n'a pas. `nil` : rien à couper.
+    var renewingStore: Subscription.Store? = .appStore
 
     /// La suppression est partie. Le bouton rouge tourne et plus rien ne se
     /// touche : la demande est définitive, elle ne part pas deux fois.
@@ -38,7 +39,7 @@ struct DeleteAccountSheet: View {
     var body: some View {
         BrandSheet(DeleteAccountCopy.title) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
-                Text(DeleteAccountCopy.body(hasOngoingTrip: hasOngoingTrip, mentionsSubscription: mentionsSubscription))
+                Text(DeleteAccountCopy.body(hasOngoingTrip: hasOngoingTrip, renewingStore: renewingStore))
                     .font(MemoBookFont.body)
                     .foregroundStyle(MemoBookColor.ink)
                     .multilineTextAlignment(.leading)
@@ -73,20 +74,27 @@ enum DeleteAccountCopy {
     static let erasure =
         "Tes voyages, tes souvenirs et tes carnets seront effacés, ainsi que tes commandes. Les voyages que tu partages restent à tes co-voyageurs, avec les souvenirs que tu y as racontés. C’est immédiat et sans retour."
 
-    /// Pour qui a un abonnement App Store qui va se renouveler — voir
-    /// ``DeleteAccountSheet/mentionsSubscription``.
-    static let subscriptionWarning =
-        "Ton abonnement, lui, se résilie chez Apple : supprimer ton compte ne l’arrête pas, pense à le couper dans les réglages de ton iPhone."
+    /// Pour qui a un abonnement qui va se renouveler — voir
+    /// ``DeleteAccountSheet/renewingStore``. Celui de Google Play a été pris
+    /// sur Android (lot B4) : il se coupe là-bas — phrase à relire par Clara.
+    static func subscriptionWarning(_ store: Subscription.Store) -> String {
+        switch store {
+        case .appStore:
+            "Ton abonnement, lui, se résilie chez Apple : supprimer ton compte ne l’arrête pas, pense à le couper dans les réglages de ton iPhone."
+        case .googlePlay:
+            "Ton abonnement, lui, se résilie dans le Play Store : supprimer ton compte ne l’arrête pas, pense à le couper depuis ton téléphone Android ou sur play.google.com."
+        }
+    }
 
     /// La porte de sortie qui n'existe que s'il y a un voyage en cours à clore.
     static let closeTripInstead =
         "Tu veux seulement clore ton voyage en cours ? Termine-le : ton compte et tes carnets restent."
 
     /// Le paragraphe de la feuille : ce qui s'efface, l'abonnement à couper
-    /// chez Apple s'il y en a un, et la porte de sortie s'il y a un voyage.
-    static func body(hasOngoingTrip: Bool, mentionsSubscription: Bool) -> String {
+    /// chez son store s'il y en a un, et la porte de sortie s'il y a un voyage.
+    static func body(hasOngoingTrip: Bool, renewingStore: Subscription.Store?) -> String {
         var sentences = [erasure]
-        if mentionsSubscription { sentences.append(subscriptionWarning) }
+        if let renewingStore { sentences.append(subscriptionWarning(renewingStore)) }
         if hasOngoingTrip { sentences.append(closeTripInstead) }
         return sentences.joined(separator: " ")
     }
@@ -100,7 +108,7 @@ enum DeleteAccountCopy {
         .brandSheet(isPresented: .constant(true)) {
             DeleteAccountSheet(
                 hasOngoingTrip: false,
-                mentionsSubscription: false,
+                renewingStore: nil,
                 isDeleting: false,
                 onKeep: {},
                 onDelete: {}

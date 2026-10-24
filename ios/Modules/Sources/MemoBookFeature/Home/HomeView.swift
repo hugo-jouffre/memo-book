@@ -227,7 +227,10 @@ public struct HomeView: View {
             guard let feed else { return }
             subscriptionSession?.learn(feed.traveller)
             announceSubscriptionEndIfNeeded(feed.traveller.subscriptionEndedOn)
-            remindTripEndIfNeeded(feed.traveller.subscriptionOutlivesTrip)
+            remindTripEndIfNeeded(
+                feed.traveller.subscriptionOutlivesTrip,
+                store: feed.traveller.subscriptionStore
+            )
         }
         .alert(
             SubscriptionCopy.tripEndTitle,
@@ -686,8 +689,13 @@ public struct HomeView: View {
 
     /// Propose de résilier **une fois par jour au plus**, tant que
     /// l'abonnement survit à tous les voyages — voir ``remindedDay``.
-    private func remindTripEndIfNeeded(_ outlivesTrip: Bool) {
-        guard outlivesTrip else { return }
+    ///
+    /// **Pas pour un abonnement pris sur Android** (lot B4) : « Résilier »
+    /// ouvre la feuille d'Apple, qui ne le connaît pas. C'est l'app Android
+    /// qui le rappelle — la règle jumelle de
+    /// `HomeModel.tripEndReminderCanOpenHere`.
+    private func remindTripEndIfNeeded(_ outlivesTrip: Bool, store: Subscription.Store?) {
+        guard outlivesTrip, store != .googlePlay else { return }
         let today = TripEndReminder.today()
         guard remindedDay != today else { return }
         remindedDay = today

@@ -58,6 +58,12 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
     /// tomber, sans attendre une relecture.
     public let subscriptionEndsAt: Date?
 
+    /// **Le store qui tient l'abonnement en cours** —
+    /// `traveller.subscriptionStore` (lot B4, 22/10/2026). `nil` sans store,
+    /// ou d'un serveur plus ancien. Le rappel de fin de voyage s'ouvre vers
+    /// **ce** store : un iPhone ne coupe pas un abonnement pris sur Android.
+    public let subscriptionStore: Subscription.Store?
+
     public init(
         id: String,
         firstName: String,
@@ -67,7 +73,8 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         subscriptionEndedOn: Date? = nil,
         subscriptionOutlivesTrip: Bool = false,
         subscriptionState: Subscription.State? = nil,
-        subscriptionEndsAt: Date? = nil
+        subscriptionEndsAt: Date? = nil,
+        subscriptionStore: Subscription.Store? = nil
     ) {
         self.id = id
         self.firstName = firstName
@@ -78,6 +85,7 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         self.subscriptionOutlivesTrip = subscriptionOutlivesTrip
         self.subscriptionState = subscriptionState
         self.subscriptionEndsAt = subscriptionEndsAt
+        self.subscriptionStore = subscriptionStore
     }
 
     /// Décodage tolérant sur les champs de l'abonnement : un serveur qui ne
@@ -98,6 +106,8 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         subscriptionState =
             (try? container.decodeIfPresent(Subscription.State.self, forKey: .subscriptionState)) ?? nil
         subscriptionEndsAt = try container.decodeIfPresent(Date.self, forKey: .subscriptionEndsAt)
+        subscriptionStore =
+            (try? container.decodeIfPresent(Subscription.Store.self, forKey: .subscriptionStore)) ?? nil
     }
 
     /// La date où l'illimité s'arrête, quand le renouvellement est coupé et

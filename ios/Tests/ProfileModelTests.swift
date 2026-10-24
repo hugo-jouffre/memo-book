@@ -553,15 +553,39 @@ final class ProfileModelTests: XCTestCase {
         XCTAssertEqual(session.override, model.subscriptionGrantsAccess)
     }
 
-    /// Seul qui a un abonnement App Store à couper lit qu'il faut le couper.
+    /// Seul qui a un abonnement à couper lit qu'il faut le couper — chez le
+    /// store qui le tient.
     func testOnlyARenewingSubscriberIsToldToCutIt() {
-        let free = DeleteAccountCopy.body(hasOngoingTrip: false, mentionsSubscription: false)
+        let free = DeleteAccountCopy.body(hasOngoingTrip: false, renewingStore: nil)
         XCTAssertFalse(free.contains("abonnement"), free)
         XCTAssertEqual(free, DeleteAccountCopy.erasure)
 
-        let subscriber = DeleteAccountCopy.body(hasOngoingTrip: true, mentionsSubscription: true)
-        XCTAssertTrue(subscriber.contains(DeleteAccountCopy.subscriptionWarning))
+        let subscriber = DeleteAccountCopy.body(hasOngoingTrip: true, renewingStore: .appStore)
+        XCTAssertTrue(subscriber.contains(DeleteAccountCopy.subscriptionWarning(.appStore)))
         XCTAssertTrue(subscriber.hasSuffix(DeleteAccountCopy.closeTripInstead))
+
+        let play = DeleteAccountCopy.body(hasOngoingTrip: false, renewingStore: .googlePlay)
+        XCTAssertTrue(play.contains("Play Store"), play)
+        XCTAssertFalse(play.contains("Apple"), play)
+    }
+
+    /// Un abonnement pris sur Android : un prélèvement raté se dit avec le
+    /// nom de Google Play, jamais celui d'Apple (lot B4).
+    func testAPlayBillingRetryNamesGooglePlay() {
+        let keepGoing = SubscriptionCopy.keepGoingParagraphs(
+            tripTitle: nil, graceEnd: nil, paidAhead: .billingRetry, holder: .googlePlay
+        ).joined(separator: " ")
+        XCTAssertTrue(keepGoing.contains("Google Play"), keepGoing)
+        XCTAssertFalse(keepGoing.contains("Apple"), keepGoing)
+
+        let reason = SubscriptionCopy.reasonParagraphs(graceEnd: nil, paidAhead: .billingRetry, holder: .googlePlay)
+            .joined(separator: " ")
+        XCTAssertTrue(reason.contains("dans ton compte Google Play"), reason)
+
+        let apple = SubscriptionCopy.keepGoingParagraphs(tripTitle: nil, graceEnd: nil, paidAhead: .billingRetry)
+            .joined(separator: " ")
+        XCTAssertTrue(apple.contains("Apple"), apple)
+        XCTAssertFalse(SubscriptionCopy.cancelAtPlay.contains("Apple"))
     }
 
     /// « 4,99 € par mois » ne se coupe jamais entre le prix et sa période.
