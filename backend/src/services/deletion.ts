@@ -1,5 +1,8 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { AppContext } from "../context.js";
+import type { EraseTraceJob } from "../jobs/eraseTrace.js";
+import { JOB_NAMES } from "../jobs/queue.js";
+import { FAKE_PDF_BASE_URL } from "./apitemplate.js";
 
 /**
  * Supprimer pour de bon : un carnet, ou un compte entier.
@@ -16,7 +19,13 @@ import type { AppContext } from "../context.js";
  *     lignes — et les fichiers derrière — resteraient indéfiniment.
  *  3. Le stockage S3 ne participe pas à la transaction. Les objets sont donc
  *     effacés **après** la validation : au pire un fichier survit à sa ligne,
- *     jamais l'inverse.
+ *     jamais l'inverse. Et ce « pire » se rattrape : un effacement refusé
+ *     repart en tâche, qui insiste (`jobs/eraseTrace.ts`).
+ *  4. **Nos tables ne sont pas les seules à garder une copie** (23/10/2026) :
+ *     le client Stripe d'un compte, les photos publiées sur le CDN Webflow,
+ *     les PDF hébergés par APITemplate. Leurs identifiants se relèvent
+ *     **avant** la transaction — les lignes qui les portent partent avec
+ *     elle — et chacun devient, **après**, une tâche d'effacement à lui.
  */
 
 export interface DeletionReport {
@@ -25,6 +34,8 @@ export interface DeletionReport {
   mediaObjects: number;
   /** Voyages qui ont changé de main plutôt que d'être supprimés. */
   transferredMemos?: number;
+  /** Traces confiées aux tâches d'effacement chez les prestataires (§ 4). */
+  providerTraces: number;
 }
 
 /** Les médias attachés aux souvenirs de ces carnets, lignes et fichiers. */
@@ -40,7 +51,7 @@ async function mediaOf(prisma: PrismaClient, memoIds: readonly string[]) {
 
   const assets = await prisma.mediaAsset.findMany({
     where: { id: { in: mediaIds } },
-    select: { storageKey: true, originalStorageKey: true },
+    select: { storageKey: true, originalStorageKey: true, cdnAssetId: true },
   });
 
   return {
@@ -52,7 +63,56 @@ async function mediaOf(prisma: PrismaClient, memoIds: readonly string[]) {
         ? [asset.storageKey, asset.originalStorageKey]
         : [asset.storageKey],
     ),
+    // Les copies publiques sur le CDN Webflow (§ 4).
+    webflowTraces: assets.flatMap((asset): EraseTraceJob[] =>
+      asset.cdnAssetId ? [{ provider: "webflow", assetId: asset.cdnAssetId }] : [],
+    ),
   };
+}
+
+/**
+ * Les PDF de ces carnets hébergés par APITemplate (§ 4). Pas ceux du rendu
+ * simulé : leur identifiant n'existe nulle part, et APITemplate refuserait
+ * pour toujours de l'effacer.
+ */
+async function pdfTracesOf(
+  prisma: PrismaClient,
+  memoIds: readonly string[],
+): Promise<EraseTraceJob[]> {
+  const renders = await prisma.render.findMany({
+    where: {
+      memoId: { in: [...memoIds] },
+      apitemplateTransactionId: { not: null },
+      NOT: { pdfUrl: { startsWith: FAKE_PDF_BASE_URL } },
+    },
+    select: { apitemplateTransactionId: true },
+  });
+
+  return renders.flatMap(({ apitemplateTransactionId: transactionId }): EraseTraceJob[] =>
+    transactionId ? [{ provider: "apitemplate", transactionId }] : [],
+  );
+}
+
+/**
+ * Confie chaque trace à sa tâche d'effacement, une fois les lignes parties.
+ * Sans faire échouer la suppression, comme pour les fichiers (§ 3) : si la file
+ * refuse le job, l'identifiant reste dans le journal, à effacer à la main.
+ */
+async function eraseTraces(
+  context: AppContext,
+  traces: readonly EraseTraceJob[],
+  scope: Record<string, unknown>,
+): Promise<void> {
+  for (const trace of traces) {
+    try {
+      await context.queue.publish<EraseTraceJob>(JOB_NAMES.eraseTrace, trace);
+    } catch (cause: unknown) {
+      context.logger.error(
+        { cause, ...scope, ...trace },
+        "Suppression faite en base, mais une trace chez un prestataire reste à effacer à la main",
+      );
+    }
+  }
 }
 
 /** Les commandes d'abord (voir § 1), les médias en dernier (voir § 2). */
@@ -67,8 +127,8 @@ async function deleteMedia(tx: Prisma.TransactionClient, mediaIds: readonly stri
 
 /**
  * Efface les fichiers, une fois les lignes parties. Sans faire échouer la
- * suppression : un fichier orphelin se rattrape par un ménage, un compte à
- * moitié supprimé ne se rattrape pas.
+ * suppression : un compte à moitié supprimé ne se rattrape pas, un fichier
+ * orphelin si — l'effacement refusé repart en tâche, qui insiste (§ 3).
  */
 async function removeObjects(
   context: AppContext,
@@ -82,8 +142,9 @@ async function removeObjects(
   } catch (cause: unknown) {
     context.logger.error(
       { cause, ...scope, objects: storageKeys.length },
-      "Suppression faite en base, mais des médias sont restés en stockage",
+      "Suppression faite en base, mais des médias sont restés en stockage : nouvel essai en tâche",
     );
+    await eraseTraces(context, [{ provider: "s3", storageKeys: [...storageKeys] }], scope);
   }
 }
 
@@ -93,7 +154,8 @@ async function removeObjects(
  *
  * Pas d'anonymisation, pas de corbeille : ses souvenirs solitaires, ses médias,
  * ses commandes, sa cagnotte, ses moyens de paiement, ses connecteurs, ses
- * appareils et ses avis partent avec lui.
+ * appareils et ses avis partent avec lui. Et, chez les prestataires (§ 4), son
+ * client Stripe, les copies Webflow de ses photos et les PDF de ses carnets.
  *
  * **Un voyage qui a au moins un co-voyageur ne se supprime pas : il change de
  * main.** Il devient celui du co-voyageur actif le plus ancien, qui perd alors
@@ -146,16 +208,26 @@ export async function deleteAccountAndData(
   const transferredIds = new Set(transfers.map((transfer) => transfer.memoId));
   const memoIds = memos.map((memo) => memo.id).filter((id) => !transferredIds.has(id));
 
-  const { entryCount, mediaIds, storageKeys } = await mediaOf(prisma, memoIds);
+  const { entryCount, mediaIds, storageKeys, webflowTraces } = await mediaOf(prisma, memoIds);
 
   // La photo de profil part avec le compte : elle n'appartient qu'à lui.
   const account = await prisma.account.findUnique({
     where: { id: accountId },
-    select: { avatarStorageKey: true },
+    select: { avatarStorageKey: true, stripeCustomerId: true },
   });
   const objects = account?.avatarStorageKey
     ? [...storageKeys, account.avatarStorageKey]
     : storageKeys;
+
+  // Les voyages transférés gardent leurs photos publiées et leurs PDF : ils
+  // sont à l'héritier, désormais.
+  const traces: EraseTraceJob[] = [
+    ...(account?.stripeCustomerId
+      ? [{ provider: "stripe" as const, customerId: account.stripeCustomerId }]
+      : []),
+    ...webflowTraces,
+    ...(await pdfTracesOf(prisma, memoIds)),
+  ];
 
   await prisma.$transaction(async (tx) => {
     for (const transfer of transfers) {
@@ -182,12 +254,14 @@ export async function deleteAccountAndData(
   });
 
   await removeObjects(context, objects, { accountId });
+  await eraseTraces(context, traces, { accountId });
 
   const report: DeletionReport = {
     memos: memoIds.length,
     entries: entryCount,
     mediaObjects: storageKeys.length,
     transferredMemos: transfers.length,
+    providerTraces: traces.length,
   };
 
   context.logger.info({ accountId, ...report }, "Compte supprimé");
@@ -216,19 +290,22 @@ export async function deleteEntryAndMedia(
 ): Promise<{ deleted: boolean; mediaObjects: number }> {
   const { prisma } = context;
 
-  const storageKeys = await prisma.$transaction(async (tx) => {
+  const removed = await prisma.$transaction(async (tx) => {
     const entry = await tx.entry.findUnique({
       where: { id: entryId },
-      select: { mediaId: true, media: { select: { storageKey: true, originalStorageKey: true } } },
+      select: {
+        mediaId: true,
+        media: { select: { storageKey: true, originalStorageKey: true, cdnAssetId: true } },
+      },
     });
     if (!entry) return null;
 
     await tx.entry.delete({ where: { id: entryId } });
-    if (!entry.mediaId || !entry.media) return [];
+    if (!entry.mediaId || !entry.media) return { storageKeys: [], cdnAssetId: null };
 
     // Un autre souvenir sur le même média le garde, ligne et fichier.
     const sharers = await tx.entry.count({ where: { mediaId: entry.mediaId } });
-    if (sharers > 0) return [];
+    if (sharers > 0) return { storageKeys: [], cdnAssetId: null };
     await tx.mediaAsset.delete({ where: { id: entry.mediaId } });
 
     const keys = [entry.media.storageKey, entry.media.originalStorageKey].filter(
@@ -240,21 +317,32 @@ export async function deleteEntryAndMedia(
       select: { storageKey: true, originalStorageKey: true },
     });
     const named = new Set(stillNamed.flatMap((asset) => [asset.storageKey, asset.originalStorageKey]));
-    return [...new Set(keys)].filter((key) => !named.has(key));
+    return {
+      storageKeys: [...new Set(keys)].filter((key) => !named.has(key)),
+      cdnAssetId: entry.media.cdnAssetId,
+    };
   });
 
-  if (storageKeys === null) return { deleted: false, mediaObjects: 0 };
-  await removeObjects(context, storageKeys, { entryId });
-  return { deleted: true, mediaObjects: storageKeys.length };
+  if (removed === null) return { deleted: false, mediaObjects: 0 };
+  await removeObjects(context, removed.storageKeys, { entryId });
+  // Sa copie publique, si la photo est passée par un carnet (§ 4).
+  if (removed.cdnAssetId) {
+    await eraseTraces(context, [{ provider: "webflow", assetId: removed.cdnAssetId }], { entryId });
+  }
+  return { deleted: true, mediaObjects: removed.storageKeys.length };
 }
 
-/** Supprime un carnet, ses souvenirs, ses médias et ses commandes. */
+/**
+ * Supprime un carnet, ses souvenirs, ses médias et ses commandes — et, chez
+ * les prestataires (§ 4), les copies Webflow de ses photos et ses PDF.
+ */
 export async function deleteMemoAndData(
   context: AppContext,
   memoId: string,
 ): Promise<DeletionReport> {
   const { prisma } = context;
-  const { entryCount, mediaIds, storageKeys } = await mediaOf(prisma, [memoId]);
+  const { entryCount, mediaIds, storageKeys, webflowTraces } = await mediaOf(prisma, [memoId]);
+  const traces = [...webflowTraces, ...(await pdfTracesOf(prisma, [memoId]))];
 
   await prisma.$transaction(async (tx) => {
     await deleteOrders(tx, [memoId]);
@@ -263,6 +351,12 @@ export async function deleteMemoAndData(
   });
 
   await removeObjects(context, storageKeys, { memoId });
+  await eraseTraces(context, traces, { memoId });
 
-  return { memos: 1, entries: entryCount, mediaObjects: storageKeys.length };
+  return {
+    memos: 1,
+    entries: entryCount,
+    mediaObjects: storageKeys.length,
+    providerTraces: traces.length,
+  };
 }

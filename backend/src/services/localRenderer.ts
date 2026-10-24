@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { RenderProfile } from "./bookPdf.js";
 import type { BookRenderer, RenderedBook } from "./apitemplate.js";
@@ -43,6 +43,19 @@ export class LocalChromiumRenderer implements BookRenderer {
     await writeFile(join(dir, `${transactionId}.pdf`), pdf);
 
     return { transactionId, pdfUrl: `${this.publicBaseUrl}/${transactionId}.pdf` };
+  }
+
+  /**
+   * Efface le PDF posé sur le disque. Un rendu qui n'est pas d'ici (un PDF
+   * d'APITemplate, quand le serveur local tourne sur la base de production)
+   * est refusé plutôt qu'ignoré : la tâche échoue, et le journal le dit.
+   */
+  async discard(transactionId: string): Promise<void> {
+    const filename = `${transactionId}.pdf`;
+    if (!LOCAL_RENDER_FILENAME.test(filename)) {
+      throw new Error(`Le rendu ${transactionId} n'a pas été composé ici : rien à effacer sur ce disque.`);
+    }
+    await rm(join(resolve(this.outputDir), filename), { force: true });
   }
 }
 

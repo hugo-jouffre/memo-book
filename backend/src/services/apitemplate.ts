@@ -12,7 +12,15 @@ export interface RenderedBook {
 
 export interface BookRenderer {
   render(payload: BookPayload): Promise<RenderedBook>;
+  /**
+   * Efface le PDF d'un rendu chez celui qui l'héberge — son voyage ou son
+   * compte est parti. Se rejoue sans risque (`jobs/eraseTrace.ts`).
+   */
+  discard(transactionId: string): Promise<void>;
 }
+
+/** Où le rendu simulé fait semblant de poser ses PDF. Rien n'y est hébergé. */
+export const FAKE_PDF_BASE_URL = "https://pdf.example.test/memobook/";
 
 /**
  * Rendu du PDF par APITemplate.io, sur le template alimenté par
@@ -73,6 +81,31 @@ export class ApiTemplateRenderer implements BookRenderer {
       pdfUrl: body.download_url,
     };
   }
+
+  /**
+   * `GET /v2/delete-object` : retire le PDF du CDN d'APITemplate et marque la
+   * transaction comme supprimée (https://apitemplate.io/apiv2/, lu le
+   * 23/10/2026). Sans cet appel, le PDF reste en ligne à son URL — un carnet
+   * entier, photos et récit, lisible par qui la connaît.
+   */
+  async discard(transactionId: string): Promise<void> {
+    const url = new URL(`${this.baseUrl}/delete-object`);
+    url.searchParams.set("transaction_ref", transactionId);
+
+    const response = await fetch(url, { headers: { "X-API-KEY": this.apiKey } });
+    const body = (await response.json().catch(() => null)) as {
+      status?: string;
+      message?: string;
+    } | null;
+
+    if (!response.ok || body?.status !== "success") {
+      throw new Error(
+        `APITemplate a refusé la suppression de ${transactionId} (HTTP ${response.status}) : ${
+          body?.message ?? "réponse illisible"
+        }`,
+      );
+    }
+  }
 }
 
 /** Rendu simulé : ne produit pas de PDF, mais valide le reste de la chaîne. */
@@ -85,9 +118,12 @@ export class FakeBookRenderer implements BookRenderer {
 
     return {
       transactionId,
-      pdfUrl: `https://pdf.example.test/memobook/${transactionId}.pdf`,
+      pdfUrl: `${FAKE_PDF_BASE_URL}${transactionId}.pdf`,
     };
   }
+
+  /** Aucun PDF n'existe : rien à effacer. */
+  async discard(): Promise<void> {}
 }
 
 function apiTemplateRenderer(env: Env): ApiTemplateRenderer {

@@ -13,6 +13,12 @@ export interface PublishedAsset {
  */
 export interface AssetPublisher {
   publish(filename: string, sourceUrl: string): Promise<PublishedAsset>;
+  /**
+   * Retire la copie publique d'une photo — son souvenir, son voyage ou son
+   * compte est parti. Un fichier déjà absent compte comme retiré : la
+   * suppression se rejoue sans risque (`jobs/eraseTrace.ts`).
+   */
+  unpublish(assetId: string): Promise<void>;
 }
 
 export class WebflowAssetPublisher implements AssetPublisher {
@@ -20,6 +26,7 @@ export class WebflowAssetPublisher implements AssetPublisher {
     private readonly token: string,
     private readonly siteId: string,
     private readonly endpoint = "https://api.webflow.com/assets/upload",
+    private readonly assetsEndpoint = "https://api.webflow.com/v2/assets",
   ) {}
 
   async publish(filename: string, sourceUrl: string): Promise<PublishedAsset> {
@@ -58,6 +65,21 @@ export class WebflowAssetPublisher implements AssetPublisher {
 
     return { assetId, cdnUrl };
   }
+
+  async unpublish(assetId: string): Promise<void> {
+    const response = await fetch(`${this.assetsEndpoint}/${encodeURIComponent(assetId)}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${this.token}`, accept: "application/json" },
+    });
+
+    // 404 : déjà retiré, par un essai précédent ou à la main. C'est le but.
+    if (response.ok || response.status === 404) return;
+
+    const body = await response.text();
+    throw new Error(
+      `Suppression Webflow échouée (HTTP ${response.status}) pour ${assetId} : ${body.slice(0, 500)}`,
+    );
+  }
 }
 
 /** Publication simulée : renvoie une URL stable et déterministe. */
@@ -69,6 +91,9 @@ export class FakeAssetPublisher implements AssetPublisher {
       cdnUrl: `https://cdn.example.test/memobook/${assetId}/${encodeURIComponent(filename)}`,
     };
   }
+
+  /** Rien n'a été publié : rien à retirer. */
+  async unpublish(): Promise<void> {}
 }
 
 export function createAssetPublisher(env: Env): AssetPublisher {

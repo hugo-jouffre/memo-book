@@ -1,5 +1,6 @@
 import type { AppContext } from "../context.js";
 import { converseTurn, type ConverseJob } from "./converse.js";
+import { eraseTrace, type EraseTraceJob } from "./eraseTrace.js";
 import { exportStats, type ExportStatsJob } from "./exportStats.js";
 import {
   releaseAbandonedOrders,
@@ -74,6 +75,9 @@ export function registerJobs(context: AppContext): void {
   context.queue.register<SyncSchoolHolidaysJob>(JOB_NAMES.syncSchoolHolidays, () =>
     syncSchoolHolidays(context),
   );
+  context.queue.register<EraseTraceJob>(JOB_NAMES.eraseTrace, (payload) =>
+    eraseTrace(context, payload),
+  );
 
   // Les horaires sont demandés ici et posés au démarrage de la file.
   // Idempotents : relancer le serveur ne crée pas un second passage quotidien.
@@ -86,6 +90,7 @@ export function registerJobs(context: AppContext): void {
 export { JOB_NAMES };
 export type {
   ConverseJob,
+  EraseTraceJob,
   ExportStatsJob,
   RedactJob,
   ReleaseAbandonedOrdersJob,
