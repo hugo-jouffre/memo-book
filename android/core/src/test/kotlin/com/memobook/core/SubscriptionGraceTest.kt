@@ -395,4 +395,68 @@ class SubscriptionGraceTest {
         val active = """{ "id": "t", "firstName": "Camille", "isUnlimited": true, "subscriptionState": "active" }"""
         assertNull(decodeTraveller(active).unlimitedUntil)
     }
+
+    // MARK: - Le store qui tient l'abonnement (lot B4, 22/10/2026)
+
+    /** Le serveur dit le store et la page où le gérer : on les lit tels quels. */
+    @Test
+    fun theServedStoreAndManageUrlAreRead() {
+        val play = decodedSubscription(
+            """"store": "google_play", "manageUrl": "https://play.google.com/store/account/subscriptions?sku=x&package=com.memobook.app"""",
+        )
+        assertEquals(Some(Subscription.Store.GooglePlay), play.servedStore)
+        assertEquals(Subscription.Store.GooglePlay, play.heldBy)
+        assertEquals("https://play.google.com/store/account/subscriptions?sku=x&package=com.memobook.app", play.manageUrl)
+
+        val apple = decodedSubscription(""""managedByAppStore": true, "store": "app_store", "manageUrl": null""")
+        assertEquals(Subscription.Store.AppStore, apple.heldBy)
+        assertNull(apple.manageUrl)
+    }
+
+    /** `"store": null` n'est pas l'absence : le serveur dit qu'aucun store ne le
+     *  tient, et un vieux `managedByAppStore` ne le contredit pas. */
+    @Test
+    fun aServedNullStoreMeansNoStore() {
+        val stripe = decodedSubscription(""""isActive": true, "managedByAppStore": false, "store": null""")
+        assertEquals(Some(null), stripe.servedStore)
+        assertNull(stripe.heldBy)
+    }
+
+    /** Un serveur d'avant B4, ou une valeur inconnue : la lecture d'avant —
+     *  l'App Store quand `managedByAppStore` le dit, aucun store sinon. */
+    @Test
+    fun withoutAServedStoreTheOldFlagAnswers() {
+        val oldApple = decodedSubscription(""""managedByAppStore": true""")
+        assertNull(oldApple.servedStore)
+        assertEquals(Subscription.Store.AppStore, oldApple.heldBy)
+
+        assertNull(decode("""{ "price": 4.99, "isActive": true }""").heldBy)
+
+        val unknown = decodedSubscription(""""managedByAppStore": true, "store": "huawei"""")
+        assertNull(unknown.servedStore)
+        assertEquals(Subscription.Store.AppStore, unknown.heldBy)
+    }
+
+    /** Le cache relit ce qu'il a écrit : le store servi — `null` compris —, la
+     *  page, et l'absence d'un serveur d'avant B4. */
+    @Test
+    fun theStoreSurvivesTheCache() {
+        val play = decodedSubscription(""""store": "google_play", "manageUrl": "https://play.google.com/x"""")
+        assertEquals(play, decode(encode(play)))
+
+        val none = decodedSubscription(""""store": null""")
+        assertEquals(Some(null), decode(encode(none)).servedStore)
+
+        val old = decodedSubscription(""""managedByAppStore": true""")
+        assertNull(decode(encode(old)).servedStore)
+    }
+
+    /** Un geste local ne change pas le store qui tient l'abonnement. */
+    @Test
+    fun aGestureKeepsTheStore() {
+        val play = decodedSubscription(""""isActive": true, "store": "google_play", "manageUrl": "https://play.google.com/x"""")
+        val cancelled = play.updating(isActive = false, cancelledAt = today)
+        assertEquals(Subscription.Store.GooglePlay, cancelled.heldBy)
+        assertEquals("https://play.google.com/x", cancelled.manageUrl)
+    }
 }

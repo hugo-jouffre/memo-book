@@ -201,7 +201,7 @@ régénérer avec elle (deux tests le vérifient).
 |---|---|
 | `PaywallView` (premier passage, retour), `BookPreviewSheet` par-dessus | ✅ |
 | Achat de l'abonnement par Google Play Billing, restauration, achats non livrés — la remise au serveur (`POST /v1/subscriptions/google-play`) attend le lot B4 : le produit ne s'active pas dans la Play Console avant | 🔶 |
-| `SubscriptionSheet` : actuel, continuer, raison, fin — et « Gérer » vers le store qui l'a vendu (Google Play, ou le renvoi vers l'iPhone pour l'App Store) | ✅ |
+| `SubscriptionSheet` : actuel, continuer, raison, fin — et « Gérer » vers le store qui l'a vendu (Google Play, ou le renvoi vers l'iPhone pour l'App Store), lu sur `subscription.store` et `subscription.manageUrl` du serveur (B4), la lecture d'avant en repli | ✅ |
 | `OrderView` : sept étapes, feuille Stripe, reprise d'un paiement abandonné, `OrderWhatsAppSheet` | ✅ |
 | Google Pay dans la feuille Stripe — piloté par le serveur (`googlePayEnabled` du ticket, `GOOGLE_PAY_ENABLED`, B5) ; éteint tant que l'accès production Google Pay manque | 🔶 |
 | Moyens de paiement enregistrés (CustomerSheet de Stripe) | ✅ |
@@ -234,6 +234,10 @@ plateforme :
 
 - « Paramètres du téléphone » / « Ouvrir les Paramètres » à la place des
   « Réglages » d'iOS (micro, photos, notifications).
+- La feuille de suppression du compte, pour un abonnement Google Play :
+  « Ton abonnement, lui, se résilie dans le Play Store : supprimer ton compte
+  ne l’arrête pas, pense à le couper dans Play Store › Paiements et
+  abonnements › Abonnements. »
 - La feuille d'abonnement, pour un abonnement pris sur iPhone : « Ton
   abonnement a été pris sur un iPhone : il se résilie chez Apple, dans les
   réglages de ton iPhone. MemoBook ne peut pas le couper depuis ce

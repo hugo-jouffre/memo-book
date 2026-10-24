@@ -6,6 +6,7 @@ import com.memobook.core.DataExportReceipt
 import com.memobook.core.MemoBookJson
 import com.memobook.core.PostalAddress
 import com.memobook.core.ProfileEdit
+import com.memobook.core.Some
 import com.memobook.core.Subscription
 import com.memobook.core.SubscriptionCancellationReason
 import com.memobook.core.Traveller
@@ -630,16 +631,21 @@ class ProfileModelTest {
         assertEquals(model.subscriptionGrantsAccess, session.override)
     }
 
-    /** Seul qui a un abonnement App Store à couper lit qu'il faut le couper. */
+    /** Seul qui a un abonnement à couper lit qu'il faut le couper — chez le store qui le tient. */
     @Test
     fun onlyARenewingSubscriberIsToldToCutIt() {
-        val free = DeleteAccountCopy.body(hasOngoingTrip = false, mentionsSubscription = false)
+        val free = DeleteAccountCopy.body(hasOngoingTrip = false, renewingStore = null)
         assertFalse(free.contains("abonnement"), free)
         assertEquals(DeleteAccountCopy.erasure, free)
 
-        val subscriber = DeleteAccountCopy.body(hasOngoingTrip = true, mentionsSubscription = true)
-        assertTrue(subscriber.contains(DeleteAccountCopy.subscriptionWarning))
-        assertTrue(subscriber.endsWith(DeleteAccountCopy.closeTripInstead))
+        val apple = DeleteAccountCopy.body(hasOngoingTrip = true, renewingStore = Subscription.Store.AppStore)
+        assertTrue(apple.contains(DeleteAccountCopy.subscriptionWarning(Subscription.Store.AppStore)))
+        assertTrue(apple.endsWith(DeleteAccountCopy.closeTripInstead))
+
+        val play = DeleteAccountCopy.body(hasOngoingTrip = false, renewingStore = Subscription.Store.GooglePlay)
+        assertTrue(play.contains("Play Store"), play)
+        assertFalse(play.contains("iPhone"), play)
+        assertFalse(play.contains("Apple"), play)
     }
 
     // MARK: - La jauge du crédit (Hugo, 08/10/2026)
@@ -719,6 +725,62 @@ class ProfileModelTest {
             SubscriptionSheet.paidAhead(server, graceEnd = null, isBillingRetry = false, isHeldByStore = true),
         )
         assertTrue(SubscriptionSheet.playSubscriptionsUrl.contains("sku=com.memobook.app.subscription.monthly&package=com.memobook.app"))
+    }
+
+    /**
+     * **Le serveur dit quel store tient l'abonnement** (`subscription.store`,
+     * lot B4) : il passe avant ce que Google Play connaît sur ce téléphone —
+     * l'abonnement d'un autre compte —, et `null` veut dire « aucun store ».
+     * Seul un achat qu'il n'a pas encore reçu passe avant lui.
+     */
+    @Test
+    fun theServedStoreDecidesWhereToManage() {
+        val play = Subscription(price = BigDecimal("4.99"), isActive = true, servedStore = Some(Subscription.Store.GooglePlay))
+        val apple = Subscription(price = BigDecimal("4.99"), isActive = true, servedStore = Some(Subscription.Store.AppStore))
+        val stripe = Subscription(price = BigDecimal("4.99"), isActive = true, servedStore = Some(null))
+
+        assertEquals(SubscriptionSheet.Store.GooglePlay, SubscriptionSheet.store(play, isHeldByPlay = false, playKnows = false))
+        assertEquals(SubscriptionSheet.Store.AppStore, SubscriptionSheet.store(apple, isHeldByPlay = false, playKnows = true))
+        assertEquals(SubscriptionSheet.Store.App, SubscriptionSheet.store(stripe, isHeldByPlay = false, playKnows = true))
+        assertEquals(SubscriptionSheet.Store.GooglePlay, SubscriptionSheet.store(stripe, isHeldByPlay = true, playKnows = false))
+
+        // Tenu par un store sans fin connue : la période en cours n'est pas coupée.
+        assertEquals(
+            SubscriptionCopy.PaidAhead.HeldByApple,
+            SubscriptionSheet.paidAhead(play, graceEnd = null, isBillingRetry = false),
+        )
+        assertEquals(
+            SubscriptionCopy.PaidAhead.Settled,
+            SubscriptionSheet.paidAhead(stripe, graceEnd = null, isBillingRetry = false),
+        )
+    }
+
+    /**
+     * « Gérer » ouvre la page que le serveur sert pour un abonnement Google
+     * Play ; notre page sinon — et jamais celle d'Apple.
+     */
+    @Test
+    fun manageOpensTheServedPlayPage() {
+        val served = "https://play.google.com/store/account/subscriptions?sku=com.memobook.app.subscription.monthly&package=com.memobook.app&x=1"
+        val play = Subscription(
+            price = BigDecimal("4.99"),
+            isActive = true,
+            servedStore = Some(Subscription.Store.GooglePlay),
+            manageUrl = served,
+        )
+        assertEquals(served, SubscriptionSheet.playManageUrl(play))
+
+        val apple = Subscription(
+            price = BigDecimal("4.99"),
+            isActive = true,
+            servedStore = Some(Subscription.Store.AppStore),
+            manageUrl = "https://apps.apple.com/account/subscriptions",
+        )
+        assertEquals(SubscriptionSheet.playSubscriptionsUrl, SubscriptionSheet.playManageUrl(apple))
+
+        val old = Subscription(price = BigDecimal("4.99"), isActive = true)
+        assertEquals(SubscriptionSheet.playSubscriptionsUrl, SubscriptionSheet.playManageUrl(old))
+        assertEquals(SubscriptionSheet.playSubscriptionsUrl, SubscriptionSheet.playManageUrl(null))
     }
 
     /** Un prélèvement raté chez Google Play se dit avec son nom, jamais celui d'Apple. */

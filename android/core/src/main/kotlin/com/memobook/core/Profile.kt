@@ -236,9 +236,20 @@ data class Connector(
  *   acheté par StoreKit. Ça décide de la résiliation : Apple ne laisse aucune app
  *   la faire à la place de son client, donc la feuille enregistre la raison puis
  *   ouvre la gestion des abonnements d'iOS. Faux pour un compte qui n'a rien
- *   souscrit, ou quand un serveur plus ancien ne sert pas le champ. ⚠️ Nom du
- *   contrat iOS gardé tel quel : il deviendra « tenu par un store » (App Store
- *   ou Google Play) avec le paiement Android.
+ *   souscrit, ou quand un serveur plus ancien ne sert pas le champ. Nom du
+ *   contrat iOS gardé tel quel ; depuis le lot B4, c'est [servedStore] qui
+ *   dit quel store le tient, et ce drapeau n'est plus que le repli.
+ * @property servedStore **le store qui tient l'abonnement, dit par le serveur**
+ *   — `subscription.store` de `GET /v1/profile` (lot B4, 22/10/2026) :
+ *   `Some(AppStore)`, `Some(GooglePlay)`, ou `Some(null)` pour un abonnement
+ *   que le serveur tient seul (Stripe) ou pas d'abonnement du tout. `null`
+ *   quand le serveur ne sert pas le champ — un serveur d'avant B4, un cache
+ *   d'avant, une valeur que cette version ne connaît pas : on retombe alors sur
+ *   [managedByAppStore]. Voir [heldBy].
+ * @property manageUrl **où se gère l'abonnement** — `subscription.manageUrl` :
+ *   la page des abonnements du Play Store pour ce produit, celle d'Apple pour
+ *   l'App Store, `null` sans store. Le serveur l'écrit une fois pour l'app,
+ *   l'e-mail de fin de voyage et le rappel.
  * @property servedIsUnlimited **ce que le serveur a tranché** :
  *   `subscription.isUnlimited` de `GET /v1/profile`, calculé par
  *   `hasUnlimitedAccess` à l'instant près (`renewsAt > now`, délai de grâce du
@@ -277,6 +288,8 @@ data class Subscription private constructor(
     val paidThrough: Instant?,
     val hasEndedBefore: Boolean,
     val managedByAppStore: Boolean,
+    val servedStore: Some<Store?>?,
+    val manageUrl: String?,
     val servedIsUnlimited: Boolean?,
     val servedState: State?,
     val autoRenews: Boolean?,
@@ -301,6 +314,26 @@ data class Subscription private constructor(
         /** A été abonné, plus rien ne court. */
         @SerialName("ended") Ended("ended"),
     }
+
+    /** Les deux stores qui vendent l'abonnement — `subscription.store` du serveur. */
+    @Serializable
+    enum class Store(val rawValue: String) {
+        /** Acheté sur un iPhone, par StoreKit. */
+        @SerialName("app_store") AppStore("app_store"),
+
+        /** Acheté sur Android, par Google Play Billing. */
+        @SerialName("google_play") GooglePlay("google_play"),
+    }
+
+    /**
+     * **Qui tient l'abonnement** : le store que le serveur dit ([servedStore]),
+     * sinon — un serveur ou un cache d'avant le lot B4 — l'App Store quand
+     * [managedByAppStore] le dit. `null` : le serveur le tient seul, ou il n'y a
+     * rien à tenir. Un achat Google Play que le serveur n'a pas encore reçu
+     * n'est pas ici : c'est l'appareil qui le sait (`SubscriptionSheet.store`).
+     */
+    val heldBy: Store?
+        get() = servedStore?.value ?: if (servedStore == null && managedByAppStore) Store.AppStore else null
 
     /** La période qu'un prix paie. */
     @Serializable
@@ -348,6 +381,8 @@ data class Subscription private constructor(
             paidThrough = paidThrough,
             hasEndedBefore = hasEndedBefore,
             managedByAppStore = managedByAppStore,
+            servedStore = servedStore,
+            manageUrl = manageUrl,
             servedIsUnlimited = if (forgets) null else servedIsUnlimited,
             servedState = if (forgets) null else servedState,
             autoRenews = autoRenews,
@@ -525,6 +560,8 @@ data class Subscription private constructor(
             paidThrough: Instant? = null,
             hasEndedBefore: Boolean = false,
             managedByAppStore: Boolean = false,
+            servedStore: Some<Store?>? = null,
+            manageUrl: String? = null,
             servedIsUnlimited: Boolean? = null,
             servedState: State? = null,
             autoRenews: Boolean? = null,
@@ -532,7 +569,8 @@ data class Subscription private constructor(
             endsAt: Instant? = null,
         ): Subscription = Subscription(
             price, interval, isActive, tripDestination, tripTitle, endsOn, cancelledAt, paidThrough,
-            hasEndedBefore, managedByAppStore, servedIsUnlimited, servedState, autoRenews, renewsAt, endsAt,
+            hasEndedBefore, managedByAppStore, servedStore, manageUrl, servedIsUnlimited, servedState,
+            autoRenews, renewsAt, endsAt,
         )
 
         /**
@@ -579,6 +617,15 @@ data class Subscription private constructor(
                 paidThrough = json.optional(fields, "paidThrough", InstantSerializer),
                 hasEndedBefore = json.optional(fields, "hasEndedBefore", Boolean.serializer()) ?: false,
                 managedByAppStore = json.optional(fields, "managedByAppStore", Boolean.serializer()) ?: false,
+                // `null` servi n'est pas l'absence : le serveur dit qu'aucun
+                // store ne le tient. Une valeur inconnue vaut l'absence — le
+                // repli sur `managedByAppStore` répond.
+                servedStore = when (fields["store"]) {
+                    null -> null
+                    is JsonNull -> Some(null)
+                    else -> json.lenient(fields, "store", Store.serializer())?.let { Some(it) }
+                },
+                manageUrl = json.lenient(fields, "manageUrl", String.serializer()),
                 servedIsUnlimited = json.optional(fields, "isUnlimited", Boolean.serializer()),
                 // Une valeur que cette version ne connaît pas ne fait pas tomber
                 // le profil : le recalcul d'avant répond à sa place.
@@ -601,6 +648,8 @@ data class Subscription private constructor(
                 put(json, "paidThrough", value.paidThrough, InstantSerializer)
                 put(json, "hasEndedBefore", value.hasEndedBefore, Boolean.serializer())
                 put(json, "managedByAppStore", value.managedByAppStore, Boolean.serializer())
+                patch(json, "store", value.servedStore, Store.serializer())
+                put(json, "manageUrl", value.manageUrl, String.serializer())
                 put(json, "isUnlimited", value.servedIsUnlimited, Boolean.serializer())
                 put(json, "state", value.servedState, State.serializer())
                 put(json, "autoRenews", value.autoRenews, Boolean.serializer())

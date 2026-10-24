@@ -1,6 +1,7 @@
 package com.memobook.feature.home
 
 import com.memobook.core.HomeFeed
+import com.memobook.core.Subscription
 import com.memobook.core.TravellerProfile
 import com.memobook.feature.AppDependencies
 import com.memobook.feature.ContentCache
@@ -31,7 +32,7 @@ import com.memobook.feature.ContentCache
  * **Qui tient l'abonnement** — sans jumeau sur iOS : le rappel de fin de
  * voyage ne s'ouvre sur Android que pour un abonnement de Google Play (voir
  * `HomeModel.tripEndReminderCanOpenHere`). L'accueil ne le sait pas, le profil
- * si (`Subscription.managedByAppStore`) : on le relit, le serveur d'abord, le
+ * si (`Subscription.heldBy`, le `subscription.store` du serveur) : on le relit, le serveur d'abord, le
  * cache du profil si le réseau manque — la même enveloppe que l'écran du
  * profil. Rare : seulement le jour où le rappel doit s'ouvrir.
  */
@@ -54,7 +55,7 @@ fun AppDependencies.homeModel(): HomeModel {
         join = { code -> api.joinTrip(code) },
         subscriptionIsManagedByAppStore = {
             val profile: TravellerProfile = readProfile()
-            profile.subscription.managedByAppStore
+            profile.subscription.heldBy == Subscription.Store.AppStore
         },
     )
 }
