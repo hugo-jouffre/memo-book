@@ -99,6 +99,6 @@ public enum LegalBlock: Sendable, Hashable {
 /// Ce que les deux documents partagent : l'adresse à laquelle tout renvoie.
 /// Écrite une fois, liée partout.
 public enum LegalContact {
-    public static let email = "hugo.jouffre.freelance@gmail.com"
+    public static let email = "contact@memo-book.com"
     public static let emailLink = "[\(email)](mailto:\(email))"
 }
