@@ -12,10 +12,16 @@ import type {
   Subscription,
   TripTheme,
 } from "@prisma/client";
-import { PAGE_TARGET_CHANGE_LIMIT, pageTargetChangesLeft } from "../services/pageTarget.js";
+import { PAGE_TARGET_CHANGE_LIMIT, PAGE_TARGET_TOLERANCE, pageTargetChangesLeft } from "../services/pageTarget.js";
 import { CONNECTOR_CATALOG } from "../services/connectorCatalog.js";
 import { serializeDailyCredit, type DailyCredit } from "../services/dailyCredit.js";
-import { unitPriceCents } from "../services/printPricing.js";
+import {
+  FREE_ZONES_CENTS,
+  maxBillablePages,
+  MINIMUM_BILLABLE_PAGES,
+  PRINT_PRICE_TIERS,
+  unitPriceCents,
+} from "../services/printPricing.js";
 import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCountries.js";
 import { storeManageUrl, SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
 import { displayablePhotoUrl } from "./tripPhotos.js";
@@ -832,6 +838,12 @@ export function serializeTripSettings(
       // ouvrirait la cible voulue. Clés « 0 » à « 100 ».
       ...(reachable ? { reachableByRatio: reachable } : {}),
     },
+    // **Le prix du carnet, servi avec les réglages** : l'onglet « Nmb de
+    // pages » annonce ce que chaque option coûtera, et le fait sans recopier
+    // la grille. Le serveur reste la seule source de vérité du tarif — l'app
+    // ne garde aucune copie et, servie par un serveur plus ancien qui ne
+    // l'envoie pas, elle se tait au lieu d'inventer un prix.
+    printPricing: serializePrintPricing(),
     // « Supprimer la conversation » n'appartient qu'au propriétaire, comme
     // supprimer le voyage (`docs/conversation.md` § 7). L'app pâlit le lien et
     // explique ; le serveur refuse quand même (`DELETE /v1/trips/:id/chat`).
@@ -839,6 +851,42 @@ export function serializeTripSettings(
     // « Supprimer le voyage » aussi (T233, 06/10/2026) : un co-voyageur ne
     // doit même pas voir l'option — `DELETE /v1/memos/:id` lui répond 404.
     canDelete: isOwner,
+  };
+}
+
+/**
+ * **La grille des prix du carnet**, telle que l'app la reçoit — voir
+ * `services/printPricing.ts`, qui en est la source.
+ *
+ * L'app en a besoin de bout en bout, et pas d'un prix à la fois : le curseur
+ * de « Personnalisé » change le nombre de pages à chaque cran, et un
+ * aller-retour par cran ferait clignoter le prix. Elle reçoit donc les
+ * paliers et fait la lecture ; **elle ne les garde pas** — rien n'est écrit
+ * en dur côté Swift, et le jour où un palier change, il change ici seul.
+ *
+ * `tolerancePages` : l'écart toléré entre le carnet composé et sa cible
+ * (`PAGE_TARGET_TOLERANCE`). L'app annonce le prix du palier de **cible +
+ * tolérance**, pour que le prix facturé ne dépasse jamais le prix affiché.
+ *
+ * Les paliers au-delà de 300 pages n'y figurent que si `ALLOW_OVER_300_PAGES`
+ * les ouvre : ce que l'app propose et ce que le serveur accepte de facturer
+ * ne doivent pas diverger.
+ */
+export function serializePrintPricing() {
+  const maxPages = maxBillablePages();
+  return {
+    tiers: PRINT_PRICE_TIERS.filter((tier) => tier.to <= maxPages).map((tier) => ({
+      id: tier.id,
+      from: tier.from,
+      to: tier.to,
+      price: euros(tier.cents),
+    })),
+    minPages: MINIMUM_BILLABLE_PAGES,
+    maxPages,
+    tolerancePages: PAGE_TARGET_TOLERANCE,
+    // Le seul extra qui se facture (maquette `3909:27845`), pour la ligne
+    // « Zones libres » de l'onglet « Extras ».
+    freeZonesPrice: euros(FREE_ZONES_CENTS),
   };
 }
 

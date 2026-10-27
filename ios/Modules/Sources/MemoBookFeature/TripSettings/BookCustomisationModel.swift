@@ -428,6 +428,12 @@ public final class BookCustomisationModel {
     /// Les paliers doivent-ils pâlir ? Les deux changements sont faits.
     public var isPageTargetLocked: Bool { pageTargetAllowance.isExhausted }
 
+    /// **La grille des prix du carnet**, servie avec les réglages — voir
+    /// ``PrintPricing``. Nulle tant que le serveur ne l'a pas dite : l'onglet
+    /// « Nombre de pages » n'affiche alors aucun prix, et la ligne « Zones
+    /// libres » aucun supplément.
+    public var printPricing: PrintPricing? { settings?.printPricing }
+
     /// Le lien « Mettre les étapes déjà écrites à la nouvelle cible » : la
     /// réécriture reste ouverte — on a répondu « Plus tard » — et la feuille
     /// est fermée.

@@ -346,6 +346,16 @@ public actor PreviewAPI: MemoBookAPI {
         return profile
     }
 
+    /// Le renouvellement coupé chez le store, dans le double : l'abonnement
+    /// passe en « résilié », et la période payée reste.
+    public func reportSubscriptionRenewalStopped() async throws -> TravellerProfile {
+        var profile = editedProfile ?? .fixture
+        profile.subscription.isActive = false
+        profile.subscription.cancelledAt = .now
+        editedProfile = profile
+        return profile
+    }
+
     /// L'achat ouvre l'abonnement **dans le double** : rouvrir le profil doit
     /// montrer un abonné, tenu par Apple — sans qu'aucune signature soit lue —,
     /// et le crédit du jour passe à l'illimité, sur le fil comme sur l'accueil.
@@ -735,9 +745,11 @@ public actor PreviewAPI: MemoBookAPI {
     public func orderQuote(
         memoId: String,
         copies: Int,
-        shippingSpeed: ShippingSpeed
+        shippingSpeed: ShippingSpeed,
+        copyOptions: [PrintedCopyOptions]
     ) async throws -> OrderQuote {
-        .fixture(copies: copies, speed: shippingSpeed)
+        _ = copyOptions
+        return .fixture(copies: copies, speed: shippingSpeed)
     }
 
     /// Une commande déjà réglée, et une intention **factice**.

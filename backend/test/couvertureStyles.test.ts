@@ -425,6 +425,12 @@ describe("styles de couverture", () => {
         ["tampon", true],
       ]);
       expect(travel[6]!.prompt).toContain("PHILIPPINES");
+      // Le tampon est **net** (Hugo, 27/10/2026) : la consigne demande une
+      // encre pleine, et interdit l'effet à moitié effacé que « encre un peu
+      // irrégulière » faisait produire.
+      expect(travel[6]!.prompt).toContain("Encre pleine et régulière");
+      expect(travel[6]!.prompt).toContain("à moitié effacé");
+      expect(travel[6]!.prompt).not.toContain("Encre un peu irrégulière");
       // Les timbres : petits, en qualité « medium », sans référence (la couverture
       // d'exemple porte des timbres écrits), et rien d'écrit dessus.
       for (const t of travel.slice(0, 6)) {

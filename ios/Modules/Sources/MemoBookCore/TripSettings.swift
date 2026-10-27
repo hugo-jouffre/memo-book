@@ -273,6 +273,14 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// Ce que l'écran lit : ce que le serveur a servi, ou rien de compté.
     public var pageTargetAllowance: PageTargetAllowance { pageTarget ?? .unrestricted }
 
+    /// **Le prix du carnet, par palier de pages** — voir ``PrintPricing``.
+    ///
+    /// C'est ce que l'onglet « Nombre de pages » annonce sous chaque option,
+    /// et ce que la ligne « Zones libres » affiche en supplément. Optionnel :
+    /// un serveur plus ancien ne le sert pas, et l'écran se tait alors plutôt
+    /// que d'inventer un prix.
+    public var printPricing: PrintPricing?
+
     public init(
         tripId: String,
         name: String,
@@ -292,7 +300,8 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         bookPdfUrl: URL? = nil,
         isPrintable: Bool = false,
         customisation: BookCustomisation? = nil,
-        pageTarget: PageTargetAllowance? = nil
+        pageTarget: PageTargetAllowance? = nil,
+        printPricing: PrintPricing? = nil
     ) {
         self.tripId = tripId
         self.name = name
@@ -313,6 +322,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         self.isPrintable = isPrintable
         self.customisation = customisation
         self.pageTarget = pageTarget
+        self.printPricing = printPricing
     }
 
     /// « @clara_prn, @ana.prn » — les co-voyageurs en bout de ligne.

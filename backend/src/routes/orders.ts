@@ -56,9 +56,36 @@ const copyOptionsSchema = z.object({
   crosswordEnabled: z.boolean(),
 });
 
+/**
+ * Combien d'exemplaires portent « Zones libres », l'option qui se facture
+ * (3,00 € l'exemplaire, `FREE_ZONES_CENTS`).
+ *
+ * Les exemplaires dont l'app n'a rien dit reprennent le style du carnet — la
+ * même règle qu'à la création de la commande, pour que le récapitulatif et la
+ * facture ne se contredisent jamais.
+ */
+function freeZonesCopiesOf(
+  memo: { freeZonesEnabled: boolean },
+  copies: number,
+  chosen: { position: number; freeZonesEnabled: boolean }[] | undefined,
+): number {
+  const picked = new Map((chosen ?? []).map((copy) => [copy.position, copy.freeZonesEnabled]));
+  let count = 0;
+  for (let position = 1; position <= copies; position += 1) {
+    if (picked.get(position) ?? memo.freeZonesEnabled) count += 1;
+  }
+  return count;
+}
+
 const quoteBody = z.object({
   copies: z.number().int().min(1).max(MAX_COPIES).default(1),
   shippingSpeed: z.enum(["standard", "express"]).default("standard"),
+  /**
+   * Les options, exemplaire par exemplaire — **le récapitulatif en a besoin
+   * depuis que « Zones libres » se facture**. Facultatif : sans rien, chaque
+   * exemplaire reprend le style du carnet, comme à la commande.
+   */
+  copyOptions: z.array(copyOptionsSchema).optional(),
 });
 
 const createOrderBody = z.object({
@@ -327,6 +354,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         pageCount: billablePages(memo),
         copies: body.copies,
         speed: body.shippingSpeed,
+        freeZonesCopies: freeZonesCopiesOf(memo, body.copies, body.copyOptions),
       })
     );
   });
@@ -379,6 +407,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
       pageCount: billablePages(memo),
       copies: body.copies,
       speed: body.shippingSpeed,
+      freeZonesCopies: freeZonesCopiesOf(memo, body.copies, body.copyOptions),
     });
 
     // Les options manquantes reprennent le style du carnet, exemplaire par

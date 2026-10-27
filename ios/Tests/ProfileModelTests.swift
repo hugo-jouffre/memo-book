@@ -209,6 +209,61 @@ final class ProfileModelTests: XCTestCase {
         XCTAssertNil(model.profile?.subscription.cancelledAt)
     }
 
+    /// **La résiliation tient au rechargement** (Hugo, 27/10/2026).
+    ///
+    /// L'écran suivait Apple et le serveur ne savait rien : le profil relu —
+    /// au retour au premier plan, à l'ouverture suivante — rendait l'abonné
+    /// d'avant, pastille « Abonné(e) » et « Résilier » compris. La coupure
+    /// part donc au serveur, et c'est **sa** réponse que l'écran garde.
+    func testARenewalCutIsReportedToTheServer() async throws {
+        var reported = false
+        let subscriber = appStoreSubscriber()
+        // Ce que le serveur répond une fois au courant : résilié, et le mois
+        // payé toujours là.
+        var cancelled = subscriber
+        cancelled.subscription.isActive = false
+        cancelled.subscription.cancelledAt = .now
+
+        let model = ProfileModel(
+            source: { subscriber },
+            reportRenewalStopped: {
+                reported = true
+                return cancelled
+            }
+        )
+        await model.load()
+
+        model.acknowledgeAppStoreRenewal(false)
+
+        try await waitUntil { reported }
+        try await waitUntil { model.profile?.subscription.cancelledAt != nil }
+        XCTAssertEqual(model.profile?.subscription.isActive, false)
+        // La feuille « Mon abonnement » propose alors de se réabonner, et non
+        // de résilier une seconde fois.
+        XCTAssertEqual(model.profile?.subscription.isCancelled, true)
+        // Le mois payé n'est pas rendu.
+        XCTAssertTrue(model.subscriptionGrantsAccess)
+    }
+
+    /// Un renouvellement **réarmé** ne dit rien au serveur : c'est l'achat
+    /// remis qui le fait.
+    func testARearmedRenewalReportsNothing() async {
+        var reported = false
+        let subscriber = appStoreSubscriber()
+        let model = ProfileModel(
+            source: { subscriber },
+            reportRenewalStopped: {
+                reported = true
+                return subscriber
+            }
+        )
+        await model.load()
+
+        model.acknowledgeAppStoreRenewal(true)
+
+        XCTAssertFalse(reported)
+    }
+
     /// Souscrire passe l'écran à l'illimité tout de suite, sans attendre que
     /// le serveur relise l'achat — et sans rien d'autre à remettre à zéro : il
     /// n'y a plus d'essai gratuit à décompter (Hugo, 03/10/2026).

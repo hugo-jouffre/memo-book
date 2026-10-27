@@ -381,6 +381,10 @@ public final class AppDependencies {
             cancelSubscription: { [api] reason in
                 try await api.cancelSubscription(reason: reason)
             },
+            // Le renouvellement coupé chez Apple, dit au serveur sans attendre
+            // sa notification (27/10/2026) — voir
+            // ``ProfileModel/acknowledgeAppStoreRenewal(_:)``.
+            reportRenewalStopped: { [api] in try await api.reportSubscriptionRenewalStopped() },
             // « Exporter mes données » : le lien part par e-mail, l'archive se
             // compose à son ouverture — voir ``DataExportSheet``.
             exportData: { [api] in try await api.requestDataExport() },
@@ -669,8 +673,13 @@ public final class AppDependencies {
             memoId: memoId,
             email: email,
             context: { [api] id in try await api.orderContext(memoId: id) },
-            quote: { [api] id, copies, speed in
-                try await api.orderQuote(memoId: id, copies: copies, shippingSpeed: speed)
+            quote: { [api] id, copies, speed, options in
+                try await api.orderQuote(
+                    memoId: id,
+                    copies: copies,
+                    shippingSpeed: speed,
+                    copyOptions: options
+                )
             },
             submit: { [api] id, request in
                 // La version du SDK Stripe part avec la commande : c'est elle

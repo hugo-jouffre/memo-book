@@ -202,8 +202,22 @@ export function serializeOrderQuote(quote: PrintQuote) {
           id: "copies",
           label: "Exemplaires",
           detail: `x${quote.copies}`,
-          amount: euros(quote.itemsCents),
+          amount: euros(quote.booksCents),
         },
+        // Le seul supplément d'option du devis : 3,00 € par exemplaire qui
+        // porte « Zones libres » — du papier en plus dans celui-là. Absent
+        // quand aucun exemplaire ne le porte : une ligne à 0,00 € ferait
+        // croire à une option qu'on a oublié de cocher.
+        ...(quote.freeZonesCents > 0
+          ? [
+              {
+                id: "free-zones",
+                label: "Zones libres",
+                detail: `x${quote.freeZonesCopies}`,
+                amount: euros(quote.freeZonesCents),
+              },
+            ]
+          : []),
         {
           id: "shipping",
           label: quote.speed === "express" ? "Livraison express" : "Livraison standard",

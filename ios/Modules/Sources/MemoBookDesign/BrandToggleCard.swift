@@ -18,6 +18,7 @@ import SwiftUI
 public struct BrandToggleCard: View {
     private let title: String
     private let detail: String
+    private let price: String?
     @Binding private var isOn: Bool
     private let isAvailable: Bool
     private let onUnavailable: (() -> Void)?
@@ -29,15 +30,21 @@ public struct BrandToggleCard: View {
     ///     même raison : un `disabled` avale le geste et n'explique rien.
     ///   - onUnavailable: ce qu'on fait de cet appui. Poser un message,
     ///     toujours.
+    ///   - price: ce que l'option ajoute au prix du carnet — « +3,00 € »,
+    ///     posé au bout de la ligne du titre, à l'encre de la marque (maquette
+    ///     `3909:27845`). Nul pour une option qui ne se facture pas, c'est-à-dire
+    ///     toutes les autres.
     public init(
         title: String,
         detail: String,
+        price: String? = nil,
         isOn: Binding<Bool>,
         isAvailable: Bool = true,
         onUnavailable: (() -> Void)? = nil
     ) {
         self.title = title
         self.detail = detail
+        self.price = price
         _isOn = isOn
         self.isAvailable = isAvailable
         self.onUnavailable = onUnavailable
@@ -94,9 +101,21 @@ public struct BrandToggleCard: View {
 
     private var text: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(MemoBookFont.bodySemibold)
-                .foregroundStyle(MemoBookColor.ink)
+            HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.xs) {
+                Text(title)
+                    .font(MemoBookFont.bodySemibold)
+                    .foregroundStyle(MemoBookColor.ink)
+                if let price {
+                    Spacer(minLength: MemoBookSpacing.xs)
+                    // Le supplément ne s'enroule pas : c'est le titre qui cède
+                    // la largeur, lui sait s'enrouler.
+                    Text(price)
+                        .font(MemoBookFont.label)
+                        .foregroundStyle(MemoBookColor.action)
+                        .monospacedDigit()
+                        .fixedSize()
+                }
+            }
             // 14 et non 12 : ce détail porte une **phrase entière** — ce que
             // l'extra ajoute au carnet —, et la légende de 12 est réservée à ce
             // qui se lit d'un coup d'œil (Hugo, 16/09/2026).
@@ -119,7 +138,7 @@ public struct BrandToggleCard: View {
             // Indisponible, il ne bascule pas sous le doigt : un `UISwitch` qui
             // glisse puis revient se lirait comme un réglage qui n'a pas pris.
             .allowsHitTesting(isAvailable)
-            .accessibilityLabel(title)
+            .accessibilityLabel(price.map { "\(title), \($0)" } ?? title)
             .accessibilityHint(detail)
     }
 }

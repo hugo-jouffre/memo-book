@@ -57,6 +57,10 @@ public final class ProfileModel {
     private let cancelSubscriptionRemotely:
         ((SubscriptionCancellationReason?) async throws -> TravellerProfile)?
 
+    /// Dit au serveur que le store a coupé le renouvellement — voir
+    /// ``acknowledgeAppStoreRenewal(_:)``. `nil` en aperçu.
+    private let reportRenewalStopped: (() async throws -> TravellerProfile)?
+
     /// Demande le lien d'export des données. `nil` en aperçu : la feuille joue
     /// la réussite.
     private let exportData: (() async throws -> DataExportReceipt)?
@@ -105,6 +109,7 @@ public final class ProfileModel {
         cancelSubscription: (
             (SubscriptionCancellationReason?) async throws -> TravellerProfile
         )? = nil,
+        reportRenewalStopped: (() async throws -> TravellerProfile)? = nil,
         exportData: (() async throws -> DataExportReceipt)? = nil,
         cached: CachedValue<TravellerProfile>? = nil
     ) {
@@ -117,6 +122,7 @@ public final class ProfileModel {
         self.changePassword = changePassword
         self.requestPasswordReset = requestPasswordReset
         self.cancelSubscriptionRemotely = cancelSubscription
+        self.reportRenewalStopped = reportRenewalStopped
         self.exportData = exportData
     }
 
@@ -474,13 +480,42 @@ public final class ProfileModel {
     }
 
     /// Ce qu'Apple dit du renouvellement, lu **sur l'appareil** au retour de la
-    /// feuille d'iOS. L'écran suit tout de suite ; le serveur l'apprend par la
-    /// notification d'Apple, quelques secondes plus tard, et le prochain
-    /// chargement le confirme. Le mois payé (`paidThrough`) ne bouge pas.
+    /// feuille d'iOS. L'écran suit tout de suite, et le mois payé
+    /// (`paidThrough`) ne bouge pas.
+    ///
+    /// **Et le serveur l'apprend tout de suite, lui aussi** (Hugo,
+    /// 27/10/2026). On attendait sa notification d'Apple : entre-temps il
+    /// répondait « abonné, renouvellement armé », et la relecture du profil —
+    /// au retour au premier plan, à l'ouverture suivante — effaçait la
+    /// résiliation que l'écran venait d'annoncer. On lisait de nouveau la
+    /// pastille « Abonné(e) », et « Mon abonnement » reproposait de résilier
+    /// ce qu'on venait de résilier. La coupure part donc à
+    /// `POST /v1/profile/subscription/cancel` (`renewalStopped`), qui pose
+    /// `autoRenews: false` : le serveur répond alors « résilié, illimité
+    /// jusqu'au … », et sa réponse remplace la copie locale.
+    ///
+    /// Un échec ne défait rien : l'écran garde ce qu'Apple a dit, et la
+    /// notification d'Apple finira par faire la même chose côté serveur.
+    /// Rien ne part pour un renouvellement **réarmé** : c'est l'achat remis
+    /// (``settleAppStoreRenewal(_:session:)``) qui le dit au serveur.
     public func acknowledgeAppStoreRenewal(_ renews: Bool) {
         mutate {
             $0.subscription.isActive = renews
             $0.subscription.cancelledAt = renews ? nil : .now
+        }
+
+        guard !renews, let reportRenewalStopped else { return }
+
+        pendingSave?.cancel()
+        pendingSave = Task { [weak self] in
+            guard let saved = try? await reportRenewalStopped() else { return }
+            guard !Task.isCancelled, let self else { return }
+
+            #if DEBUG
+                profile = SandboxPersona.current?.applied(to: saved) ?? saved
+            #else
+                profile = saved
+            #endif
         }
     }
 

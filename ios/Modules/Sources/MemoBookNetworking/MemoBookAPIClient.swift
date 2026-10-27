@@ -304,6 +304,20 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func reportSubscriptionRenewalStopped() async throws -> TravellerProfile {
+        // La même route que la résiliation : ce qu'on lui apprend ici, c'est
+        // que le store a coupé le renouvellement. Sans raison — elle est déjà
+        // partie, à la confirmation.
+        struct Body: Encodable { let renewalStopped: Bool }
+
+        return try await send(
+            method: "POST",
+            path: "/v1/profile/subscription/cancel",
+            encodableBody: Body(renewalStopped: true),
+            credential: .session
+        )
+    }
+
     public func syncAppStoreTransaction(
         signedTransaction: String,
         memoId: String?
@@ -617,16 +631,21 @@ public actor MemoBookAPIClient: MemoBookAPI {
     public func orderQuote(
         memoId: String,
         copies: Int,
-        shippingSpeed: ShippingSpeed
+        shippingSpeed: ShippingSpeed,
+        copyOptions: [PrintedCopyOptions]
     ) async throws -> OrderQuote {
+        // **Les options partent avec le devis** (27/10/2026) : « Zones libres »
+        // se facture par exemplaire qui le porte, et le récapitulatif doit
+        // compter les mêmes que la commande.
         struct Body: Encodable {
             let copies: Int
             let shippingSpeed: ShippingSpeed
+            let copyOptions: [PrintedCopyOptions]
         }
         return try await send(
             method: "POST",
             path: "/v1/memos/\(memoId)/orders/quote",
-            encodableBody: Body(copies: copies, shippingSpeed: shippingSpeed)
+            encodableBody: Body(copies: copies, shippingSpeed: shippingSpeed, copyOptions: copyOptions)
         )
     }
 

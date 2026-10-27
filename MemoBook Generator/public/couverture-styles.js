@@ -862,9 +862,18 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
           transparent: true,
           detourer: true,
           reference: "silhouette",
+          // **Un tampon net, pas un tampon usé** (Hugo, 27/10/2026). La
+          // consigne disait « Encre un peu irrégulière », et le modèle la
+          // lisait comme une invitation : anneau rompu, lettres à moitié
+          // effacées, silhouette fantôme. Le tampon de référence
+          // (`3904:24480`) est au contraire posé d'un coup, l'encre pleine et
+          // le trait continu — c'est ce qu'on demande désormais, et on
+          // interdit nommément l'effet d'usure.
           prompt:
             `Un tampon postal rond à l'encre bordeaux, comme celui de l'image de référence de couverture : le nom « ${String(pays || lieu).toUpperCase()} » ` +
-            "écrit deux fois en arc dans l'anneau, des étoiles, et au centre la silhouette du pays fournie en image. Encre un peu irrégulière. Fond transparent.",
+            "écrit deux fois en arc dans l'anneau, des étoiles, et au centre la silhouette du pays fournie en image. " +
+            "Encre pleine et régulière, trait net et continu, anneau fermé, lettres entièrement lisibles : " +
+            "aucun effet usé, délavé, craquelé ni à moitié effacé. Fond transparent.",
         },
       ];
     }

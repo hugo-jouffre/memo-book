@@ -128,6 +128,9 @@ type ProfileBody = {
     isUnlimited: boolean;
     paidThrough: string | null;
     managedByAppStore: boolean;
+    state: string;
+    autoRenews: boolean | null;
+    endsAt: string | null;
   };
   offeredSteps?: unknown;
   remainingSteps?: unknown;
@@ -571,6 +574,56 @@ describe("la fin du voyage", () => {
     expect(response.statusCode).toBe(200);
     const row = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
     expect(row).toMatchObject({ status: "active", cancellationReason: "tooExpensive" });
+  });
+
+  /**
+   * **Le renouvellement coupé, dit par l'app** (Hugo, 27/10/2026). Sans ça, le
+   * serveur répondait « abonné, renouvellement armé » jusqu'à la notification
+   * d'Apple, et la relecture du profil effaçait la résiliation qu'on venait de
+   * confirmer trois fois.
+   */
+  it("prend acte du renouvellement coupé, sans rendre le mois payé", async () => {
+    const account = await registerAccount(harness.app);
+    await purchase(account.authorization, transaction({ appAccountToken: account.accountId }));
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/profile/subscription/cancel",
+      headers: { authorization: account.authorization },
+      payload: { renewalStopped: true },
+    });
+
+    expect(response.statusCode).toBe(200);
+    // Le statut ne bouge pas : Apple honore la période déjà réglée.
+    const row = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
+    expect(row).toMatchObject({ status: "active", autoRenews: false });
+    expect(row.cancelledAt).not.toBeNull();
+
+    // Et c'est ce que le profil dit, tout de suite : résilié, illimité
+    // jusqu'au bout du mois payé.
+    const profile = response.json<ProfileBody>();
+    expect(profile.subscription).toMatchObject({ state: "ending", autoRenews: false, isUnlimited: true });
+    expect(profile.subscription.endsAt).not.toBeNull();
+  });
+
+  it("rejoué, il ne fait pas avancer la date de résiliation", async () => {
+    const account = await registerAccount(harness.app);
+    await purchase(account.authorization, transaction({ appAccountToken: account.accountId }));
+
+    const cancel = () =>
+      harness.app.inject({
+        method: "POST",
+        url: "/v1/profile/subscription/cancel",
+        headers: { authorization: account.authorization },
+        payload: { renewalStopped: true },
+      });
+
+    await cancel();
+    const first = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
+    await cancel();
+    const second = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
+
+    expect(second.cancelledAt?.toISOString()).toBe(first.cancelledAt?.toISOString());
   });
 });
 

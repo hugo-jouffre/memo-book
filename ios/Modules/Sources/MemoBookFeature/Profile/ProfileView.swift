@@ -403,9 +403,17 @@ public struct ProfileView: View {
     /// une étiquette posée sur l'écran, droite parce qu'alignée sur un titre —
     /// un libellé de travers à côté d'un mot horizontal se lit comme un défaut
     /// de rendu.
+    ///
+    /// **Elle tombe dès qu'on a résilié** (Hugo, 27/10/2026 : « je résilie, je
+    /// reviens, j'ai toujours la pastille lime »). L'illimité court jusqu'au
+    /// bout du mois payé — et c'est bien ce que dit la ligne « Mon
+    /// abonnement », « Jusqu'au 12 novembre » —, mais il n'y a plus
+    /// d'abonnement, et le lime ne dit que l'abonnement (T7). Lire
+    /// « ABONNÉ(E) » après trois confirmations se lit comme une résiliation
+    /// qui n'a pas pris.
     @ViewBuilder
     private var subscriberPill: some View {
-        if let profile = model.profile, isSubscriber {
+        if let profile = model.profile, isSubscriber, !hasCancelledSubscription {
             BrandTagPill(
                 SubscriptionCopy.currentBadge(for: profile.gender),
                 tone: .accentOutlined,
@@ -417,6 +425,18 @@ public struct ProfileView: View {
             // titre hors de l'écran. Elle garde alors sa taille, et elle seule.
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
+    }
+
+    /// **Le renouvellement est coupé** : résilié dans l'app, ou chez le store.
+    /// L'illimité peut courir encore — voir ``subscriptionEndLabel`` —, mais
+    /// l'abonnement, lui, est fini.
+    ///
+    /// Un achat qui vient d'avoir lieu l'emporte : la session dit « abonné »
+    /// avant que le serveur n'ait relu, et le profil qu'on a sous la main est
+    /// alors celui d'avant l'achat.
+    private var hasCancelledSubscription: Bool {
+        guard subscriptionSession?.override != true else { return false }
+        return model.profile?.subscription.isCancelled == true
     }
 
     /// Le gros bouton lime de la maquette, et **rien d'autre au-dessus** : pour

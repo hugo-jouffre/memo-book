@@ -152,6 +152,15 @@ public struct TripSettingsView: View {
                     onSubscribe: {
                         sheet = nil
                         showsPaywall = true
+                    },
+                    // « Résilier » (Hugo, 27/10/2026) : la feuille referme,
+                    // et « Mon abonnement » prend la suite — c'est là que la
+                    // résiliation se fait, en trois confirmations. Une feuille
+                    // ne s'empile pas sur une autre, même motif que le paywall
+                    // juste au-dessus.
+                    onCancelSubscription: {
+                        sheet = nil
+                        onIntent(.manageSubscription)
                     }
                 )
             }
@@ -242,15 +251,12 @@ public struct TripSettingsView: View {
             // jauge comprise ; un abonné y lit « Illimité ». Sans crédit servi
             // (un serveur plus ancien), la ligne se tait plutôt que d'inventer.
             if let credit = dailyCredit {
+                // **« Résilier » est passé dans la feuille** (Hugo,
+                // 27/10/2026) : il était sous cette ligne, il prend désormais
+                // la place de « Fermer » dans la modale que la ligne ouvre —
+                // voir ``DailyCreditSheet``. Les réglages n'ont plus de bouton
+                // rouge posé au milieu de leurs lignes.
                 DailyCreditRow(credit: credit) { sheet = .dailyCredit }
-                // **Abonné : de quoi résilier, là où on lit « Illimité »**
-                // (Hugo, 18/10/2026). Hors de la ligne, qui est déjà un
-                // bouton : « Mon abonnement » du profil fait la suite.
-                if credit.isUnlimited {
-                    BrandButton(DailyCreditCopy.cancelSubscription, style: .destructive, fillsWidth: true) {
-                        onIntent(.manageSubscription)
-                    }
-                }
             }
 
             BrandRowGroup {
