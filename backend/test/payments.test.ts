@@ -1,5 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { quote as computeQuote } from "../src/services/printPricing.js";
+import {
+  billablePages,
+  FREE_ZONES_CENTS,
+  getPrintPrice,
+  quote as computeQuote,
+} from "../src/services/printPricing.js";
 import { createHarness, registerAccount, resetDatabase, type TestHarness } from "./helpers.js";
 
 /**
@@ -108,17 +113,47 @@ async function balance(): Promise<number> {
   return account.walletBalanceCents;
 }
 
-/** Ce que le serveur facturera, calculé par la même fonction que lui. */
+/**
+ * Ce que le serveur facturera, calculé par la même fonction que lui.
+ *
+ * Les « Zones libres » sont allumées par défaut sur un carnet
+ * (`memos.freeZonesEnabled`) : chaque exemplaire les porte, et les paie.
+ */
 function expectedTotal(pages: number, copies: number): number {
   return computeQuote({
     bookTitle: "x",
     pageCount: pages,
     copies,
     speed: "standard",
+    freeZonesCopies: copies,
   }).totalCents;
 }
 
 describe("payer une commande par carte", () => {
+  /**
+   * **Le montant encaissé est celui du palier**, calculé sur `billablePages`
+   * — jamais un total venu du client. 58 pages composées tombent dans le
+   * palier 46-65, soit 75,00 € l'exemplaire ; les « Zones libres », allumées
+   * par défaut sur le carnet, ajoutent 3,00 € par exemplaire.
+   */
+  it("facture à Stripe le palier de billablePages, et rien d'autre", async () => {
+    const { memo, renderId } = await printableTrip();
+
+    const body = (await placeOrder(memo.id, renderId, 2)).json<OrderBody>();
+
+    const pages = billablePages({ targetPageCount: 60, pageCount: 58 });
+    expect(pages).toBe(58);
+    const { tierId, priceCents } = getPrintPrice(pages);
+    expect(tierId).toBe("standard");
+    expect(priceCents).toBe(7_500);
+    expect(body.payment.amountCents).toBe(2 * priceCents + 2 * FREE_ZONES_CENTS);
+
+    // Et c'est bien ce montant que Stripe a reçu, pas celui de la commande
+    // relue : l'intention porte sa propre somme.
+    const stored = await harness.prisma.printOrder.findUniqueOrThrow({ where: { id: body.id } });
+    expect(stored.amountCents).toBe(body.payment.amountCents);
+  });
+
   it("ouvre une intention et laisse la commande en draft", async () => {
     const { memo, renderId } = await printableTrip();
 

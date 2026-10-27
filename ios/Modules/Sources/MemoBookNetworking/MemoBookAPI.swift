@@ -142,6 +142,18 @@ public protocol MemoBookAPI: Sendable {
         reason: SubscriptionCancellationReason?
     ) async throws -> TravellerProfile
 
+    /// **Ce que le store dit du renouvellement**, lu sur l'appareil au retour
+    /// de la feuille d'abonnements d'iOS : il est coupé.
+    ///
+    /// Apple ne laisse aucune app résilier à la place de son client, et le
+    /// serveur ne l'apprend que par sa notification — quelques secondes plus
+    /// tard, parfois jamais en bac à sable. Entre-temps, il répondait « abonné,
+    /// renouvellement armé », et le prochain chargement du profil effaçait la
+    /// résiliation qu'on venait de confirmer trois fois (Hugo, 27/10/2026).
+    /// Cette route lui fait prendre acte tout de suite ; la période payée, elle,
+    /// ne bouge pas. Rend le profil relu.
+    func reportSubscriptionRenewalStopped() async throws -> TravellerProfile
+
     /// Remet au serveur une transaction App Store — l'achat qui vient d'avoir
     /// lieu, une restauration, ou ce que StoreKit rend au lancement.
     ///
@@ -298,7 +310,8 @@ public protocol MemoBookAPI: Sendable {
     func orderQuote(
         memoId: String,
         copies: Int,
-        shippingSpeed: ShippingSpeed
+        shippingSpeed: ShippingSpeed,
+        copyOptions: [PrintedCopyOptions]
     ) async throws -> OrderQuote
 
     /// Accepte — ou refuse — d'être prévenu par WhatsApp de l'acheminement.

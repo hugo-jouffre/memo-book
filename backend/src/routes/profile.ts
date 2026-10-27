@@ -130,6 +130,17 @@ const linkDeviceBody = z.object({ deviceToken: z.string().min(1) });
  */
 const cancelSubscriptionBody = z.object({
   reason: z.string().trim().min(1).max(60).optional(),
+  /**
+   * **Le renouvellement est coupé chez le store**, tel que l'app vient de le
+   * lire sur l'appareil (`willAutoRenew()` de StoreKit, au retour de la
+   * feuille d'abonnements d'iOS).
+   *
+   * Faux ou absent : rien de neuf, la route se contente d'enregistrer la
+   * raison pour un abonnement de store. Vrai : la ligne passe en
+   * « renouvellement coupé » **tout de suite**, sans attendre la notification
+   * d'Apple — voir la route.
+   */
+  renewalStopped: z.boolean().optional(),
 });
 
 /**
@@ -499,6 +510,19 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
    * fermer d'ici ferait croire l'abonnement arrêté pendant qu'Apple continue de
    * prélever. Pour lui, cette route n'enregistre que **la raison**.
    *
+   * ⚠️ **…mais le renouvellement coupé, si** (Hugo, 27/10/2026 — « je résilie,
+   * je reviens à l'accueil et on me propose de résilier encore »). Le serveur
+   * n'apprenait la coupure que par la notification d'Apple : en attendant, il
+   * répondait « abonné, renouvellement armé », et le prochain chargement du
+   * profil effaçait la résiliation que l'écran venait d'afficher — pastille
+   * « Abonné(e) » comprise. L'app dit donc ce qu'elle a **lu sur l'appareil**
+   * (`renewalStopped`, `willAutoRenew()` de StoreKit au retour de la feuille
+   * d'iOS), et la ligne passe à `autoRenews: false` : `subscriptionStateOf` la
+   * lit `ending`, l'illimité court jusqu'à `renewsAt`, et la notification
+   * d'Apple confirmera la même chose quelques secondes plus tard. **Le statut
+   * ne bouge pas** : Apple honore la période payée, et c'est elle qui porte
+   * l'illimité.
+   *
    * **Google Play non plus** (lot B4, 22/10/2026) : l'app Android ouvre la
    * page des abonnements du Play Store (`subscription.manageUrl` du profil
    * rendu), et c'est la notification `SUBSCRIPTION_CANCELED` qui ferme la
@@ -507,13 +531,28 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
    */
   app.post("/v1/profile/subscription/cancel", async (request) => {
     const accountId = accountIdOf(request);
-    const { reason } = cancelSubscriptionBody.parse(request.body ?? {});
+    const { reason, renewalStopped } = cancelSubscriptionBody.parse(request.body ?? {});
     const living = LIVING_SUBSCRIPTION_STATUSES;
 
     const [{ count: storeKit }, { count: others }] = await Promise.all([
       context.prisma.subscription.updateMany({
-        where: { accountId, provider: { in: [...STORE_PROVIDERS] }, status: { in: [...living] } },
-        data: reason === undefined ? {} : { cancellationReason: reason },
+        where: {
+          accountId,
+          provider: { in: [...STORE_PROVIDERS] },
+          status: { in: [...living] },
+          // **Rejouable** : la date de résiliation est celle du premier geste,
+          // pas celle du dernier appel. L'app rejoue cette route au retour de
+          // la feuille d'iOS, et une date qui avance à chaque fois ferait
+          // reculer l'historique.
+          ...(renewalStopped ? { OR: [{ autoRenews: true }, { cancelledAt: null }] } : {}),
+        },
+        data: {
+          ...(reason === undefined ? {} : { cancellationReason: reason }),
+          // Le renouvellement que l'app vient de lire chez le store. La date
+          // de résiliation va avec : c'est elle qui distingue « s'en va » d'un
+          // prélèvement raté, côté app comme dans l'historique.
+          ...(renewalStopped ? { autoRenews: false, cancelledAt: new Date() } : {}),
+        },
       }),
       context.prisma.subscription.updateMany({
         where: { accountId, provider: { notIn: [...STORE_PROVIDERS] }, status: { in: [...living] } },

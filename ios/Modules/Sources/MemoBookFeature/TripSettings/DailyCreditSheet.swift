@@ -21,7 +21,7 @@ import SwiftUI
 /// (calendrier)   Le crédit se recharge chaque nuit, à minuit.
 ///
 /// [ Passer en illimité ]   ← lime : le lime ne dit que l'abonnement
-/// [ Fermer ]
+/// [ Fermer ]               ← pour un abonné, « Résilier » à sa place (27/10/2026)
 /// ```
 ///
 /// **Le bouton ne pose pas le paywall sur la feuille.** Une feuille ne
@@ -29,9 +29,13 @@ import SwiftUI
 /// remonte à ``TripSettingsView``, qui referme la feuille puis ouvre le
 /// paywall en plein écran — le motif de « En savoir plus » dans le profil.
 ///
-/// Pour un abonné, ni jauge ni bouton : « Illimité », et un paragraphe qui
+/// Pour un abonné, ni jauge ni compteur : « Illimité », et un paragraphe qui
 /// rappelle ce que l'abonnement n'ouvre pas — ses co-voyageurs non abonnés
-/// partagent toujours le crédit du voyage.
+/// partagent toujours le crédit du voyage. **Son seul bouton est « Résilier »**
+/// (Hugo, 27/10/2026) : il était posé sous la ligne « Crédit du jour » des
+/// réglages, il prend désormais la place de « Fermer », que la croix de
+/// ``BrandSheet`` rend de toute façon. Il ne résilie pas plus que
+/// ``onSubscribe`` n'achète : il mène à « Mon abonnement ».
 ///
 /// ⚠️ **Aucune maquette ne la dessine** (T248). Elle reprend les composants
 /// validés — ``BrandSheet``, ``BrandGauge``, ``BrandButton`` — et reste à
@@ -42,6 +46,12 @@ struct DailyCreditSheet: View {
     /// « Passer en illimité ». La vue des réglages ferme la feuille et ouvre le
     /// paywall ; la feuille, elle, ne présente rien.
     let onSubscribe: () -> Void
+
+    /// « Résilier », **à la place de « Fermer » pour un abonné** (Hugo,
+    /// 27/10/2026). Même contrat que ``onSubscribe`` : la vue des réglages
+    /// referme la feuille et ouvre « Mon abonnement », où la résiliation se
+    /// fait en trois confirmations. Rien ne se résilie ici.
+    let onCancelSubscription: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.subscriptionSession) private var subscriptionSession
@@ -70,21 +80,34 @@ struct DailyCreditSheet: View {
                 }
 
                 VStack(spacing: MemoBookSpacing.s) {
-                    if !credit.isUnlimited {
+                    if credit.isUnlimited {
+                        // **Un abonné lit « Résilier », pas « Fermer »**
+                        // (Hugo, 27/10/2026). Il n'y a rien d'autre à faire
+                        // ici — l'illimité est déjà ouvert —, et la croix de
+                        // ``BrandSheet`` referme la feuille comme partout
+                        // ailleurs. Le bouton ne résilie pas : il mène à
+                        // « Mon abonnement », qui demande trois fois.
+                        BrandButton(
+                            DailyCreditCopy.cancelSubscription,
+                            style: .destructive,
+                            fillsWidth: true,
+                            action: onCancelSubscription
+                        )
+                    } else {
                         BrandButton(
                             DailyCreditCopy.unlimitedCallToAction,
                             style: .accent,
                             fillsWidth: true,
                             action: onSubscribe
                         )
-                    }
 
-                    BrandButton(
-                        DailyCreditCopy.Sheet.close,
-                        style: credit.isUnlimited ? .primary : .secondary,
-                        fillsWidth: true
-                    ) {
-                        dismiss()
+                        BrandButton(
+                            DailyCreditCopy.Sheet.close,
+                            style: .secondary,
+                            fillsWidth: true
+                        ) {
+                            dismiss()
+                        }
                     }
                 }
             }
@@ -193,7 +216,7 @@ struct DailyCreditSheet: View {
         .background(MemoBookColor.background)
         .task { await model.load() }
         .sheet(isPresented: .constant(true)) {
-            DailyCreditSheet(model: model, onSubscribe: {})
+            DailyCreditSheet(model: model, onSubscribe: {}, onCancelSubscription: {})
         }
 }
 
@@ -211,7 +234,7 @@ struct DailyCreditSheet: View {
         .background(MemoBookColor.background)
         .task { await model.load() }
         .sheet(isPresented: .constant(true)) {
-            DailyCreditSheet(model: model, onSubscribe: {})
+            DailyCreditSheet(model: model, onSubscribe: {}, onCancelSubscription: {})
         }
 }
 
@@ -229,6 +252,6 @@ struct DailyCreditSheet: View {
         .background(MemoBookColor.background)
         .task { await model.load() }
         .sheet(isPresented: .constant(true)) {
-            DailyCreditSheet(model: model, onSubscribe: {})
+            DailyCreditSheet(model: model, onSubscribe: {}, onCancelSubscription: {})
         }
 }

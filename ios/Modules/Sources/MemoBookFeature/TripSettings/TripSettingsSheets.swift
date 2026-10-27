@@ -674,7 +674,8 @@ struct ClearConversationSheet: View {
             case .notifications: TripNotificationsSheet(model: model)
             case .theme: TripThemeSheet(model: model)
             case .companions: TripInviteSheet(model: model)
-            case .dailyCredit: DailyCreditSheet(model: model, onSubscribe: { sheet = nil })
+            case .dailyCredit:
+                DailyCreditSheet(model: model, onSubscribe: { sheet = nil }, onCancelSubscription: { sheet = nil })
             }
         }
         .environment(\.colorScheme, .light)

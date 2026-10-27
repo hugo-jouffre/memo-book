@@ -126,6 +126,8 @@ struct BookPagesPanel: View {
                     BrandOptionRow(
                         target.label(forTripDays: days, ratio: ratio),
                         subtitle: target.detail,
+                        value: price(of: target),
+                        valueTone: .accent,
                         isSelected: selection == target
                     ) {
                         choose(target)
@@ -154,7 +156,12 @@ struct BookPagesPanel: View {
             guard let pages = model.customisation?.targetPageCount else { return }
             customPages = Double(pages)
             isCustomising = BookPageTarget.matching(pageCount: pages, tripDays: days, ratio: ratio) == .custom
+            logPrices()
         }
+        // Le ratio se règle dans l'onglet voisin, et il déplace les cibles
+        // (18/10/2026) : les prix affichés suivent, sans rien redemander au
+        // serveur — la grille ne dépend que du nombre de pages.
+        .onChange(of: ratio) { _, _ in logPrices() }
         // La feuille refermée sans changement — « Annuler », ou un refus — :
         // le curseur revient sur la cible qui tient toujours.
         .onChange(of: model.pageTargetChange == nil) { _, isClosed in
@@ -194,6 +201,19 @@ struct BookPagesPanel: View {
         return days == 1 ? "1 jour" : "\(days) jours"
     }
 
+    /// **Ce que le curseur laisse poser** : de 20 pages à ce que le serveur
+    /// accepte de facturer — 300, ou 400 quand la configuration ouvre le
+    /// dernier palier (``PrintPricing/maxPages``).
+    ///
+    /// Le plancher de l'imprimeur est 16 pages ; le curseur part de 20 parce
+    /// qu'il avance de dix en dix, et qu'un carnet de 16 se facture de toute
+    /// façon comme un carnet de 20 — même palier. Sans grille servie, les
+    /// bornes d'avant (30 à 180), qui sont celles que le serveur sait composer.
+    private var customPageBounds: ClosedRange<Double> {
+        guard let pricing = model.printPricing else { return 30...180 }
+        return 20...Double(pricing.maxPages)
+    }
+
     /// Le nombre exact, quand aucun palier ne convient. Un pas de dix : un
     /// carnet se relie par cahiers, et « 63 pages » ne veut rien dire de plus
     /// que « 60 ».
@@ -212,7 +232,7 @@ struct BookPagesPanel: View {
 
             Slider(
                 value: $customPages,
-                in: 30...180,
+                in: customPageBounds,
                 step: 10,
                 onEditingChanged: { isEditing in
                     guard !isEditing else { return }
@@ -228,6 +248,54 @@ struct BookPagesPanel: View {
         }
         .padding(.horizontal, MemoBookSpacing.xs)
         .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    // MARK: - Le prix de chaque option
+
+    /// **Ce que coûtera le carnet**, option par option — le prix du palier de
+    /// `cible + tolérance` (``PrintPricing/displayedPrice(forTarget:)``).
+    ///
+    /// Le carnet composé tient dans sa cible à cinq pages près : annoncer le
+    /// haut de la fourchette, c'est promettre un prix qu'on ne dépassera pas.
+    ///
+    /// « Personnalisé » n'a pas de cible à lui : c'est le nombre posé au
+    /// curseur qui fait le prix, et il se met à jour à chaque cran — la grille
+    /// entière est déjà là, aucun aller-retour n'est nécessaire.
+    ///
+    /// `nil` — un serveur qui ne sert pas encore la grille, un nombre de pages
+    /// hors de ce qu'on sait facturer — : la ligne s'affiche **sans prix**.
+    /// Mieux vaut pas de prix qu'un prix faux.
+    private func price(of target: BookPageTarget) -> String? {
+        guard let pricing = model.printPricing else { return nil }
+        let amount: Decimal?
+        if target == .custom {
+            amount = pricing.price(forPages: Int(customPages))
+        } else if let pages = target.pageCount(forTripDays: days, ratio: ratio) {
+            amount = pricing.displayedPrice(forTarget: pages)
+        } else {
+            amount = nil
+        }
+        return amount?.euros
+    }
+
+    /// Le prix de chaque option, tel que l'écran vient de le calculer — en
+    /// développement seulement.
+    private func logPrices() {
+        #if DEBUG
+            guard let pricing = model.printPricing else {
+                print("[pricing] aucune grille servie : les options s'affichent sans prix")
+                return
+            }
+            for target in BookPageTarget.allCases {
+                let pages = target == .custom
+                    ? Int(customPages)
+                    : (target.pageCount(forTripDays: days, ratio: ratio) ?? 0) + pricing.tolerancePages
+                let tier = pricing.tier(forPages: pages)?.id ?? "aucun"
+                let cible = target.pageCount(forTripDays: days, ratio: ratio).map { "\($0)" } ?? "—"
+                let affiché = price(of: target) ?? "—"
+                print("[pricing] \(target.rawValue) cible=\(cible) facturé=\(pages) palier=\(tier) prix=\(affiché)")
+            }
+        #endif
     }
 
     private func choose(_ target: BookPageTarget) {
@@ -547,9 +615,14 @@ struct BookExtrasPanel: View {
                 detail: BookCopy.Customisation.quizDetail,
                 isOn: binding(\.quizEnabled, model.setQuiz)
             )
+            // Le seul extra qui se facture : 3,00 € l'exemplaire, parce qu'il
+            // ajoute du papier (maquette `3909:27845`). Le prix vient du
+            // serveur avec les réglages ; sans lui, la ligne s'affiche telle
+            // qu'avant plutôt que d'annoncer un supplément inventé.
             BrandToggleCard(
                 title: BookCopy.Customisation.freeZonesTitle,
                 detail: BookCopy.Customisation.freeZonesDetail,
+                price: model.printPricing?.freeZonesPrice.map { "+\($0.euros)" },
                 isOn: binding(\.freeZonesEnabled, model.setFreeZones)
             )
             BrandToggleCard(

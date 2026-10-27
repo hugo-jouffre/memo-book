@@ -388,6 +388,32 @@ const schema = z.object({
    */
   FCM_SERVICE_ACCOUNT_JSON: z.string().default(""),
   FCM_PROJECT_ID: z.string().default(""),
+
+  /**
+   * **Le prix du carnet au-delà de 300 pages** — `services/printPricing.ts`.
+   *
+   * Faux par défaut : la grille s'arrête à 300 pages, et un carnet plus épais
+   * se refuse plutôt que de se facturer au jugé. À `true`, le palier 301-400
+   * (145,00 €) s'ouvre, côté facture comme côté app — c'est la même grille
+   * qui est servie à l'écran « Nombre de pages ».
+   *
+   * Déclarée ici pour que toute la configuration se lise au même endroit ;
+   * `printPricing.ts` la relit dans `process.env`, parce qu'il est pur et ne
+   * reçoit pas le contexte de l'application.
+   */
+  ALLOW_OVER_300_PAGES: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+
+  /**
+   * Les journaux du calcul de prix : pages reçues, pages facturées, palier
+   * trouvé, prix en centimes. Allumés d'office en développement.
+   */
+  DEBUG_PRICING: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 });
 
 export type Env = z.infer<typeof schema> & {

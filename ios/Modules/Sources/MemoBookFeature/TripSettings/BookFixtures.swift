@@ -53,7 +53,10 @@ extension TripSettings {
             // les deux pages au-dessus d'elles (voir `BookPagesPeek`). Pour les
             // voir en simulateur, poser ici l'URL d'un PDF de carnet.
             isPrintable: true,
-            customisation: .fixture
+            customisation: .fixture,
+            // La grille que le serveur sert avec les réglages, pour que les
+            // aperçus montrent les prix de l'onglet « Nombre de pages ».
+            printPricing: .fixture
         )
     }
 
@@ -84,6 +87,31 @@ extension BookCustomisation {
             quizEnabled: true,
             freeZonesEnabled: true,
             crosswordEnabled: true
+        )
+    }
+}
+
+extension PrintPricing {
+    /// **La grille du 21/10/2026**, telle que `serializePrintPricing` la sert
+    /// — paliers fermés à 300 pages, 3,00 € pour les zones libres.
+    ///
+    /// C'est une copie d'essai, pour les aperçus seuls : en vrai, l'app ne
+    /// connaît que ce que le serveur lui dit (voir ``PrintPricing``).
+    public static var fixture: PrintPricing {
+        PrintPricing(
+            tiers: [
+                Tier(id: "compact", from: 16, to: 45, price: 55),
+                Tier(id: "standard", from: 46, to: 65, price: 75),
+                Tier(id: "detailed", from: 66, to: 85, price: 80),
+                Tier(id: "detailed-plus", from: 86, to: 100, price: 85),
+                Tier(id: "large", from: 101, to: 120, price: 105),
+                Tier(id: "large-plus", from: 121, to: 200, price: 110),
+                Tier(id: "very-large", from: 201, to: 300, price: 129),
+            ],
+            minPages: 16,
+            maxPages: 300,
+            tolerancePages: 5,
+            freeZonesPrice: 3
         )
     }
 }

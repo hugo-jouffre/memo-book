@@ -66,7 +66,7 @@ public final class OrderModel {
     private let memoId: String
     private let email: String?
     private let loadContext: (String) async throws -> OrderContext
-    private let loadQuote: (String, Int, ShippingSpeed) async throws -> OrderQuote
+    private let loadQuote: (String, Int, ShippingSpeed, [PrintedCopyOptions]) async throws -> OrderQuote
     private let submit: (String, NewPrintOrderRequest) async throws -> PlacedPrintOrder
     private let requestShareLink: (String) async throws -> URL
     private let setWhatsApp: (String, String?) async throws -> PrintOrder
@@ -106,14 +106,28 @@ public final class OrderModel {
     private struct QuoteKey: Hashable {
         let copies: Int
         let speed: ShippingSpeed
+        /// **Ce que les options changent au montant** : « Zones libres » se
+        /// facture par exemplaire qui le porte (3,00 €), et c'est le seul
+        /// extra qui coûte. Deux choix d'options qui facturent pareil
+        /// partagent donc la même réponse.
+        let freeZonesCopies: Int
+    }
+
+    /// La clé du devis courant — voir ``QuoteKey``.
+    private var quoteKey: QuoteKey {
+        QuoteKey(
+            copies: draft.copies,
+            speed: draft.shippingSpeed,
+            freeZonesCopies: draft.copyOptions.filter(\.freeZonesEnabled).count
+        )
     }
 
     public init(
         memoId: String,
         email: String? = nil,
         context: @escaping (String) async throws -> OrderContext = { _ in .fixture },
-        quote: @escaping (String, Int, ShippingSpeed) async throws -> OrderQuote = {
-            _, copies, speed in .fixture(copies: copies, speed: speed)
+        quote: @escaping (String, Int, ShippingSpeed, [PrintedCopyOptions]) async throws -> OrderQuote = {
+            _, copies, speed, _ in .fixture(copies: copies, speed: speed)
         },
         submit: @escaping (String, NewPrintOrderRequest) async throws -> PlacedPrintOrder = {
             memoId, request in
@@ -282,6 +296,9 @@ public final class OrderModel {
         forCopyAt position: Int
     ) {
         draft.setOption(option, to: isOn, forCopyAt: position)
+        // « Zones libres » se facture (27/10/2026) : le récapitulatif doit
+        // suivre le geste, comme il suit le nombre d'exemplaires.
+        refreshQuote()
     }
 
     public func followsFirstCopy(_ position: Int) -> Bool {
@@ -290,6 +307,9 @@ public final class OrderModel {
 
     public func setFollowsFirstCopy(_ follows: Bool, forCopyAt position: Int) {
         draft.setFollowsFirstCopy(follows, forCopyAt: position)
+        // Recopier le premier exemplaire peut allumer ou éteindre ses zones
+        // libres : même raison que ci-dessus.
+        refreshQuote()
     }
 
     // MARK: - Étape 4 — la rapidité
@@ -304,7 +324,7 @@ public final class OrderModel {
 
     /// Le devis du couple choisi, s'il est déjà arrivé.
     public var quote: OrderQuote? {
-        quotes[QuoteKey(copies: draft.copies, speed: draft.shippingSpeed)]
+        quotes[quoteKey]
     }
 
     /// Demande le récapitulatif du couple courant, sauf s'il est déjà en cache.
@@ -312,7 +332,7 @@ public final class OrderModel {
     /// Appelé à **chaque** changement d'exemplaires ou de rapidité, donc bien
     /// avant l'étape 5 : quand on y arrive, la réponse est là.
     public func refreshQuote() {
-        let key = QuoteKey(copies: draft.copies, speed: draft.shippingSpeed)
+        let key = quoteKey
         quoteTask?.cancel()
         guard quotes[key] == nil else {
             quoteError = nil
@@ -325,7 +345,7 @@ public final class OrderModel {
         quoteTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let loaded = try await loadQuote(memoId, key.copies, key.speed)
+                let loaded = try await loadQuote(memoId, key.copies, key.speed, draft.copyOptions)
                 guard !Task.isCancelled else { return }
                 quotes[key] = loaded
                 quoteError = nil

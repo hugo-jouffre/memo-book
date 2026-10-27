@@ -43,25 +43,40 @@ public struct BrandOptionRow: View {
     /// 18/09/2026 — la feuille « Genre », puis « Rythme du récit »).
     public static let lingerBeforeDismiss: Duration = .milliseconds(350)
 
+    /// De quelle encre s'écrit la valeur posée en bout de ligne.
+    public enum ValueTone: Sendable {
+        /// Le gris des précisions — un délai, un état, un supplément de
+        /// livraison. C'est le ton par défaut.
+        case muted
+        /// Le vert de la marque, pour un **prix qu'on vient lire** : c'est
+        /// ainsi que la maquette écrit le prix des quatre options de l'onglet
+        /// « Nombre de pages » (`3904:24325`).
+        case accent
+    }
+
     private let title: String
     private let subtitle: String?
     private let value: String?
+    private let valueTone: ValueTone
     private let isSelected: Bool
     private let action: () -> Void
 
     /// - Parameter value: ce que l'option coûte, ou son état — « Inclus »,
     ///   « 9,90 € », « disponible ». Posé **avant** la pastille de sélection :
     ///   on lit ce qu'on choisit, puis ce que ça change, puis ce qui est coché.
+    /// - Parameter valueTone: l'encre de cette valeur — voir ``ValueTone``.
     public init(
         _ title: String,
         subtitle: String? = nil,
         value: String? = nil,
+        valueTone: ValueTone = .muted,
         isSelected: Bool,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.subtitle = subtitle
         self.value = value
+        self.valueTone = valueTone
         self.isSelected = isSelected
         self.action = action
     }
@@ -98,7 +113,7 @@ public struct BrandOptionRow: View {
                 if let value {
                     Text(value)
                         .font(MemoBookFont.label)
-                        .foregroundStyle(MemoBookColor.inkMuted)
+                        .foregroundStyle(valueTone == .accent ? MemoBookColor.action : MemoBookColor.inkMuted)
                         .monospacedDigit()
                         // Le prix ne s'enroule pas et ne se rogne pas : il
                         // cède la largeur au libellé, qui sait s'enrouler.
