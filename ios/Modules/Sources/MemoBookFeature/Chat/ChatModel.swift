@@ -340,6 +340,9 @@ public final class ChatModel {
             thread = loaded
             cursor = loaded.now
             errorMessage = nil
+            // Le bonjour de MEMO **arrive** au lieu d'être déjà là — voir
+            // ``revealOpening(of:)``.
+            let opening = openingToReveal(in: loaded)
             // Ce que le serveur rend, il l'a reçu : son crédit le compte déjà.
             // Et le téléphone le garde, pour rouvrir le fil sans réseau.
             if !isOffline {
@@ -395,9 +398,49 @@ public final class ChatModel {
             // avant cette lecture : son crédit ne passe pas devant elle.
             if let latestDelivery { markDelivery(latestDelivery.replayed) }
             watchDeliveries()
+
+            // En dernier : le reste du chargement n'a pas à attendre la pause.
+            if let opening { await revealOpening(opening) }
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// **Le bonjour de MEMO, sur un fil qu'on ouvre pour la première fois.**
+    ///
+    /// Le serveur le pose dès la première lecture du fil
+    /// (`ensureOpening`, `routes/chat.ts`) : sans ça, un carnet neuf s'ouvrait
+    /// sur un fil vide, et l'app y dessinait son propre mot d'accueil — qui
+    /// disait presque la même chose que la bulle d'ouverture (Hugo,
+    /// 28/10/2026 : « deux informations se contredisent »).
+    ///
+    /// Mais une bulle déjà posée quand l'écran se dessine n'a l'air de rien :
+    /// elle est là, comme un décor. Celle-ci **arrive** — le mot d'accueil, la
+    /// bulle d'écriture, puis le bonjour qui prend sa place —, exactement
+    /// comme arrivent les réponses de MEMO (``apply(_:)``).
+    ///
+    /// `nil` dès qu'il y a autre chose dans le fil : on ne rejoue pas un
+    /// bonjour à chaque ouverture, et une conversation entamée s'ouvre sur ce
+    /// qu'on s'est dit.
+    private func openingToReveal(in thread: ChatThread) -> ChatMessage? {
+        guard !isOffline, thread.messages.count == 1 else { return nil }
+        let only = thread.messages[0]
+        return only.author.isTraveller ? nil : only
+    }
+
+    /// Retire la bulle, pose la bulle d'écriture le temps de sa pause, puis la
+    /// remet. Interrompue — on quitte l'écran —, elle la remet quand même :
+    /// un fil ne se garde pas amputé de son premier message.
+    private func revealOpening(_ opening: ChatMessage) async {
+        guard thread != nil else { return }
+        thread?.messages = []
+        turn = .thinking
+
+        let pause = Duration.milliseconds(opening.pauseMilliseconds ?? 700)
+        try? await Task.sleep(for: max(pause, Self.minimumThinking))
+
+        thread?.messages = [opening]
+        if turn == .thinking { turn = .idle }
     }
 
     /// Suit ce que la file fait des tours partis par elle — le vocal de

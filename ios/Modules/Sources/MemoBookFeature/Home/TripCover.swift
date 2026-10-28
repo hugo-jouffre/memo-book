@@ -24,14 +24,13 @@ struct TripCover: View {
             .accessibilityHidden(true)
     }
 
+    /// ``RemoteImage`` et non `AsyncImage` (28/10/2026) : une couverture déjà
+    /// vue se redessinait depuis son motif à chaque défilement de l'accueil et
+    /// à chaque retour sur l'écran.
     @ViewBuilder
     private var artwork: some View {
-        AsyncImage(url: trip.coverPhotoUrl) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                TripCoverPlaceholder(seed: trip.id)
-            }
+        RemoteImage(url: trip.coverPhotoUrl) {
+            TripCoverPlaceholder(seed: trip.id)
         }
     }
 

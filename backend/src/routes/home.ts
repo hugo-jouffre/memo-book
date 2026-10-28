@@ -1,5 +1,4 @@
 import type { FastifyInstance } from "fastify";
-import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { normalizeAccessCode } from "../lib/accessCode.js";
@@ -10,6 +9,7 @@ import { readDailyCredits, type DailyCredit } from "../services/dailyCredit.js";
 import { createMemoFor, isTakenId, visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
+import { coverPhotoInclude } from "./tripPhotos.js";
 import { effectiveStage, stageFromDates } from "../services/tripStage.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import {
@@ -52,18 +52,6 @@ const idParams = z.object({ id: z.string().min(1).max(64) });
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Le tri qui élit la couverture, hors du `as const` de ``tripInclude`` : un
- * tableau figé en lecture seule ne rentre pas dans le type de Prisma.
- */
-const coverPhotoOrder: Prisma.EntryOrderByWithRelationInput[] = [
-  // Les paysages d'abord (`true` avant `false` et `null`), puis la plus récente.
-  { photoIsLandscape: { sort: "desc", nulls: "last" } },
-  { capturedAt: "desc" },
-  { createdAt: "desc" },
-  { id: "desc" },
-];
-
 /** Ce dont `serializeTrip` a besoin, et rien de plus. */
 const tripInclude = {
   members: {
@@ -71,33 +59,12 @@ const tripInclude = {
     include: { account: true },
     orderBy: { invitedAt: "asc" as const },
   },
-  // **La photo du voyage quand aucune n'a été choisie** : la plus récente de
-  // ses photos **paysage** (`serializeTrip`) — et, faute de paysage, la plus
-  // récente de ses photos tout court (Hugo, 18/10/2026 : « il faut que les
-  // photos envoyées dans le chat alimentent la photo qui illustre le
-  // voyage »). Un voyage raconté en portraits gardait son motif ; il prend
-  // désormais sa dernière photo, recadrée au centre.
-  //
-  // Paysage d'abord (Hugo, 15/10/2026) : cette couverture-là est la carte du
-  // voyage, large, et une photo verticale s'y recadre en une bande prise au
-  // milieu. Le voyageur peut toujours en choisir une à la main. ⚠️ À ne pas confondre avec la couverture **imprimée** du
-  // carnet, qui est verticale et suit son propre parcours (`routes/covers.ts`).
-  //
-  // `photoIsLandscape` plutôt qu'une comparaison de deux colonnes, que Prisma
-  // ne sait pas faire ; il est écrit à l'arrivée de la photo, avec ses
-  // dimensions (`services/photoOrientation.ts`).
-  //
-  // **Les trois tris, et pas seulement le premier** : six photos envoyées
-  // dans un même message partagent leur `capturedAt` à la milliseconde, et
-  // `ORDER BY capturedAt DESC LIMIT 1` laissait alors Postgres trancher — la
-  // couverture changeait d'une requête à l'autre. `createdAt` puis `id`
-  // rendent le choix stable.
-  entries: {
-    where: { kind: "photo" as const, media: { isNot: null } },
-    orderBy: coverPhotoOrder,
-    take: 1,
-    select: { media: { select: { storageKey: true, cdnUrl: true } } },
-  },
+  // **La photo du voyage quand aucune n'a été choisie** : la règle vit dans
+  // `tripPhotos.ts`, et toutes les routes la lisent là — la conversation
+  // comprise, qui ne l'élisait pas (28/10/2026). ⚠️ À ne pas confondre avec la
+  // couverture **imprimée** du carnet, verticale, qui suit son propre parcours
+  // (`routes/covers.ts`).
+  ...coverPhotoInclude,
 } as const;
 
 /**

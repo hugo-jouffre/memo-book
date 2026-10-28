@@ -211,6 +211,10 @@ public final class AppDependencies {
     /// serait le seul geste irréversible du lot.
     public func forgetAccountContent() async {
         await content.clearAll()
+        // Les photos gardées décodées en mémoire (couvertures, en-tête du
+        // fil) : elles appartiennent aux voyages de ce compte — voir
+        // ``RemoteImageCache``.
+        RemoteImageCache.shared.clear()
         // Le dernier crédit du jour que chaque conversation a lu porte
         // l'abonnement de ce compte : il ne suit pas le prochain. Ici, et donc
         // juste avant `SubscriptionSession.reset()` — déconnexion, session

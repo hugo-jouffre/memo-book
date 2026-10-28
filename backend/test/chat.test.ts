@@ -284,11 +284,24 @@ const memoBubbles = (thread: ChatThreadJson) =>
   thread.messages.filter((message) => message.author === "memo" && message.body.kind === "text");
 
 describe("lire le fil", () => {
-  it("rend un fil vide avec les puces d'ouverture, et dit qui peut l'effacer", async () => {
+  /**
+   * **MEMO dit bonjour dès qu'on ouvre la conversation** (Hugo, 28/10/2026).
+   * Sa bulle n'était posée qu'au premier tour du voyageur : un carnet neuf
+   * s'ouvrait sur un fil vide, où l'app dessinait son propre mot d'accueil —
+   * qui disait presque la même chose, et la contredisait en partie puisque
+   * l'ouverture demande ensuite le contexte du voyage.
+   */
+  it("s'ouvre sur le bonjour de MEMO, avec les puces d'ouverture, et dit qui peut l'effacer", async () => {
     const memo = await seedTrip(owner.accountId);
     const thread = await readThread(memo.id);
 
-    expect(thread.messages).toEqual([]);
+    expect(thread.messages).toHaveLength(1);
+    expect(thread.messages[0]?.author).toBe("memo");
+    expect(thread.messages[0]?.body).toEqual({ kind: "text", text: OPENING_TEXT });
+
+    // Une seule fois : rouvrir le fil ne redit pas bonjour.
+    const again = await readThread(memo.id);
+    expect(again.messages).toHaveLength(1);
     // Une seule puce : le contexte du voyage d'abord (Paul, 28/09/2026).
     expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["context"]);
     expect(thread.suggestions[0]?.label).toBe(SUGGESTIONS.context.label);
