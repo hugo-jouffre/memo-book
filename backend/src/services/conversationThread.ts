@@ -12,7 +12,12 @@ import {
   type CurrentEntry,
   type MemoResponder,
 } from "./conversation.js";
-import { OPENING_PAUSE_MS, SUGGESTION_SETS, validationQuestionFor } from "./conversationCopy.js";
+import {
+  OPENING_PAUSE_MS,
+  SUGGESTION_SETS,
+  splitQuestionFor,
+  validationQuestionFor,
+} from "./conversationCopy.js";
 import type { RedactedNeighbour } from "./redaction.js";
 import { contextVoiceOf } from "./tripContext.js";
 
@@ -397,6 +402,57 @@ export function conversationStateOf(memo: Pick<Memo, "conversationState">): Conv
  * `doubts` : les passages que l'écrivain n'a pas compris. La bulle les cite,
  * dans la même question (`validationQuestionFor`).
  */
+/**
+ * **« J'ai entendu plusieurs moments : je les sépare ? »** (Hugo,
+ * 28/10/2026).
+ *
+ * Posée à la place de « Il te convient ? » quand l'écrivain a trouvé où
+ * couper : si l'on sépare, les textes changent entièrement, et valider
+ * d'abord ne servirait à rien. La question **nomme** les moments — c'est ce
+ * qui dit où la coupe tombe.
+ *
+ * Elle mène aux mêmes puces que la question de la longueur
+ * (``LONG_MESSAGE``), et donc au même effet : le découpage a lieu dans le job
+ * de conversation, à la réponse.
+ *
+ * - Returns: `true` quand la question a été posée — l'appelant ne demande
+ *   alors pas la validation.
+ */
+export async function askToSplit(
+  db: Db,
+  entryId: string,
+  moments: readonly { title: string }[],
+): Promise<boolean> {
+  if (moments.length < 2) return false;
+
+  const card = await db.chatMessage.findFirst({
+    where: { entryId, author: "memo", kind: "transcript" },
+    include: { entry: { select: { validatedAt: true } } },
+    orderBy: { seq: "desc" },
+  });
+  // Un souvenir déjà validé ne se redécoupe pas : on ne revient pas sur ce
+  // qui est réglé.
+  if (!card || card.entry?.validatedAt) return false;
+
+  const question = splitQuestionFor(moments.map((moment) => moment.title));
+  await db.chatMessage.create({
+    data: {
+      memoId: card.memoId,
+      author: "memo",
+      kind: "text",
+      text: question,
+      replyToId: card.replyToId,
+      stepId: card.stepId,
+      pauseMilliseconds: pauseBeforeSaying(question),
+      model: "scripted",
+      // `asksSplitFor` : c'est lui qui dit **quel** souvenir la réponse
+      // découpe, quand elle arrivera.
+      payload: { suggestions: [...SUGGESTION_SETS.split], asksSplitFor: entryId },
+    },
+  });
+  return true;
+}
+
 export async function askValidation(db: Db, entryId: string, doubts: readonly string[] = []): Promise<boolean> {
   const card = await db.chatMessage.findFirst({
     where: { entryId, author: "memo", kind: "transcript" },
