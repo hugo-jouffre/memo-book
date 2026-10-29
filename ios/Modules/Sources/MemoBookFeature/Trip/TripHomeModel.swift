@@ -204,8 +204,13 @@ public final class TripHomeModel {
                 errorMessage = nil
                 confirm("Récits séparés.")
             } catch {
-                errorMessage = error.localizedDescription
+                // **Le bandeau après la relecture, et pas avant** : `load()`
+                // efface `errorMessage` quand il réussit, et l'erreur posée
+                // d'abord disparaissait aussitôt — le refus ne se voyait nulle
+                // part. On relit donc le voyage, puis on dit ce qui s'est
+                // passé.
                 await load()
+                errorMessage = error.localizedDescription
             }
         }
     }

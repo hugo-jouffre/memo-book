@@ -73,7 +73,12 @@ final class TripStepSeparationTests: XCTestCase {
     }
 
     /// Un refus ne laisse pas l'écran sur un découpage inventé : il relit le
-    /// voyage et dit ce qui s'est passé.
+    /// voyage et **dit** ce qui s'est passé.
+    ///
+    /// L'ordre compte, et c'est ce que ce test tient : `load()` efface
+    /// `errorMessage` quand il réussit, donc le bandeau se pose **après** la
+    /// relecture. Posé avant, il disparaissait aussitôt et le refus ne se
+    /// voyait nulle part.
     func testAFailureRereadsTheTrip() async {
         struct Refused: Error {}
         let grouped = step("a", number: 1, stories: 2)
