@@ -472,6 +472,11 @@ export function serializeTripStep(
     // (`DELETE /v1/entries/:id`) ; sans eux, elle ne paraît pas. Le dernier
     // parti, l'étape disparaît (`services/tripFacts.ts`).
     entryIds: (step.entries ?? []).map((entry) => entry.id),
+    // **Combien de récits l'étape réunit** (28/10/2026). Un, le cas courant.
+    // Plusieurs : la rédaction a jugé qu'ils se prolongeaient, et la carte
+    // propose alors de les séparer
+    // (`POST /v1/trips/:id/steps/:stepId/separate`).
+    storyCount: (step.entries ?? []).filter((entry) => entry.kind !== "photo").length,
   };
 }
 

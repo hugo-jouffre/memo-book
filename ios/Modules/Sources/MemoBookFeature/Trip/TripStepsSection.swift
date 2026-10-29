@@ -149,13 +149,28 @@ struct TripStepsSection: View {
                         step: step,
                         onOpen: { onOpenStep(step) },
                         onValidate: { onValidateStep(step) },
-                        onDelete: model.canDeleteMemories(of: step) ? { onDeleteStep(step) } : nil
+                        onDelete: model.canDeleteMemories(of: step) ? { onDeleteStep(step) } : nil,
+                        // « Séparer ces récits » : seulement sur une étape que
+                        // la rédaction a réunie (28/10/2026).
+                        onSeparate: model.canSeparateStories(of: step)
+                            ? { model.separateStories(of: step) }
+                            : nil
                     )
                 }
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)
         }
     }
+}
+
+/// **« Séparer ces récits »** — le geste du tiroir d'une étape que la
+/// rédaction a réunie (Hugo, 28/10/2026).
+///
+/// ⚠️ **Aucune maquette ne le dessine** : il reprend le tiroir existant et son
+/// vocabulaire, et reste à valider dans Figma.
+enum SeparateStepCopy {
+    /// Le libellé du geste, lu par VoiceOver et affiché dans le tiroir.
+    static let action = "Séparer ces récits"
 }
 
 /// Une étape : sa vignette, son rang, ses dates, et qui y était.
@@ -168,12 +183,18 @@ struct TripStepsSection: View {
 /// - **« Valider cette étape »**, tant qu'elle ne l'est pas. Une fois validée,
 ///   une coche discrète le dit à la place — même parti pris que « Ça me
 ///   convient » sur un souvenir (`ChatBubbles`).
+/// - **« Séparer ces récits »** (Hugo, 28/10/2026), seulement sur une étape
+///   qui en réunit plusieurs : la rédaction les a jugés inséparables, et c'est
+///   le voyageur qui tranche en dernier.
 struct TripStepCard: View {
     let step: TripStep
     let onOpen: () -> Void
     let onValidate: () -> Void
     /// `nil` : rien à effacer qu'on sache désigner — pas de croix.
     var onDelete: (() -> Void)? = nil
+
+    /// `nil` : l'étape ne réunit qu'un récit, il n'y a rien à séparer.
+    var onSeparate: (() -> Void)? = nil
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var thumbnailSide: CGFloat = 76
@@ -197,6 +218,19 @@ struct TripStepCard: View {
                     tint: MemoBookColor.valid,
                     label: "Valider cette étape",
                     action: onValidate
+                )
+            )
+        }
+        if let onSeparate {
+            actions.append(
+                BrandSwipeAction(
+                    // ⚠️ `IconLayers` faute de ciseaux dans le jeu de marque :
+                    // des calques qu'on écarte disent à peu près la même
+                    // chose. À reprendre quand Figma dessinera le geste.
+                    icon: "IconLayers",
+                    tint: MemoBookColor.action,
+                    label: SeparateStepCopy.action,
+                    action: onSeparate
                 )
             )
         }

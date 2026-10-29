@@ -364,6 +364,21 @@ export interface RedactionResult {
    * rédaction. Vide le plus souvent.
    */
   doubts: string[];
+  /**
+   * **Ce souvenir continue le précédent** : les deux ne font qu'une étape du
+   * carnet (Hugo, 28/10/2026 — « 1 message n'est pas toujours égal à
+   * 1 étape »).
+   *
+   * C'est l'écrivain qui tranche, parce qu'il est le seul à lire les deux :
+   * il reçoit déjà les souvenirs voisins (``RedactedNeighbour``). « Et sinon,
+   * le soir, on est retournés au même bar » prolonge le récit de la journée ;
+   * « le lendemain on a pris la route du sud » en ouvre un autre.
+   *
+   * Faux le plus souvent : un souvenir fait son étape, et c'est la règle du
+   * fil comme de l'accueil.
+   */
+  continuesPrevious: boolean;
+
   /** Modèle qui a produit le texte, tracé sur l'entrée. */
   model: string;
 }
@@ -685,6 +700,16 @@ const REDACTION_SCHEMA = {
         "Vide le plus souvent — un mot que le contexte rend certain se corrige sans doute.",
       items: { type: "string" },
     },
+    continuesPrevious: {
+      type: "boolean",
+      description:
+        "true UNIQUEMENT si ce souvenir prolonge le souvenir précédent (« Ce qui a été raconté " +
+        "avant ») : le même moment, la même scène, repris là où il s'était arrêté — « et sinon, " +
+        "le soir, on est retournés au même bar », « j'ai oublié de dire que… ». Les deux ne " +
+        "feront alors qu'une seule étape du carnet. false dans tous les autres cas, et c'est le " +
+        "cas le plus fréquent : un nouveau lieu, un autre jour, une autre scène ouvrent une " +
+        "étape, même au même endroit. Sans souvenir précédent, toujours false.",
+    },
   },
   required: [
     "understanding",
@@ -697,6 +722,7 @@ const REDACTION_SCHEMA = {
     "coherenceSheet",
     "insights",
     "doubts",
+    "continuesPrevious",
   ],
   additionalProperties: false,
 } as const;
@@ -1080,6 +1106,10 @@ export class FakeRedactor implements Redactor {
 
     return {
       understanding: { heart: firstSentence, tone: "", readings: [] },
+      // Le faux rédacteur ne juge pas ce qui tient ensemble : chaque souvenir
+      // fait son étape, comme avant le 28/10/2026. Les tests qui veulent un
+      // groupement posent la colonne eux-mêmes.
+      continuesPrevious: false,
       title: firstSentence.slice(0, 60).replace(/[.!?…]+$/, ""),
       text: withPrecisions.slice(0, 420),
       // Le faux rédacteur ne lit pas le temps dans le vocal : il n'en met pas.

@@ -223,6 +223,11 @@ export async function redactEntry(
         data: {
           redactedText: result.text,
           suggestedTitle: result.title,
+          // **Ce récit prolonge le précédent** : les deux ne feront qu'une
+          // étape (28/10/2026). L'écrivain seul peut le dire, il lit les
+          // deux. Le découpage, lui, se refait tout seul derrière
+          // (`refreshTripFacts`).
+          continuesPreviousStep: result.continuesPrevious,
           weatherKey: result.weatherKey,
           funFact: result.funFact,
           funFactTitle: result.funFactTitle,

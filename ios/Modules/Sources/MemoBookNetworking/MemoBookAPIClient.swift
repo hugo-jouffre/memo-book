@@ -182,6 +182,14 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func separateStep(tripId: String, stepId: String) async throws -> TripDetail {
+        try await send(
+            method: "POST",
+            path: "/v1/trips/\(tripId)/steps/\(stepId)/separate",
+            credential: .session
+        )
+    }
+
     public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {
         try await send(method: "POST", path: "/v1/trips", encodableBody: draft, credential: .session)
     }

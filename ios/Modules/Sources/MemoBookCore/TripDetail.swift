@@ -98,6 +98,16 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
     /// paraît pas, faute de savoir quoi effacer.
     public let entryIds: [String]?
 
+    /// **Combien de récits cette étape réunit** (Hugo, 28/10/2026 — « 1
+    /// message n'est pas toujours égal à 1 étape »).
+    ///
+    /// Un, le cas courant. Plusieurs quand la rédaction a jugé qu'ils se
+    /// prolongeaient — « et sinon, le soir, on est retournés au même bar » —
+    /// et la carte propose alors de les séparer. Les photos ne comptent pas :
+    /// elles illustrent, elles ne racontent pas. `nil` d'un serveur qui ne le
+    /// dit pas encore : la carte ne propose rien.
+    public let storyCount: Int?
+
     public init(
         id: String,
         number: Int,
@@ -109,7 +119,8 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
         photoUrl: URL? = nil,
         transport: TripTransport? = nil,
         validatedAt: Date? = nil,
-        entryIds: [String]? = nil
+        entryIds: [String]? = nil,
+        storyCount: Int? = nil
     ) {
         self.id = id
         self.number = number
@@ -122,10 +133,14 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
         self.transport = transport
         self.validatedAt = validatedAt
         self.entryIds = entryIds
+        self.storyCount = storyCount
     }
 
     /// La croix du tiroir s'offre : on sait quels souvenirs effacer.
     public var hasDeletableMemories: Bool { !(entryIds ?? []).isEmpty }
+
+    /// L'étape réunit plusieurs récits : on peut proposer de les séparer.
+    public var groupsSeveralStories: Bool { (storyCount ?? 1) > 1 }
 
     /// Cette étape, validée. Sert la mise à jour optimiste de « Valider cette
     /// étape » côté app, et les jeux d'essai qui simulent la même réponse.
@@ -141,7 +156,8 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
             photoUrl: photoUrl,
             transport: transport,
             validatedAt: date,
-            entryIds: entryIds
+            entryIds: entryIds,
+            storyCount: storyCount
         )
     }
 }
