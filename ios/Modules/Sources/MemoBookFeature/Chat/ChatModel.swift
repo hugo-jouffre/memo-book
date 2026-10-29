@@ -431,15 +431,26 @@ public final class ChatModel {
     /// Retire la bulle, pose la bulle d'écriture le temps de sa pause, puis la
     /// remet. Interrompue — on quitte l'écran —, elle la remet quand même :
     /// un fil ne se garde pas amputé de son premier message.
+    ///
+    /// ⚠️ **Elle ne retire qu'elle.** Vider le fil puis le réécrire emportait
+    /// ce que le chargement venait d'y poser : les tours qui attendaient le
+    /// réseau sur le disque, posés en bulles « en cours d'envoi » quelques
+    /// lignes plus haut dans ``load()``. On ouvrait alors le fil sur le
+    /// bonjour seul, et ce qu'on avait dit dans le métro avait disparu.
     private func revealOpening(_ opening: ChatMessage) async {
         guard thread != nil else { return }
-        thread?.messages = []
+        thread?.messages.removeAll { $0.id == opening.id }
         turn = .thinking
 
         let pause = Duration.milliseconds(opening.pauseMilliseconds ?? 700)
         try? await Task.sleep(for: max(pause, Self.minimumThinking))
 
-        thread?.messages = [opening]
+        // `insert` et non un `append` : la bulle reprend son rang, devant ce
+        // qui attendait déjà. Et rien si elle est revenue entre-temps — un
+        // sondage a pu la reposer pendant la pause.
+        if thread?.messages.contains(where: { $0.id == opening.id }) == false {
+            insert(opening)
+        }
         if turn == .thinking { turn = .idle }
     }
 
