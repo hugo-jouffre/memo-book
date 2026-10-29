@@ -735,8 +735,13 @@ describe("découper un récit en plusieurs étapes (Hugo, 28/10/2026)", () => {
     // La proposition est consommée : la question ne se repose pas.
     expect(after[0]?.splitSuggestion).toBeNull();
 
-    // Les deux repassent par la rédaction.
-    expect(after.every((row) => row.redactionStatus === "pending")).toBe(true);
+    // **Chaque part a son texte**, écrit depuis elle seule. On regarde le
+    // texte et non le statut : le banc exécute les jobs, donc la rédaction
+    // est déjà repassée quand on arrive ici.
+    const texts = after.map((row) => row.redactedText ?? row.transcript ?? "");
+    expect(texts[0]).toContain("Colisée");
+    expect(texts[1]).toContain("Naples");
+    expect(texts[0]).not.toContain("Naples");
 
     // Chaque part a sa fiche dans le fil, et MEMO dit ce qu'il a fait.
     const thread = await readThread(memo.id);
