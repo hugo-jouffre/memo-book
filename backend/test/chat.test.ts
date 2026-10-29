@@ -747,7 +747,9 @@ describe("découper un récit en plusieurs étapes (Hugo, 28/10/2026)", () => {
     const thread = await readThread(memo.id);
     const cards = thread.messages.filter((message) => message.body.kind === "transcript");
     expect(cards).toHaveLength(2);
-    expect(memoBubbles(thread).at(-1)?.body).toEqual({
+    // Dans le fil, pas forcément en dernier : les deux rédactions repassent
+    // derrière et posent chacune son « Il te convient ? ».
+    expect(memoBubbles(thread).map((message) => message.body)).toContainEqual({
       kind: "text",
       text: splitAccepted(2),
     });
