@@ -176,7 +176,8 @@ struct ChatMessageRow: View {
             ChatTranscriptBubble(
                 card: card,
                 isExpanded: isExpanded,
-                onToggleExpansion: onToggleExpansion
+                onToggleExpansion: onToggleExpansion,
+                model: model
             )
 
         case .photos(let attachments):
@@ -778,6 +779,45 @@ struct ChatTranscriptBubble: View {
     let card: TranscriptCard
     let isExpanded: Bool
     let onToggleExpansion: () -> Void
+    @Bindable var model: ChatModel
+
+    /// **Quelle version on regarde** (Hugo, 28/10/2026). Un état de la vue et
+    /// non du souvenir : regarder la transcription littérale ne change rien
+    /// au carnet tant qu'on n'a pas dit de la garder.
+    ///
+    /// Il part de ce qui est gardé : une fiche qui imprime sa littérale
+    /// s'ouvre dessus.
+    @State private var showsRawText: Bool?
+
+    /// Ce qu'on regarde : le choix de la vue, sinon ce que le souvenir garde.
+    private var isShowingRawText: Bool { showsRawText ?? card.prefersTranscript }
+
+    /// Le texte affiché : l'un ou l'autre, selon la bascule. Sans deux
+    /// versions à comparer, c'est celui qui part au carnet, et rien d'autre.
+    private var shownText: String? {
+        guard card.hasTwoVersions else { return card.text }
+        return isShowingRawText ? card.rawText : card.writtenText
+    }
+
+    /// La version regardée est-elle déjà celle qui part au carnet ?
+    private var isShownVersionKept: Bool { isShowingRawText == card.prefersTranscript }
+
+    /// Les deux versions d'un souvenir, pour la bascule.
+    private enum Version: String, Hashable, Identifiable, CaseIterable {
+        /// Le texte rédigé par l'IA — celui que le carnet imprime par défaut.
+        case written
+        /// La transcription littérale, mot pour mot.
+        case raw
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .written: ChatCopy.Transcript.written
+            case .raw: ChatCopy.Transcript.raw
+            }
+        }
+    }
 
     @ScaledMetric(relativeTo: .caption) private var glyph: CGFloat = MemoBookSpacing.snug
 
@@ -795,7 +835,7 @@ struct ChatTranscriptBubble: View {
     private static let expandableLength = Int(Double(collapsedLineLimit) * 35 * 1.15)
 
     private var isExpandable: Bool {
-        (card.text?.count ?? 0) > Self.expandableLength
+        (shownText?.count ?? 0) > Self.expandableLength
     }
 
     /// Les trois temps de la fiche — `docs/conversation.md` § 5. Une fiche sans
@@ -840,7 +880,7 @@ struct ChatTranscriptBubble: View {
         case .listening: state = ChatCopy.transcriptPending
         case .writing: state = "\(ChatCopy.transcriptWriting) \(card.text ?? "")"
         case .failed: state = "\(ChatCopy.transcriptFailed) \(card.text ?? "")"
-        case .ready: state = [card.heading, card.text].compactMap { $0 }.joined(separator: ". ")
+        case .ready: state = [isShowingRawText ? nil : card.heading, shownText].compactMap { $0 }.joined(separator: ". ")
         }
         let validated = card.isValidated ? " \(ChatCopy.Voice.validated)." : ""
         return "\(day). \(state)\(validated)"
@@ -943,15 +983,74 @@ struct ChatTranscriptBubble: View {
 
         case .ready:
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-                if let title = card.heading, !title.isEmpty {
+                // Le titre est celui du récit **rédigé** : il ne veut rien
+                // dire au-dessus de la transcription brute.
+                if let title = card.heading, !title.isEmpty, !isShowingRawText {
                     Text(title)
                         .font(MemoBookFont.sectionTitle)
                         .foregroundStyle(MemoBookColor.ink)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
                 }
-                narrative(card.text ?? "", tint: MemoBookColor.ink)
+                // La brute en gris, comme pendant la rédaction : c'est ce
+                // qu'on a dit, pas ce que le carnet racontera — sauf si on
+                // choisit de la garder.
+                narrative(
+                    shownText ?? "",
+                    tint: isShowingRawText && !card.prefersTranscript
+                        ? MemoBookColor.inkMuted
+                        : MemoBookColor.ink
+                )
+                versions
             }
+        }
+    }
+
+    /// **Les deux versions, et ce qu'on en fait** — la bascule, le choix, la
+    /// relance (Hugo, 28/10/2026).
+    ///
+    /// Rien de tout ça sur une fiche qui n'a qu'un texte : un souvenir écrit
+    /// au clavier n'a pas de « version brute » à comparer, et une fiche d'un
+    /// serveur plus ancien ne la porte pas.
+    @ViewBuilder
+    private var versions: some View {
+        if let entryId = card.entryId, card.hasTwoVersions {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                BrandSegmentedPicker(
+                    Version.allCases,
+                    selection: Binding(
+                        get: { isShowingRawText ? Version.raw : Version.written },
+                        set: { showsRawText = $0 == .raw }
+                    ),
+                    size: .compact
+                ) { $0.label }
+
+                HStack(spacing: MemoBookSpacing.s) {
+                    // « Garder celle-ci » ne se propose que sur la version
+                    // qu'on ne garde pas déjà : sur l'autre, il ne ferait rien.
+                    if !isShownVersionKept {
+                        BrandButton(ChatCopy.Transcript.keepThisOne, style: .link, size: .small) {
+                            model.keepTranscript(isShowingRawText, forEntry: entryId)
+                        }
+                    }
+
+                    BrandButton(ChatCopy.Transcript.reanalyse, style: .link, size: .small) {
+                        model.reanalyse(entryId: entryId)
+                    }
+                }
+
+                // Ce que le carnet imprimera, écrit une fois — sans quoi la
+                // bascule laisse croire qu'on a changé le carnet en regardant.
+                Text(
+                    card.prefersTranscript
+                        ? ChatCopy.Transcript.keepingRaw
+                        : ChatCopy.Transcript.keepingWritten
+                )
+                .font(MemoBookFont.caption)
+                .foregroundStyle(MemoBookColor.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, MemoBookSpacing.xs / 2)
         }
     }
 

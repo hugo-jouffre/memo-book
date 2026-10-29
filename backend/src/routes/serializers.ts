@@ -6,6 +6,7 @@ import type {
   PrintOrderCopy,
   Render,
 } from "@prisma/client";
+import { finalTextOf } from "../jobs/redact.js";
 import { freeCorrectionCharactersLeft } from "../services/dailyCredit.js";
 import type { PrintQuote } from "../services/printPricing.js";
 
@@ -50,6 +51,8 @@ export function serializeEntry(entry: Entry & { media?: MediaAsset | null }) {
     redactionError: entry.redactionError,
     editedText: entry.editedText,
     editedAt: entry.editedAt?.toISOString() ?? null,
+    /** La transcription littérale est gardée, plutôt que le texte rédigé. */
+    prefersTranscript: entry.prefersTranscript,
     /** « Ça me convient » : le souvenir relu et gardé tel quel — `docs/conversation.md` § 6. */
     validatedAt: entry.validatedAt?.toISOString() ?? null,
     /**
@@ -57,7 +60,7 @@ export function serializeEntry(entry: Entry & { media?: MediaAsset | null }) {
      * priorité ne soit pas réimplémentée — et donc divergente — dans chaque
      * client.
      */
-    displayText: entry.editedText ?? entry.redactedText ?? entry.transcript,
+    displayText: finalTextOf(entry),
     /** Les caractères de correction encore offerts à cette fiche (QA D8, 19/10/2026). */
     freeCorrectionCharactersLeft: freeCorrectionCharactersLeft(entry),
     suggestedTitle: entry.suggestedTitle,

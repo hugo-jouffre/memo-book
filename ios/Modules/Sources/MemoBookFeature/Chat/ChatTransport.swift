@@ -237,11 +237,30 @@ public struct ChatTransport: Sendable {
     /// sans cache.
     public var remember: @Sendable (ChatThread) async -> Void
 
+    /// **Garder la transcription littérale**, ou revenir au texte rédigé
+    /// (Hugo, 28/10/2026) — `PATCH /v1/entries/:id`. Ce n'est pas une
+    /// correction : ça ne coûte rien.
+    public var keepTranscript: @Sendable (_ entryId: String, _ keeps: Bool) async throws -> Entry
+
+    /// **Relancer l'analyse** d'un souvenir — `POST /v1/entries/:id/redaction`.
+    /// L'IA le relit et en tire une version généralement plus complète ; le
+    /// choix de garder la littérale tombe, puisqu'on redemande une rédaction.
+    public var reanalyse: @Sendable (_ entryId: String) async throws -> Entry
+
     public init(
         load: @escaping @Sendable () async throws -> ChatThread,
         poll: @escaping @Sendable (Date) async throws -> ChatThreadUpdate,
         send: @escaping @Sendable (OutgoingTurn) async throws -> ChatSendOutcome,
         editTranscript: @escaping @Sendable (String, String) async throws -> Entry,
+        // Par défaut, les deux gestes de la fiche ne mènent nulle part : un
+        // transport qui ne les porte pas — un aperçu, un double de test — les
+        // refuse au lieu de faire croire qu'ils ont pris.
+        keepTranscript: @escaping @Sendable (String, Bool) async throws -> Entry = { _, _ in
+            throw APIError.server(statusCode: 0, code: nil, message: "Choix indisponible ici.")
+        },
+        reanalyse: @escaping @Sendable (String) async throws -> Entry = { _ in
+            throw APIError.server(statusCode: 0, code: nil, message: "Analyse indisponible ici.")
+        },
         media: @escaping @Sendable (URL) async throws -> Data,
         waiting: @escaping @Sendable () async -> [OutgoingTurn] = { [] },
         deliveries: @escaping @Sendable () async -> AsyncStream<ChatTurnDelivery> = { AsyncStream { $0.finish() } },
@@ -259,6 +278,8 @@ public struct ChatTransport: Sendable {
         self.offlineThread = offlineThread
         self.discard = discard
         self.remember = remember
+        self.keepTranscript = keepTranscript
+        self.reanalyse = reanalyse
     }
 
     // MARK: - Le vrai serveur
@@ -275,6 +296,10 @@ public struct ChatTransport: Sendable {
             editTranscript: { entryId, text in
                 try await api.updateEntry(id: entryId, edit: EntryEdit.text(text))
             },
+            keepTranscript: { entryId, keeps in
+                try await api.updateEntry(id: entryId, edit: EntryEdit.keepsTranscript(keeps))
+            },
+            reanalyse: { entryId in try await api.retryRedaction(entryId: entryId) },
             media: { url in
                 // `/v1/entries/<id>/media` pour un souvenir,
                 // `/v1/chat-messages/<id>/media` pour un vocal du contexte du

@@ -1128,6 +1128,17 @@ model Entry {
   redactionModel  String?
   redactedAt      DateTime?
 
+  /// **Garder la transcription littérale** plutôt que le texte rédigé (Hugo,
+  /// 28/10/2026). La fiche du fil montre les deux ; ce drapeau dit laquelle
+  /// part au carnet — voir `finalTextOf`.
+  ///
+  /// Un drapeau et non une recopie du brut dans `editedText` : ce n'est pas
+  /// une correction au clavier, et ça ne doit donc rien coûter au pot de
+  /// corrections (`correctionFreeCharacters`) ni au crédit du jour. Relancer
+  /// l'analyse le baisse : on redemande une rédaction, c'est qu'on veut la
+  /// voir. Une correction à la main passe devant, toujours.
+  prefersTranscript Boolean @default(false)
+
   /// Texte corrigé au clavier par l'utilisateur dans l'app. Dès qu'il existe,
   /// il fait autorité : la mise en page le reprend **au mot près**.
   editedText String?

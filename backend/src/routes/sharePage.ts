@@ -218,7 +218,9 @@ export function registerSharePageRoutes(app: FastifyInstance, context: AppContex
           return name ? [name] : [];
         }),
         // Le texte relu, jamais la transcription brute : hésitations et « euh »
-        // n'ont rien à faire dans la vignette d'un lien.
+        // n'ont rien à faire dans la vignette d'un lien. **Y compris quand le
+        // voyageur a choisi de garder sa transcription** (`prefersTranscript`,
+        // 28/10/2026) : ce choix fait le carnet, pas l'aperçu d'un partage.
         excerpt: excerptOf(memo.entries.map((entry) => entry.editedText ?? entry.redactedText)),
       }),
     );

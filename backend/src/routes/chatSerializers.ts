@@ -46,6 +46,20 @@ export type ChatTurnStatus =
   | { status: "idle" }
   | { status: "replying"; messageId: string };
 
+/**
+ * **Les deux versions d'un souvenir**, quand il y a bien deux textes à
+ * comparer : la transcription littérale et le texte rédigé. Nulles sinon — la
+ * fiche ne propose alors aucune bascule.
+ */
+function twoVersionsOf(entry: { transcript: string | null; redactedText: string | null }) {
+  const hasTwo =
+    entry.transcript !== null && entry.redactedText !== null && entry.transcript !== entry.redactedText;
+  return {
+    rawText: hasTwo ? entry.transcript : null,
+    writtenText: hasTwo ? entry.redactedText : null,
+  };
+}
+
 /** Où en est la fiche d'un souvenir : ce que la bulle dessine en trois temps. */
 export type TranscriptPhase = "listening" | "writing" | "ready" | "failed";
 
@@ -238,6 +252,23 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbe
           placeLabel: entry.placeLabel,
           duration: entry.media?.durationSeconds ?? null,
           text: finalTextOf(entry),
+          // **Les deux versions, pour pouvoir les comparer** (Hugo,
+          // 28/10/2026). La fiche montrait le texte rédigé et lui seul : rien
+          // ne disait si l'IA avait inventé ou perdu quelque chose. Elle
+          // porte désormais les deux, et l'app passe de l'une à l'autre sans
+          // rien redemander.
+          //
+          // **Servies toutes les deux, et pas déduites de `text`** : `text`
+          // est ce qui part au carnet (`finalTextOf`), et c'est tantôt l'une
+          // tantôt l'autre. Les déduire de lui faisait disparaître la bascule
+          // au moment précis où l'on venait de choisir la littérale.
+          //
+          // Nulles quand il n'y a rien à comparer : un souvenir écrit au
+          // clavier, dont le brut *est* le texte ; une rédaction qui n'a rien
+          // rendu ; deux textes identiques.
+          ...twoVersionsOf(entry),
+          // Laquelle part au carnet — voir `finalTextOf`.
+          prefersTranscript: entry.prefersTranscript,
           isSimulated: false,
           entryId: entry.id,
           footnote: phase === "ready" ? TRANSCRIPT_FOOTNOTE : null,

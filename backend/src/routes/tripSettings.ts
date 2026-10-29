@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
+import { finalTextOf } from "../jobs/redact.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { readDailyCredit } from "../services/dailyCredit.js";
@@ -178,9 +179,12 @@ async function reachablePagesOf(
   if (!days) return null;
   const written = await context.prisma.entry.findMany({
     where: { memoId: memo.id, kind: { not: "photo" }, OR: [{ editedText: { not: null } }, { redactedText: { not: null } }] },
-    select: { editedText: true, redactedText: true },
+    select: { editedText: true, redactedText: true, transcript: true, prefersTranscript: true },
   });
-  const texts = written.map((entry) => (entry.editedText ?? entry.redactedText ?? "").trim()).filter(Boolean);
+  // Le texte **qui sera imprimé** (`finalTextOf`) : une fiche qui garde sa
+  // transcription littérale ne fait pas le même nombre de signes, donc pas le
+  // même nombre de pages.
+  const texts = written.map((entry) => (finalTextOf(entry) ?? "").trim()).filter(Boolean);
   const density = pageDensity(memo.targetPageCount, days, memo.photoTextRatio);
   return Object.fromEntries(
     PHOTO_RATIOS.map((ratio) => {

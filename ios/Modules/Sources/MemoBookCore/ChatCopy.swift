@@ -140,6 +140,30 @@ public enum ChatCopy {
     /// La transcription ou la rédaction a échoué ; le brut reste s'il existe.
     public static let transcriptFailed = "Je n’ai pas réussi à finir cette fiche. Tu peux la corriger à la main, ou réenregistrer."
 
+    /// **Les deux versions d'un souvenir** (Hugo, 28/10/2026) : ce que MEMO a
+    /// rédigé, et ce qu'on a dit mot pour mot. La fiche passe de l'une à
+    /// l'autre ; c'est le seul moyen de voir si l'IA a inventé ou perdu
+    /// quelque chose.
+    public enum Transcript {
+        /// Le texte rédigé — celui qui part au carnet par défaut.
+        public static let written = "Rédigé"
+
+        /// La transcription littérale, mot pour mot.
+        public static let raw = "Mot pour mot"
+
+        /// Garder **celle qu'on regarde** pour le carnet.
+        public static let keepThisOne = "Garder celle-ci"
+
+        /// Redemander une rédaction : l'IA relit le vocal et en tire
+        /// généralement une version plus complète.
+        public static let reanalyse = "Ré-analyser"
+
+        /// Ce que le carnet imprimera, dit sous la bascule — sans quoi
+        /// regarder une version laisserait croire qu'on l'a choisie.
+        public static let keepingWritten = "C’est le texte rédigé qui ira dans ton carnet."
+        public static let keepingRaw = "C’est le mot pour mot qui ira dans ton carnet."
+    }
+
     /// Ce que le voyageur « dit » en envoyant une correction au clavier : la
     /// bulle bleue d'une commande silencieuse, à laquelle MEMO accuse réception.
     public static let editedByHand = "J’ai retouché le texte à la main."

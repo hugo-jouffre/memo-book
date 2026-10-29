@@ -23,13 +23,33 @@ export interface RedactJob {
   rewrite?: boolean;
 }
 
-/** Le texte qui fait foi pour une entrée : la correction de l'utilisateur d'abord. */
+/**
+ * **Le texte qui fait foi pour un souvenir** — celui que le carnet imprime,
+ * celui que la fiche du fil montre, celui que MEMO relit.
+ *
+ * Trois états, dans cet ordre :
+ *
+ * 1. la **correction au clavier** (`editedText`), toujours devant : ce sont
+ *    les mots de quelqu'un, et la mise en page les reprend au mot près ;
+ * 2. ce que le voyageur a **choisi de garder** (`prefersTranscript`, Hugo,
+ *    28/10/2026) : la transcription littérale plutôt que le texte rédigé ;
+ * 3. sinon le texte rédigé, et la transcription brute en dernier recours —
+ *    une rédaction échouée vaut mieux qu'un carnet vide.
+ *
+ * `prefersTranscript` est **obligatoire dans le type**, et c'est voulu : la
+ * hiérarchie était recopiée à quatre endroits, et un champ qu'on oublie de
+ * lire rendrait au carnet un texte que le voyageur n'a pas choisi. Le
+ * compilateur réclame donc la colonne à chaque appelant.
+ */
 export function finalTextOf(entry: {
   editedText: string | null;
   redactedText: string | null;
   transcript: string | null;
+  prefersTranscript: boolean;
 }): string | null {
-  return entry.editedText ?? entry.redactedText ?? entry.transcript;
+  if (entry.editedText !== null) return entry.editedText;
+  if (entry.prefersTranscript && entry.transcript !== null) return entry.transcript;
+  return entry.redactedText ?? entry.transcript;
 }
 
 /**
