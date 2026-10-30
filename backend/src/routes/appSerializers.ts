@@ -24,6 +24,7 @@ import {
 } from "../services/printPricing.js";
 import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCountries.js";
 import { storeManageUrl, SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
+import { finalTextOf } from "../jobs/redact.js";
 import { displayablePhotoUrl } from "./tripPhotos.js";
 import {
   accountSubscriptionOf,
@@ -948,18 +949,27 @@ function styleSummaryOf(memo: Memo): string {
 }
 
 /**
- * Les trois états du texte d'un souvenir. Le corrigé à la main d'abord, le
- * rédigé ensuite, la transcription brute en dernier — c'est l'ordre de
- * préférence de tout le pipeline.
+ * Les états du texte d'un souvenir — voir `finalTextOf`, qui porte la règle :
+ * le corrigé à la main d'abord, puis ce que le voyageur a choisi de garder,
+ * puis le rédigé, la transcription brute en dernier.
+ *
+ * La hiérarchie était recopiée ici ; elle ne l'est plus, pour qu'une fiche
+ * qui garde sa transcription littérale la garde **partout** (28/10/2026).
  */
 type EntryTextRow = {
   editedText?: string | null;
   redactedText?: string | null;
   transcript?: string | null;
+  prefersTranscript?: boolean;
 };
 
 function textOf(entry: EntryTextRow): string | undefined {
-  return (entry.editedText ?? entry.redactedText ?? entry.transcript)?.trim() || undefined;
+  return finalTextOf({
+    editedText: entry.editedText ?? null,
+    redactedText: entry.redactedText ?? null,
+    transcript: entry.transcript ?? null,
+    prefersTranscript: entry.prefersTranscript ?? false,
+  })?.trim() || undefined;
 }
 
 type WalletEntryRow = {

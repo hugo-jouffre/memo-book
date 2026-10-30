@@ -156,6 +156,31 @@ public struct TranscriptCard: Sendable, Hashable {
     /// `nil` : un serveur d'avant, ou une fiche du jeu d'essai.
     public let freeCorrectionCharactersLeft: Int?
 
+    /// **La transcription littérale**, mot pour mot (Hugo, 28/10/2026). La
+    /// fiche passe d'elle au texte rédigé : c'est ce qui permet de voir si
+    /// l'IA a inventé ou perdu quelque chose.
+    ///
+    /// `nil` quand il n'y a rien à comparer — un souvenir écrit au clavier,
+    /// dont le brut *est* le texte ; une rédaction qui n'a rien rendu — ou
+    /// servie par un serveur plus ancien. La fiche ne propose alors aucune
+    /// bascule.
+    public let rawText: String?
+
+    /// **Le texte rédigé** par l'IA, servi à côté de ``rawText``.
+    ///
+    /// Distinct de ``text``, qui est ce qui **part au carnet** : celui-là est
+    /// tantôt l'un tantôt l'autre, selon ``prefersTranscript``. Les déduire de
+    /// lui faisait disparaître la bascule au moment précis où l'on venait de
+    /// choisir la littérale.
+    public let writtenText: String?
+
+    /// C'est la transcription littérale qui part au carnet, et non le texte
+    /// rédigé — voir ``rawText``.
+    public let prefersTranscript: Bool
+
+    /// Y a-t-il deux versions à comparer sur cette fiche ?
+    public var hasTwoVersions: Bool { rawText != nil && writtenText != nil }
+
     public init(
         title: String,
         heading: String? = nil,
@@ -168,7 +193,10 @@ public struct TranscriptCard: Sendable, Hashable {
         footnote: String? = nil,
         phase: Phase = .ready,
         isValidated: Bool = false,
-        freeCorrectionCharactersLeft: Int? = nil
+        freeCorrectionCharactersLeft: Int? = nil,
+        rawText: String? = nil,
+        writtenText: String? = nil,
+        prefersTranscript: Bool = false
     ) {
         self.title = title
         self.heading = heading
@@ -182,6 +210,9 @@ public struct TranscriptCard: Sendable, Hashable {
         self.phase = phase
         self.isValidated = isValidated
         self.freeCorrectionCharactersLeft = freeCorrectionCharactersLeft
+        self.rawText = rawText
+        self.writtenText = writtenText
+        self.prefersTranscript = prefersTranscript
     }
 
     /// La même fiche, une fois le récit revenu.
@@ -198,7 +229,10 @@ public struct TranscriptCard: Sendable, Hashable {
             footnote: footnote,
             phase: .ready,
             isValidated: isValidated,
-            freeCorrectionCharactersLeft: freeCorrectionCharactersLeft
+            freeCorrectionCharactersLeft: freeCorrectionCharactersLeft,
+            rawText: rawText,
+            writtenText: writtenText,
+            prefersTranscript: prefersTranscript
         )
     }
 
@@ -216,6 +250,7 @@ extension TranscriptCard: Codable {
     private enum CodingKeys: String, CodingKey {
         case title, heading, capturedAt, placeLabel, duration, text, isSimulated, entryId, footnote
         case phase, isValidated, freeCorrectionCharactersLeft
+        case rawText, writtenText, prefersTranscript
     }
 
     public init(from decoder: any Decoder) throws {
@@ -233,7 +268,10 @@ extension TranscriptCard: Codable {
             phase: try container.decodeIfPresent(Phase.self, forKey: .phase) ?? .ready,
             isValidated: try container.decodeIfPresent(Bool.self, forKey: .isValidated) ?? false,
             freeCorrectionCharactersLeft: try container.decodeIfPresent(
-                Int.self, forKey: .freeCorrectionCharactersLeft)
+                Int.self, forKey: .freeCorrectionCharactersLeft),
+            rawText: try container.decodeIfPresent(String.self, forKey: .rawText),
+            writtenText: try container.decodeIfPresent(String.self, forKey: .writtenText),
+            prefersTranscript: try container.decodeIfPresent(Bool.self, forKey: .prefersTranscript) ?? false
         )
     }
 
@@ -251,6 +289,9 @@ extension TranscriptCard: Codable {
         try container.encode(phase, forKey: .phase)
         try container.encode(isValidated, forKey: .isValidated)
         try container.encodeIfPresent(freeCorrectionCharactersLeft, forKey: .freeCorrectionCharactersLeft)
+        try container.encodeIfPresent(rawText, forKey: .rawText)
+        try container.encodeIfPresent(writtenText, forKey: .writtenText)
+        try container.encode(prefersTranscript, forKey: .prefersTranscript)
     }
 }
 

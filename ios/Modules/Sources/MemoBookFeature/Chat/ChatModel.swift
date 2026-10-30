@@ -1329,6 +1329,57 @@ public final class ChatModel {
     }
 
     /// La fiche d'un souvenir, une fois le serveur repassé dessus.
+    // MARK: - Les deux versions d'un souvenir
+
+    /// **Garder la transcription littérale**, ou revenir au texte rédigé
+    /// (Hugo, 28/10/2026).
+    ///
+    /// C'est un choix, pas une correction : il ne coûte ni caractères offerts
+    /// ni crédit du jour, et il ne passe pas par le composeur. La fiche se
+    /// redessine avec ce que le serveur rend — c'est lui qui tranche quel
+    /// texte part au carnet (`finalTextOf`).
+    public func keepTranscript(_ keeps: Bool, forEntry entryId: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let entry = try await transport.keepTranscript(entryId, keeps)
+                refreshCard(for: entry)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// **Relancer l'analyse** d'un souvenir : l'IA le relit et en tire une
+    /// version généralement plus complète.
+    ///
+    /// La fiche repasse par « on rédige » le temps que la nouvelle version
+    /// arrive — c'est le sondage qui la rapportera, comme pour une première
+    /// rédaction. Le choix de garder la littérale tombe côté serveur : on
+    /// redemande une rédaction, c'est qu'on veut la lire.
+    public func reanalyse(entryId: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let entry = try await transport.reanalyse(entryId)
+                refreshCard(for: entry)
+                // Le serveur rédige ; le fil le rapportera.
+                if needsPolling { startPolling() }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// Où en est la fiche d'un souvenir — la même lecture que le serveur
+    /// (`transcriptPhaseOf`, `routes/chatSerializers.ts`).
+    private static func phase(of entry: Entry) -> TranscriptCard.Phase {
+        if entry.status == .failed || entry.redactionStatus == .failed { return .failed }
+        if entry.status.isInProgress { return .listening }
+        if entry.redactionStatus.isInProgress { return .writing }
+        return .ready
+    }
+
     private func refreshCard(for entry: Entry) {
         guard var thread else { return }
         for index in thread.messages.indices {
@@ -1343,10 +1394,20 @@ public final class ChatModel {
                     isSimulated: false,
                     entryId: entry.id,
                     footnote: card.footnote,
-                    phase: .ready,
+                    // Le temps vient du souvenir et non d'un `.ready` posé
+                    // d'office : relancer l'analyse remet la fiche à « on
+                    // rédige », et c'est ce qu'elle doit montrer (28/10/2026).
+                    phase: Self.phase(of: entry),
                     isValidated: entry.validatedAt != nil || card.isValidated,
                     freeCorrectionCharactersLeft: entry.freeCorrectionCharactersLeft
-                        ?? card.freeCorrectionCharactersLeft
+                        ?? card.freeCorrectionCharactersLeft,
+                    // Les deux versions suivent le souvenir relu — et elles
+                    // ne se déduisent pas du texte affiché, qui est tantôt
+                    // l'une tantôt l'autre (`finalTextOf`). Nulles quand il
+                    // n'y a rien à comparer.
+                    rawText: entry.hasTwoVersions ? entry.transcript : card.rawText,
+                    writtenText: entry.hasTwoVersions ? entry.redactedText : card.writtenText,
+                    prefersTranscript: entry.prefersTranscript
                 )
             )
         }

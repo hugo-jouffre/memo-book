@@ -45,6 +45,12 @@ const updateEntryBody = z.object({
   placeLabel: z.string().max(200).nullable().optional(),
   suggestedTitle: z.string().max(200).nullable().optional(),
   weatherKey: z.enum(WEATHER_KEYS).nullable().optional(),
+  /**
+   * **Garder la transcription littérale** plutôt que le texte rédigé (Hugo,
+   * 28/10/2026). Ce n'est pas une correction au clavier : ça ne coûte ni
+   * caractères offerts ni crédit du jour — voir `entries.prefersTranscript`.
+   */
+  prefersTranscript: z.boolean().optional(),
 });
 
 /** Taille maximale d'un média. ~25 Mo couvre un vocal long et une photo pleine résolution. */
@@ -302,6 +308,9 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
             ...(hasNewText ? { editedText: body.editedText, editedAt: now } : {}),
             ...(offered > 0 ? { correctionFreeCharacters: { increment: offered } } : {}),
             ...(clearsEdit ? { editedText: null, editedAt: null } : {}),
+            ...(body.prefersTranscript !== undefined
+              ? { prefersTranscript: body.prefersTranscript }
+              : {}),
             ...(body.placeLabel !== undefined ? { placeLabel: body.placeLabel } : {}),
             ...(body.suggestedTitle !== undefined ? { suggestedTitle: body.suggestedTitle } : {}),
             ...(body.weatherKey !== undefined ? { weatherKey: body.weatherKey } : {}),
@@ -358,9 +367,14 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
     // relance est un appel d'IA payé, et dix touches rapides en mettaient dix
     // en file. La bascule est atomique — deux requêtes simultanées n'en
     // lancent qu'une.
+    //
+    // **Et le choix de garder la littérale tombe** (28/10/2026) : redemander
+    // une rédaction, c'est vouloir la lire. Sans ça, la nouvelle version
+    // arrivait dans une fiche qui continuait d'afficher — et d'imprimer — le
+    // brut, sans que rien ne le dise.
     const claimed = await context.prisma.entry.updateMany({
       where: { id, redactionStatus: { in: ["ready", "failed"] } },
-      data: { redactionStatus: "pending", redactionError: null },
+      data: { redactionStatus: "pending", redactionError: null, prefersTranscript: false },
     });
     if (claimed.count === 0) {
       return reply.code(200).send(serializeEntry(entry));

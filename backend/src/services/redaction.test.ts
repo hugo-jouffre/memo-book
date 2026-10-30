@@ -110,34 +110,48 @@ describe("FakeRedactor", () => {
  * pipeline : ce que l'utilisateur a corrigé au clavier gagne toujours.
  */
 describe("finalTextOf", () => {
+  /** Un souvenir rédigé, non corrigé, qui garde le texte du modèle. */
+  const entry = {
+    editedText: null as string | null,
+    redactedText: "La version du modèle." as string | null,
+    transcript: "euh la version brute" as string | null,
+    prefersTranscript: false,
+  };
+
   it("préfère la correction manuelle au texte rédigé", () => {
-    expect(
-      finalTextOf({
-        editedText: "Ma version.",
-        redactedText: "La version du modèle.",
-        transcript: "euh la version brute",
-      }),
-    ).toBe("Ma version.");
+    expect(finalTextOf({ ...entry, editedText: "Ma version." })).toBe("Ma version.");
   });
 
   it("retombe sur le texte rédigé sans correction", () => {
-    expect(
-      finalTextOf({
-        editedText: null,
-        redactedText: "La version du modèle.",
-        transcript: "euh la version brute",
-      }),
-    ).toBe("La version du modèle.");
+    expect(finalTextOf(entry)).toBe("La version du modèle.");
   });
 
   it("retombe sur la transcription quand la rédaction a échoué", () => {
-    expect(
-      finalTextOf({ editedText: null, redactedText: null, transcript: "la version brute" }),
-    ).toBe("la version brute");
+    expect(finalTextOf({ ...entry, redactedText: null })).toBe("euh la version brute");
   });
 
   it("renvoie null pour une entrée sans aucun texte", () => {
-    expect(finalTextOf({ editedText: null, redactedText: null, transcript: null })).toBeNull();
+    expect(
+      finalTextOf({ ...entry, redactedText: null, transcript: null }),
+    ).toBeNull();
+  });
+
+  // **Garder la littérale** (Hugo, 28/10/2026) : c'est elle qui part au
+  // carnet, et c'est `finalTextOf` qui le dit à toute la chaîne.
+  it("garde la transcription littérale quand on l'a choisie", () => {
+    expect(finalTextOf({ ...entry, prefersTranscript: true })).toBe("euh la version brute");
+  });
+
+  it("mais la correction au clavier passe devant le choix", () => {
+    expect(
+      finalTextOf({ ...entry, prefersTranscript: true, editedText: "Ma version." }),
+    ).toBe("Ma version.");
+  });
+
+  it("et le choix ne vaut rien sans transcription à garder", () => {
+    expect(finalTextOf({ ...entry, prefersTranscript: true, transcript: null })).toBe(
+      "La version du modèle.",
+    );
   });
 });
 
