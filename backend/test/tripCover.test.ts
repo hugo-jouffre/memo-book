@@ -85,7 +85,38 @@ async function sendPhoto(
   expect(response.statusCode).toBe(201);
 }
 
+/** La photo que l'en-tête de la conversation affiche pour ce voyage. */
+async function chatAvatarOf(authorization: string, memoId: string): Promise<string | null> {
+  const response = await harness.app.inject({
+    method: "GET",
+    url: `/v1/trips/${memoId}/chat`,
+    headers: { authorization },
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json<{ avatarUrl: string | null }>().avatarUrl ?? null;
+}
+
 describe("la couverture d'un voyage", () => {
+  /**
+   * **La même photo partout** (Hugo, 28/10/2026 — « la photo devrait se mettre
+   * dans la mini bulle en haut du chat aussi, à la place de l'icône
+   * montagne »). Le fil ne rendait que la couverture choisie à la main : sans
+   * elle, l'accueil montrait une photo et la conversation une montagne.
+   */
+  it("illustre aussi l'en-tête de la conversation", async () => {
+    const { authorization } = await registerAccount(harness.app);
+    const memoId = await createTrip(authorization);
+
+    expect(await chatAvatarOf(authorization, memoId)).toBeNull();
+
+    await sendPhoto(authorization, memoId, { width: 1200, height: 900 }, "2026-01-06T09:00:00.000Z");
+
+    const avatar = await chatAvatarOf(authorization, memoId);
+    expect(avatar).toBeTruthy();
+    // Et c'est **la même** que celle de l'accueil : une seule élection.
+    expect(avatar).toBe(await coverOf(authorization, memoId));
+  });
+
   it("prend la photo paysage envoyée dans la conversation", async () => {
     const { authorization } = await registerAccount(harness.app);
     const memoId = await createTrip(authorization);

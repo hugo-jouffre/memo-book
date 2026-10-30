@@ -107,18 +107,22 @@ struct ChatHeader: View {
     /// La photo du voyage. Taille **fixe**, hors Dynamic Type : une photo n'est
     /// pas du texte, et un avatar qui grandit avec le corps pousserait le titre
     /// hors de sa ligne au lieu de l'accompagner.
+    /// La photo du voyage — celle qu'on a choisie, sinon celle que le voyage a
+    /// élue (`coverPhotoInclude`, côté serveur). Le serveur ne servait que la
+    /// première, que presque personne ne choisit : l'en-tête montrait donc sa
+    /// montagne pendant que l'accueil montrait une photo (Hugo, 28/10/2026).
+    ///
+    /// La montagne reste, pour un voyage dont aucune photo n'est encore
+    /// arrivée. ``RemoteImage`` garde la photo décodée : elle ne repasse plus
+    /// par la montagne à chaque ouverture du fil.
     private var avatar: some View {
-        AsyncImage(url: thread.avatarUrl) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                Image(brand: "IconMountain")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
-                    .foregroundStyle(MemoBookColor.ink)
-            }
+        RemoteImage(url: thread.avatarUrl) {
+            Image(brand: "IconMountain")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+                .foregroundStyle(MemoBookColor.ink)
         }
         .frame(width: MemoBookSpacing.avatarSide, height: MemoBookSpacing.avatarSide)
         .background(MemoBookColor.outline, in: .circle)
@@ -265,14 +269,35 @@ struct ChatGreetingView: View {
 /// le début d'une page, au lieu de flotter sous l'en-tête et de cacher une
 /// bulle. En gris, en petit : elle rassure sans prendre la parole.
 struct ChatPrivacyNote: View {
+    /// Le cadenas suit le corps du texte : c'est une ponctuation de la
+    /// mention, pas une icône d'interface.
+    @ScaledMetric(relativeTo: .caption) private var lockSide: CGFloat = 14
+
     var body: some View {
-        Text(ChatCopy.privacyNote)
-            .font(MemoBookFont.caption)
-            .foregroundStyle(MemoBookColor.inkMuted)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, MemoBookSpacing.screenMargin)
-            .padding(.vertical, MemoBookSpacing.xs)
+        VStack(spacing: MemoBookSpacing.xs / 2) {
+            // **Un cadenas au-dessus** (Hugo, 28/10/2026) : la phrase se lit
+            // d'un coup d'œil, l'icône dit de quoi elle parle avant même
+            // qu'on la lise.
+            Image(brand: "IconLocker")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: lockSide, height: lockSide)
+                .foregroundStyle(MemoBookColor.inkMuted)
+                .accessibilityHidden(true)
+
+            Text(ChatCopy.privacyNote)
+            // La seconde phrase sur sa propre ligne, et non à la suite d'un
+            // deux-points : c'est elle qui dit qui peut lire.
+            Text(ChatCopy.privacyNoteDetail)
+        }
+        .font(MemoBookFont.caption)
+        .foregroundStyle(MemoBookColor.inkMuted)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, MemoBookSpacing.screenMargin)
+        .padding(.vertical, MemoBookSpacing.xs)
+        .accessibilityElement(children: .combine)
     }
 }

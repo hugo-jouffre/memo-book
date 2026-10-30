@@ -12,6 +12,7 @@ import {
 } from "../services/conversationCopy.js";
 import { firstNameOf, type ChatMessageRow, type EntryWithMedia } from "../services/conversationThread.js";
 import { avatarUrlOf } from "../services/avatars.js";
+import { displayablePhotoUrl } from "./tripPhotos.js";
 import {
   LIMITED_AUDIENCE,
   freeCorrectionCharactersLeft,
@@ -326,6 +327,12 @@ export type MemoForChat = Memo & {
   owner: Account;
   members: (MemoMember & { account: Account | null })[];
   steps: MemoStep[];
+  /**
+   * La photo élue du voyage, quand la requête l'a chargée — une seule,
+   * `coverPhotoInclude` (`tripPhotos.ts`). Absente d'une requête qui ne la
+   * demande pas : l'en-tête retombe alors sur sa montagne.
+   */
+  entries?: { media: { storageKey: string; cdnUrl: string | null } | null }[];
 };
 
 export interface SerializeThreadOptions {
@@ -412,7 +419,11 @@ export function serializeChatThread(options: SerializeThreadOptions) {
   return {
     id: memo.id,
     title: memo.title,
-    avatarUrl: memo.coverPhotoUrl,
+    // La photo choisie à la main, sinon celle que le voyage a élue — la même
+    // règle que l'accueil et l'écran du voyage (`coverPhotoInclude`). Nulle
+    // tant qu'aucune photo n'est arrivée : l'en-tête dessine sa montagne.
+    avatarUrl:
+      memo.coverPhotoUrl ?? displayablePhotoUrl(options.publicBaseUrl, memo.entries?.[0]?.media),
     destination: memo.destinationName
       ? {
           name: memo.destinationName,

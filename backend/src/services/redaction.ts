@@ -378,9 +378,75 @@ export interface RedactionResult {
    * fil comme de l'accueil.
    */
   continuesPrevious: boolean;
+  /**
+   * **Les moments distincts entendus dans ce seul récit** (Hugo, 28/10/2026 —
+   * « 1 message n'est pas toujours égal à 1 étape »).
+   *
+   * Vide le plus souvent : un récit raconte un moment, et c'est la règle. Mais
+   * quelqu'un qui rattrape trois jours d'un coup en raconte trois, et le
+   * carnet n'a aucune raison de les coudre en une seule étape.
+   *
+   * Chaque part cite **mot pour mot** sa tranche de la transcription :
+   * l'écrivain découpe, il ne réécrit pas. C'est ce qui rend la proposition
+   * vérifiable — et c'est ce texte-là qui deviendra le souvenir, rédigé
+   * ensuite comme n'importe quel autre.
+   *
+   * Ce n'est **qu'une proposition** : MEMO la pose dans le fil, et rien n'est
+   * découpé avant que le voyageur réponde.
+   */
+  moments: { title: string; transcript: string }[];
 
   /** Modèle qui a produit le texte, tracé sur l'entrée. */
   model: string;
+}
+
+/** Au-delà, ce n'est plus un récit à découper : c'est un carnet entier. */
+export const MAX_MOMENTS = 4;
+
+/**
+ * Les moments proposés, relus de façon défensive — un modèle peut rendre
+ * n'importe quoi, et une proposition douteuse ne doit pas couper un souvenir.
+ *
+ * On ne garde la proposition **que** si elle tient debout :
+ * - au moins deux parts, au plus ``MAX_MOMENTS`` ;
+ * - chacune avec un titre et un texte non vides ;
+ * - et **chaque texte retrouvé dans la transcription** : l'écrivain devait
+ *   citer, pas réécrire. Une part inventée découperait le souvenir sur des
+ *   mots que personne n'a dits.
+ *
+ * Rend un tableau vide dès qu'un doute subsiste : ne rien proposer est
+ * toujours mieux que proposer de couper au mauvais endroit.
+ */
+export function parseMoments(value: unknown, transcript: string | null): RedactionResult["moments"] {
+  if (!Array.isArray(value) || value.length < 2 || value.length > MAX_MOMENTS) return [];
+  const haystack = normalizeForMatching(transcript ?? "");
+  if (!haystack) return [];
+
+  const moments: RedactionResult["moments"] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return [];
+    const { title, transcript: part } = item as { title?: unknown; transcript?: unknown };
+    if (typeof title !== "string" || typeof part !== "string") return [];
+    const cleanTitle = title.trim();
+    const cleanPart = part.trim();
+    if (!cleanTitle || !cleanPart) return [];
+    if (!haystack.includes(normalizeForMatching(cleanPart))) return [];
+    moments.push({ title: cleanTitle, transcript: cleanPart });
+  }
+  return moments;
+}
+
+/**
+ * De quoi comparer deux bouts de transcription sans se faire piéger par la
+ * ponctuation ni les espaces : un modèle qui cite recolle parfois autrement.
+ */
+function normalizeForMatching(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/[^\p{Letter}\p{Number}' ]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Au-delà, un doute n'est plus un passage, c'est une phrase : MEMO le cite, il doit tenir dans une bulle. */
@@ -710,6 +776,29 @@ const REDACTION_SCHEMA = {
         "cas le plus fréquent : un nouveau lieu, un autre jour, une autre scène ouvrent une " +
         "étape, même au même endroit. Sans souvenir précédent, toujours false.",
     },
+    moments: {
+      type: "array",
+      description:
+        "Les moments **distincts** que ce seul récit contient, quand il y en a plusieurs : " +
+        "quelqu'un qui rattrape trois jours d'un coup en raconte trois. Tableau VIDE dans le cas " +
+        `normal — un récit, un moment — et jamais plus de ${MAX_MOMENTS} parts. Un changement de ` +
+        "jour ou de lieu fait un moment ; un détail ajouté après coup, non. Chaque part cite " +
+        "**mot pour mot** sa tranche de la transcription, sans un mot ajouté, retiré ni " +
+        "remplacé : tu découpes, tu ne réécris pas. Les parts se suivent dans l'ordre du récit " +
+        "et ne se chevauchent pas.",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Trois à six mots qui disent ce moment-là." },
+          transcript: {
+            type: "string",
+            description: "La tranche de la transcription qui raconte ce moment, citée mot pour mot.",
+          },
+        },
+        required: ["title", "transcript"],
+        additionalProperties: false,
+      },
+    },
   },
   required: [
     "understanding",
@@ -723,6 +812,7 @@ const REDACTION_SCHEMA = {
     "insights",
     "doubts",
     "continuesPrevious",
+    "moments",
   ],
   additionalProperties: false,
 } as const;
@@ -1071,6 +1161,9 @@ export class AnthropicRedactor implements Redactor {
       ...withinFunFactLimit(parsed),
       quiz: withinQuizLimits(parsed.quiz),
       doubts: parseDoubts(parsed.doubts),
+      // Relus **contre la transcription** : une part que personne n'a dite
+      // découperait le souvenir sur des mots inventés.
+      moments: parseMoments(parsed.moments, input.entry.transcript),
       model: this.model,
     };
   }
@@ -1110,6 +1203,9 @@ export class FakeRedactor implements Redactor {
       // fait son étape, comme avant le 28/10/2026. Les tests qui veulent un
       // groupement posent la colonne eux-mêmes.
       continuesPrevious: false,
+      // Le faux rédacteur n'entend qu'un moment : les tests qui veulent un
+      // découpage posent la proposition eux-mêmes.
+      moments: [],
       title: firstSentence.slice(0, 60).replace(/[.!?…]+$/, ""),
       text: withPrecisions.slice(0, 420),
       // Le faux rédacteur ne lit pas le temps dans le vocal : il n'en met pas.

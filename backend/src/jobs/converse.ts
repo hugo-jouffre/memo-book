@@ -29,6 +29,7 @@ import {
   fallbackPrompt,
   photosAtZeroRatio,
   photosBeyondAsked,
+  splitAccepted,
   photosMissing,
   photosToValidate,
   photosWanted,
@@ -70,10 +71,12 @@ import {
   loadCurrentEntry,
   loadHistory,
   loadRecentEntries,
+  lockThread,
   photosTargetEntryId,
   REPLY_TIMEOUT_MS,
   type Db,
 } from "../services/conversationThread.js";
+import { splitEntryIntoMoments } from "../services/entrySplit.js";
 import { stepNumbersOf } from "../routes/chatSerializers.js";
 import { finalTextOf, parseCoherenceSheet, type RedactJob } from "./redact.js";
 import { JOB_NAMES } from "./queue.js";
@@ -489,6 +492,37 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   const redactEntryIds: string[] = [];
   const currentDay = dayKeyOf(currentEntry?.capturedAt ?? message.createdAt);
 
+  // **« Découpe en deux étapes »** (Hugo, 28/10/2026) : le découpage a lieu
+  // ici, une fois le voyageur d'accord. La puce, elle, n'a fait que parler.
+  //
+  // Dans sa propre transaction, **avant** celle qui écrit le fil : les fiches
+  // des nouvelles étapes doivent exister avant que la réponse ne se pose
+  // dessus, et c'est aussi ce qui laisse `reply` se corriger ici plutôt qu'au
+  // fond d'une fermeture.
+  //
+  // La cible vient de la **question** (`asksSplitFor`) et non de ce que l'app
+  // a envoyé : c'est MEMO qui a demandé, il sait de quel souvenir il parlait.
+  // Sans proposition qui tienne — la question venait de la seule longueur du
+  // message —, on ne coupe pas au jugé, et MEMO le dit.
+  if (message.suggestionId === "split") {
+    const outcome = await prisma.$transaction(async (tx) => {
+      await lockThread(tx, memo.id);
+      const target = await splitTargetOf(tx, memo.id, message.seq);
+      return target ? await splitEntryIntoMoments(tx, target) : null;
+    });
+
+    // Rien à faire quand il n'y a pas eu de découpage : la réponse scriptée
+    // de la puce dit déjà qu'on ne coupera pas (`SPLIT_NOT_FOUND`).
+    if (outcome) {
+      redactEntryIds.push(...outcome.entryIds);
+      reply = {
+        ...reply,
+        beats: composeBeats(text ?? "", [splitAccepted(outcome.entryIds.length)]),
+        suggestionIds: [],
+      };
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     let entryId = message.entryId;
 
@@ -761,6 +795,25 @@ interface StepToClose {
  * photos demandées soient jamais venues. Une fois par récit
  * (`closingAskedFor`) : on ne revient pas deux fois sur un refus.
  */
+/**
+ * **Le souvenir que la question du découpage visait** — le `asksSplitFor` de
+ * la dernière question posée avant cette réponse.
+ *
+ * Lu sur la question et non sur ce que l'app a envoyé : c'est MEMO qui a
+ * demandé, et il sait de quel souvenir il parlait. `null` quand la question
+ * ne venait pas de lui — celle de la longueur (`LONG_MESSAGE`) ne vise aucun
+ * souvenir en particulier.
+ */
+async function splitTargetOf(tx: Prisma.TransactionClient, memoId: string, beforeSeq: number): Promise<string | null> {
+  const question = await tx.chatMessage.findFirst({
+    where: { memoId, author: "memo", kind: "text", seq: { lt: beforeSeq } },
+    orderBy: { seq: "desc" },
+    select: { payload: true },
+  });
+  const asked = (question?.payload as { asksSplitFor?: unknown } | null)?.asksSplitFor;
+  return typeof asked === "string" ? asked : null;
+}
+
 async function stepToClose(
   context: AppContext,
   memoId: string,

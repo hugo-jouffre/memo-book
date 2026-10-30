@@ -6,9 +6,11 @@ import {
   DOUBT_MAX_CHARS,
   EMPTY_COHERENCE_SHEET,
   FakeRedactor,
+  MAX_MOMENTS,
   buildRedactionPrompt,
   createRedactor,
   parseDoubts,
+  parseMoments,
   withinFunFactLimit,
   withinQuizLimits,
   type RedactionInput,
@@ -136,6 +138,64 @@ describe("finalTextOf", () => {
 
   it("renvoie null pour une entrée sans aucun texte", () => {
     expect(finalTextOf({ editedText: null, redactedText: null, transcript: null })).toBeNull();
+  });
+});
+
+/**
+ * **Les moments d'un récit**, relus de façon défensive (Hugo, 28/10/2026).
+ * Un modèle peut rendre n'importe quoi, et une proposition douteuse
+ * découperait un souvenir sur des mots que personne n'a dits.
+ */
+describe("parseMoments", () => {
+  const transcript =
+    "Jeudi on a marché jusqu'au Colisée, il y avait un monde fou. " +
+    "Le lendemain on a pris la route du sud, direction Naples.";
+
+  const moments = [
+    { title: "Le Colisée bondé", transcript: "Jeudi on a marché jusqu'au Colisée, il y avait un monde fou." },
+    { title: "La route du sud", transcript: "Le lendemain on a pris la route du sud, direction Naples." },
+  ];
+
+  it("garde une proposition qui cite la transcription", () => {
+    expect(parseMoments(moments, transcript)).toEqual(moments);
+  });
+
+  it("refuse une part que personne n'a dite", () => {
+    const invented = [moments[0], { title: "Inventé", transcript: "On a dormi sur la plage de Positano." }];
+    expect(parseMoments(invented, transcript)).toEqual([]);
+  });
+
+  it("tolère la ponctuation et les espaces d'une citation recollée", () => {
+    const requoted = [
+      { title: moments[0]!.title, transcript: "jeudi on a marché jusqu'au colisée il y avait un monde fou" },
+      { title: moments[1]!.title, transcript: moments[1]!.transcript },
+    ];
+    expect(parseMoments(requoted, transcript)).toHaveLength(2);
+  });
+
+  it("refuse une seule part : découper en un, c'est ne pas découper", () => {
+    expect(parseMoments([moments[0]], transcript)).toEqual([]);
+  });
+
+  it("refuse au-delà du maximum", () => {
+    const tooMany = Array.from({ length: MAX_MOMENTS + 1 }, () => moments[0]);
+    expect(parseMoments(tooMany, transcript)).toEqual([]);
+  });
+
+  it("refuse une part sans titre ou sans texte", () => {
+    expect(parseMoments([{ title: "", transcript: moments[0]!.transcript }, moments[1]], transcript)).toEqual([]);
+    expect(parseMoments([{ title: "Un titre", transcript: "  " }, moments[1]], transcript)).toEqual([]);
+  });
+
+  it("refuse tout sans transcription à vérifier", () => {
+    expect(parseMoments(moments, null)).toEqual([]);
+    expect(parseMoments(moments, "")).toEqual([]);
+  });
+
+  it("refuse ce qui n'est pas une liste d'objets", () => {
+    expect(parseMoments(null, transcript)).toEqual([]);
+    expect(parseMoments("deux moments", transcript)).toEqual([]);
+    expect(parseMoments([moments[0], "le second"], transcript)).toEqual([]);
   });
 });
 

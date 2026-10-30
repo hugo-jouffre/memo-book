@@ -1143,6 +1143,19 @@ model Entry {
   /// la machine, comme `editedText` l'emporte sur `redactedText`.
   separatedByTraveller Boolean @default(false)
 
+  /// **Les moments que l'écrivain a entendus dans ce récit**, quand il y en a
+  /// plusieurs (Hugo, 28/10/2026 — « comprendre si un message contient au
+  /// contraire plusieurs étapes »).
+  ///
+  /// Un tableau `[{ title, transcript }]` : chaque part cite **mot pour mot**
+  /// sa tranche de la transcription, l'écrivain ne réécrit rien ici. Nul le
+  /// plus souvent — un récit raconte un moment.
+  ///
+  /// Il n'est qu'une **proposition** : MEMO la pose dans le fil et attend la
+  /// réponse. Effacé dès qu'on a répondu, dans un sens ou dans l'autre — une
+  /// question à laquelle on a répondu ne se repose pas.
+  splitSuggestion Json?
+
   /// Texte corrigé au clavier par l'utilisateur dans l'app. Dès qu'il existe,
   /// il fait autorité : la mise en page le reprend **au mot près**.
   editedText String?
