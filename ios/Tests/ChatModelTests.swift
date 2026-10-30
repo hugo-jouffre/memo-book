@@ -295,6 +295,53 @@ final class ChatModelTests: XCTestCase {
         XCTAssertEqual(asked, ["entry-1"])
     }
 
+    /// **Le bonjour de MEMO arrive, il n'est pas déjà là** (Hugo, 28/10/2026).
+    ///
+    /// Le serveur le pose dès la première lecture du fil ; l'app le fait
+    /// arriver — le mot d'accueil, la bulle d'écriture, puis le bonjour qui
+    /// prend sa place. Ce qui compte ici : qu'il **finisse** dans le fil. Le
+    /// retirer le temps de la pause est le geste risqué de la manœuvre.
+    func testTheOpeningArrivesInsteadOfBeingAlreadyThere() async throws {
+        let opening = ChatMessage(
+            id: "opening",
+            author: .memo,
+            body: .text("Bonjour 👋"),
+            sentAt: .now,
+            seq: 1,
+            pauseMilliseconds: 500
+        )
+        let script = Script(thread: thread(messages: [opening]))
+        let model = ChatModel(transport: transport(script))
+
+        // `load()` tient jusqu'au bout de la pause : on l'observe pendant.
+        let loading = Task { await model.load() }
+
+        // Pendant la pause : le fil est vide — l'écran montre son mot
+        // d'accueil — et MEMO écrit.
+        try await until("MEMO écrit, le fil encore vide") {
+            model.isThinking && model.messages.isEmpty
+        }
+
+        await loading.value
+        XCTAssertEqual(model.messages.map(\.id), ["opening"], "Le bonjour prend la place du mot d'accueil.")
+        XCTAssertFalse(model.isThinking)
+    }
+
+    /// Une conversation entamée s'ouvre sur ce qu'on s'est dit : pas de
+    /// bonjour rejoué, pas de fil amputé le temps d'une pause.
+    func testAnOngoingThreadOpensOnWhatWasSaid() async throws {
+        let messages = [
+            ChatMessage(id: "opening", author: .memo, body: .text("Bonjour 👋"), sentAt: .now, seq: 1),
+            ChatMessage(id: "m2", author: .traveller, body: .text("Une longue journée à Rome."), sentAt: .now, seq: 2),
+        ]
+        let model = ChatModel(transport: transport(Script(thread: thread(messages: messages))))
+
+        await model.load()
+
+        XCTAssertEqual(model.messages.map(\.id), ["opening", "m2"])
+        XCTAssertFalse(model.isThinking)
+    }
+
     /// Les bulles de MEMO arrivent **dans l'ordre et espacées** : l'indicateur
     /// se rallume entre deux, et les puces ne reviennent qu'à la fin.
     func testMemoBeatsArriveInOrderWithTheirPauses() async throws {

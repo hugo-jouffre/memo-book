@@ -10,6 +10,9 @@ import {
   PRECISION_NOTED,
   REVISION_NOTED,
   returnToValidate,
+  SPLIT_NOT_FOUND,
+  SPLIT_REFUSED,
+  splitAccepted,
   SUGGESTIONS,
   VALIDATION_QUESTION,
   tooShort,
@@ -284,11 +287,24 @@ const memoBubbles = (thread: ChatThreadJson) =>
   thread.messages.filter((message) => message.author === "memo" && message.body.kind === "text");
 
 describe("lire le fil", () => {
-  it("rend un fil vide avec les puces d'ouverture, et dit qui peut l'effacer", async () => {
+  /**
+   * **MEMO dit bonjour dès qu'on ouvre la conversation** (Hugo, 28/10/2026).
+   * Sa bulle n'était posée qu'au premier tour du voyageur : un carnet neuf
+   * s'ouvrait sur un fil vide, où l'app dessinait son propre mot d'accueil —
+   * qui disait presque la même chose, et la contredisait en partie puisque
+   * l'ouverture demande ensuite le contexte du voyage.
+   */
+  it("s'ouvre sur le bonjour de MEMO, avec les puces d'ouverture, et dit qui peut l'effacer", async () => {
     const memo = await seedTrip(owner.accountId);
     const thread = await readThread(memo.id);
 
-    expect(thread.messages).toEqual([]);
+    expect(thread.messages).toHaveLength(1);
+    expect(thread.messages[0]?.author).toBe("memo");
+    expect(thread.messages[0]?.body).toEqual({ kind: "text", text: OPENING_TEXT });
+
+    // Une seule fois : rouvrir le fil ne redit pas bonjour.
+    const again = await readThread(memo.id);
+    expect(again.messages).toHaveLength(1);
     // Une seule puce : le contexte du voyage d'abord (Paul, 28/09/2026).
     expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["context"]);
     expect(thread.suggestions[0]?.label).toBe(SUGGESTIONS.context.label);
@@ -670,6 +686,131 @@ describe("une étape par récit (Hugo, 12/10/2026)", () => {
     expect(served.statusCode).toBe(200);
     const home = await harness.app.inject({ method: "GET", url: "/v1/home", headers: { authorization: owner.authorization } });
     expect(home.json<{ trips: { coverPhotoUrl: string | null }[] }>().trips[0]?.coverPhotoUrl).toBe(step?.photoUrl);
+  });
+});
+
+/**
+ * **Un message peut contenir plusieurs étapes** (Hugo, 28/10/2026).
+ *
+ * L'écrivain entend les moments distincts d'un même récit et les propose ;
+ * MEMO pose la question dans le fil ; **rien n'est découpé avant la réponse**.
+ */
+describe("découper un récit en plusieurs étapes (Hugo, 28/10/2026)", () => {
+  const RECIT =
+    "Jeudi on a marché jusqu'au Colisée, il y avait un monde fou. " +
+    "Le lendemain on a pris la route du sud, direction Naples.";
+
+  /** Un souvenir raconté, et la proposition de découpage que l'écrivain en a faite. */
+  async function toldWithSuggestion(memoId: string) {
+    await say(memoId, RECIT);
+    const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId } });
+    await harness.prisma.entry.update({
+      where: { id: entry.id },
+      data: {
+        transcript: RECIT,
+        splitSuggestion: [
+          { title: "Le Colisée bondé", transcript: "Jeudi on a marché jusqu'au Colisée, il y avait un monde fou." },
+          { title: "La route du sud", transcript: "Le lendemain on a pris la route du sud, direction Naples." },
+        ],
+      },
+    });
+    // La question de MEMO, telle que la rédaction la pose (`askToSplit`).
+    await harness.prisma.chatMessage.create({
+      data: {
+        memoId,
+        author: "memo",
+        kind: "text",
+        text: "Tu m'as raconté 2 moments d'un coup. Tu préfères ?",
+        model: "scripted",
+        payload: { suggestions: ["split", "keep"], asksSplitFor: entry.id },
+      },
+    });
+    return entry;
+  }
+
+  it("découpe à la confirmation : deux souvenirs, deux fiches, deux étapes", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const entry = await toldWithSuggestion(memo.id);
+
+    await say(memo.id, SUGGESTIONS.split.label, { suggestionId: "split" });
+
+    // Le souvenir d'origine garde la première part, et son audio.
+    const after = await harness.prisma.entry.findMany({
+      where: { memoId: memo.id },
+      orderBy: { capturedAt: "asc" },
+    });
+    expect(after).toHaveLength(2);
+    expect(after[0]?.id).toBe(entry.id);
+    expect(after[0]?.transcript).toBe("Jeudi on a marché jusqu'au Colisée, il y avait un monde fou.");
+    expect(after[1]?.transcript).toBe("Le lendemain on a pris la route du sud, direction Naples.");
+    // La seconde part est du texte : l'audio ne se coupe pas en deux.
+    expect(after[1]?.kind).toBe("text");
+    // La proposition est consommée : la question ne se repose pas.
+    expect(after[0]?.splitSuggestion).toBeNull();
+
+    // **Chaque part a son texte**, écrit depuis elle seule. On regarde le
+    // texte et non le statut : le banc exécute les jobs, donc la rédaction
+    // est déjà repassée quand on arrive ici.
+    const texts = after.map((row) => row.redactedText ?? row.transcript ?? "");
+    expect(texts[0]).toContain("Colisée");
+    expect(texts[1]).toContain("Naples");
+    expect(texts[0]).not.toContain("Naples");
+
+    // Chaque part a sa fiche dans le fil, et MEMO dit ce qu'il a fait.
+    const thread = await readThread(memo.id);
+    const cards = thread.messages.filter((message) => message.body.kind === "transcript");
+    expect(cards).toHaveLength(2);
+    // Dans le fil, pas forcément en dernier : les deux rédactions repassent
+    // derrière et posent chacune son « Il te convient ? ».
+    expect(memoBubbles(thread).map((message) => message.body)).toContainEqual({
+      kind: "text",
+      text: splitAccepted(2),
+    });
+
+    // Et deux cartes sur l'accueil du voyage.
+    expect(await readSteps(memo.id)).toHaveLength(2);
+  });
+
+  it("ne découpe rien tant qu'on n'a pas répondu", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await toldWithSuggestion(memo.id);
+
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(1);
+  });
+
+  /**
+   * « Garde d'un seul tenant » : rien ne bouge, et il reste à valider le
+   * texte. La proposition, elle, a fait son temps.
+   */
+  it("garde tout d'un seul tenant quand on refuse", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await toldWithSuggestion(memo.id);
+
+    await say(memo.id, SUGGESTIONS.keep.label, { suggestionId: "keep" });
+
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(1);
+    expect(memoBubbles(await readThread(memo.id)).at(-1)?.body).toEqual({
+      kind: "text",
+      text: SPLIT_REFUSED,
+    });
+  });
+
+  /**
+   * La question de la longueur (`LONG_MESSAGE`) ne vise aucun souvenir : on
+   * ne coupe pas au jugé, et MEMO le dit plutôt que de trancher au milieu
+   * d'une phrase.
+   */
+  it("refuse de couper quand aucune proposition ne tient", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, RECIT);
+
+    await say(memo.id, SUGGESTIONS.split.label, { suggestionId: "split" });
+
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(1);
+    expect(memoBubbles(await readThread(memo.id)).at(-1)?.body).toEqual({
+      kind: "text",
+      text: SPLIT_NOT_FOUND,
+    });
   });
 });
 

@@ -41,6 +41,7 @@ import { visibleToAccount } from "../services/memoOwnership.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { MAX_PHOTOS_PER_STEP } from "../services/photoBudget.js";
 import { measurePhoto } from "../services/photoOrientation.js";
+import { coverPhotoInclude } from "./tripPhotos.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { contextVoiceOf, isGathering, parseTripContext } from "../services/tripContext.js";
 import {
@@ -100,6 +101,12 @@ const chatMemoInclude = {
     orderBy: { invitedAt: "asc" as const },
   },
   steps: { orderBy: { number: "asc" as const } },
+  // **La photo du voyage, élue comme ailleurs** (Hugo, 28/10/2026 — « la photo
+  // devrait se mettre dans la mini bulle en haut du chat aussi, à la place de
+  // l'icône montagne »). Le fil ne rendait que la photo **choisie à la main**,
+  // que presque personne ne choisit : l'en-tête montrait donc sa montagne
+  // pendant que l'accueil, lui, montrait une photo du voyage.
+  ...coverPhotoInclude,
 } as const;
 
 async function loadChatMemo(
@@ -365,8 +372,17 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
           ...(memo.chatClearedAt ? { capturedAt: { gt: memo.chatClearedAt } } : {}),
         },
       });
-      if (orphans === 0) return;
+      // **L'ouverture d'abord, et sans attendre un souvenir** (Hugo,
+      // 28/10/2026 — « il faudrait que le message de bienvenue arrive […] en
+      // remplacement du message de chat vide »). Elle n'était posée qu'au
+      // premier tour du voyageur, ou en reconstruisant un fil qui avait des
+      // souvenirs orphelins : un carnet neuf s'ouvrait donc sur un fil vide,
+      // où l'app dessinait son propre mot d'accueil — qui disait presque la
+      // même chose que la bulle d'ouverture, et la contredisait en partie
+      // puisque celle-ci demande ensuite le contexte du voyage. MEMO dit
+      // désormais bonjour dès qu'on ouvre la conversation, et une seule fois.
       await ensureOpening(tx, memoId, context.responder);
+      if (orphans === 0) return;
       await materializeEntriesWithoutMessages(tx, memo);
     });
 
