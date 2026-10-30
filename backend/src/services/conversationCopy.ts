@@ -101,6 +101,50 @@ export function validationQuestionFor(doubts: readonly string[]): string {
 export const PRECISION_NOTED = "C’est noté, je reprends le texte avec ça.";
 
 /**
+ * **« J'ai entendu plusieurs moments »** (Hugo, 28/10/2026) — la question du
+ * découpage, posée quand l'écrivain a trouvé où couper.
+ *
+ * Elle est plus précise que ``LONG_MESSAGE``, qui ne regarde que la longueur
+ * et se pose avant la rédaction : celle-ci **nomme** les moments, et dit donc
+ * où la coupe tombe. Les deux mènent aux mêmes puces (`split`), et au même
+ * effet.
+ *
+ * Posée **avant** de proposer le texte : si l'on sépare, les textes changent
+ * entièrement, et valider d'abord ne servirait à rien.
+ */
+export function splitQuestionFor(titles: readonly string[]): string {
+  const quoted = titles.map((title) => `« ${title} »`);
+  const list =
+    quoted.length > 2
+      ? `${quoted.slice(0, -1).join(", ")} et ${quoted[quoted.length - 1]}`
+      : quoted.join(" et ");
+  return (
+    `Tu m’as raconté ${quoted.length} moments d’un coup : ${list}. ` +
+    "Je peux en faire une étape chacun, ou tout garder ensemble. Tu préfères ?"
+  );
+}
+
+/** « Garde d'un seul tenant » : rien ne bouge, et il reste à valider le texte. */
+export const SPLIT_REFUSED = "Très bien, je garde tout d’un seul tenant. Et le texte, il te convient ?";
+
+/** « Découpe en deux étapes » : les étapes arrivent, chacune avec son texte. */
+export function splitAccepted(count: number): string {
+  return `C’est fait : j’en ai fait ${count} étapes. Je te les écris, une par une.`;
+}
+
+/**
+ * « Découpe en deux étapes » sur un récit où l'écrivain n'a **pas** trouvé de
+ * coupe nette — la question venait de la longueur seule (``LONG_MESSAGE``).
+ *
+ * On ne coupe pas au jugé : un récit tranché au milieu d'une phrase est pire
+ * qu'un récit long. MEMO le dit, et propose la seule chose qui marche
+ * vraiment — raconter la suite à part.
+ */
+export const SPLIT_NOT_FOUND =
+  "Je n’ai pas trouvé d’endroit net où couper : je préfère le garder d’un seul tenant plutôt que " +
+  "de le trancher au milieu. Si tu veux deux étapes, raconte-moi la seconde à part.";
+
+/**
  * « J'aimerais faire des modifications à l'oral » : le vocal qui suit **corrige**
  * le texte de la fiche, il ne s'y ajoute pas (Hugo, 12/10/2026). MEMO demande
  * donc ce qu'il faut changer, pas de tout redire.
@@ -674,6 +718,18 @@ export const SCRIPTED_ANSWERS: Partial<
   // job (`converse.ts`) — une puce ne fait jamais que parler.
   context: { text: CONTEXT_INVITATION, suggestions: "none" },
   "context-later": { text: CONTEXT_SKIPPED, suggestions: "afterContext" },
+  // **Le découpage d'un récit** (Hugo, 28/10/2026).
+  //
+  // « Découpe en deux étapes » répond ici ce qui arrive **quand il n'y a rien
+  // à couper** — la question venait de la seule longueur du message, et on ne
+  // tranche pas au jugé. Le job (`converse.ts`) remplace cette réponse quand
+  // le découpage a bien eu lieu : elle dit alors combien d'étapes. Une
+  // réponse scriptée, et donc aucun appel de modèle pour une commande.
+  //
+  // « Garde d'un seul tenant » n'a rien à faire que répondre, et la suite est
+  // celle du texte : il reste à le valider.
+  split: { text: SPLIT_NOT_FOUND, suggestions: "trio" },
+  keep: { text: SPLIT_REFUSED, suggestions: "trio" },
 };
 
 /**

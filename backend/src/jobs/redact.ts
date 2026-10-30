@@ -11,7 +11,7 @@ import {
 } from "../services/redaction.js";
 
 import { describeTripContext, parseTripContext } from "../services/tripContext.js";
-import { askValidation, firstNameOf } from "../services/conversationThread.js";
+import { askToSplit, askValidation, firstNameOf } from "../services/conversationThread.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 
 export interface RedactJob {
@@ -223,6 +223,13 @@ export async function redactEntry(
         data: {
           redactedText: result.text,
           suggestedTitle: result.title,
+          // **Les moments entendus dans ce seul récit**, s'il y en a
+          // plusieurs (28/10/2026). Une proposition, rien de plus : c'est
+          // MEMO qui la pose, et le voyageur qui tranche.
+          splitSuggestion:
+            result.moments.length > 0
+              ? (result.moments as unknown as Prisma.InputJsonArray)
+              : Prisma.DbNull,
           weatherKey: result.weatherKey,
           funFact: result.funFact,
           funFactTitle: result.funFactTitle,
@@ -256,11 +263,19 @@ export async function redactEntry(
       },
       "Souvenir rédigé",
     );
-    // « Il te convient ? » d'abord : c'est la bulle que le voyageur attend.
-    // Les étapes et les chiffres du voyage (T227) se recalculent ensuite — une
-    // transaction verrouillée qui la retardait sans rien lui apporter ; la
-    // fiche de l'étape se met à jour au tour de relecture suivant de l'app.
-    if (!rewrite) await askValidation(prisma, entryId, result.doubts);
+    // **Le découpage se demande avant le texte** (28/10/2026) : si l'on
+    // sépare, les textes changent entièrement, et valider d'abord ne
+    // servirait à rien. Sinon, « Il te convient ? » d'abord : c'est la bulle
+    // que le voyageur attend.
+    //
+    // Les étapes et les chiffres du voyage (T227) se recalculent ensuite —
+    // une transaction verrouillée qui la retardait sans rien lui apporter ;
+    // la fiche de l'étape se met à jour au tour de relecture suivant de
+    // l'app.
+    if (!rewrite) {
+      const asked = await askToSplit(prisma, entryId, result.moments);
+      if (!asked) await askValidation(prisma, entryId, result.doubts);
+    }
     await refreshTripFactsQuietly(context, entry.memoId);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
