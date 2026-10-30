@@ -54,7 +54,7 @@ const previewInclude = {
   entries: {
     orderBy: { createdAt: "asc" as const },
     take: 5,
-    select: { editedText: true, redactedText: true, transcript: true },
+    select: { editedText: true, redactedText: true, transcript: true, prefersTranscript: true },
   },
 };
 

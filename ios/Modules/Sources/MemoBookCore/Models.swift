@@ -149,6 +149,17 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
     /// 19/10/2026). `nil` pour un serveur d'avant.
     public let freeCorrectionCharactersLeft: Int?
 
+    /// **La transcription littérale est gardée**, plutôt que le texte rédigé
+    /// (Hugo, 28/10/2026). Faux pour un serveur d'avant, qui n'en sait rien.
+    public let prefersTranscript: Bool
+
+    /// **Deux textes à comparer** : une transcription littérale et un texte
+    /// rédigé qui en diffère — voir ``TranscriptCard/rawText``.
+    public var hasTwoVersions: Bool {
+        guard let transcript, let redactedText else { return false }
+        return transcript != redactedText
+    }
+
     /// `true` quand l'utilisateur a repris le texte à la main.
     public var isEdited: Bool { editedText != nil }
 
@@ -185,7 +196,8 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         error: String? = nil,
         media: MediaSummary? = nil,
         createdAt: Date,
-        freeCorrectionCharactersLeft: Int? = nil
+        freeCorrectionCharactersLeft: Int? = nil,
+        prefersTranscript: Bool = false
     ) {
         self.id = id
         self.memoId = memoId
@@ -198,7 +210,11 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         self.editedText = editedText
         self.editedAt = editedAt
         self.validatedAt = validatedAt
-        self.displayText = displayText ?? editedText ?? redactedText ?? transcript
+        // La même hiérarchie que le décodeur et que `finalTextOf` côté
+        // serveur : la correction, puis ce qu'on a choisi de garder, puis le
+        // rédigé, le brut en dernier.
+        self.displayText =
+            displayText ?? editedText ?? (prefersTranscript ? transcript : nil) ?? redactedText ?? transcript
         self.suggestedTitle = suggestedTitle
         self.funFact = funFact
         self.funFactTitle = funFactTitle
@@ -209,6 +225,7 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         self.media = media
         self.createdAt = createdAt
         self.freeCorrectionCharactersLeft = freeCorrectionCharactersLeft
+        self.prefersTranscript = prefersTranscript
     }
 
     /// Décodage tolérant sur les champs de rédaction.
@@ -246,12 +263,16 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         media = try container.decodeIfPresent(MediaSummary.self, forKey: .media)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         freeCorrectionCharactersLeft = try container.decodeIfPresent(Int.self, forKey: .freeCorrectionCharactersLeft)
+        prefersTranscript = try container.decodeIfPresent(Bool.self, forKey: .prefersTranscript) ?? false
 
         // Le serveur calcule `displayText` ; le repli local applique la même
-        // hiérarchie pour que les deux ne puissent pas diverger.
+        // hiérarchie pour que les deux ne puissent pas diverger — la
+        // transcription gardée comprise (`finalTextOf`, 28/10/2026).
         displayText =
             try container.decodeIfPresent(String.self, forKey: .displayText)
-            ?? editedText ?? redactedText ?? transcript
+            ?? editedText
+            ?? (prefersTranscript ? transcript : nil)
+            ?? redactedText ?? transcript
     }
 }
 
@@ -266,14 +287,26 @@ public struct EntryEdit: Encodable, Sendable, Hashable {
     public var suggestedTitle: String??
     public var weatherKey: String??
 
+    /// **Garder la transcription littérale** plutôt que le texte rédigé —
+    /// voir ``TranscriptCard/rawText``. Ce n'est pas une correction au
+    /// clavier : ça ne coûte ni caractères offerts ni crédit du jour.
+    public var prefersTranscript: Bool?
+
     public init(
         editedText: String?? = nil,
         suggestedTitle: String?? = nil,
-        weatherKey: String?? = nil
+        weatherKey: String?? = nil,
+        prefersTranscript: Bool? = nil
     ) {
         self.editedText = editedText
         self.suggestedTitle = suggestedTitle
         self.weatherKey = weatherKey
+        self.prefersTranscript = prefersTranscript
+    }
+
+    /// Garder la version littérale (`true`) ou revenir au texte rédigé.
+    public static func keepsTranscript(_ keeps: Bool) -> EntryEdit {
+        EntryEdit(prefersTranscript: keeps)
     }
 
     /// Reprend le texte à la main.
@@ -287,7 +320,7 @@ public struct EntryEdit: Encodable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case editedText, suggestedTitle, weatherKey
+        case editedText, suggestedTitle, weatherKey, prefersTranscript
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -295,6 +328,7 @@ public struct EntryEdit: Encodable, Sendable, Hashable {
         if let editedText { try container.encode(editedText, forKey: .editedText) }
         if let suggestedTitle { try container.encode(suggestedTitle, forKey: .suggestedTitle) }
         if let weatherKey { try container.encode(weatherKey, forKey: .weatherKey) }
+        if let prefersTranscript { try container.encode(prefersTranscript, forKey: .prefersTranscript) }
     }
 }
 

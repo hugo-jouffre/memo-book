@@ -74,6 +74,43 @@ final class ChatModelTests: XCTestCase {
             )
         }
 
+        /// **Garder la littérale**, comme le serveur : c'est `displayText`
+        /// qui change, et le drapeau avec.
+        func keepTranscript(_ entryId: String, _ keeps: Bool) -> Entry {
+            kept.append((entryId, keeps))
+            return Entry(
+                id: entryId,
+                memoId: "trip",
+                kind: .audio,
+                status: .ready,
+                transcript: "euh donc le Colisée au petit matin voilà",
+                redactionStatus: .ready,
+                redactedText: "Le Colisée au petit matin.",
+                capturedAt: .now,
+                createdAt: .now,
+                prefersTranscript: keeps
+            )
+        }
+
+        /// **Relancer l'analyse** : la rédaction repart, et le choix tombe.
+        func reanalyse(_ entryId: String) -> Entry {
+            reanalysed.append(entryId)
+            return Entry(
+                id: entryId,
+                memoId: "trip",
+                kind: .audio,
+                status: .ready,
+                transcript: "euh donc le Colisée au petit matin voilà",
+                redactionStatus: .pending,
+                capturedAt: .now,
+                createdAt: .now,
+                prefersTranscript: false
+            )
+        }
+
+        private(set) var kept: [(String, Bool)] = []
+        private(set) var reanalysed: [String] = []
+
         func answerSends(with factory: @escaping @Sendable (OutgoingTurn) -> ChatTurnReceipt) { receiptFor = factory }
         func queueUpdate(_ update: ChatThreadUpdate) { updates.append(update) }
         func failSending(with error: any Error) { failsSending = error }
@@ -99,6 +136,8 @@ final class ChatModelTests: XCTestCase {
             poll: { _ in await script.poll() },
             send: { turn in try await script.send(turn) },
             editTranscript: { entryId, text in try await script.edit(entryId, text) },
+            keepTranscript: { entryId, keeps in await script.keepTranscript(entryId, keeps) },
+            reanalyse: { entryId in await script.reanalyse(entryId) },
             media: { _ in Data() },
             waiting: { await script.waiting },
             deliveries: { await script.deliveries() },
@@ -191,6 +230,69 @@ final class ChatModelTests: XCTestCase {
         XCTAssertEqual(model.turn, .thinking, "MEMO réfléchit : le reçu dit qu'un tour est en vol.")
         let sentIds = await script.sent.map(\.id)
         XCTAssertEqual(sentIds, [sentId])
+    }
+
+    // MARK: - Les deux versions d'un souvenir (28/10/2026)
+
+    /// Une fiche de souvenir, rédigée, avec sa transcription littérale à côté.
+    private func transcriptThread() -> ChatThread {
+        thread(messages: [
+            ChatMessage(
+                id: "fiche",
+                author: .memo,
+                body: .transcript(
+                    TranscriptCard(
+                        title: "Retranscription étape 1",
+                        capturedAt: .now,
+                        text: "Le Colisée au petit matin.",
+                        entryId: "entry-1",
+                        rawText: "euh donc le Colisée au petit matin voilà",
+                        writtenText: "Le Colisée au petit matin."
+                    )
+                ),
+                sentAt: .now,
+                seq: 1
+            )
+        ])
+    }
+
+    /// Le card de la fiche, tel que la vue le lit.
+    private func card(of model: ChatModel) -> TranscriptCard? {
+        guard case .transcript(let card) = model.messages.first(where: { $0.id == "fiche" })?.body else {
+            return nil
+        }
+        return card
+    }
+
+    /// **Garder la littérale** : c'est elle qui part au carnet, et la fiche
+    /// le dit. Ce n'est pas une correction — rien ne passe par le composeur.
+    func testKeepingTheRawTranscriptChangesWhatGoesToTheBook() async throws {
+        let script = Script(thread: transcriptThread())
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        XCTAssertEqual(card(of: model)?.prefersTranscript, false)
+
+        model.keepTranscript(true, forEntry: "entry-1")
+
+        try await until("la fiche garde la littérale") { self.card(of: model)?.prefersTranscript == true }
+        XCTAssertEqual(card(of: model)?.text, "euh donc le Colisée au petit matin voilà", "C'est elle qu'on lit.")
+        let kept = await script.kept.map(\.1)
+        XCTAssertEqual(kept, [true])
+        XCTAssertEqual(model.turn, .idle, "Un choix n'est pas un tour de conversation.")
+    }
+
+    /// **Ré-analyser** : la fiche repasse par « on rédige » le temps que la
+    /// nouvelle version arrive.
+    func testReanalysingPutsTheCardBackToWriting() async throws {
+        let script = Script(thread: transcriptThread())
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        model.reanalyse(entryId: "entry-1")
+
+        try await until("la fiche se remet à rédiger") { self.card(of: model)?.phase == .writing }
+        let asked = await script.reanalysed
+        XCTAssertEqual(asked, ["entry-1"])
     }
 
     /// **Le bonjour de MEMO arrive, il n'est pas déjà là** (Hugo, 28/10/2026).
