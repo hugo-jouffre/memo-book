@@ -67,6 +67,11 @@ public protocol MemoBookAPI: Sendable {
     /// rien de plus. Rend le voyage entier, comme ``tripDetail(id:)``.
     func validateStep(tripId: String, stepId: String) async throws -> TripDetail
 
+    /// **« Séparer ces récits »** : une étape qui en réunit plusieurs redevient
+    /// une étape par récit (Hugo, 28/10/2026). Le choix du voyageur l'emporte
+    /// ensuite sur ce que la rédaction comprend. Rend le voyage relu.
+    func separateStep(tripId: String, stepId: String) async throws -> TripDetail
+
     /// Crée un voyage à partir des six étapes de « Créer un voyage ». Rend le
     /// voyage **et son code d'accès**, que la dernière étape affiche.
     func createTrip(_ draft: TripDraft) async throws -> CreatedTrip

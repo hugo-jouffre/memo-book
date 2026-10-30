@@ -1128,6 +1128,21 @@ model Entry {
   redactionModel  String?
   redactedAt      DateTime?
 
+  /// **Ce récit continue le précédent** : les deux ne font qu'une étape
+  /// (Hugo, 28/10/2026 — « 1 message n'est pas toujours égal à 1 étape »).
+  ///
+  /// Écrit par la rédaction, qui reçoit déjà les souvenirs voisins
+  /// (`RedactedNeighbour`) : elle seule peut dire si « et sinon, le soir, on
+  /// est retournés au même bar » ouvre une étape ou prolonge celle d'avant.
+  /// Faux par défaut, donc un souvenir fait son étape — la règle d'avant
+  /// (12/10/2026), qui reste la plus fréquente.
+  continuesPreviousStep Boolean @default(false)
+
+  /// **Le voyageur a séparé ce récit du précédent**, depuis la carte de
+  /// l'étape. Passe devant ``continuesPreviousStep`` : la main l'emporte sur
+  /// la machine, comme `editedText` l'emporte sur `redactedText`.
+  separatedByTraveller Boolean @default(false)
+
   /// **Garder la transcription littérale** plutôt que le texte rédigé (Hugo,
   /// 28/10/2026). La fiche du fil montre les deux ; ce drapeau dit laquelle
   /// part au carnet — voir `finalTextOf`.

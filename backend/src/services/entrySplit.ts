@@ -92,6 +92,15 @@ export async function splitEntryIntoMoments(db: Db, entryId: string): Promise<Sp
         transcript: moment.transcript,
         suggestedTitle: moment.title,
         redactionStatus: "pending",
+        // **Découpée à la demande : rien ne la recollera** (30/10/2026, à la
+        // fusion de #160 et #161). Chaque part repasse par la rédaction, qui
+        // juge aussi si un récit prolonge le précédent
+        // (`continuesPreviousStep`) — et deux parts d'un même récit, elle les
+        // dirait prolongées sans hésiter. Elle réunirait donc en une étape ce
+        // que le voyageur vient de demander de séparer. `separatedByTraveller`
+        // passe devant la machine, comme sur la carte d'étape : la main
+        // l'emporte.
+        separatedByTraveller: true,
         // Une seconde par part : l'ordre du récit, rien de plus.
         capturedAt: new Date(entry.capturedAt.getTime() + (index + 1) * 1_000),
         placeLabel: entry.placeLabel,

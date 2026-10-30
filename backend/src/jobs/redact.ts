@@ -243,6 +243,11 @@ export async function redactEntry(
         data: {
           redactedText: result.text,
           suggestedTitle: result.title,
+          // **Ce récit prolonge le précédent** : les deux ne feront qu'une
+          // étape (28/10/2026). L'écrivain seul peut le dire, il lit les
+          // deux. Le découpage, lui, se refait tout seul derrière
+          // (`refreshTripFacts`).
+          continuesPreviousStep: result.continuesPrevious,
           // **Les moments entendus dans ce seul récit**, s'il y en a
           // plusieurs (28/10/2026). Une proposition, rien de plus : c'est
           // MEMO qui la pose, et le voyageur qui tranche.

@@ -40,6 +40,9 @@ public final class TripHomeModel {
     /// « Valider cette étape ». `nil` en aperçu, où le geste reste possible
     /// mais ne parle à aucun serveur.
     private let validateStepRemotely: ((String, String) async throws -> TripDetail)?
+
+    /// « Séparer ces récits » — voir ``separateStories(of:)``. `nil` en aperçu.
+    private let separateStepRemotely: ((String, String) async throws -> TripDetail)?
     private var pendingValidation: Task<Void, Never>?
 
     /// Un mot qui s'efface tout seul, après une validation réussie — même
@@ -63,6 +66,7 @@ public final class TripHomeModel {
         cached: CachedValue<TripDetail>? = nil,
         homeCard: CachedValue<Trip>? = nil,
         validateStep: ((String, String) async throws -> TripDetail)? = nil,
+        separateStep: ((String, String) async throws -> TripDetail)? = nil,
         deleteEntry: ((String) async throws -> Void)? = nil
     ) {
         self.tripId = tripId
@@ -70,6 +74,7 @@ public final class TripHomeModel {
         self.cached = cached
         self.homeCard = homeCard
         self.validateStepRemotely = validateStep
+        self.separateStepRemotely = separateStep
         self.deleteEntry = deleteEntry
     }
 
@@ -170,6 +175,53 @@ public final class TripHomeModel {
                 await load()
             }
         }
+    }
+
+    // MARK: - Séparer les récits d'une étape
+
+    /// **« Séparer ces récits »** : une étape qui en réunit plusieurs redevient
+    /// une étape par récit (Hugo, 28/10/2026).
+    ///
+    /// La rédaction réunit ce qui se prolonge — « et sinon, le soir, on est
+    /// retournés au même bar ». Elle se trompe parfois, et c'est le voyageur
+    /// qui a raison : son geste est retenu, et une rédaction qui repasse ne
+    /// les réunira plus.
+    ///
+    /// L'écran n'anticipe pas, contrairement à la validation : séparer
+    /// renumérote les étapes suivantes, et deviner ce découpage côté app
+    /// reviendrait à réécrire la règle du serveur. On attend donc sa réponse,
+    /// qui est le voyage entier.
+    public func separateStories(of step: TripStep) {
+        guard let separateStepRemotely, step.groupsSeveralStories else { return }
+        guard separatingStepId == nil else { return }
+
+        separatingStepId = step.id
+        Task { [weak self] in
+            guard let self else { return }
+            defer { separatingStepId = nil }
+            do {
+                detail = try await separateStepRemotely(tripId, step.id)
+                errorMessage = nil
+                confirm("Récits séparés.")
+            } catch {
+                // **Le bandeau après la relecture, et pas avant** : `load()`
+                // efface `errorMessage` quand il réussit, et l'erreur posée
+                // d'abord disparaissait aussitôt — le refus ne se voyait nulle
+                // part. On relit donc le voyage, puis on dit ce qui s'est
+                // passé.
+                await load()
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// L'étape dont on sépare les récits, le temps de l'aller-retour.
+    public private(set) var separatingStepId: String?
+
+    /// Le geste s'offre : le serveur dit que l'étape réunit plusieurs récits,
+    /// et l'app sait les séparer.
+    public func canSeparateStories(of step: TripStep) -> Bool {
+        separateStepRemotely != nil && step.groupsSeveralStories
     }
 
     // MARK: - Supprimer les souvenirs d'une étape

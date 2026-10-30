@@ -441,6 +441,9 @@ public final class AppDependencies {
                 await content.read(.home, as: HomeFeed.self)?.trips.first { $0.id == id }
             },
             validateStep: { [api] tripId, stepId in try await api.validateStep(tripId: tripId, stepId: stepId) },
+            // « Séparer ces récits » (28/10/2026) — voir
+            // ``TripHomeModel/separateStories(of:)``.
+            separateStep: { [api] tripId, stepId in try await api.separateStep(tripId: tripId, stepId: stepId) },
             // Un souvenir déjà effacé — par un co-voyageur, entre deux
             // lectures — n'est pas un échec : c'est ce qu'on voulait (T235).
             deleteEntry: { [api] id in

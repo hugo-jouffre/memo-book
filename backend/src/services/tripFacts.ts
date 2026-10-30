@@ -67,6 +67,12 @@ interface FactEntry {
   stepId: string | null;
   insights: EntryInsights;
   cdnUrl: string | null;
+  /**
+   * **Ce récit prolonge le précédent** : les deux ne font qu'une étape — ce
+   * que la rédaction a compris (`continuesPreviousStep`), sauf si le voyageur
+   * les a séparés depuis la carte (`separatedByTraveller`), qui passe devant.
+   */
+  continuesPrevious: boolean;
 }
 
 /** Un groupe de souvenirs qui deviendra une étape. */
@@ -139,7 +145,9 @@ export interface StepPins {
 /**
  * Découpe les souvenirs en étapes : **un récit, une étape** (Hugo,
  * 12/10/2026 — « c'est enregistré, ton carnet compte une étape de plus »
- * doit se voir sur l'accueil du voyage).
+ * doit se voir sur l'accueil du voyage) — **sauf quand un récit en prolonge
+ * un autre** (Hugo, 28/10/2026 : « 1 message n'est pas toujours égal à
+ * 1 étape »).
  *
  * C'est la règle du fil : la N-ième fiche « Retranscription étape N » est
  * l'étape N, MEMO compose « la page de cette étape » à chaque récit validé,
@@ -147,10 +155,17 @@ export interface StepPins {
  * d'avant (T227) rangeait deux récits du même lieu dans une seule carte :
  * le chat annonçait une étape de plus, l'accueil n'en montrait aucune.
  *
- * - Un **récit** — un vocal, un texte — ouvre toujours sa propre étape, dans
- *   l'ordre où il a été vécu (`capturedAt`). Un `stepId` envoyé avec lui ne
- *   le range pas ailleurs : ce n'était, le plus souvent, que l'étape où le
- *   voyage en était.
+ * - Un **récit** — un vocal, un texte — ouvre sa propre étape, dans l'ordre
+ *   où il a été vécu (`capturedAt`). Un `stepId` envoyé avec lui ne le range
+ *   pas ailleurs : ce n'était, le plus souvent, que l'étape où le voyage en
+ *   était.
+ * - …**sauf s'il prolonge le précédent** (``FactEntry/continuesPrevious``) :
+ *   il rejoint alors son étape au lieu d'en ouvrir une. C'est l'écrivain qui
+ *   le dit, à la rédaction — lui seul lit les deux récits. « Et sinon, le
+ *   soir, on est retournés au même bar » n'est pas une étape de plus.
+ *   Le voyageur peut le défaire depuis la carte, et sa main l'emporte.
+ *   ⚠️ Un récit qui prolonge **le premier de la liste** ne prolonge rien : il
+ *   ouvre l'étape, faute de précédent.
  * - Une **photo** rejoint l'étape choisie par le voyageur s'il y en a une,
  *   sinon le récit qu'elle illustre, sinon le dernier récit vécu avant elle
  *   (le premier, si elle les précède tous). Sans aucun récit, les photos
@@ -170,6 +185,16 @@ export function groupIntoSteps(
       photos.push(entry);
       continue;
     }
+    // Prolonger le précédent, c'est le rejoindre : son groupe grandit, et
+    // aucune étape ne s'ouvre. Le lieu reste celui du récit qui a ouvert
+    // l'étape — c'est lui qui la nomme.
+    const previous = stories[stories.length - 1];
+    if (entry.continuesPrevious && previous) {
+      previous.entries.push(entry);
+      storyOf.set(entry.id, previous);
+      continue;
+    }
+
     const group: StepGroup = { place: placeOf(entry), entries: [entry], stepId: null, pinned: false };
     stories.push(group);
     storyOf.set(entry.id, group);
@@ -248,6 +273,8 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
           createdAt: true,
           stepId: true,
           insights: true,
+          continuesPreviousStep: true,
+          separatedByTraveller: true,
           media: { select: { cdnUrl: true } },
         },
       });
@@ -259,6 +286,8 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
         stepId: row.stepId,
         insights: parseInsights(row.insights),
         cdnUrl: row.media?.cdnUrl ?? null,
+        // La main l'emporte sur la machine, comme partout ici.
+        continuesPrevious: row.continuesPreviousStep && !row.separatedByTraveller,
       }));
 
       const before = [...memo.steps].sort((a, b) => b.number - a.number)[0] ?? null;

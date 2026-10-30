@@ -253,6 +253,13 @@ public actor PreviewAPI: MemoBookAPI {
         )
     }
 
+    /// Séparer, dans le double : les récits d'une étape en ouvrent chacun une.
+    /// Le jeu d'essai n'en réunit aucune, donc rien ne bouge.
+    public func separateStep(tripId: String, stepId: String) async throws -> TripDetail {
+        _ = stepId
+        return try await tripDetail(id: tripId)
+    }
+
     public func gallery() async throws -> Gallery { .fixture }
 
     public func tripThemes() async throws -> [TripTheme] { TripTheme.fixtures }

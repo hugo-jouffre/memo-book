@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Jimp } from "jimp";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeResponder } from "../src/services/conversation.js";
+import { refreshTripFacts } from "../src/services/tripFacts.js";
 import {
   ACKNOWLEDGED_EARLIER,
   LISTENING_FOR_REVISION,
@@ -559,8 +560,9 @@ async function readSteps(memoId: string) {
     headers: { authorization: owner.authorization },
   });
   expect(response.statusCode).toBe(200);
-  return response.json<{ steps: { id: string; number: number; entryIds: string[]; photoUrl: string | null }[] }>()
-    .steps;
+  return response.json<{
+    steps: { id: string; number: number; entryIds: string[]; photoUrl: string | null; storyCount: number }[];
+  }>().steps;
 }
 
 describe("le téléphone du tour (lot B5, 22/10/2026)", () => {
@@ -690,6 +692,51 @@ describe("une étape par récit (Hugo, 12/10/2026)", () => {
 });
 
 /**
+ * **Un message n'est pas toujours une étape** (Hugo, 28/10/2026). La
+ * rédaction dit qu'un récit en prolonge un autre ; les deux ne font alors
+ * qu'une étape, et le voyageur peut les séparer s'il n'est pas d'accord.
+ */
+describe("grouper deux récits en une étape (Hugo, 28/10/2026)", () => {
+  it("les réunit, puis les sépare quand le voyageur le demande", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, "On a passé la matinée au Colisée, il y avait un monde fou devant l'entrée.");
+    await say(memo.id, "Et sinon le soir, on est retournés boire un verre au même endroit.");
+    expect(await readSteps(memo.id)).toHaveLength(2);
+
+    // Ce que la rédaction aurait compris : le second prolonge le premier.
+    const [, second] = await harness.prisma.entry.findMany({
+      where: { memoId: memo.id },
+      orderBy: { createdAt: "asc" },
+    });
+    await harness.prisma.entry.update({
+      where: { id: second!.id },
+      data: { continuesPreviousStep: true },
+    });
+    await refreshTripFacts(harness.prisma, memo.id);
+
+    const grouped = await readSteps(memo.id);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0]?.storyCount).toBe(2);
+
+    // « Séparer ces récits » : la main l'emporte sur la machine.
+    const separated = await harness.app.inject({
+      method: "POST",
+      url: `/v1/trips/${memo.id}/steps/${grouped[0]!.id}/separate`,
+      headers: { authorization: owner.authorization },
+    });
+    expect(separated.statusCode).toBe(200);
+
+    const apart = await readSteps(memo.id);
+    expect(apart.map((step) => step.number)).toEqual([1, 2]);
+    expect(apart.every((step) => step.storyCount === 1)).toBe(true);
+
+    // Et une rédaction qui repasse ne les réunira plus.
+    await refreshTripFacts(harness.prisma, memo.id);
+    expect(await readSteps(memo.id)).toHaveLength(2);
+  });
+});
+
+/**
  * **Un message peut contenir plusieurs étapes** (Hugo, 28/10/2026).
  *
  * L'écrivain entend les moments distincts d'un même récit et les propose ;
@@ -768,6 +815,17 @@ describe("découper un récit en plusieurs étapes (Hugo, 28/10/2026)", () => {
     });
 
     // Et deux cartes sur l'accueil du voyage.
+    expect(await readSteps(memo.id)).toHaveLength(2);
+
+    // **Et rien ne les recollera** : la rédaction des parts juge aussi si un
+    // récit prolonge le précédent, et deux parts d'un même récit, elle les
+    // dirait prolongées. Même si elle le dit, elles restent séparées — le
+    // voyageur l'a demandé (`separatedByTraveller`).
+    await harness.prisma.entry.update({
+      where: { id: after[1]!.id },
+      data: { continuesPreviousStep: true },
+    });
+    await refreshTripFacts(harness.prisma, memo.id);
     expect(await readSteps(memo.id)).toHaveLength(2);
   });
 
