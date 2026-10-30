@@ -335,10 +335,35 @@ public actor PendingRecordingStore {
         )
     }
 
-    /// Relit la file. Une fiche illisible — disque abîmé — est **jetée avec ses
-    /// fichiers** plutôt que de faire échouer la lecture entière : un souvenir
-    /// perdu ne doit pas en bloquer neuf autres. Une fiche qui promet un
-    /// fichier absent aussi.
+    /// Le dossier où dorment les fiches qu'on n'a pas su relire — voir
+    /// ``readFromDisk()``. Il n'est jamais lu par l'app : il existe pour que
+    /// rien ne soit détruit, et pour qu'une version suivante puisse revenir
+    /// les chercher.
+    private var quarantine: URL { directory.appending(path: "illisibles") }
+
+    /// Relit la file. Une fiche illisible ne fait pas échouer la lecture
+    /// entière : un souvenir perdu ne doit pas en bloquer neuf autres.
+    ///
+    /// ⚠️ **Et elle n'est plus jetée** (Hugo, 28/10/2026 — « s'assurer que le
+    /// passage d'une version à une autre ne fasse pas perdre ce que les
+    /// utilisateurs ont commencé à raconter »). Elle l'était, avec son audio,
+    /// dès le premier lancement qui ne savait pas la relire. Or une fiche
+    /// devient illisible pour deux raisons : un disque abîmé — rare —, et un
+    /// **changement de format** entre deux versions de l'app — le jour où
+    /// ``PendingTurn`` gagne un champ obligatoire, se renomme, ou qu'une
+    /// version plus récente a écrit une fiche que celle-ci ne comprend pas.
+    /// Ce jour-là, la mise à jour détruisait en silence tous les vocaux qui
+    /// n'étaient pas partis, et un vocal qui n'est pas parti n'existe nulle
+    /// part ailleurs.
+    ///
+    /// Elle part donc en quarantaine, **avec ses fichiers**, au lieu d'être
+    /// supprimée. Ça ne la renvoie pas toute seule — il faudra du code pour
+    /// la relire —, mais ça laisse la chose possible, et c'est la seule
+    /// propriété qui compte : une suppression, elle, ne se rattrape pas.
+    ///
+    /// Une fiche qui promet un fichier absent est supprimée, elle : il n'y a
+    /// plus rien à envoyer ni à sauver, et la garder ferait grossir le dossier
+    /// d'une promesse vide.
     private func readFromDisk() -> [PendingTurn] {
         let manager = FileManager.default
         guard let files = try? manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
@@ -351,7 +376,7 @@ public actor PendingRecordingStore {
             guard let data = try? Data(contentsOf: url),
                 let turn = try? decoder.decode(PendingTurn.self, from: data)
             else {
-                try? manager.removeItem(at: url)
+                setAside(url)
                 return nil
             }
             let filesArePresent = turn.filenames.indices.allSatisfy { index in
@@ -362,6 +387,37 @@ public actor PendingRecordingStore {
                 return nil
             }
             return turn
+        }
+    }
+
+    /// Met une fiche illisible de côté, avec les fichiers qui portent son nom.
+    ///
+    /// Les fichiers sont retrouvés par **préfixe** et non par la fiche : on ne
+    /// sait justement pas la lire, donc on ne connaît ni son identifiant ni le
+    /// nombre de fichiers qu'elle promettait. Le nom du fichier JSON, lui, est
+    /// l'identifiant (``metadataURL(_:)``).
+    ///
+    /// Tout échec est ignoré : ne pas réussir à mettre de côté ne doit pas
+    /// empêcher de lire les neuf autres fiches. La fiche reste alors où elle
+    /// est — illisible, mais toujours là.
+    private func setAside(_ url: URL) {
+        let manager = FileManager.default
+        try? manager.createDirectory(at: quarantine, withIntermediateDirectories: true)
+
+        let id = url.deletingPathExtension().lastPathComponent
+        let siblings =
+            (try? manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil))?
+            .filter { $0.lastPathComponent.hasPrefix(id) } ?? [url]
+
+        for file in siblings {
+            let destination = quarantine.appending(path: file.lastPathComponent)
+            // Une quarantaine d'un lancement précédent porte déjà ce nom : on
+            // garde la plus ancienne, qui est la plus proche de l'original.
+            guard !manager.fileExists(atPath: destination.path(percentEncoded: false)) else {
+                try? manager.removeItem(at: file)
+                continue
+            }
+            try? manager.moveItem(at: file, to: destination)
         }
     }
 }
