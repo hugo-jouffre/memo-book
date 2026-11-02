@@ -313,6 +313,18 @@ private struct BookCompositionView: View {
                     .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
                     .accessibilityHidden(true)
 
+                // **Le bandeau prend la place de la carte**, et non celle du
+                // bas de l'écran (02/11/2026) : posé sous les boutons, il
+                // tombait hors de la vue, si bien qu'un échec se lisait comme
+                // une page blanche figée — la carte était partie, et rien
+                // n'était venu la remplacer. On a cru à une composition sans
+                // fin pendant une journée.
+                if let message = model.errorMessage {
+                    ErrorBanner(message: message) {
+                        Task { await model.retry() }
+                    }
+                }
+
                 BookActionsBlock(
                     // La composition est en cours : il n'y a rien à commander
                     // encore, mais on peut déjà aller régler son style.
@@ -320,12 +332,6 @@ private struct BookCompositionView: View {
                     onCustomise: { onIntent(.customise) },
                     onOrder: { onIntent(.order) }
                 )
-
-                if let message = model.errorMessage {
-                    ErrorBanner(message: message) {
-                        Task { await model.retry() }
-                    }
-                }
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.top, MemoBookSpacing.xs)
