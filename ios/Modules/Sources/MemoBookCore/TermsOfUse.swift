@@ -14,6 +14,10 @@ import Foundation
 //
 // ⚠️ **C'est le site qui fait foi** : memobook.fr doit publier le même texte,
 // le même jour que l'app.
+//
+// **Un seul texte pour les deux stores** (Clara, 02/11/2026) : le chapitre 5
+// nomme Android et iPhone dans la même phrase, et ce fichier dit mot pour mot
+// ce que dit son jumeau `TermsOfUse.kt`.
 
 public enum TermsOfUse {
     private static let contactLink = LegalContact.emailLink
@@ -113,11 +117,15 @@ public enum TermsOfUse {
 
     // MARK: - 5. Abonnement
 
-    /// L'abonnement mensuel (Hugo, 03/10/2026). Ce qu'Apple exige d'un
+    /// L'abonnement mensuel (Hugo, 03/10/2026). Ce que les stores exigent d'un
     /// abonnement à renouvellement automatique — prix, durée, renouvellement,
     /// résiliation — et ce que le produit a décidé : l'illimité est personnel,
-    /// il reste ouvert jusqu'au bout de la période payée, et les remboursements
-    /// passent par Apple.
+    /// il reste ouvert jusqu'au bout de la période payée.
+    ///
+    /// **Un seul texte pour les deux stores** (Clara, 02/11/2026) : chaque
+    /// phrase dit Android *et* iPhone, et le jumeau Kotlin porte les mêmes
+    /// mots. Un abonnement reste chez le store qui l'a vendu, le compte
+    /// MemoBook passe d'un téléphone à l'autre.
     public static let subscription = LegalChapter(
         id: "cgu.abonnement",
         number: 5,
@@ -128,20 +136,21 @@ public enum TermsOfUse {
             .heading("Prix et paiement"),
             .bullets([
                 "L’abonnement est un abonnement à renouvellement automatique, au prix de 4,99 € TTC par mois. Le prix applicable est celui affiché dans l’application au moment de la souscription.",
-                "Il est souscrit et payé via l’App Store d’Apple : le montant est prélevé sur votre compte Apple à la confirmation de l’achat, puis à chaque renouvellement. MemoBook ne reçoit ni ne conserve aucune donnée bancaire.",
-                "Toute modification du prix vous est annoncée à l’avance, selon les règles de l’App Store, et vous laisse la possibilité de résilier avant qu’elle ne s’applique.",
+                "Il est souscrit et payé via le store de votre téléphone : sur Android, via Google Play, le montant étant prélevé avec le moyen de paiement de votre compte Google ; sur iPhone, via l’App Store d’Apple, le montant étant prélevé sur votre compte Apple. Le prélèvement a lieu à la confirmation de l’achat, puis à chaque renouvellement. MemoBook ne reçoit ni ne conserve aucune donnée bancaire.",
+                "Un abonnement reste payé et géré par le store où il a été souscrit, et s’utilise sur l’autre plateforme avec le même compte MemoBook.",
+                "Toute modification du prix vous est annoncée à l’avance, selon les règles du store où vous avez souscrit, et vous laisse la possibilité de résilier avant qu’elle ne s’applique.",
             ]),
 
             .heading("Renouvellement et résiliation"),
             .bullets([
                 "L’abonnement se renouvelle automatiquement chaque mois, au même prix, sauf résiliation au moins 24 heures avant la fin de la période en cours.",
-                "Vous pouvez gérer et résilier votre abonnement à tout moment dans les réglages de votre compte Apple (Réglages de l’iPhone, votre nom, puis Abonnements).",
+                "Vous pouvez gérer et résilier votre abonnement à tout moment dans le store où vous l’avez souscrit : sur Android, dans le Play Store (votre profil, Paiements et abonnements, puis Abonnements) ou sur play.google.com ; sur iPhone, dans les réglages de votre compte Apple (Réglages de l’iPhone, votre nom, puis Abonnements).",
                 "La résiliation prend effet à la fin de la période déjà payée : l’accès illimité reste ouvert jusqu’à cette date, puis le service revient à l’utilisation gratuite décrite au chapitre 4. Vos carnets et vos contenus sont conservés.",
                 "Quand votre dernier voyage en cours se termine, MemoBook vous rappelle que vous pouvez résilier votre abonnement.",
             ]),
 
             .heading("Remboursement"),
-            .paragraph("Une période commencée est due : la résiliation n’entraîne aucun remboursement au prorata de la période en cours. Les demandes de remboursement sont traitées par Apple, selon ses propres conditions, depuis [reportaproblem.apple.com](https://reportaproblem.apple.com)."),
+            .paragraph("Une période commencée est due : la résiliation n’entraîne aucun remboursement au prorata de la période en cours. Les demandes de remboursement suivent les règles du store où l’abonnement a été souscrit. Souscrit sur Android : dans les 48 heures qui suivent un achat, depuis l’historique des commandes de votre compte Google Play ([play.google.com](https://play.google.com), Paiements et abonnements, puis « Signaler un problème ») ; au-delà, écrivez-nous à \(contactLink), nous étudions chaque demande et pouvons rembourser depuis Google Play. Souscrit sur iPhone : elles sont traitées par Apple, depuis [reportaproblem.apple.com](https://reportaproblem.apple.com)."),
         ]
     )
 

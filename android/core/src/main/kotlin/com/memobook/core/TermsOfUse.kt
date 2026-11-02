@@ -16,11 +16,11 @@ package com.memobook.core
 // ⚠️ **C'est le site qui fait foi** : memobook.fr doit publier le même texte,
 // le même jour que l'app.
 //
-// **La version Google Play** (A8b, 23/10/2026) : recopié de l'app iOS, sauf
-// le chapitre 5, où l'abonnement se paie, se gère, se résilie et se rembourse
-// par Google Play — et où un abonnement pris sur un iPhone reste chez Apple.
-// Chaque phrase changée est listée dans la PR, pour Clara. ⚠️ Le site doit
-// porter les deux versions, ou un texte qui vaut pour les deux stores.
+// **Un seul texte pour les deux stores** (Clara, 02/11/2026) : le chapitre 5
+// nomme Android et iPhone dans la même phrase, et ce fichier dit mot pour mot
+// ce que dit son jumeau `TermsOfUse.swift`. Un abonnement reste payé et géré
+// par le store qui l'a vendu ; le compte MemoBook, lui, passe d'un téléphone à
+// l'autre. ⚠️ memobook.fr publie ce texte-là, et lui seul.
 
 object TermsOfUse {
     private const val contactLink = LegalContact.emailLink
@@ -130,8 +130,12 @@ object TermsOfUse {
      * L'abonnement mensuel (Hugo, 03/10/2026). Ce que les stores exigent d'un
      * abonnement à renouvellement automatique — prix, durée, renouvellement,
      * résiliation — et ce que le produit a décidé : l'illimité est personnel,
-     * il reste ouvert jusqu'au bout de la période payée. Sur Android, il se
-     * paie et se résilie par Google Play ; le jumeau iOS dit l'App Store.
+     * il reste ouvert jusqu'au bout de la période payée.
+     *
+     * **Un seul texte pour les deux stores** (Clara, 02/11/2026) : chaque
+     * phrase dit Android *et* iPhone, et le jumeau Swift porte les mêmes mots.
+     * Un abonnement reste chez le store qui l'a vendu, le compte MemoBook
+     * passe d'un téléphone à l'autre.
      */
     val subscription = LegalChapter(
         id = "cgu.abonnement",
@@ -143,21 +147,21 @@ object TermsOfUse {
             LegalBlock.Heading("Prix et paiement"),
             LegalBlock.Bullets(listOf(
                 "L’abonnement est un abonnement à renouvellement automatique, au prix de 4,99 € TTC par mois. Le prix applicable est celui affiché dans l’application au moment de la souscription.",
-                "Sur Android, il est souscrit et payé via Google Play : le montant est prélevé avec le moyen de paiement de votre compte Google à la confirmation de l’achat, puis à chaque renouvellement. MemoBook ne reçoit ni ne conserve aucune donnée bancaire.",
-                "Un abonnement souscrit sur un iPhone reste payé via l’App Store d’Apple, selon ses règles : il s’utilise aussi sur Android, avec le même compte MemoBook.",
-                "Toute modification du prix vous est annoncée à l’avance, selon les règles de Google Play, et vous laisse la possibilité de résilier avant qu’elle ne s’applique.",
+                "Il est souscrit et payé via le store de votre téléphone : sur Android, via Google Play, le montant étant prélevé avec le moyen de paiement de votre compte Google ; sur iPhone, via l’App Store d’Apple, le montant étant prélevé sur votre compte Apple. Le prélèvement a lieu à la confirmation de l’achat, puis à chaque renouvellement. MemoBook ne reçoit ni ne conserve aucune donnée bancaire.",
+                "Un abonnement reste payé et géré par le store où il a été souscrit, et s’utilise sur l’autre plateforme avec le même compte MemoBook.",
+                "Toute modification du prix vous est annoncée à l’avance, selon les règles du store où vous avez souscrit, et vous laisse la possibilité de résilier avant qu’elle ne s’applique.",
             )),
 
             LegalBlock.Heading("Renouvellement et résiliation"),
             LegalBlock.Bullets(listOf(
                 "L’abonnement se renouvelle automatiquement chaque mois, au même prix, sauf résiliation au moins 24 heures avant la fin de la période en cours.",
-                "Vous pouvez gérer et résilier votre abonnement à tout moment dans le Play Store (votre profil, Paiements et abonnements, puis Abonnements), ou sur play.google.com. Un abonnement souscrit sur un iPhone se résilie dans les réglages de cet iPhone.",
+                "Vous pouvez gérer et résilier votre abonnement à tout moment dans le store où vous l’avez souscrit : sur Android, dans le Play Store (votre profil, Paiements et abonnements, puis Abonnements) ou sur play.google.com ; sur iPhone, dans les réglages de votre compte Apple (Réglages de l’iPhone, votre nom, puis Abonnements).",
                 "La résiliation prend effet à la fin de la période déjà payée : l’accès illimité reste ouvert jusqu’à cette date, puis le service revient à l’utilisation gratuite décrite au chapitre 4. Vos carnets et vos contenus sont conservés.",
                 "Quand votre dernier voyage en cours se termine, MemoBook vous rappelle que vous pouvez résilier votre abonnement.",
             )),
 
             LegalBlock.Heading("Remboursement"),
-            LegalBlock.Paragraph("Une période commencée est due : la résiliation n’entraîne aucun remboursement au prorata de la période en cours. Les demandes de remboursement suivent les règles de Google Play : dans les 48 heures qui suivent un achat, elles se font depuis l’historique des commandes de votre compte Google Play ([play.google.com](https://play.google.com), Paiements et abonnements, puis « Signaler un problème ») ; au-delà, écrivez-nous à $contactLink : nous étudions chaque demande et pouvons rembourser depuis Google Play. Celles d’un abonnement souscrit sur un iPhone sont traitées par Apple, depuis [reportaproblem.apple.com](https://reportaproblem.apple.com)."),
+            LegalBlock.Paragraph("Une période commencée est due : la résiliation n’entraîne aucun remboursement au prorata de la période en cours. Les demandes de remboursement suivent les règles du store où l’abonnement a été souscrit. Souscrit sur Android : dans les 48 heures qui suivent un achat, depuis l’historique des commandes de votre compte Google Play ([play.google.com](https://play.google.com), Paiements et abonnements, puis « Signaler un problème ») ; au-delà, écrivez-nous à $contactLink, nous étudions chaque demande et pouvons rembourser depuis Google Play. Souscrit sur iPhone : elles sont traitées par Apple, depuis [reportaproblem.apple.com](https://reportaproblem.apple.com)."),
         )
     )
 
