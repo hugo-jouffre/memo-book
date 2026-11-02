@@ -583,6 +583,12 @@ a.btn {
   border-color: var(--ink);
 }
 
+/* Pas encore écrite : le cadre ne réclame pas l'attention. */
+.page-a-ecrire {
+  border-color: var(--line);
+  border-style: dashed;
+}
+
 .page-ecrite textarea {
   font-size: 0.9375rem;
   line-height: 1.5;
