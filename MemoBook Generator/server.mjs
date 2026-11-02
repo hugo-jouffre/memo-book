@@ -12,7 +12,8 @@
  *  2. écrire les vocaux sur le disque pour que `transcribe-whatsapp.sh`
  *     les transcrive — c'est bien le script du dépôt qui travaille, pas une
  *     seconde implémentation qui divergerait de lui ;
- *  3. relayer l'appel de découpage vers OpenAI ou Anthropic.
+ *  3. relayer les appels de modèle — découpage, analyse, rédaction — vers
+ *     OpenAI ou Anthropic, et servir les règles d'écriture du dépôt.
  *
  * Il écoute sur 127.0.0.1 uniquement : c'est un outil d'établi, pas un service.
  */
@@ -329,7 +330,7 @@ async function transcrire(req, res) {
 
 /* ------------------------------------------------------------- découpage --- */
 
-async function appelerAnthropic(cle, modele, consigne) {
+async function appelerAnthropic(cle, modele, consigne, systeme) {
   const reponse = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -342,6 +343,11 @@ async function appelerAnthropic(cle, modele, consigne) {
       // L'analyse d'une étape chargée de photos dépasse 4 000 jetons : un JSON
       // tronqué fait perdre toute l'analyse — lieux, cartes et fun facts.
       max_tokens: 8000,
+      // Les règles de rédaction sont identiques d'une étape à l'autre : mises
+      // en cache, elles ne sont facturées plein tarif qu'à la première.
+      ...(systeme
+        ? { system: [{ type: "text", text: systeme, cache_control: { type: "ephemeral" } }] }
+        : {}),
       messages: [{ role: "user", content: consigne }],
     }),
   });
@@ -355,14 +361,17 @@ async function appelerAnthropic(cle, modele, consigne) {
     .join("\n");
 }
 
-async function appelerOpenai(cle, modele, consigne) {
+async function appelerOpenai(cle, modele, consigne, systeme) {
   const base = process.env.OPENAI_API_BASE || "https://api.openai.com/v1";
   const reponse = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { authorization: `Bearer ${cle}`, "content-type": "application/json" },
     body: JSON.stringify({
       model: modele,
-      messages: [{ role: "user", content: consigne }],
+      messages: [
+        ...(systeme ? [{ role: "system", content: systeme }] : []),
+        { role: "user", content: consigne },
+      ],
       response_format: { type: "json_object" },
     }),
   });
@@ -407,13 +416,19 @@ async function decouper(req, res) {
 }
 
 /**
- * Analyse d'une étape pour la mise en page (lieu, photo ↔ paragraphe, scènes).
- * La consigne arrive construite par la page (`consigneAnalyseEtape`), avec les
- * vignettes ; le serveur ne fait qu'ajouter la clé et relayer, comme pour le
- * découpage. `appelerAnthropic` et `appelerOpenai` acceptent un contenu en
- * plusieurs blocs, images comprises.
+ * Le relais de modèle : la page construit la consigne, le serveur ajoute la
+ * clé et renvoie le JSON du modèle. Deux usages, même code, deux routes pour
+ * que le journal et les coûts se lisent séparément :
+ *
+ *  - `/api/analyser` — l'analyse d'une étape pour la mise en page (lieu,
+ *    photo ↔ paragraphe, scènes), avec les vignettes (`consigneAnalyseEtape`) ;
+ *  - `/api/rediger` — la réécriture d'une étape, sans image, avec les règles
+ *    d'écriture en prompt système (`consigneRedaction`, `systemeRedaction`).
+ *
+ * `appelerAnthropic` et `appelerOpenai` acceptent un contenu en plusieurs
+ * blocs, images comprises.
  */
-async function analyser(req, res) {
+async function relayer(req, res) {
   const corps = await lireJson(req);
   const veutAnthropic = corps.fournisseur === "anthropic";
   const nomCle = veutAnthropic ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
@@ -423,13 +438,32 @@ async function analyser(req, res) {
   const modele =
     corps.modele || (veutAnthropic ? DEFAUTS.modeleAnthropic : DEFAUTS.modeleOpenai);
   const contenu = messagesAnalyse(String(corps.consigne || ""), corps.images || [], veutAnthropic);
+  const systeme = corps.systeme ? String(corps.systeme) : null;
   const brut = await (veutAnthropic
-    ? appelerAnthropic(cle, modele, contenu)
-    : appelerOpenai(cle, modele, contenu)
+    ? appelerAnthropic(cle, modele, contenu, systeme)
+    : appelerOpenai(cle, modele, contenu, systeme)
   ).catch((erreur) => {
     throw erreurAvecSource(erreur, source);
   });
   repondreJson(res, 200, extraireJson(brut));
+}
+
+/**
+ * Les règles d'écriture, lues sur le disque et servies telles quelles.
+ *
+ * `agents/agent-transcription.md` **est** le prompt système de la rédaction
+ * (`loadWritingRules`, `backend/src/services/redaction.ts`) : l'atelier le
+ * relaie plutôt que d'en garder une paraphrase, qui aurait dérivé à la
+ * première retouche du fichier. En local c'est la copie de travail — donc la
+ * branche en cours — qui fait foi.
+ */
+async function reglesRedaction(req, res) {
+  const chemin = join(RACINE, "agents", "agent-transcription.md");
+  if (!existsSync(chemin)) {
+    throw new ErreurHttp(404, "agents/agent-transcription.md introuvable : pas de règles, pas de réécriture");
+  }
+  const regles = await readFile(chemin, "utf8");
+  repondreJson(res, 200, { regles, source: "agents/agent-transcription.md" });
 }
 
 /**
@@ -488,7 +522,9 @@ async function router(req, res) {
 
   if (req.method === "POST" && chemin === "/api/transcrire") return transcrire(req, res);
   if (req.method === "POST" && chemin === "/api/decouper") return decouper(req, res);
-  if (req.method === "POST" && chemin === "/api/analyser") return analyser(req, res);
+  if (req.method === "POST" && chemin === "/api/analyser") return relayer(req, res);
+  if (req.method === "POST" && chemin === "/api/rediger") return relayer(req, res);
+  if (req.method === "GET" && chemin === "/api/regles-redaction") return reglesRedaction(req, res);
   if (req.method === "POST" && chemin === "/api/image") return image(req, res);
 
   if (req.method === "GET") return servirStatique(res, chemin);

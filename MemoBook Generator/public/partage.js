@@ -241,6 +241,184 @@ Réponds uniquement par un objet JSON, sans texte autour :
 {"lieu":{"nom":"","pays":"","lat":0,"lon":0,"genre":"ville"},"lieux":[{"nom":"","pays":"","lat":0,"lon":0,"genre":"site"}],"trajets":[{"depart":{"nom":"","pays":"","lat":0,"lon":0},"arrivee":{"nom":"","pays":"","lat":0,"lon":0},"mode":"avion"}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","legende":"","personnes":0,"couverture":0}],"funFacts":[{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}],"quiz":{"question":"","choix":["","",""],"reponse":""}}`;
   }
 
+  /* -------------------------------------------------------------- rédaction --- */
+
+  /**
+   * Le barème des tailles d'étape, recopié de `STEP_SIZES`
+   * (`backend/src/services/payloadValidator.ts`) : la rédaction de l'atelier
+   * vise les mêmes longueurs que celle du pipeline, et la mise en page compte
+   * sur des paragraphes de 379 signes au plus.
+   */
+  const TAILLES_ETAPE = {
+    S: { min: 200, max: 379, paragraphes: 1 },
+    M: { min: 380, max: 559, paragraphes: 2 },
+    L: { min: 560, max: 899, paragraphes: 3 },
+    XL: { min: 900, max: 1440, paragraphes: 4 },
+  };
+
+  /** Le plafond d'un paragraphe, en signes : celui de la taille S (`EDITORIAL_LIMITS`). */
+  const PARAGRAPHE_MAX = TAILLES_ETAPE.S.max;
+
+  const bareme = () =>
+    Object.entries(TAILLES_ETAPE)
+      .map(
+        ([nom, t]) =>
+          `${nom} ${t.min}–${t.max} (${t.paragraphes} paragraphe${t.paragraphes > 1 ? "s" : ""})`,
+      )
+      .join(", ");
+
+  /**
+   * La densité que la cible de pages demande, lue par rapport au palier « Par
+   * défaut » du voyage : recopie de `pageDensity`
+   * (`backend/src/services/pageTarget.ts`), paliers à ×2/3 et ×4/3 compris.
+   */
+  function densiteDeLaCible(pagesCible, jours) {
+    const standard = !jours || jours <= 0 ? 60 : Math.min(Math.max(Math.round(jours / 10) * 10, 30), 180);
+    const ratio = (Number(pagesCible) || standard) / standard;
+    if (ratio <= 5 / 6) return "compact";
+    if (ratio >= 7 / 6) return "detaille";
+    return "standard";
+  }
+
+  /** Ce que la densité dit à l'écrivain, en une ligne (`pageDensityInstruction`). */
+  const LIGNE_DENSITE = {
+    compact:
+      "récit **compact** : prends la plus petite taille qui garde le cœur de l'étape (S ou M le plus souvent, L pour une étape qui porte le voyage, jamais XL). Garde le cœur, laisse les détails secondaires.",
+    detaille:
+      "récit **détaillé** : quand les vocaux ont la matière, prends la taille au-dessus (L ou XL) et garde les détails, les noms, les petites scènes. Sans matière, reste court : on ne gonfle jamais.",
+    standard:
+      "récit **par défaut** : la taille que la matière des vocaux demande, sans tirer vers le court ni vers le long.",
+  };
+
+  /**
+   * Le prompt système de la rédaction : les règles d'écriture **telles
+   * quelles**, comme le fait le pipeline (`AnthropicRedactor.buildSystemPrompt`).
+   *
+   * `agents/agent-transcription.md` **est** le prompt, pas une paraphrase : le
+   * serveur local le lit sur le disque, la version en ligne le prend sur
+   * GitHub (`/api/regles-redaction`, `MoteurNavigateur.reglesRedaction`). Sans
+   * lui, l'atelier ne réécrit pas : mieux vaut le texte brut que des règles
+   * inventées ici, qui divergeraient du carnet que l'app produit.
+   */
+  function systemeRedaction(regles) {
+    return [
+      "Tu es l'écrivain de MemoBook. D'un souvenir raconté à l'oral, tu fais la page de",
+      "carnet de voyage que le voyageur aurait écrite lui-même : tu comprends d'abord ce",
+      "qu'il a vécu et ce qu'il voulait en dire, puis tu l'écris.",
+      "",
+      "Les règles ci-dessous font autorité et s'appliquent intégralement, sans exception.",
+      "Elles priment sur tes habitudes de rédaction. En cas de conflit entre deux règles,",
+      "la hiérarchie des quatre principes tranche.",
+      "",
+      "Tu réponds uniquement par l'objet JSON demandé.",
+      "",
+      "---",
+      "",
+      String(regles || "").trim(),
+    ].join("\n");
+  }
+
+  /**
+   * La consigne de rédaction d'une étape de l'atelier.
+   *
+   * Deux écarts avec le pipeline, assumés : une étape d'atelier porte
+   * **plusieurs vocaux** — la taille visée se compte donc par vocal —, et
+   * l'atelier n'a ni fiche de cohérence ni conversation. Ce qui en tient lieu :
+   * les étapes déjà réécrites, données en contexte pour la voix et les
+   * graphies, et le contexte du carnet déduit par le découpage.
+   *
+   * Le titre, le lieu et les dates ne sont pas redemandés : le découpage les a
+   * déjà écrits, et le voyageur les corrige à la main.
+   */
+  function consigneRedaction({ carnet, etape, precedentes, pagesCible, jours }) {
+    const lignes = ["## Le carnet", `Titre : ${carnet?.titre || "(pas encore de titre)"}`];
+    if (carnet?.destination) lignes.push(`Destination : ${carnet.destination}`);
+    if (carnet?.dateDebut || carnet?.dateFin) {
+      lignes.push(`Dates du voyage : ${carnet.dateDebut || "?"} → ${carnet.dateFin || "?"}`);
+    }
+    if (carnet?.voyageurs) lignes.push(`Voyageurs : ${carnet.voyageurs}`);
+    if (carnet?.rencontres?.length) lignes.push(`Rencontres déjà nommées : ${carnet.rencontres.join(", ")}`);
+    if (pagesCible) {
+      const densite = densiteDeLaCible(pagesCible, jours);
+      lignes.push(`Nombre de pages cible du carnet : ${pagesCible} — ${LIGNE_DENSITE[densite]}`);
+    }
+
+    lignes.push(
+      "",
+      "## Qui raconte",
+      carnet?.voyageurs
+        ? `Le narrateur est le premier des voyageurs : ${carnet.voyageurs}. S'il parle de lui à la ` +
+            "troisième personne, c'est de lui-même (§ 1.3)."
+        : "Le narrateur n'est pas nommé : écris à la première personne, sans lui inventer de prénom.",
+    );
+
+    const voisines = (precedentes || []).slice(-3);
+    if (voisines.length) {
+      lignes.push(
+        "",
+        `## Les ${voisines.length} étapes précédentes, déjà écrites`,
+        "Elles donnent le ton, le rythme, la voix à tenir et les graphies déjà fixées.",
+        "Ne les résume pas, ne les reprends pas : enchaîne. La dernière phrase de la dernière",
+        "étape et la première phrase de la tienne ne doivent pas se recouvrir.",
+      );
+      for (const voisine of voisines) {
+        lignes.push(
+          "",
+          `### ${voisine.titre || "(sans titre)"}${voisine.lieu ? ` — ${voisine.lieu}` : ""}`,
+          voisine.texte,
+        );
+      }
+    } else {
+      lignes.push(
+        "",
+        "## Première étape du carnet",
+        "C'est toi qui ouvres le carnet : la personne, le temps et les appellations que tu",
+        "choisis ici engagent toutes les étapes suivantes.",
+      );
+    }
+
+    const vocaux = (etape?.souvenirs || []).filter((s) => String(s.texte || "").trim());
+    lignes.push(
+      "",
+      "## L'étape à rédiger",
+      `Titre déjà écrit : « ${etape?.titre || "(sans titre)"} »`,
+      etape?.lieu ? `Lieu : ${etape.lieu}` : "Lieu : non précisé par le voyageur",
+      etape?.dateDebut || etape?.dateFin
+        ? `Dates racontées : ${etape.dateDebut || "?"}${etape.dateFin && etape.dateFin !== etape.dateDebut ? ` → ${etape.dateFin}` : ""}`
+        : "Dates : inconnues",
+      "",
+      `Ses ${vocaux.length} vocal(aux), transcrits par une machine qui entend mal les noms propres et`,
+      "l'argot (§ 1.2), dans l'ordre où ils ont été enregistrés. Le jour raconté est celui que dit",
+      "le voyageur : souvent le jour même ou la veille, parfois bien avant.",
+    );
+    vocaux.forEach((s, i) => {
+      const quand = [s.date, s.heure].filter(Boolean).join(" ");
+      lignes.push("", `### Vocal ${i + 1}${quand ? ` — envoyé le ${quand}` : ""}`, "```", String(s.texte).trim(), "```");
+    });
+
+    lignes.push(
+      "",
+      "## Rappels",
+      "- Une seule page de carnet pour toute l'étape : les vocaux sont la matière d'un même",
+      "  moment, pas des textes à mettre bout à bout. Les redites d'un vocal à l'autre se fondent.",
+      `- Le barème des tailles — ${bareme()} — se compte **par vocal** : ${vocaux.length} vocal(aux)`,
+      `  dans cette étape, soit une étape qui va de la taille d'un vocal à ${vocaux.length} fois celle-là,`,
+      "  selon la matière. On ne gonfle jamais ce que le voyageur n'a pas raconté.",
+      `- **${PARAGRAPHE_MAX} caractères au plus par paragraphe**, séparés par une ligne vide : au-delà,`,
+      "  la mise en page refuse le texte.",
+      "- Texte nu : ni HTML, ni Markdown, ni emoji, ni titre dans le texte.",
+      "- Tout ce que tu écris se retrouve dans les vocaux. Pas de culture générale dans le récit :",
+      "  l'atelier a une passe séparée pour les encarts et les quiz.",
+      "- Un mot que tu n'as pas compris ne s'imprime pas : il va dans `doutes`, que tu laisses",
+      "  vide quand tout est clair.",
+      "",
+      "Réponds uniquement par un objet JSON, sans texte autour et sans balises de code :",
+      '{"texte":"premier paragraphe\\n\\nsecond paragraphe","doutes":["",""]}',
+    );
+
+    return lignes.join("\n");
+  }
+
   /**
    * Le contenu du message d'analyse : la consigne, puis chaque photo précédée
    * d'une ligne « Photo <id> », au format du fournisseur. Les images sont des
@@ -315,6 +493,10 @@ Réponds uniquement par un objet JSON, sans texte autour :
     extraireJson,
     consigneDecoupage,
     consigneAnalyseEtape,
+    consigneRedaction,
+    systemeRedaction,
+    densiteDeLaCible,
+    PARAGRAPHE_MAX,
     messagesAnalyse,
   };
 

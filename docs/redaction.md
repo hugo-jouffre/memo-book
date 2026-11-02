@@ -23,6 +23,15 @@
 et avec qui, les dates du voyage et de l'étape, la fiche de cohérence du carnet,
 les trois dernières étapes écrites, tous les titres et encarts déjà employés.
 
+**Deux lecteurs du même prompt.** Le pipeline de l'app, et depuis le
+02/11/2026 l'atelier carnet (`MemoBook Generator`), qui réécrit les étapes d'un
+carnet bêta avant de le générer. L'atelier charge le même
+`agents/agent-transcription.md` — par le serveur local, ou sur `main` pour la
+version en ligne — au lieu d'en garder une paraphrase : une retouche des règles
+vaut pour les deux au prochain lancement. Ce qui diffère, c'est le contexte
+(une étape d'atelier porte plusieurs vocaux, et il n'y a ni fiche de cohérence
+ni conversation) : `consigneRedaction`, dans `MemoBook Generator/public/partage.js`.
+
 **Ce qu'il rend** : sa lecture du vocal (`understanding` — le cœur de l'étape,
 le ton, ce que veut dire chaque passage oral), le titre, le récit, la météo
 — seulement si le vocal la dit clairement, `null` sinon —, l'encart éventuel, la fiche de cohérence mise à jour, le relevé pour les
@@ -72,6 +81,46 @@ mesurerait plus rien. On illustre avec des voyages inventés (Lisbonne, l'Algarv
 Clara, Tom).
 
 ## 4. Journal
+
+### 02/11/2026 — L'atelier réécrit, avant de générer
+
+**Le constat** (Hugo). Dans l'atelier carnet, l'API Claude ne servait qu'au
+découpage en étapes et à l'analyse pour la mise en page — deux consignes qui
+interdisent explicitement de réécrire. Le carnet bêta s'imprimait donc sur les
+transcriptions brutes, et rien dans l'outil ne le disait : on ne voyait le
+texte qu'en ouvrant le PDF.
+
+**Ce qui change.** Une passe de réécriture par étape, dans l'atelier, avec les
+règles de `agent-transcription.md` en prompt système. Elle tourne au bouton
+« Réécrire les étapes avec l'IA », et de toute façon avant la génération. Le
+texte s'affiche dans la carte de l'étape, s'édite à la main, part dans le JSON
+(`texte`, `texte_source`) et dans le PDF. Ce qui est imprimé est ce qui est
+relu : c'était le but.
+
+**Les choix**
+
+1. **Les règles telles quelles, pas une copie.** Le serveur local sert le
+   fichier du dépôt (`/api/regles-redaction`), la version en ligne le prend sur
+   `main`. Sans les règles, pas de réécriture : l'atelier laisse le texte brut
+   plutôt que d'écrire avec une plume inventée ici.
+2. **La main passe avant le modèle**, comme `editedText` dans l'app : un texte
+   corrigé n'est jamais réécrit par une passe. Seul le bouton d'une étape
+   repasse par-dessus, sur un clic explicite.
+3. **Le barème se compte par vocal.** Une étape d'atelier en groupe plusieurs ;
+   S/M/L/XL par vocal, 379 caractères par paragraphe comme la validation.
+4. **Rien n'est repayé deux fois** : une empreinte de l'étape (vocaux, titre,
+   lieu, dates, densité) dit si la réécriture est encore valable, et elle suit
+   l'étape dans le fichier d'avancement.
+5. **La réécriture passe avant l'analyse** : l'analyse associe les photos aux
+   paragraphes du texte imprimé, et les fun facts en sortent.
+
+**Ce qui reste ouvert**
+
+- Pas de fiche de cohérence dans l'atelier : la voix tient par les trois étapes
+  précédentes données en contexte, pas par un état relu et réécrit.
+- Le banc (§ 3) ne couvre pas cette passe : elle n'a pas les mêmes entrées.
+- Le coût d'un carnet complet n'est pas mesuré — un appel par étape, les règles
+  mises en cache après la première.
 
 ### 02/10/2026 — Comprendre avant d'écrire
 
@@ -150,3 +199,5 @@ Prime) et ajoutait des bons mots (« une sieste stratégique »).
 | 02/10/2026 | Les règles des textes du carnet entier sortent du prompt, dans `agent-transcription-carnet.md` | reco Claude |
 | 02/10/2026 | Un paragraphe : 379 caractères, comme la validation du carnet | reco Claude |
 | 02/10/2026 | Toute modification des règles se mesure sur le banc, avant et après ; l'historique s'écrit ici, jamais dans le prompt | Hugo, reco Claude |
+| 02/11/2026 | L'atelier carnet réécrit ses étapes avec le prompt du dépôt, chargé tel quel — jamais une paraphrase | Hugo, reco Claude |
+| 02/11/2026 | Le texte réécrit se lit et se corrige dans l'atelier, avant la génération, et c'est lui qui part dans le JSON | Hugo |

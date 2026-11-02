@@ -340,6 +340,13 @@ const etat = {
   journal: [],
   transcriptionEnCours: false,
   classementEnCours: false,
+  redactionEnCours: false,
+  /**
+   * Les règles d'écriture (`agents/agent-transcription.md`), chargées à la
+   * première réécriture : c'est le prompt système de la rédaction, identique
+   * d'une étape à l'autre.
+   */
+  reglesRedaction: null,
   erreur: "",
   info: "",
   montrerExport: false,
@@ -953,6 +960,10 @@ function construireEtape(segment, souvenirs, anciens) {
     manuel: { ...manuel },
     souvenirs,
     photos: ancienne?.photos ? [...ancienne.photos] : [],
+    // La réécriture suit l'étape : un vocal ajouté ailleurs dans le carnet ne
+    // doit pas faire repayer celles qui n'ont pas bougé. `cleRedaction` dit
+    // ensuite si elle est encore valable.
+    redaction: ancienne?.redaction || null,
   };
 }
 
@@ -1338,6 +1349,16 @@ function construireJson() {
         lieu: e.lieu,
         date_debut: e.dateDebut,
         date_fin: e.dateFin || e.dateDebut,
+        // Le texte qui s'imprime, et d'où il vient : « reecrit » par le
+        // modèle, « corrige » à la main par-dessus, ou « brut » quand l'étape
+        // n'est pas passée par la réécriture. Les paragraphes sont ceux de la
+        // mise en page.
+        texte: recitDe(e),
+        texte_source: sourceDuTexte(e),
+        paragraphes: paragraphesDe(e),
+        ...(e.redaction?.modele ? { texte_modele: e.redaction.modele } : {}),
+        ...(e.redaction?.doutes?.length ? { texte_doutes: e.redaction.doutes } : {}),
+        // La matière : les transcriptions telles que le voyageur les a relues.
         souvenirs: e.souvenirs.map((s) => ({
           texte: s.texte,
           date: s.date,
@@ -1555,6 +1576,7 @@ function etapesPourMiseEnPage(photoDe) {
     lieuComplet: lieuComplet(etape.lieu, etat.carnet.destination),
     dateLongue: dateLongue(etape.dateDebut),
     recit: recitDe(etape),
+    paragraphes: paragraphesDe(etape),
     photos: etape.photos
       .filter((p) => p.data)
       .map((p) => ({
@@ -1575,7 +1597,42 @@ function etapesPourMiseEnPage(photoDe) {
   }));
 }
 
-const recitDe = (etape) => etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
+/**
+ * Le texte imprimé d'une étape : celui de la réécriture quand elle a abouti —
+ * corrigé à la main s'il l'a été —, sinon les transcriptions bout à bout.
+ *
+ * Tout ce qui lit le carnet passe par ici — mise en page, analyse d'étape,
+ * JSON, textes de couverture : la chaîne ne connaît qu'un seul texte, celui
+ * qui s'imprime.
+ */
+const recitDe = (etape) => texteReecrit(etape) || recitBrut(etape);
+
+/** Les transcriptions de l'étape bout à bout, telles que le voyageur les a relues. */
+const recitBrut = (etape) => etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
+
+/** Le texte réécrit de l'étape ; vide tant qu'aucune réécriture n'a abouti. */
+const texteReecrit = (etape) => String(etape.redaction?.texte || "").trim();
+
+/**
+ * Les paragraphes de l'étape. Ceux que l'écrivain a séparés d'une ligne vide
+ * sont respectés, mais repassés par `enParagraphes` : un paragraphe plus long
+ * qu'une page ferait refuser le texte par la mise en page, et l'écrivain ne
+ * connaît pas la hauteur des pages.
+ */
+function paragraphesDe(etape) {
+  const voulus = texteReecrit(etape)
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (!voulus.length) return MiseEnPage.enParagraphes(recitBrut(etape));
+  return voulus.flatMap((p) => MiseEnPage.enParagraphes(p));
+}
+
+/** D'où vient le texte imprimé : pour le JSON, et pour l'étiquette de l'étape. */
+function sourceDuTexte(etape) {
+  if (!texteReecrit(etape)) return "brut";
+  return etape.redaction?.manuel ? "corrige" : "reecrit";
+}
 
 /**
  * Les pages du livre tel qu'il part chez Pumbo : celles du PDF **en version
@@ -3139,6 +3196,252 @@ async function importerFichePumbo(fichier) {
   rendreColonne();
 }
 
+/* --------------------------------------------------- réécriture des étapes --- */
+
+/**
+ * La réécriture est la passe que l'app fait à l'enregistrement du vocal
+ * (`backend/src/services/redaction.ts`) : d'une transcription orale, la page
+ * de carnet que le voyageur aurait écrite. L'atelier la fait étape par étape,
+ * **avant** la mise en page et avant la génération, pour qu'on lise le texte
+ * du carnet dans l'outil au lieu de le découvrir dans le PDF.
+ *
+ * Trois règles tiennent le reste :
+ *
+ * - le prompt système, ce sont les règles d'écriture du dépôt, telles quelles
+ *   (`agents/agent-transcription.md`) : l'atelier n'a pas sa propre plume ;
+ * - un texte corrigé à la main n'est jamais réécrit — comme `editedText` dans
+ *   l'app, la main du voyageur passe avant le modèle ;
+ * - une étape inchangée n'est pas repayée (`cleRedaction`).
+ */
+
+/** À changer quand `consigneRedaction` demande autre chose : les textes gardés se refont. */
+const VERSION_REDACTION = "1-redaction";
+
+/**
+ * La clé d'une réécriture : ce qui, s'il change, la rend caduque — les
+ * transcriptions, ce que le découpage a écrit de l'étape, et la densité que la
+ * cible de pages demande. Elle voyage avec l'étape dans le fichier
+ * d'avancement, comme celle de l'analyse.
+ */
+function cleRedaction(etape) {
+  return empreinte(
+    [
+      VERSION_REDACTION,
+      etape.titre || "",
+      etape.lieu || "",
+      etape.dateDebut || "",
+      etape.dateFin || "",
+      densiteDuCarnet(),
+      recitBrut(etape),
+    ].join("|"),
+  );
+}
+
+/** La densité de récit que la cible de pages demande : `compact`, `standard` ou `detaille`. */
+const densiteDuCarnet = () => densiteDeLaCible(pagesDuFormat(), joursDuVoyage());
+
+/** L'état de la réécriture d'une étape, pour l'étiquette et pour la passe. */
+function etatRedaction(etape) {
+  if (!texteReecrit(etape)) return "absente";
+  if (etape.redaction?.manuel) return "manuelle";
+  return etape.redaction?.cle === cleRedaction(etape) ? "a-jour" : "perimee";
+}
+
+/** Les étapes qu'une passe de réécriture doit écrire : ni à jour, ni corrigées à la main. */
+const aReecrire = (etape) =>
+  recitBrut(etape).length > 0 && ["absente", "perimee"].includes(etatRedaction(etape));
+
+/** La clé disponible pour un fournisseur : celle de la page, sinon celle du serveur. */
+const cleDisponible = (fournisseur) =>
+  fournisseur === "anthropic"
+    ? etat.reglages.cleAnthropic?.trim() || etat.config?.cleServeur?.anthropic
+    : etat.reglages.cleOpenai?.trim() || etat.config?.cleServeur?.openai;
+
+/**
+ * Le fournisseur de la réécriture : **Anthropic dès qu'une clé est là**, quel
+ * que soit le sélecteur du découpage.
+ *
+ * Les règles d'écriture sont écrites pour Claude, et c'est Claude qui écrit le
+ * carnet dans l'app : un carnet bêta d'une autre plume ne dirait rien de ce
+ * que le voyageur recevra. Sans clé Anthropic, on écrit quand même avec OpenAI
+ * — un texte d'une autre plume vaut mieux qu'une transcription brute — et le
+ * journal le dit.
+ */
+function fournisseurRedaction() {
+  if (cleDisponible("anthropic")) return "anthropic";
+  return cleDisponible("openai") ? "openai" : null;
+}
+
+/** Le modèle de la réécriture : celui des réglages s'il vise le même fournisseur, sinon son défaut. */
+const modeleRedaction = (fournisseur) =>
+  etat.reglages.fournisseurDecoupage === fournisseur && etat.reglages.modeleDecoupage.trim()
+    ? etat.reglages.modeleDecoupage.trim()
+    : MODELE_PAR_FOURNISSEUR[fournisseur];
+
+/** Le serveur relaie en local ; en ligne la page appelle l'API elle-même. */
+async function appelRedaction(corps) {
+  if (etat.mode === "navigateur") return MoteurNavigateur.rediger(corps);
+  return appelJson("/api/rediger", corps);
+}
+
+/**
+ * Les règles d'écriture, lues une fois par session. En local elles viennent du
+ * dépôt sur le disque — donc de la branche en cours ; en ligne, de `main`.
+ */
+async function chargerReglesRedaction() {
+  if (etat.reglesRedaction) return etat.reglesRedaction;
+  const lu =
+    etat.mode === "navigateur"
+      ? await MoteurNavigateur.reglesRedaction()
+      : await (async () => {
+          const reponse = await fetch("/api/regles-redaction");
+          const donnees = await reponse.json().catch(() => ({}));
+          if (!reponse.ok) throw new Error(donnees.erreur || `Erreur ${reponse.status}`);
+          return donnees;
+        })();
+  etat.reglesRedaction = lu.regles;
+  noter(`Règles d'écriture chargées — ${lu.source}, ${nombre(lu.regles.length)} signes.`);
+  return etat.reglesRedaction;
+}
+
+/** Les étapes déjà écrites qui précèdent celle-ci, pour tenir la voix du carnet. */
+function voisinesEcrites(etape) {
+  const index = etat.etapes.indexOf(etape);
+  return etat.etapes
+    .slice(0, Math.max(0, index))
+    .filter((e) => texteReecrit(e))
+    .map((e) => ({ titre: e.titre, lieu: e.lieu, texte: texteReecrit(e) }));
+}
+
+/**
+ * Réécrit les étapes qui le demandent, **une par une dans l'ordre du récit** :
+ * chaque étape reçoit les trois précédentes déjà écrites, et c'est ce qui tient
+ * la voix, les graphies et les enchaînements d'un bout à l'autre du carnet. En
+ * parallèle, elles s'ignoreraient.
+ *
+ * Un échec laisse l'étape sur son texte brut : le carnet se fait quand même.
+ */
+async function redigerEtapes(statut = () => {}, etapes = etat.etapes) {
+  const aFaire = etapes.filter(aReecrire);
+  if (!aFaire.length) return { faites: 0, echecs: 0 };
+  const fournisseur = fournisseurRedaction();
+  if (!fournisseur) {
+    statut("Pas de clé de modèle : étapes laissées en texte brut, sans réécriture.");
+    noter("Pas de clé de modèle : aucune étape réécrite — le carnet s'imprimera sur les transcriptions.", "err");
+    return { faites: 0, echecs: aFaire.length };
+  }
+  const modele = modeleRedaction(fournisseur);
+  if (fournisseur !== "anthropic") {
+    noter(
+      `Pas de clé Anthropic : la réécriture passe par ${modele}. Les règles d'écriture sont ` +
+        "faites pour Claude, et c'est lui qui écrit le carnet dans l'app — le texte sera d'une autre plume.",
+      "err",
+    );
+  }
+
+  let regles;
+  try {
+    regles = await chargerReglesRedaction();
+  } catch (erreur) {
+    noter(`Règles d'écriture introuvables (${erreur.message}) — étapes laissées en texte brut.`, "err");
+    return { faites: 0, echecs: aFaire.length };
+  }
+  const systeme = systemeRedaction(regles);
+
+  etat.redactionEnCours = true;
+  rendreEtapes();
+  let faites = 0;
+  let echecs = 0;
+  let premiereErreur = null;
+  try {
+    for (const etape of aFaire) {
+      statut(`Réécriture des étapes… ${faites + echecs} / ${aFaire.length}`);
+      try {
+        const resultat = await appelRedaction({
+          fournisseur,
+          modele,
+          cleOpenai: etat.reglages.cleOpenai,
+          cleAnthropic: etat.reglages.cleAnthropic,
+          systeme,
+          consigne: consigneRedaction({
+            carnet: { ...etat.carnet, rencontres: etat.rencontres },
+            etape,
+            precedentes: voisinesEcrites(etape),
+            pagesCible: pagesDuFormat(),
+            jours: joursDuVoyage(),
+          }),
+        });
+        const texte = String(resultat?.texte || "").trim();
+        if (!texte) throw new Error("le modèle n'a renvoyé aucun texte");
+        etape.redaction = {
+          cle: cleRedaction(etape),
+          texte,
+          doutes: (resultat.doutes || []).filter((d) => String(d || "").trim()).slice(0, 6),
+          modele,
+          manuel: false,
+        };
+        faites += 1;
+        // Le texte apparaît étape après étape : on suit la réécriture.
+        rendreEtapes();
+      } catch (erreur) {
+        echecs += 1;
+        premiereErreur ||= erreur;
+        debugCarnet(`réécriture de l'étape « ${etape.titre || etape.lieu} » impossible`, erreur);
+      }
+    }
+  } finally {
+    etat.redactionEnCours = false;
+  }
+
+  if (faites) noter(`${faites} étape(s) réécrite(s) par le modèle.`);
+  if (echecs) {
+    noter(
+      `Réécriture impossible pour ${echecs} étape(s) sur ${aFaire.length} — elles s'imprimeront ` +
+        `sur leur texte brut : ${premiereErreur?.message || premiereErreur}`,
+      "err",
+    );
+  }
+  statut(`Réécriture terminée — ${faites} étape(s) écrite(s)${echecs ? `, ${echecs} en échec` : ""}.`);
+  rendreEtapes();
+  majStats();
+  return { faites, echecs };
+}
+
+/** « Réécrire les étapes », depuis le bouton : la passe, puis le carnet à jour. */
+async function reecrireToutesLesEtapes() {
+  if (etat.redactionEnCours) return;
+  const annoncer = (texte) => {
+    etat.info = texte;
+    rendreGroupe();
+  };
+  const aFaire = etat.etapes.filter(aReecrire).length;
+  if (!aFaire) {
+    etat.info = "Toutes les étapes sont déjà écrites : corrige un texte ou un vocal pour en relancer une.";
+    rendreGroupe();
+    return;
+  }
+  await redigerEtapes(annoncer);
+  apresChangement();
+}
+
+/** « Réécrire » sur une étape : elle seule repasse, même si elle était à jour. */
+async function reecrireUneEtape(etapeId) {
+  if (etat.redactionEnCours) return;
+  const etape = etat.etapes.find((e) => e.id === etapeId);
+  if (!etape) return;
+  // Un clic explicite sur une étape l'emporte sur la main et sur la clé : c'est
+  // le seul moyen de reprendre un texte qu'on a modifié puis regretté.
+  etape.redaction = null;
+  await redigerEtapes(
+    (texte) => {
+      etat.info = texte;
+      rendreGroupe();
+    },
+    [etape],
+  );
+  apresChangement();
+}
+
 /* ------------------------------------------- analyse d'étape et cartes --- */
 
 const CONTOURS_CARTE_URL =
@@ -3158,6 +3461,11 @@ function cleAnalyse(etape) {
     recitDe(etape),
     ...etape.photos.filter((p) => p.data).map((p) => `${p.id}:${p.largeur}x${p.hauteur}`),
   ].join("|");
+  return empreinte(contenu);
+}
+
+/** L'empreinte d'un contenu : la longueur et un hachage court, assez pour dire « ça a changé ». */
+function empreinte(contenu) {
   let h = 0;
   for (let i = 0; i < contenu.length; i += 1) h = (Math.imul(31, h) + contenu.charCodeAt(i)) | 0;
   return `${contenu.length}-${(h >>> 0).toString(36)}`;
@@ -3196,10 +3504,7 @@ async function appelAnalyse(corps) {
  */
 async function analyserEtapes(statut = () => {}) {
   const fournisseur = etat.reglages.fournisseurDecoupage;
-  const anthropic = fournisseur === "anthropic";
-  const avecCle =
-    (anthropic ? etat.reglages.cleAnthropic : etat.reglages.cleOpenai)?.trim() ||
-    (anthropic ? etat.config?.cleServeur?.anthropic : etat.config?.cleServeur?.openai);
+  const avecCle = cleDisponible(fournisseur);
   const aFaire = etat.etapes.filter((e) => e.analyse?.cle !== cleAnalyse(e));
   if (!aFaire.length) return { faites: 0, echecs: 0 };
   if (!avecCle) {
@@ -3218,7 +3523,7 @@ async function analyserEtapes(statut = () => {}) {
       const consigne = consigneAnalyseEtape({
         lieu: etape.lieu,
         destination: etat.carnet.destination,
-        paragraphes: MiseEnPage.enParagraphes(recitDe(etape)),
+        paragraphes: paragraphesDe(etape),
         photos,
         // De quoi tenir environ un fun fact toutes les trois pages : une étape
         // fait à peu près une page par 700 signes de récit, plus ses planches.
@@ -3386,8 +3691,17 @@ function dessinerCarteChapitre(requete) {
   return Carte.renderMapDataUri(etat.contoursCarte, requete);
 }
 
-/** Ce qui précède la mise en page : l'analyse des étapes et les contours de carte. */
+/**
+ * Ce qui précède la mise en page : la réécriture des étapes, leur analyse et
+ * les contours de carte.
+ *
+ * La réécriture passe **en premier**, et seule : l'analyse associe les photos
+ * aux paragraphes du texte imprimé, et les fun facts en sortent. Analyser le
+ * texte brut pour imprimer le texte réécrit donnerait des photos à côté de
+ * leur passage.
+ */
 async function preparerMiseEnPage(statut) {
+  await redigerEtapes(statut);
   await Promise.all([analyserEtapes(statut), chargerContoursCarte(), chargerStickers()]);
   await Promise.all([chargerContoursDetail(), chargerRuesDesVilles()]);
   // La netteté et l'exposition de chaque photo : quand une étape en a trop,
@@ -3846,6 +4160,79 @@ function selecteurEtapePhoto(photoId, etapeIdActuelle) {
   );
   select.value = etapeIdActuelle || "";
   return select;
+}
+
+/** L'étiquette de la réécriture d'une étape : d'où vient le texte affiché. */
+function libelleRedaction(etape) {
+  switch (etatRedaction(etape)) {
+    case "a-jour":
+      return `✦ réécrit par ${etape.redaction.modele} · ${nombre(texteReecrit(etape).length)} signes`;
+    case "manuelle":
+      return `corrigé à la main · ${nombre(texteReecrit(etape).length)} signes`;
+    case "perimee":
+      return "les vocaux ont changé depuis — à réécrire";
+    default:
+      return "pas encore réécrit : le carnet s'imprimerait sur les transcriptions";
+  }
+}
+
+/**
+ * Le texte de carnet de l'étape, tel qu'il s'imprimera — visible dans
+ * l'atelier et non plus seulement dans le PDF (Hugo, 02/11/2026).
+ *
+ * Il s'édite ici : la correction prime sur le modèle, et aucune passe ne la
+ * réécrit (`aReecrire`). Le bouton de l'étape, lui, repasse par-dessus quand
+ * on le demande explicitement.
+ */
+function blocRedaction(etape) {
+  const texte = texteReecrit(etape);
+  const doutes = etape.redaction?.doutes || [];
+  return h(
+    "div",
+    { class: `redaction${texte ? "" : " redaction-vide"}` },
+    h(
+      "div",
+      { class: "redaction-tete" },
+      h("span", { class: "redaction-titre" }, "Texte du carnet"),
+      h("span", { class: "stats" }, libelleRedaction(etape)),
+      h(
+        "span",
+        { class: "fin" },
+        bouton(texte ? "Réécrire" : "Écrire avec l'IA", {
+          petit: true,
+          desactive: etat.redactionEnCours || !recitBrut(etape),
+          titre: texte
+            ? "Redemande le texte de cette étape au modèle, par-dessus celui-ci"
+            : "Écrit le texte de carnet de cette étape à partir de ses vocaux",
+          surClic: () => reecrireUneEtape(etape.id),
+        }),
+      ),
+    ),
+    h("textarea", {
+      value: texte,
+      placeholder:
+        "Rien encore. « Écrire avec l'IA » fait la page de carnet de cette étape à partir des vocaux ci-dessous ; sans elle, ce sont les transcriptions qui s'impriment.",
+      rows: Math.min(18, Math.max(3, Math.ceil((texte.length || 0) / 70) + (texte.match(/\n/g) || []).length)),
+      // Pas de rendu ici : le DOM affiche déjà la frappe, et re-rendre volerait
+      // le curseur au milieu d'une phrase.
+      oninput: (ev) => {
+        const valeur = ev.target.value;
+        etape.redaction = {
+          ...(etape.redaction || { doutes: [], modele: "" }),
+          cle: etape.redaction?.cle || cleRedaction(etape),
+          texte: valeur,
+          manuel: true,
+        };
+        majStats();
+      },
+    }),
+    doutes.length > 0 &&
+      h(
+        "p",
+        { class: "aide" },
+        `Ce que l'écrivain n'a pas compris, et n'a donc pas écrit : ${doutes.join(" · ")}`,
+      ),
+  );
 }
 
 function carteSouvenir(s, conteneurId) {
@@ -4693,6 +5080,7 @@ function rendreEtapes() {
           }),
         ),
       ),
+      blocRedaction(e),
       e.photos.length > 0 &&
         h("div", { class: "grille-photos" }, e.photos.map((p) => cartePhoto(p, e.id))),
       h("div", { class: "pile" }, e.souvenirs.map((s) => carteSouvenir(s, e.id))),
@@ -4805,6 +5193,13 @@ function rendreGroupe() {
           desactive: etat.classementEnCours,
           titre: "Redemande un découpage complet au modèle",
           surClic: redecouper,
+        }),
+        bouton(etat.redactionEnCours ? "Réécriture en cours…" : "Réécrire les étapes avec l'IA", {
+          desactive: etat.redactionEnCours || etat.classementEnCours,
+          titre:
+            "Écrit le texte de carnet de chaque étape à partir de ses vocaux, dans la plume de " +
+            "l'app. Les textes corrigés à la main et ceux déjà à jour ne repassent pas.",
+          surClic: reecrireToutesLesEtapes,
         }),
         etat.groupeModifie &&
           bouton("Annuler mes modifications", {

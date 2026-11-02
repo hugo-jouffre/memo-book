@@ -208,17 +208,23 @@
   }
 
   /**
-   * Analyse d'une étape pour la mise en page : la consigne, puis chaque photo
-   * précédée de son identifiant. Mêmes fournisseurs et mêmes clés que le
-   * découpage ; le corps des messages est construit par `messagesAnalyse`,
-   * partagé avec le serveur local.
+   * Le relais de modèle depuis la page : la consigne, les photos éventuelles
+   * précédées de leur identifiant, et les règles d'écriture en prompt système
+   * quand il y en a. Mêmes fournisseurs et mêmes clés que le découpage ; le
+   * corps des messages est construit par `messagesAnalyse`, partagé avec le
+   * serveur local.
+   *
+   * Il sert l'analyse d'étape (avec images, sans système) et la rédaction
+   * (sans image, avec système) : le serveur local a les deux routes sur le
+   * même code, pour la même raison.
    */
-  async function analyser(corps) {
+  async function relayer(corps) {
     const anthropic = corps.fournisseur === "anthropic";
     const cle = ((anthropic ? corps.cleAnthropic : corps.cleOpenai) || "").trim();
     if (!cle) throw new Error(`Aucune clé ${anthropic ? "Anthropic" : "OpenAI"}`);
     const modele = corps.modele || (anthropic ? "claude-opus-5" : "gpt-4o");
     const contenu = globalThis.messagesAnalyse(corps.consigne, corps.images, anthropic);
+    const systeme = corps.systeme ? String(corps.systeme) : null;
 
     const reponse = anthropic
       ? await fetch(`${BASE_ANTHROPIC}/messages`, {
@@ -229,14 +235,26 @@
             "anthropic-dangerous-direct-browser-access": "true",
             "content-type": "application/json",
           },
-          body: JSON.stringify({ model: modele, max_tokens: 8000, messages: [{ role: "user", content: contenu }] }),
+          body: JSON.stringify({
+            model: modele,
+            max_tokens: 8000,
+            // Mises en cache, les règles ne sont facturées plein tarif qu'à la
+            // première étape de la série.
+            ...(systeme
+              ? { system: [{ type: "text", text: systeme, cache_control: { type: "ephemeral" } }] }
+              : {}),
+            messages: [{ role: "user", content: contenu }],
+          }),
         })
       : await fetch(`${BASE_OPENAI}/chat/completions`, {
           method: "POST",
           headers: { authorization: `Bearer ${cle}`, "content-type": "application/json" },
           body: JSON.stringify({
             model: modele,
-            messages: [{ role: "user", content: contenu }],
+            messages: [
+              ...(systeme ? [{ role: "system", content: systeme }] : []),
+              { role: "user", content: contenu },
+            ],
             response_format: { type: "json_object" },
           }),
         });
@@ -247,6 +265,23 @@
       ? donnees.content.filter((b) => b.type === "text").map((b) => b.text).join("\n")
       : donnees.choices?.[0]?.message?.content || "";
     return globalThis.extraireJson(brut);
+  }
+
+  /**
+   * Les règles d'écriture, prises sur GitHub : `agents/agent-transcription.md`
+   * **est** le prompt système de la rédaction, et la page n'a pas le dépôt
+   * sous la main. C'est la version de `main` — en local, le serveur sert la
+   * copie de travail, donc la branche en cours.
+   */
+  async function reglesRedaction() {
+    const reponse = await fetch(
+      "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/agents/agent-transcription.md",
+      { cache: "no-cache" },
+    );
+    if (!reponse.ok) {
+      throw new Error(`règles d'écriture introuvables sur GitHub (HTTP ${reponse.status})`);
+    }
+    return { regles: await reponse.text(), source: "agents/agent-transcription.md (main)" };
   }
 
   /** Une illustration de couverture, directement depuis la page (`genererImage`, `partage.js`). */
@@ -262,5 +297,12 @@
     });
   }
 
-  globalThis.MoteurNavigateur = { transcrire, decouper, analyser, image };
+  globalThis.MoteurNavigateur = {
+    transcrire,
+    decouper,
+    analyser: relayer,
+    rediger: relayer,
+    reglesRedaction,
+    image,
+  };
 })();

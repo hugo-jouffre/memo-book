@@ -59,10 +59,15 @@ tourner » plus bas.
    Chaque étape porte quatre outils : monter, descendre, **dupliquer** et
    supprimer. La duplication recopie souvenirs et photos avec de nouveaux
    identifiants : modifier la copie ne touche pas l'original.
-7. **Génère le JSON** — le bouton passe à « Génération en cours… », puis la
+7. **Réécris les étapes** — « Réécrire les étapes avec l'IA », sous le texte
+   groupé. Chaque étape reçoit son « Texte du carnet » : la page que le
+   voyageur aurait écrite, dans la plume de l'app. Relis-la, corrige-la — ta
+   version n'est plus jamais réécrite. Sautée ici, la passe se fait de toute
+   façon avant la génération du carnet.
+8. **Génère le JSON** — le bouton passe à « Génération en cours… », puis la
    fenêtre d'enregistrement s'ouvre. Le panneau du bas montre ensuite ce qui
    vient d'être écrit.
-8. **Génère le carnet** *(Beta)* — le JSON part chez APITemplate, sur le
+9. **Génère le carnet** *(Beta)* — le JSON part chez APITemplate, sur le
    template de `templates/travel-journal/`, et le PDF s'ouvre dans un onglet.
 
 ### La console
@@ -202,13 +207,16 @@ dépenser sur la clé d'un autre.
 ## Ce que fait le serveur local, et pourquoi il existe
 
 `server.mjs` écoute sur `127.0.0.1` uniquement, sans aucune dépendance npm. Il
-sert trois choses que la page ne peut pas faire seule quand elle tourne en local :
+sert ce que la page ne peut pas faire seule quand elle tourne en local :
 
 | Route | Rôle |
 |---|---|
 | `POST /api/vocaux/<session>` | Écrit un vocal dans `.atelier/vocaux/<session>/`, sous son nom normalisé, en reposant sa date de fichier |
 | `POST /api/transcrire` | Lance `transcribe-whatsapp.sh` et renvoie sa sortie au fil de l'eau (NDJSON) |
 | `POST /api/decouper` | Relaie l'appel de découpage vers OpenAI ou Anthropic |
+| `POST /api/analyser` | Relaie l'analyse d'une étape (lieu, photos, fun facts, quiz) |
+| `POST /api/rediger` | Relaie la réécriture d'une étape, règles d'écriture en prompt système |
+| `GET /api/regles-redaction` | Sert `agents/agent-transcription.md` du dépôt, tel quel |
 
 **La transcription n'est pas réimplémentée.** C'est bien
 `transcribe-whatsapp.sh` qui travaille : le cache par vocal, les
@@ -248,8 +256,48 @@ Les modèles par défaut sont ceux de `backend/src/env.ts` — `gpt-4o` et
 réglages à côté du pipeline et du script. Le champ « Modèle de découpage »
 prend le pas dessus.
 
-Le modèle **ne réécrit rien** : il découpe, titre et date. Le texte du
-voyageur est repris au mot près, comme dans le reste de la chaîne.
+Le modèle du découpage **ne réécrit rien** : il découpe, titre et date. La
+réécriture est une passe à part, ci-dessous.
+
+## Réécriture des étapes
+
+Le carnet ne s'imprime pas sur les transcriptions : chaque étape passe par
+l'écrivain de MemoBook, celui du pipeline (`backend/src/services/redaction.ts`),
+et c'est son texte qui part dans le JSON et dans le PDF.
+
+**Où ça se voit.** Dans chaque étape, le cadre « Texte du carnet » : ce qui
+s'imprimera, tel quel. Il s'édite à la main — ta version fait autorité et
+n'est plus jamais réécrite, comme dans l'app. « Réécrire les étapes avec l'IA »,
+sous le texte groupé, fait la passe complète ; le bouton d'une étape la refait
+pour elle seule, même si elle était à jour.
+
+**Quand ça tourne.** Au bouton, et de toute façon avant « Générer le carnet » :
+l'analyse de mise en page lit le texte imprimé, pas le brouillon. Une étape
+inchangée n'est pas réécrite deux fois — l'empreinte tient compte des vocaux,
+du titre, du lieu, des dates et de la densité que la cible de pages demande.
+
+**Avec quelles règles.** `agents/agent-transcription.md`, le prompt système de
+la rédaction, chargé **tel quel** : le serveur local sert le fichier du dépôt
+(`/api/regles-redaction`), la version en ligne le prend sur `main`. Sans lui,
+l'atelier ne réécrit pas et le dit : mieux vaut le texte brut qu'une plume
+inventée ici, qui divergerait du carnet que l'app produit.
+
+**Ce qui diffère du pipeline**, et c'est assumé : une étape d'atelier porte
+plusieurs vocaux (le barème S/M/L/XL se compte par vocal), il n'y a ni fiche de
+cohérence ni conversation — la voix tient par les trois étapes précédentes,
+données en contexte —, et les encarts comme les quiz restent le travail de la
+passe d'analyse. Le détail est dans `consigneRedaction` (`public/partage.js`)
+et le journal dans [`docs/redaction.md`](../docs/redaction.md) § 4.
+
+**Qui écrit.** Claude (`claude-opus-5`) dès qu'une clé Anthropic est là, quel
+que soit le sélecteur « Découpage en étapes » : les règles sont écrites pour
+lui, et c'est lui qui écrit le carnet dans l'app. Sans clé Anthropic, l'atelier
+écrit quand même avec OpenAI et le dit dans la console — le texte sera d'une
+autre plume. L'étiquette de chaque étape nomme le modèle qui l'a écrite.
+
+**Ce que ça coûte.** Un appel par étape à réécrire. Les règles (40 000 signes)
+sont mises en cache côté Anthropic : elles ne sont facturées plein tarif qu'à
+la première étape de la série.
 
 ## Réglages
 

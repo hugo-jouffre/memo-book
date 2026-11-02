@@ -588,6 +588,48 @@ a.btn {
   margin-bottom: 0.5rem;
 }
 
+/* --- le texte de carnet d'une étape --- */
+
+.redaction {
+  border-radius: 0.625rem;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  background: var(--paper);
+  border: 1px solid var(--forest);
+}
+
+/* Pas encore écrite : le cadre ne réclame pas l'attention. */
+.redaction-vide {
+  border-color: var(--line);
+  border-style: dashed;
+}
+
+.redaction-tete {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.redaction-titre {
+  font-family: var(--titre);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.redaction-tete .fin {
+  margin-left: auto;
+}
+
+.redaction textarea {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
 .grille-photos {
   display: grid;
   gap: 0.5rem;
