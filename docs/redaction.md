@@ -108,6 +108,32 @@ Clara, Tom).
 
 ## 4. Journal
 
+### 02/11/2026 — La page se lit avant le carnet, et part dans le JSON
+
+**Le constat** (Hugo). La rédaction de l'atelier ne tournait qu'à l'intérieur
+de « Générer le carnet » : on ne voyait le texte qu'une fois le PDF ouvert, et
+« Réécrire » sur une étape ne faisait que jeter la page en attendant la
+génération suivante. Le JSON exporté, lui, ne portait que les transcriptions —
+le texte écrit n'existait que dans le PDF.
+
+**Ce qui change**
+
+1. **Un bouton « Écrire les pages »**, sous le texte groupé : la passe seule,
+   sans rien envoyer à APITemplate. C'est là qu'on relit et qu'on corrige.
+2. **« Réécrire » réécrit tout de suite**, pour l'étape cliquée seulement ; les
+   autres, déjà écrites, lui donnent le ton et les titres.
+3. **La carte « Page écrite » est toujours là**, en pointillé tant qu'il n'y a
+   pas de page : l'absence de texte se voit au lieu de se deviner.
+4. **Le JSON porte `texte` et `texte_source`** (`ecrite`, `corrigee`, `brute`),
+   plus `texte_doutes`. Les vocaux restent dans `souvenirs[].texte`.
+5. **Un clic explicite passe outre la case des réglages** : elle gouverne la
+   passe automatique de la génération, pas les boutons — sans quoi le bouton
+   ne ferait rien sans dire pourquoi.
+
+Rien ne change côté prompt, fiche de cohérence ou fournisseur : la passe du
+23/10 est la même, elle est seulement déclenchable et visible.
+
+
 ### 23/10/2026 — L'atelier écrit, lui aussi
 
 **Le constat** (Hugo). Les PDF générés depuis l'atelier en ligne
@@ -229,3 +255,5 @@ Prime) et ajoutait des bons mots (« une sieste stratégique »).
 | 23/10/2026 | Dans l'atelier, encarts et quiz restent à l'analyse d'étape : une seule source par carnet | reco Claude |
 | 23/10/2026 | La rédaction de l'atelier a son propre fournisseur : `claude-opus-5`, comme l'app, pendant que le découpage reste sur OpenAI | Hugo |
 | 02/10/2026 | Toute modification des règles se mesure sur le banc, avant et après ; l'historique s'écrit ici, jamais dans le prompt | Hugo, reco Claude |
+| 02/11/2026 | La page écrite se lit et se corrige dans l'atelier **avant** la génération, pas dans le PDF | Hugo |
+| 02/11/2026 | Le texte imprimé part dans le JSON exporté (`texte`, `texte_source`), à côté des vocaux | Hugo |

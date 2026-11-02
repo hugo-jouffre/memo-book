@@ -363,6 +363,8 @@ const etat = {
   journal: [],
   transcriptionEnCours: false,
   classementEnCours: false,
+  /** Une passe de rédaction est en cours : les boutons qui la relanceraient attendent. */
+  redactionEnCours: false,
   erreur: "",
   info: "",
   montrerExport: false,
@@ -1361,6 +1363,13 @@ function construireJson() {
         lieu: e.lieu,
         date_debut: e.dateDebut,
         date_fin: e.dateFin || e.dateDebut,
+        // Le texte qui s'imprime, et d'où il vient : « ecrite » par l'écrivain,
+        // « corrigee » à la main par-dessus, ou « brute » quand l'étape n'est
+        // pas passée par la rédaction. C'est ce que lit la mise en page.
+        texte: recitDe(e),
+        texte_source: sourceDuTexte(e),
+        ...(e.redaction?.doutes?.length ? { texte_doutes: e.redaction.doutes } : {}),
+        // La matière : les vocaux tels que la machine les a entendus.
         souvenirs: e.souvenirs.map((s) => ({
           texte: s.texte,
           date: s.date,
@@ -3249,6 +3258,12 @@ function cleRedaction(etape) {
 /** Les vocaux de l'étape bout à bout, tels que la machine les a entendus. */
 const brutDe = (etape) => etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
 
+/** D'où vient le texte imprimé : pour le JSON, et pour qui relit le fichier. */
+function sourceDuTexte(etape) {
+  if (!pageEcrite(etape)) return "brute";
+  return etape.redaction?.manuelle ? "corrigee" : "ecrite";
+}
+
 /** La page écrite de l'étape, si elle correspond encore à ses vocaux. */
 const pageEcrite = (etape) =>
   etape.redaction && (etape.redaction.manuelle || etape.redaction.cle === cleRedaction(etape))
@@ -3268,8 +3283,12 @@ const pageEcrite = (etape) =>
  * Sans clé, ou si le modèle échoue, le carnet se fait quand même : l'étape
  * garde sa transcription brute. On le dit, sans bloquer.
  */
-async function redigerEtapes(statut = () => {}) {
-  if (!etat.reglages.redaction) return { faites: 0, echecs: 0 };
+async function redigerEtapes(statut = () => {}, { demandee = false } = {}) {
+  // Le réglage gouverne la passe automatique de la génération. Un clic sur
+  // « Écrire les pages » ou sur « Réécrire » est une demande explicite : elle
+  // passe outre, sinon le bouton ne ferait rien sans dire pourquoi.
+  if (!etat.reglages.redaction && !demandee) return { faites: 0, echecs: 0 };
+  if (etat.redactionEnCours) return { faites: 0, echecs: 0 };
   const aFaire = etat.etapes.filter((e) => brutDe(e) && !pageEcrite(e));
   if (!aFaire.length) return { faites: 0, echecs: 0 };
 
@@ -3310,6 +3329,9 @@ async function redigerEtapes(statut = () => {}) {
   let faites = 0;
   let echecs = 0;
   let premiereErreur = null;
+  etat.redactionEnCours = true;
+  rendreEtapes();
+  rendreGroupe();
   // La fiche de cohérence passe d'une étape à la suivante : c'est la mémoire
   // longue du carnet (prénoms, graphies, personne, temps, voix du narrateur).
   let fiche = etat.ficheCoherence || FICHE_COHERENCE_VIDE;
@@ -3382,6 +3404,9 @@ async function redigerEtapes(statut = () => {}) {
       precedentes.push({ titre: etape.titre, lieu: etape.lieu, texte });
       if (etape.titre) titresEmployes.push(etape.titre);
       faites += 1;
+      // La page apparaît dès qu'elle est écrite : on suit la passe au lieu
+      // d'attendre la fin sans rien voir.
+      rendreEtapes();
     } catch (erreur) {
       echecs += 1;
       premiereErreur ||= erreur;
@@ -3396,16 +3421,54 @@ async function redigerEtapes(statut = () => {}) {
       "err",
     );
   }
-  if (faites) apresChangement();
+  etat.redactionEnCours = false;
+  statut(
+    faites || echecs
+      ? `Pages écrites — ${faites} sur ${aFaire.length}${echecs ? `, ${echecs} en échec` : ""}.`
+      : "Rien à écrire : toutes les pages sont à jour.",
+  );
+  apresChangement();
   return { faites, echecs };
 }
 
-/** Réécrire une étape : la page actuelle part, la suivante se fait à la génération. */
-function reecrireEtape(id) {
+/**
+ * « Écrire les pages » : la passe, à la demande, sans générer le carnet.
+ *
+ * C'est ce qui permet de lire et de corriger le texte **avant** d'envoyer quoi
+ * que ce soit à APITemplate — jusqu'ici, on ne le découvrait qu'en ouvrant le
+ * PDF (Hugo, 02/11/2026).
+ */
+async function ecrireLesPages() {
+  const annoncer = (texte) => {
+    etat.info = texte;
+    rendreGroupe();
+  };
+  if (!etat.etapes.some((e) => brutDe(e) && !pageEcrite(e))) {
+    etat.info = "Toutes les pages sont à jour : « Réécrire » sur une étape pour en refaire une.";
+    rendreGroupe();
+    return;
+  }
+  await redigerEtapes(annoncer, { demandee: true });
+}
+
+/**
+ * « Réécrire » sur une étape : sa page part, et se refait **tout de suite**.
+ *
+ * Les autres étapes, déjà écrites, ne repassent pas — elles donnent seulement
+ * le ton et les titres à celle-ci (`redigerEtapes`).
+ */
+async function reecrireEtape(id) {
   const etape = etat.etapes.find((e) => e.id === id);
-  if (!etape) return;
+  if (!etape || etat.redactionEnCours) return;
   delete etape.redaction;
   apresChangement();
+  await redigerEtapes(
+    (texte) => {
+      etat.info = texte;
+      rendreGroupe();
+    },
+    { demandee: true },
+  );
 }
 
 /* ------------------------------------------- analyse d'étape et cartes --- */
@@ -4129,21 +4192,29 @@ function selecteurEtapePhoto(photoId, etapeIdActuelle) {
 function carteRedaction(etape) {
   const texte = pageEcrite(etape);
   const doutes = etape.redaction?.doutes || [];
+  // Sans page, la carte reste : c'est elle qui dit que le carnet s'imprimerait
+  // sur la transcription brute, et qui offre de l'écrire sur-le-champ.
+  const perimee = Boolean(etape.redaction?.texte) && !texte;
   return h(
     "div",
-    { class: "souvenir page-ecrite" },
+    { class: `souvenir page-ecrite${texte ? "" : " page-a-ecrire"}` },
     h(
       "div",
       { class: "souvenir-meta" },
       h("span", { class: "etiquette" }, "Page écrite"),
       etape.redaction?.manuelle && h("span", {}, "corrigée à la main"),
-      h("span", {}, `${texte.length} signes`),
+      texte
+        ? h("span", {}, `${texte.length} signes`)
+        : h("span", {}, perimee ? "les vocaux ont changé depuis" : "pas encore écrite"),
       h(
         "span",
         { class: "fin" },
-        bouton("Réécrire", {
+        bouton(texte ? "Réécrire" : "Écrire", {
           petit: true,
-          titre: "Jette cette page : elle se réécrit à la prochaine génération",
+          desactive: etat.redactionEnCours,
+          titre: texte
+            ? "Jette cette page et la redemande au modèle, tout de suite"
+            : "Écrit la page de cette étape à partir de ses vocaux, tout de suite",
           surClic: () => reecrireEtape(etape.id),
         }),
       ),
@@ -4156,8 +4227,10 @@ function carteRedaction(etape) {
         )
       : null,
     h("textarea", {
-      value: texte,
-      rows: Math.min(18, Math.max(3, Math.ceil(texte.length / 70))),
+      value: texte || "",
+      placeholder:
+        "Pas encore écrite : sans elle, le carnet s'imprime sur la transcription brute des vocaux ci-dessous.",
+      rows: Math.min(18, Math.max(3, Math.ceil((texte || "").length / 70))),
       oninput: (ev) => {
         // Pas de rendu ici : le DOM affiche déjà la frappe, et re-rendre
         // volerait le curseur au milieu d'une phrase.
@@ -5069,7 +5142,7 @@ function rendreEtapes() {
       ),
       e.photos.length > 0 &&
         h("div", { class: "grille-photos" }, e.photos.map((p) => cartePhoto(p, e.id))),
-      pageEcrite(e) && carteRedaction(e),
+      brutDe(e) && carteRedaction(e),
       h("div", { class: "pile" }, e.souvenirs.map((s) => carteSouvenir(s, e.id))),
       !e.souvenirs.length &&
         !e.photos.length &&
@@ -5177,9 +5250,16 @@ function rendreGroupe() {
           surClic: appliquerTexteEtapes,
         }),
         bouton(etat.classementEnCours ? "Lecture du récit…" : "Redécouper avec l'IA", {
-          desactive: etat.classementEnCours,
+          desactive: etat.classementEnCours || etat.redactionEnCours,
           titre: "Redemande un découpage complet au modèle",
           surClic: redecouper,
+        }),
+        bouton(etat.redactionEnCours ? "Rédaction en cours…" : "Écrire les pages", {
+          desactive: etat.redactionEnCours || etat.classementEnCours,
+          titre:
+            "Écrit la page de carnet de chaque étape qui n'en a pas encore, sans générer le " +
+            "carnet : de quoi la lire et la corriger avant d'envoyer quoi que ce soit",
+          surClic: ecrireLesPages,
         }),
         etat.groupeModifie &&
           bouton("Annuler mes modifications", {

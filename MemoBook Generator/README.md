@@ -59,12 +59,13 @@ tourner » plus bas.
    Chaque étape porte quatre outils : monter, descendre, **dupliquer** et
    supprimer. La duplication recopie souvenirs et photos avec de nouveaux
    identifiants : modifier la copie ne touche pas l'original.
-7. **Les pages s'écrivent** — à la génération, chaque étape passe par
-   l'écrivain de MemoBook avant la mise en page : la transcription brute entre,
-   la page que le voyageur aurait écrite sort. Elle apparaît au-dessus des
-   vocaux dont elle est tirée, se corrige au clavier — une page corrigée à la
-   main n'est plus jamais réécrite — et **Réécrire** la refait. Voir
-   « Rédaction » plus bas.
+7. **Écris les pages** — le bouton « Écrire les pages », sous le texte groupé.
+   Chaque étape passe par l'écrivain de MemoBook : la transcription brute
+   entre, la page que le voyageur aurait écrite sort. Elle apparaît au-dessus
+   des vocaux dont elle est tirée, se corrige au clavier — une page corrigée à
+   la main n'est plus jamais réécrite — et **Réécrire** la refait sur-le-champ.
+   Sauté ici, le tout se fait de toute façon à la génération ; le faire
+   maintenant, c'est pouvoir relire avant d'envoyer. Voir « Rédaction » plus bas.
 8. **Génère le JSON** — le bouton passe à « Génération en cours… », puis la
    fenêtre d'enregistrement s'ouvre. Le panneau du bas montre ensuite ce qui
    vient d'être écrit.
@@ -288,12 +289,28 @@ même :
 - **une étape = tous ses vocaux**, là où le pipeline rédige un vocal à la fois.
   Ils arrivent groupés, chacun daté, et l'écrivain en fait une page d'un tenant.
 
-Dans la colonne, la page écrite s'affiche **au-dessus** des vocaux dont elle est
-tirée. Elle se corrige au clavier — une page corrigée à la main fait autorité et
-n'est plus jamais réécrite, comme `Entry.editedText` dans l'app — et
-**Réécrire** la jette pour qu'elle se refasse à la génération suivante. Un
-passage que l'écrivain n'a pas compris ne s'imprime pas : il est cité sous la
-page et dans la console.
+**Quand ça tourne.** Au bouton « Écrire les pages », sous le texte groupé, et
+de toute façon avant « Générer le carnet » — l'analyse de mise en page lit la
+page écrite, pas le brouillon. Le bouton existe pour qu'on lise et corrige le
+texte **avant** d'envoyer quoi que ce soit à APITemplate : jusqu'au 02/11/2026,
+on ne le découvrait qu'en ouvrant le PDF. Un clic sur « Écrire les pages » ou
+sur « Réécrire » passe outre la case des réglages : c'est une demande
+explicite, elle ne peut pas ne rien faire.
+
+Dans la colonne, la carte « Page écrite » s'affiche **au-dessus** des vocaux
+dont elle est tirée — en pointillé tant qu'il n'y a pas de page, pour qu'on
+sache que le carnet s'imprimerait sur la transcription brute. Elle se corrige
+au clavier — une page corrigée à la main fait autorité et n'est plus jamais
+réécrite, comme `Entry.editedText` dans l'app — et **Réécrire** la refait
+tout de suite, elle seule ; les autres étapes, déjà écrites, lui donnent
+seulement le ton et les titres. Un passage que l'écrivain n'a pas compris ne
+s'imprime pas : il est cité sous la page et dans la console.
+
+**Dans le JSON**, chaque étape porte `texte` — ce qui s'imprime — et
+`texte_source` : `ecrite` par l'écrivain, `corrigee` à la main par-dessus, ou
+`brute` quand l'étape n'est pas passée par la rédaction. Les doutes suivent
+dans `texte_doutes`. Les `souvenirs[].texte` gardent les vocaux tels que la
+machine les a entendus : la matière reste lisible à côté du texte.
 
 Une page est **gardée** tant que ses vocaux, son lieu et la destination ne
 changent pas ; elle voyage avec l'étape dans le fichier d'avancement. Les dates
@@ -314,7 +331,9 @@ les 40 Ko de règles en prompt système. Côté Anthropic elles sont mises en ca
 — facturées plein tarif à la première étape de la série seulement. Compter 1 à
 2 $ pour un carnet d'une dizaine d'étapes, sur le compte Anthropic prépayé que
 l'app partage. La case « Écrire les pages avant la mise en page », dans les
-réglages, revient à la transcription brute.
+réglages, revient à la transcription brute : elle gouverne la passe
+**automatique** de la génération, pas le bouton — décochée, « Écrire les
+pages » écrit quand même ce qu'on lui demande.
 
 Quand la rédaction ne peut pas se faire — pas de clé, règles injoignables,
 modèle en échec —, **le carnet se fait quand même** avec la transcription
