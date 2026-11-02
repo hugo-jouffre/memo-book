@@ -74,7 +74,7 @@ c'est **la vérification sur téléphone**, les clés de Hugo et les lots serveu
 | B4 | Abonnement Google Play côté serveur (compte de service Play d'abord) | ⏳ | Claude, après Hugo | un achat de test rend illimité le même compte sur iPhone |
 | ~~B2~~ | Apple par le web — abandonné le 22/10/2026 | — | — | un compte Apple d'iPhone entre par « Mot de passe oublié » |
 | B5 | Plateforme dans les réponses de MEMO, Google Pay | ⏳ | Claude | MEMO dit « Paramètres du téléphone » sur Android |
-| A8b | CGU, confidentialité et FAQ réécrites pour Google Play | ⏳ | Claude ; Clara relit | la fiche Play peut citer ses textes |
+| A8b | CGU, confidentialité et FAQ réécrites pour Google Play | ✅ #149 | reste la relecture de Clara | la fiche Play peut citer ses textes |
 | A9 | Fiche Play, classification, sécurité des données | ⏳ | Clara | l'app passe l'examen de Google |
 
 ### Les prompts à coller
@@ -93,18 +93,19 @@ Chaque prompt suppose que la PR précédente est fusionnée.
 **A8b — Textes légaux pour Google Play**
 > Lis android/CLAUDE.md et docs/android.md. Les CGU (chapitre 5), la politique de confidentialité (2.4 et 3) et trois réponses de la FAQ parlent de l'App Store et de l'iPhone. Propose, dans `:core` (Android) et `MemoBookCore` (iOS), des textes qui valent pour les deux stores, sans changer le fond ; liste chaque phrase changée dans la PR pour Clara.
 
-## Une décision à prendre (Clara)
+## La décision de Clara — tranchée le 02/11/2026
 
-**La transcription en direct pendant l'enregistrement.** Sur iPhone, le texte
-s'écrit pendant qu'on parle. Sur Android, le micro ne peut pas servir à la fois
-à l'enregistrement et à la reconnaissance vocale avant Android 13. Trois choix :
+**La transcription en direct pendant l'enregistrement : forme d'onde seule sur
+tous les Android** (choix 1). Sur iPhone, le texte s'écrit pendant qu'on parle ;
+sur Android, le micro ne peut pas servir à la fois à l'enregistrement et à la
+reconnaissance vocale avant Android 13. Clara retient le plus simple et le plus
+sûr : la forme d'onde pendant l'enregistrement, et le texte du serveur qui
+arrive comme aujourd'hui. **C'est déjà ce qui est codé** — rien à faire.
 
-1. **Forme d'onde seule sur tous les Android** (recommandé pour le 6/11, **et
-   c'est ce qui est porté**) : le plus simple et le plus sûr ; le texte du
-   serveur arrive comme aujourd'hui.
-2. Transcription en direct sur Android 13+, forme d'onde seule en dessous.
-3. Transcription partout, avec deux micros en concurrence : déconseillé, le
-   vocal risque d'être coupé sur certains téléphones.
+Les deux autres pistes, écartées : la transcription en direct sur Android 13+
+seulement (deux comportements à maintenir), et la transcription partout avec
+deux micros en concurrence (le vocal risque d'être coupé sur certains
+téléphones).
 
 ## Si quelque chose bloque
 
