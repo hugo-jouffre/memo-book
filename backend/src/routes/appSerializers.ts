@@ -970,7 +970,7 @@ export function serializeBookPreview(
     // ça, une régénération en fond ferait disparaître le carnet déjà affiché
     // (`renders.take: 1` ne voit que le rendu en cours, `pdfUrl: null`) le
     // temps qu'elle aboutisse.
-    status: serializeRenderStatus(render?.status),
+    status: serializeRenderStatus(render?.status, render?.error),
     pdfUrl: lastReady?.pdfUrl ?? null,
     pageCount: memo.pageCount,
     // **De quoi suivre une composition** (T224, 07/10/2026) : la dernière,
@@ -1017,11 +1017,18 @@ export function serializeBookPreview(
  * « ça compose », « c'est prêt », « ça a raté ». Tout ce qui n'est ni prêt ni
  * en échec est une attente — c'est le repli sûr, et il est aussi celui du
  * décodeur Swift.
+ *
+ * **Le motif de l'échec part avec lui** (02/11/2026) : il était remplacé par
+ * une phrase générique, si bien qu'une composition refusée parce que des
+ * souvenirs s'écrivaient encore — la seule chose dont on puisse faire quelque
+ * chose, attendre une minute et réessayer — se lisait comme une panne. Les
+ * messages de `renders.error` sont écrits pour le voyageur, en français ; la
+ * phrase générale reste le repli d'un échec qui n'en a pas.
  */
-function serializeRenderStatus(status: string | undefined) {
+function serializeRenderStatus(status: string | undefined, error?: string | null) {
   if (status === "ready") return { status: "ready" };
   if (status === "failed") {
-    return { status: "failed", message: "La composition n’a pas abouti." };
+    return { status: "failed", message: error?.trim() || "La composition n’a pas abouti." };
   }
   return { status: "composing" };
 }
