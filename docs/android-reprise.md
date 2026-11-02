@@ -74,7 +74,7 @@ c'est **la vérification sur téléphone**, les clés de Hugo et les lots serveu
 | B4 | Abonnement Google Play côté serveur (compte de service Play d'abord) | ⏳ | Claude, après Hugo | un achat de test rend illimité le même compte sur iPhone |
 | ~~B2~~ | Apple par le web — abandonné le 22/10/2026 | — | — | un compte Apple d'iPhone entre par « Mot de passe oublié » |
 | B5 | Plateforme dans les réponses de MEMO, Google Pay | ⏳ | Claude | MEMO dit « Paramètres du téléphone » sur Android |
-| A8b | CGU, confidentialité et FAQ réécrites pour Google Play | ✅ #149 | reste la relecture de Clara | la fiche Play peut citer ses textes |
+| A8b | CGU, confidentialité et FAQ : **une seule version pour les deux stores** | ✅ #149, unifiée le 02/11 | reste la relecture de Clara, et la publication sur memobook.fr | la fiche Play peut citer ses textes |
 | A9 | Fiche Play, classification, sécurité des données | ⏳ | Clara | l'app passe l'examen de Google |
 
 ### Les prompts à coller

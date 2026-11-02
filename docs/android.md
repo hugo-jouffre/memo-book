@@ -79,10 +79,15 @@ la main.
 Côté app, B4 rend aussi indépendant du store ce qui ne connaît qu'Apple :
 `Subscription.managedByAppStore` (dire quel store tient l'abonnement), les états
 `Grace` et `isInBillingRetry` (calqués sur le réessai d'Apple), et
-`applePayMerchantId` dans `PaymentIntentTicket` et `OrderPayment` (B5). Les CGU
-(chapitre 5), la politique de confidentialité (2.4 et 3) et trois réponses de
-la FAQ parlaient de l'App Store et de l'iPhone : leur version Google Play est
-écrite côté Android (A8b, 23/10/2026), à relire par Clara.
+`applePayMerchantId` dans `PaymentIntentTicket` et `OrderPayment` (B5).
+
+**Les textes légaux : une seule version** (Clara, 02/11/2026). Les CGU
+(chapitre 5), la politique de confidentialité (2.6 et 3) et trois réponses de
+la FAQ parlaient de l'App Store et de l'iPhone. Elles nomment désormais les
+deux stores dans la même phrase — « sur Android… sur iPhone… » — et les
+fichiers Kotlin et Swift portent **mot pour mot** le même texte.
+`StoreNeutralTextsTest.kt` et `StoreNeutralTextsTests.swift` tiennent la règle
+des deux côtés. memobook.fr publie ce texte-là, et lui seul.
 
 `POST /v1/profile/subscription/cancel` ne coupe plus localement un abonnement
 Google Play (B4) : il note la raison, comme pour StoreKit, et la résiliation se
