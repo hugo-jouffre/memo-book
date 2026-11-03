@@ -123,9 +123,19 @@ est pas, Google refuse une fiche qui promet ce que l'app ne fait pas.
 ### Captures de téléphone
 
 Six captures, en portrait, **1080 × 1920 au moins** (le minimum pour être mis
-en avant est de quatre à 1080 px), sans cadre de téléphone. Elles se prennent
-dans l'émulateur, sur le jeu d'essai : aucune donnée réelle, des voyages déjà
-remplis.
+en avant est de quatre à 1080 px), sans cadre de téléphone.
+
+⚠️ **Pas sur le jeu d'essai** (constaté le 03/11/2026). `SandboxPersona.kt` ne
+porte aucune image : `--ez previewSignedIn true` ouvre bien des voyages
+remplis, mais leurs couvertures, leurs photos et l'aperçu du carnet restent
+vides. Quatre des six captures ci-dessous partiraient chez Google avec des
+zones d'image blanches.
+
+Les captures se prennent donc **connecté au compte de démo**
+`demo@memo-book.com` en production, comme l'a fait iOS
+([`soumission-app-store.md`](soumission-app-store.md)) : ses voyages ont de
+vraies photos. Dans l'émulateur, se connecter à la main une fois, puis suivre
+le tableau ci-dessous.
 
 Préparer l'émulateur une fois (barre d'état propre, 12:00, batterie pleine) :
 
