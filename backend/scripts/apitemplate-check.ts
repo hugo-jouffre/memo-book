@@ -28,7 +28,6 @@
  */
 import { loadSamplePayload } from "../src/lib/templates.js";
 import { ApiTemplateRenderer } from "../src/services/apitemplate.js";
-import type { BookPayload } from "../src/services/structuring.js";
 
 const apiKey = process.env.APITEMPLATE_API_KEY ?? "";
 const templateId = process.env.APITEMPLATE_TEMPLATE_ID || "7a177b23210099d6";
@@ -49,7 +48,7 @@ if (apiKey === "") {
 const renderer = new ApiTemplateRenderer(apiKey, templateId, baseUrl, "preview", null);
 
 try {
-  const { pdfUrl, transactionId } = await renderer.render(loadSamplePayload() as unknown as BookPayload);
+  const { pdfUrl, transactionId } = await renderer.render(loadSamplePayload());
   console.log(`\nPDF fabriqué — transaction ${transactionId || "(sans référence)"}`);
   console.log(pdfUrl);
   process.exit(0);
