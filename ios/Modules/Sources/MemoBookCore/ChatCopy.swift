@@ -492,7 +492,24 @@ public enum ChatCopy {
         public static let dismiss = "Ignorer"
         /// Ce que VoiceOver dit d'un bouton déjà touché, passé au bleu.
         public static let followed = "Déjà ouvert"
+
+        /// Ce que « Compléter l'étape manquante » **envoie** — le seul bouton
+        /// qui parle au lieu d'ouvrir un écran (19/10/2026).
+        ///
+        /// ⚠️ Au caractère près le libellé du catalogue serveur
+        /// (`fill-missing-day`, `services/conversationCopy.ts`) : c'est sur
+        /// cette égalité que le serveur reconnaît une commande et ne la
+        /// décompte pas du crédit du jour.
+        public static let fillMissingDayId = "fill-missing-day"
+        public static let fillMissingDay = "Compléter l’étape manquante"
     }
+
+    /// Ce que MEMO répond quand on accepte de combler une journée — dans le
+    /// **bac à sable** seulement. En vrai, c'est le serveur qui nomme la
+    /// journée qu'il a trouvée (`missingDayListening`,
+    /// `services/conversationCopy.ts`) ; ici, celle du jeu d'essai.
+    public static let missingDayListening =
+        "Je t’écoute : raconte-moi ta journée du mercredi 26 août, à l’oral ou au clavier."
 
     // MARK: - Les photos
 
@@ -626,5 +643,9 @@ public enum ChatCopy {
         public static func photos(count: Int) -> String {
             count == 1 ? "Une photo" : "\(count) photos"
         }
+
+        /// Ce qu'une bulle de photos promet à VoiceOver : la toucher les
+        /// ouvre en grand (Hugo, 15/10/2026).
+        public static let openPhoto = "Voir en grand"
     }
 }

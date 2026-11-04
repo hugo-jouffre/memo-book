@@ -53,9 +53,35 @@ export interface ConversationState {
    * Une fois chacun : MEMO n'insiste jamais.
    */
   closingAskedFor: string[];
+  /**
+   * **L'étape manquante** (19/10/2026) — voir `conversationGaps.ts`.
+   *
+   * `gapAskedFor` : les journées dont MEMO a déjà proposé de combler le trou.
+   * Une fois chacune, jamais deux, même si la journée reste vide.
+   */
+  gapAskedFor: string[];
+  /** La proposition en vol, tant qu'elle n'est ni acceptée ni restée lettre morte. */
+  gapOffered: { days: string[]; askedAt: string } | null;
+  /** Les propositions restées sans suite. Au-delà de deux, plus jamais pour ce voyage. */
+  gapDeclines: number;
+  /** Quand la dernière est partie — au plus une toutes les 48 heures. */
+  gapLastAskedAt: string | null;
+  /**
+   * La journée que le prochain récit datera, posée par « Compléter l'étape
+   * manquante ». Elle ne vit qu'un tour, et se périme en une demi-heure.
+   */
+  tellingDay: { day: string; askedAt: string } | null;
 }
 
-export const EMPTY_CONVERSATION_STATE: ConversationState = { roseEpineGraineAskedFor: [], closingAskedFor: [] };
+export const EMPTY_CONVERSATION_STATE: ConversationState = {
+  roseEpineGraineAskedFor: [],
+  closingAskedFor: [],
+  gapAskedFor: [],
+  gapOffered: null,
+  gapDeclines: 0,
+  gapLastAskedAt: null,
+  tellingDay: null,
+};
 
 /** Relecture défensive, comme `parseCoherenceSheet` : un JSON corrompu ne bloque pas un tour. */
 export function parseConversationState(value: unknown): ConversationState {
@@ -63,9 +89,34 @@ export function parseConversationState(value: unknown): ConversationState {
   const candidate = value as Partial<ConversationState>;
   const strings = (list: unknown) =>
     Array.isArray(list) ? list.filter((item): item is string => typeof item === "string") : [];
+  // ⚠️ Toute clé oubliée ici est **effacée à chaque tour** : le job réécrit
+  // l'objet entier à partir de ce qu'on relit. Une proposition d'étape
+  // manquante perdue, c'est une carte qui revient en boucle.
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
+  const day = (value: unknown): { day: string; askedAt: string } | null => {
+    if (!value || typeof value !== "object") return null;
+    const entry = value as { day?: unknown; askedAt?: unknown };
+    return typeof entry.day === "string" && typeof entry.askedAt === "string"
+      ? { day: entry.day, askedAt: entry.askedAt }
+      : null;
+  };
+  const offered = (value: unknown): { days: string[]; askedAt: string } | null => {
+    if (!value || typeof value !== "object") return null;
+    const entry = value as { days?: unknown; askedAt?: unknown };
+    const days = strings(entry.days);
+    return days.length > 0 && typeof entry.askedAt === "string"
+      ? { days, askedAt: entry.askedAt }
+      : null;
+  };
+
   return {
     roseEpineGraineAskedFor: strings(candidate.roseEpineGraineAskedFor),
     closingAskedFor: strings(candidate.closingAskedFor),
+    gapAskedFor: strings(candidate.gapAskedFor),
+    gapOffered: offered(candidate.gapOffered),
+    gapDeclines: typeof candidate.gapDeclines === "number" ? candidate.gapDeclines : 0,
+    gapLastAskedAt: text(candidate.gapLastAskedAt),
+    tellingDay: day(candidate.tellingDay),
   };
 }
 
@@ -218,6 +269,37 @@ export interface TripContextTurnReply {
   model: string;
 }
 
+/**
+ * **La journée qui manque, telle que MEMO la demande** (21/10/2026, Hugo).
+ *
+ * Le trou reste calculé par le code — `conversationGaps.ts`, sur des dates, et
+ * rien d'autre : un trou inventé serait pire que pas de trou du tout. Ce que
+ * le modèle fait, c'est **poser la question**, en contexte, et demander si la
+ * journée a été sautée exprès ou si elle est passée sous le nez. La carte à
+ * texte fixe (`missingDayNotice`) reste le repli quand l'appel tombe.
+ */
+export interface MissingDayTurnInput {
+  memo: { title: string; destinationCity: string | null };
+  travellerFirstName: string | null;
+  /** Les journées sans récit, en ISO, telles que le code les a trouvées. */
+  days: string[];
+  /** La journée racontée juste avant le trou, et celle juste après. */
+  before: string;
+  after: string;
+  /** Ce qui a été raconté de part et d'autre — de quoi poser une question qui tombe juste. */
+  beforeText: string | null;
+  afterText: string | null;
+  /** Le libellé exact du bouton posé sous la bulle, pour que MEMO y renvoie sans le réécrire. */
+  buttonLabel: string;
+  now: Date;
+}
+
+export interface MissingDayTurnReply {
+  /** Une bulle, une question : voulu ou oublié. `null` laisse parler la carte fixe. */
+  text: string | null;
+  model: string;
+}
+
 export interface MemoResponder {
   /** L'ouverture : une copie fixe, sans modèle. Sur l'interface pour refléter `MemoResponder.swift`. */
   opening(): { text: string; suggestionIds: SuggestionId[] };
@@ -227,6 +309,11 @@ export interface MemoResponder {
    * extrait ; **le code** décide de ce qui manque et de la question suivante.
    */
   gatherContext(input: TripContextTurnInput): Promise<TripContextTurnReply>;
+  /**
+   * Demande la journée qui manque. **Le code a déjà trouvé le trou** : le
+   * répondeur n'a qu'à l'énoncer et à demander si c'est voulu ou oublié.
+   */
+  askMissingDay(input: MissingDayTurnInput): Promise<MissingDayTurnReply>;
 }
 
 // ---------------------------------------------------------------------------
@@ -526,6 +613,11 @@ export class FakeResponder implements MemoResponder {
       acknowledgement: null,
       model: "fake",
     };
+  }
+
+  /** Sans modèle, la carte fixe dit déjà tout : `null` la laisse parler. */
+  async askMissingDay(_input: MissingDayTurnInput): Promise<MissingDayTurnReply> {
+    return { text: null, model: "fake" };
   }
 
   /** Vocal et photo = souvenir ; puce = commande ; texte court sur un souvenir en cours = précision. */

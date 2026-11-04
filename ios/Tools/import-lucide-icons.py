@@ -84,6 +84,7 @@ ROLES = {
     "circle-pause": "PauseCircle",
     "check": "Check",
     "x": "Close",
+    "gift": "Gift",
 }
 
 #: Les icônes que la maquette montre **pleines** et non au trait : les commandes

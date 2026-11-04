@@ -14,6 +14,7 @@ import {
   type ConversationState,
   type ConversationInput,
   type ConversationReply,
+  type MemoResponder,
 } from "../services/conversation.js";
 import {
   ACKNOWLEDGED,
@@ -25,12 +26,18 @@ import {
   SILENT_REVISION_RETRY,
   SILENT_VOICE_RETRY,
   ROSE_EPINE_GRAINE,
+  MISSING_DAY_WHICH,
   SUGGESTION_SETS,
+  dayOfGapDayId,
   fallbackPrompt,
   photosAtZeroRatio,
   photosBeyondAsked,
   splitAccepted,
   photosMissing,
+  gapDayId,
+  isGapDayId,
+  missingDayListening,
+  missingDayNotice,
   photosToValidate,
   photosWanted,
   returnForPhotos,
@@ -43,8 +50,21 @@ import {
   DAILY_CREDIT_EXHAUSTED,
   refundSilentVoice,
   silentVoiceLine,
+  timeZoneOf,
 } from "../services/dailyCredit.js";
+import {
+  capturedAtFor,
+  shouldOfferGap,
+  tellingDayOf,
+  withGapAccepted,
+  withGapDeclined,
+  withGapOffered,
+  gapBorders,
+  type Gap,
+} from "../services/conversationGaps.js";
 import { platformOfPayload, platformPayload } from "../services/appPlatform.js";
+import { localDate } from "../services/localCalendar.js";
+import { CALLS_TO_ACTION } from "../services/callsToAction.js";
 import { photoBudgetFor } from "../services/photoBudget.js";
 import { measurePhoto } from "../services/photoOrientation.js";
 import { photosForTarget, tripDays } from "../services/pageTarget.js";
@@ -167,6 +187,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   const memo = message.memo;
   const state = conversationStateOf(memo);
   const tripContext = parseTripContext(memo.tripContext);
+  // Le fuseau du **propriétaire**, et non du lecteur : deux co-voyageurs, l'un
+  // à Paris et l'autre à Tokyo, doivent voir les mêmes journées.
+  const timeZone = await tripTimeZone(context, memo.ownerAccountId);
 
   // Le voyageur raconte le contexte de son voyage : un tour à part, qui
   // n'écrit aucun souvenir — `services/tripContext.ts`. Les photos restent
@@ -178,6 +201,16 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
 
   if (message.suggestionId === "photos-sample") {
     await attachSamplePhotos(context, message, now);
+    return;
+  }
+
+  // « Compléter l'étape manquante », et la journée qu'on choisit quand il en
+  // manque deux : un tour à part, sans modèle et sans souvenir.
+  if (
+    message.suggestionId === "fill-missing-day" ||
+    (message.suggestionId !== null && isGapDayId(message.suggestionId))
+  ) {
+    await converseMissingDay(context, message, state, now);
     return;
   }
 
@@ -465,6 +498,23 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   // « Je valide mes photos » clôt une étape : si on avait sauté celle d'avant
   // pour raconter celle-ci, MEMO y revient (Hugo, 12/10/2026).
   const closing = message.suggestionId === "photos-ok" ? await stepToClose(context, memo.id, message.seq, state) : null;
+
+  // **L'étape manquante** (19/10/2026). Au même moment que l'étape sautée —
+  // « Je valide mes photos », le seul instant vraiment au repos du déroulé —
+  // et jamais dans le même tour qu'elle : deux relances d'affilée, c'est une
+  // de trop. Tout le reste du contrat tombe de cet ancrage unique : jamais au
+  // milieu d'un souvenir, ni sous une précision, ni après un refus.
+  const found =
+    message.suggestionId === "photos-ok" && !closing
+      ? await gapToOffer(context, memo, state, now, timeZone)
+      : null;
+  // **C'est MEMO qui pose la question** (21/10/2026, Hugo) : le code a trouvé
+  // le trou, le modèle demande s'il est voulu ou oublié. Un appel qui tombe,
+  // ou une bulle hors contrat, laisse parler la carte fixe — le trou se dit
+  // quand même, c'est seulement la question qui s'éteint.
+  const offer = found
+    ? { ...found, ...(await missingDayBubble(responder, found, memo, input, logger, messageId)) }
+    : null;
   if (closing) {
     reply = {
       ...reply,
@@ -491,6 +541,12 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
 
   const redactEntryIds: string[] = [];
   const currentDay = dayKeyOf(currentEntry?.capturedAt ?? message.createdAt);
+
+  // La journée que « Compléter l'étape manquante » a ouverte, si elle tient
+  // encore debout — un mode qui traîne daterait un souvenir d'il y a une
+  // semaine, et c'est précisément ce qu'on ne veut pas.
+  const telling = tellingDayOf(memo, state, now, timeZone);
+  const told = telling && disposition === "memory" ? capturedAtFor(telling, timeZone) : null;
 
   // **« Découpe en deux étapes »** (Hugo, 28/10/2026) : le découpage a lieu
   // ici, une fois le voyageur d'accord. La puce, elle, n'a fait que parler.
@@ -534,7 +590,10 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
           kind: "text",
           status: "ready",
           transcript: message.text ?? "",
-          capturedAt: message.createdAt,
+          // Un texte raconté après coup porte la journée du trou, et non
+          // l'heure de son envoi : c'est ce qui le range à sa place dans le
+          // carnet (`conversationGaps.ts`).
+          capturedAt: told ?? message.createdAt,
           stepId: message.stepId,
         },
       });
@@ -552,6 +611,14 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
         },
       });
       redactEntryIds.push(entryId);
+    }
+
+    // Un **vocal** raconté après coup : son souvenir existe déjà — la route
+    // l'a créé à l'envoi, daté de l'envoi — et c'est ici qu'on le redate. Une
+    // seule décision sur la journée, pour le texte comme pour la voix. Les
+    // photos n'y passent pas : elles portent leur propre date de prise de vue.
+    if (told && entryId && kind === "voice") {
+      await tx.entry.update({ where: { id: entryId }, data: { capturedAt: told } });
     }
 
     if (disposition === "context" && currentEntry) {
@@ -604,6 +671,25 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
       });
     }
 
+    // La carte « ✦ Suggestions » de l'étape manquante : une bulle de plus,
+    // **la dernière du tour**, sans puces — le sérialiseur remonte alors au
+    // tour d'avant pour les siennes, qui restent celles qu'on attendait.
+    if (offer) {
+      await tx.chatMessage.create({
+        data: {
+          memoId: memo.id,
+          author: "memo",
+          kind: "text",
+          text: offer.notice,
+          replyToId: message.id,
+          stepId: message.stepId,
+          pauseMilliseconds: pauseBeforeSaying(offer.notice),
+          model: offer.model,
+          payload: { callToAction: { id: "fill_missing_day" } },
+        },
+      });
+    }
+
     // L'étape sautée n'est pas validée : sa fiche revient au bas du fil, et la
     // question avec elle — c'est elle que « Ça me convient » validera.
     if (closing?.reason === "validation") {
@@ -652,9 +738,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
       data: {
         ...(reply.prompt ? { prompt: reply.prompt } : {}),
         ...contextChangeFor(message.suggestionId, tripContext),
-        conversationState: withClosingAsked(
-          nextConversationState(state, reply, currentDay),
-          closing?.entryId ?? null,
+        conversationState: withGapState(
+          withClosingAsked(nextConversationState(state, reply, currentDay), closing?.entryId ?? null),
+          { offered: offer?.gap ?? null, consumesTellingDay: telling !== null, now },
         ) as unknown as Prisma.InputJsonObject,
       },
     });
@@ -892,6 +978,198 @@ async function photosAskedButMissing(
 function withClosingAsked(state: ConversationState, entryId: string | null): ConversationState {
   if (!entryId || state.closingAskedFor.includes(entryId)) return state;
   return { ...state, closingAskedFor: [...state.closingAskedFor, entryId] };
+}
+
+// ---------------------------------------------------------------------------
+// L'étape manquante — `services/conversationGaps.ts` porte toutes les règles
+// ---------------------------------------------------------------------------
+
+/** Le fuseau du voyage : celui du compte qui en est propriétaire. */
+async function tripTimeZone(context: AppContext, ownerAccountId: string): Promise<string> {
+  const owner = await context.prisma.account.findUnique({
+    where: { id: ownerAccountId },
+    select: { timeZone: true },
+  });
+  return timeZoneOf({ timeZone: owner?.timeZone ?? null });
+}
+
+/**
+ * Le trou qu'on propose de combler, et les deux journées qui l'encadrent —
+ * `null` neuf fois sur dix, et c'est le but. Ne lit la base que si le registre
+ * laisse encore une chance à une proposition.
+ */
+async function gapToOffer(
+  context: AppContext,
+  memo: { id: string; startDate: Date | null; endDate: Date | null; stage: string; narrationPace: string | null },
+  state: ConversationState,
+  now: Date,
+  timeZone: string,
+): Promise<{
+  gap: Gap;
+  before: string;
+  after: string;
+  beforeText: string | null;
+  afterText: string | null;
+} | null> {
+  const entries = await context.prisma.entry.findMany({
+    // Les photos n'ouvrent ni ne ferment un trou : une photo du 26 illustre le
+    // plus souvent l'étape du 25.
+    where: { memoId: memo.id, kind: { not: "photo" } },
+    // `text` sert la question de MEMO (21/10/2026) : savoir ce qui a été
+    // raconté de part et d'autre, c'est la différence entre « il te manque le
+    // 26 » et une question qui tombe juste.
+    select: { capturedAt: true, editedText: true, redactedText: true, transcript: true },
+  });
+  const told = entries.map((entry) => entry.capturedAt);
+
+  const gap = shouldOfferGap(memo, state, told, now, timeZone);
+  if (!gap) return null;
+
+  const borders = gapBorders(gap, told, timeZone);
+  if (!borders) return null;
+
+  // Le dernier récit de la journée, quand elle en porte plusieurs : c'est lui
+  // qui touche le trou.
+  const textOn = (day: string): string | null => {
+    const ofDay = entries
+      .filter((entry) => localDate(entry.capturedAt, timeZone) === day)
+      // Le corrigé au clavier, sinon le rédigé, sinon le brut — l'ordre du reste
+      // du serveur (`routes/serializers.ts`).
+      .map((entry) => (entry.editedText ?? entry.redactedText ?? entry.transcript ?? "").trim())
+      .filter((text) => text !== "");
+    return ofDay.length > 0 ? ofDay[ofDay.length - 1]! : null;
+  };
+
+  return {
+    gap,
+    before: borders.before,
+    after: borders.after,
+    beforeText: textOn(borders.before),
+    afterText: textOn(borders.after),
+  };
+}
+
+/**
+ * La bulle du trou : celle de MEMO, ou celle du code.
+ *
+ * Le repli n'est pas un pis-aller discret — c'est la carte fixe d'avant le
+ * 21/10/2026, qui dit le trou et sa porte de sortie sans poser de question.
+ * `model` le dit : le nom du modèle, ou « scripted ».
+ */
+async function missingDayBubble(
+  responder: MemoResponder,
+  found: { gap: Gap; before: string; after: string; beforeText: string | null; afterText: string | null },
+  memo: { title: string; destinationCity: string | null },
+  input: ConversationInput,
+  logger: AppContext["logger"],
+  messageId: string,
+): Promise<{ notice: string; model: string }> {
+  const scripted = missingDayNotice(found.gap.days, found.before, found.after);
+  try {
+    const asked = await responder.askMissingDay({
+      memo: { title: memo.title, destinationCity: memo.destinationCity },
+      travellerFirstName: input.traveller.firstName,
+      days: [...found.gap.days],
+      before: found.before,
+      after: found.after,
+      beforeText: found.beforeText,
+      afterText: found.afterText,
+      buttonLabel: CALLS_TO_ACTION.fill_missing_day.label,
+      now: input.now,
+    });
+    if (asked.text) return { notice: asked.text, model: asked.model };
+    return { notice: scripted, model: "scripted" };
+  } catch (cause) {
+    logger.warn({ messageId, err: cause }, "La question du trou n'est pas venue, la carte fixe parle");
+    return { notice: scripted, model: "scripted" };
+  }
+}
+
+/**
+ * Le registre de l'étape manquante, en un seul endroit — l'ordre compte :
+ *
+ * 1. la journée qu'on vient de raconter rend le mode ;
+ * 2. **le silence vaut refus** : une proposition en vol que ce tour-ci n'a pas
+ *    acceptée est refusée, qu'on ait touché « Ignorer » ou simplement continué
+ *    à raconter ;
+ * 3. la nouvelle proposition part.
+ */
+function withGapState(
+  state: ConversationState,
+  { offered, consumesTellingDay, now }: { offered: Gap | null; consumesTellingDay: boolean; now: Date },
+): ConversationState {
+  let next = consumesTellingDay ? { ...state, tellingDay: null } : state;
+  if (next.gapOffered) next = withGapDeclined(next);
+  if (offered) next = withGapOffered(next, offered, now);
+  return next;
+}
+
+/**
+ * « Compléter l'étape manquante », et la journée qu'on choisit quand il en
+ * manque deux.
+ *
+ * Une journée seule n'ouvre aucune question : MEMO la nomme et écoute — le
+ * code connaît déjà la réponse, et MEMO ne pose jamais une question de plus.
+ * Deux journées en posent **une**, avec ses deux puces datées.
+ *
+ * Sans proposition en vol (un vieux bouton rejoué, une conversation effacée
+ * entre-temps), MEMO répond sans ouvrir de mode : aucune date fausse possible.
+ */
+async function converseMissingDay(
+  context: AppContext,
+  message: NonNullable<Awaited<ReturnType<typeof loadTurn>>>,
+  state: ConversationState,
+  now: Date,
+): Promise<void> {
+  const { prisma } = context;
+  const offered = state.gapOffered?.days ?? [];
+  const chosen = message.suggestionId ? dayOfGapDayId(message.suggestionId) : null;
+
+  // La journée de ce tour : celle qu'on a touchée, ou la seule proposée.
+  const day = chosen && offered.includes(chosen) ? chosen : offered.length === 1 ? offered[0]! : null;
+  const asksWhich = day === null && offered.length > 1;
+
+  const text = asksWhich ? MISSING_DAY_WHICH : day ? missingDayListening(day) : ACKNOWLEDGED_EARLIER;
+  const suggestions = asksWhich ? offered.map((candidate) => gapDayId(candidate)) : [];
+
+  await prisma.$transaction(async (tx) => {
+    await tx.chatMessage.update({
+      where: { id: message.id },
+      data: { disposition: "command", repliedAt: now },
+    });
+    await tx.chatMessage.create({
+      data: {
+        memoId: message.memoId,
+        author: "memo",
+        kind: "text",
+        text,
+        replyToId: message.id,
+        stepId: message.stepId,
+        pauseMilliseconds: pauseBeforeSaying(text),
+        model: "scripted",
+        payload: { suggestions },
+      },
+    });
+
+    // La question des deux journées laisse la proposition en vol : c'est la
+    // puce qui l'acceptera. Une journée choisie la referme — et elle entre au
+    // registre, comblée ou non : on ne la repropose jamais.
+    const next = asksWhich
+      ? state
+      : day
+        ? withGapAccepted(state, offered, day, now)
+        : { ...state, gapOffered: null };
+
+    await tx.memo.update({
+      where: { id: message.memoId },
+      data: { conversationState: next as unknown as Prisma.InputJsonObject },
+    });
+  });
+
+  context.logger.info(
+    { memoId: message.memoId, day, asksWhich },
+    "MEMO revient sur une journée manquante",
+  );
 }
 
 /**

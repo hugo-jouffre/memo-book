@@ -387,8 +387,9 @@ d'abonnement n'est jamais montrée à quelqu'un qui raconte déjà sans limite.
 
 Deux origines :
 
-- **Le code** pose `daily_credit_subscribe` (la bulle « reviens demain ») et
-  `open_photo_settings` (l'accès aux photos limité, que seule l'app connaît).
+- **Le code** pose `daily_credit_subscribe` (la bulle « reviens demain »),
+  `open_photo_settings` (l'accès aux photos limité, que seule l'app connaît) et
+  `fill_missing_day` (l'étape manquante, plus bas).
 - **L'IA** choisit, rarement, un bouton parmi ceux que **le code autorise ce
   tour-ci** (`callsToActionAllowed`, `conversation.ts`) — le modèle propose, le
   code dispose :
@@ -406,6 +407,12 @@ des boutons permis, avec tout bouton qui fait la même chose (`daily_credit_subs
 et `subscribe` sont la même offre). Le repli suit : `validateReply` jette ce
 qui n'est pas permis (03/10/2026).
 
+⚠️ **Un bouton ouvre un écran et n'envoie rien — sauf un.**
+`fill_missing_day` (19/10/2026) **parle** : il envoie la commande
+`fill-missing-day`, dont le libellé est le sien au caractère près, et MEMO
+enchaîne dans le fil. Il est un bouton parce que c'est le dessin de la carte
+« ✦ Suggestions », pas parce qu'il mène ailleurs.
+
 Jamais sous un vocal, des photos ou une puce. `validateReply` jette un bouton
 non autorisé ; le job le range sur la **dernière** bulle du tour, et le remet
 à `null` quand les bulles disparaissent (un souvenir) ou sont remplacées par
@@ -414,6 +421,64 @@ passe **jamais** par un nouveau `body.kind` ni par une puce : les apps déjà
 installées casseraient sur l'un et enverraient l'autre comme un texte. Elles
 ignorent la clé `callToAction` — **le texte de la bulle doit donc se suffire**
 et dire où trouver ce que le bouton ouvre.
+
+### L'étape manquante
+
+**Le problème** : on raconte le 25, puis le 27, et le 26 n'existera jamais dans
+le carnet. Personne ne s'en aperçoit avant de recevoir le livre.
+
+**La règle, en une phrase** : une journée du voyage sans aucun récit,
+**encadrée des deux côtés** par une journée racontée, donne une carte
+« ✦ Suggestions » — une seule fois. L'encadrement est tout l'intérêt : il
+distingue un oubli de la journée d'aujourd'hui qu'on n'a pas encore eu le temps
+de raconter, laquelle appartient à la notification de relance
+(`docs/notifications.md`), pas au fil.
+
+Tout est **calculé par le code**, jamais par le modèle
+(`backend/src/services/conversationGaps.ts`, fonctions pures) : un trou se lit
+sur des dates, il ne s'invente pas. `fill_missing_day` n'entre donc pas dans le
+catalogue que MEMO reçoit (`allowedForModel: false`).
+
+Cinq conditions avant de déranger quelqu'un, et elles sont toutes des refus :
+
+| Condition | Pourquoi |
+|---|---|
+| Le voyage a une date de départ | Sans fenêtre, il n'y a pas de trou, seulement des jours sans récit |
+| Le trou fait 1 ou 2 jours | Au-delà, ce n'est plus un oubli : c'est une façon de raconter |
+| Le rythme du récit est « tous les jours » (ou « tous les 2 jours » pour un trou d'un seul jour) | À « toutes les semaines », le trou est la norme : le relever reviendrait à reprocher son propre réglage |
+| Le voyage est en cours, ou fini depuis moins d'une semaine | Un voyage passé importé est troué par construction |
+| Au moins trois journées racontées | On ne relève pas un trou au deuxième jour |
+
+**Quand** : après « Je valide mes photos », le seul moment vraiment au repos du
+déroulé — et **jamais dans le même tour que l'étape sautée** : deux relances
+d'affilée, c'est une de trop. Tout le reste tombe de cet ancrage unique : jamais
+au milieu d'un souvenir, ni sous une précision, ni après un refus, ni sous la
+rose, l'épine et la graine.
+
+**La carte ne pose aucune question** — le bouton est la question, et MEMO n'en
+pose jamais deux. Sa phrase se suffit sans son bouton, pour une app plus
+ancienne, et dit la sortie : « sinon on le laisse comme ça ».
+
+**Le bouton** ouvre la journée : MEMO la nomme (« Je t'écoute : raconte-moi ta
+journée du mercredi 26 août ») et se tait. S'il manque **deux** journées, il
+pose **une** question avec deux puces datées (`gap-day:2026-08-26`) — le seul
+libellé de puce que le code écrit, parce qu'une date ne s'écrit pas d'avance.
+Le récit qui suit est daté à **midi de cette journée-là** dans le fuseau du
+propriétaire : il se glisse à sa place dans le carnet, et renumérote les étapes
+de l'accueil (`groupIntoSteps` suit `capturedAt`, la fiche du fil garde son
+numéro d'arrivée).
+
+**Ce qui empêche la fatigue** (`memos.conversationState`) : `gapAskedFor` — une
+journée proposée ne l'est jamais deux fois, comblée ou non ; `gapOffered` — une
+seule proposition en vol ; `gapLastAskedAt` — 48 heures entre deux ;
+`gapDeclines` — **deux refus et plus jamais pour ce voyage**. Et un refus se lit
+dans le **silence** : une proposition que le tour suivant n'accepte pas est
+refusée, qu'on ait touché « Ignorer » ou simplement continué à raconter. L'app
+n'a donc rien à remonter — « Ignorer » reste local, comme pour tous les boutons.
+
+`tellingDay` ne vit **qu'un tour** et se périme en une demi-heure : un mode
+caché qui daterait un souvenir d'il y a une semaine serait pire que pas de
+fonctionnalité du tout.
 
 ## 7. Supprimer la conversation
 
@@ -523,6 +588,7 @@ attend donc son voyage au lieu d'être refusé — et perdu.
 | Répondre | job `memobook.converse` | `AnthropicResponder` (Sonnet 5, prompt = `agents/agent-conversation.md`, sortie JSON contrainte : bulles, classement, puces, relance, rose/épine/graine, `callToActionId`) → repli `HeuristicResponder` sans clé Anthropic → `FakeResponder` sous `PIPELINE_MODE=fake`, en CI et dans les tests |
 | Le crédit du jour | `backend/src/services/dailyCredit.ts`, table `trip_daily_usage` | Décompté sous le verrou du voyage ; servi en `dailyCredit` ; refus `429 daily_credit_exhausted` (§ 6 bis) |
 | Un bouton | `payload.callToAction = { id }` → `message.callToAction` | Catalogue `callsToAction.ts`, résolu pour chaque lecteur (§ 6 bis) |
+| Ce que MEMO a déjà demandé | `memos.conversationState` | `roseEpineGraineAskedFor`, `closingAskedFor`, et pour l'étape manquante `gapAskedFor`, `gapOffered`, `gapDeclines`, `gapLastAskedAt`, `tellingDay` (§ 6 bis) |
 | Écrire | jobs `transcribe` → `redact` (existent) | La rédaction relit les précisions du fil |
 
 Le détail — champs, codes d'erreur, tests, phasage en quatre PR — est dans le
@@ -608,11 +674,121 @@ posé, ce qui est fréquent sur un vocal aussi dense. Pas changé pour l'instant
 — une scène ne suffit pas à trancher, et rien n'empêche la question au tour
 suivant.
 
+### Troisième calibration — 21/10/2026, Sonnet 5, la ligne de l'étape manquante
+
+Occasion : la fonctionnalité « étape manquante » (§ 14, 19/10) ajoute au § 8 du
+prompt une ligne d'interdiction — MEMO ne fait jamais remarquer qu'il manque
+une journée, c'est le code qui relève les trous. Une scène neuve l'éprouve,
+`22-journee-manquante.json` : un fil où le 25 et le 27 sont racontés, le 26
+jamais.
+
+**Le banc ne tournait plus depuis le 03/10.** Premier passage : les 22 scènes
+refusées par l'API avant que le modèle parle, `400 invalid_request_error —
+Enum value 'subscribe' does not match declared type '['string', 'null']'`.
+L'API refuse une union de types dès qu'un `enum` l'accompagne, et les deux
+schémas de `conversationAnthropic.ts` le faisaient : `callToActionId` et
+`narrationMoment`, tous deux écrits le 03/10 avec le crédit du jour. L'`enum`
+porte déjà `null` et suffit ; le `type` est retiré.
+
+⚠️ **Le même schéma sert au vrai chat.** Dans `jobs/converse.ts`, un répondeur
+qui jette ne casse rien de visible : un `logger.warn` part et le moteur de
+règles répond à sa place. Du 03/10 au 21/10, chaque tour de conversation réel
+est donc parti en 400 et c'est l'heuristique qui a parlé aux voyageurs — sans
+que personne le voie, puisque le repli est silencieux et que les tests back
+ne touchent pas l'API. L'extraction du contexte du voyage (§ 2 bis) était
+cassée de la même façon. À retenir : **le banc est le seul endroit où cette
+panne est visible**, et il n'avait pas tourné depuis que la ligne existait.
+
+Ce que la grille a attrapé ensuite, et ce qui a changé :
+
+| Ce qu'on a lu | Pourquoi c'est une faute | Ce qui a changé |
+|---|---|---|
+| Scène 22 : rien sur le trou, ni remarque ni question | — | Rien : la ligne du § 8 fait ce qu'on lui demande, aux trois passages |
+| « Ce dîner à Trastevere **avec Clara**, un détail qui t'est resté ? » en relance | La relance s'affiche sur la carte du voyage, que tous les co-voyageurs lisent — § 7 dit « elle ne nomme personne ». Même faute qu'au 23/09 | La **dernière phrase de la ligne du § 8** est réécrite : elle disait « ferait deux **relances** pour un seul oubli » |
+
+**Le mot « relance » était la cause, et ça se mesure.** Dans ce prompt « la
+relance » est un terme technique — la phrase de la carte du § 7. L'employer au
+sens courant de « rappel » dans une ligne du § 8 amorçait le champ. Seize
+tirages de la scène 02 par état du prompt :
+
+| Prompt | Relances écrites | Dont nommant quelqu'un |
+|---|---|---|
+| La ligne d'origine | 6 sur 8 | 3 |
+| Sans la ligne | 0 sur 16 | 0 |
+| La ligne réécrite, sans le mot « relance » | 0 sur 16 | 0 |
+
+La ligne dit maintenant « Le dire toi aussi, ce serait signaler deux fois le
+même oubli ». Leçon qui dépasse ce cas : **un mot du vocabulaire du prompt
+employé au sens courant ailleurs dans le prompt se paie**, et le banc ne
+l'attrape que si on relit les relances, qu'aucune case automatique ne coche.
+
+Et une correction dans le **banc**, pas dans le prompt — la troisième de cette
+famille après les deux du 23/09 et celle du 24/09 : l'écho des mots du voyageur
+ne s'exige plus sur une **commande**. « Il me reste combien de temps ? » appelle
+la règle du crédit du jour, pas un écho de la question ; l'exiger était déjà
+sans objet sur un refus, pour la même raison.
+
+Au terme des trois passages, les 22 scènes passent sans manquement de forme, et
+les lignes qui se lisent tiennent : rien d'inventé, aucune question déjà
+répondue, aucune relance ne nomme personne, et le mélange tu (au voyageur) /
+vous (au groupe) sonne juste partout.
+
+**Coût réel d'un passage : environ 0,30 $**, pas 1 à 2 $ — ce chiffre-là est
+celui du banc de rédaction (Opus 5.5, `modeles-ia.md` § Décisions, 02/10). Ici
+le prompt système est mis en cache, et 21 des 22 scènes le relisent au tarif
+cache.
+
+### La question du trou — 21/10/2026, Sonnet 5
+
+Hugo, le 21/10 : la carte à texte fixe ne suffit pas, il veut que MEMO
+**questionne** le voyageur sur son trou — et distingue le jour sauté exprès du
+jour passé sous le nez. La carte disait le trou sans jamais demander pourquoi.
+
+Ce qui ne change pas, et c'est l'essentiel : **le code trouve toujours le
+trou.** Un trou se calcule sur des dates ; un trou inventé serait pire que pas
+de trou du tout, et ça reste vrai. Ce qui change, c'est qui écrit la phrase.
+
+| | Avant le 21/10 | Depuis |
+|---|---|---|
+| Qui trouve le trou | `conversationGaps.ts`, sur les dates | inchangé |
+| Qui écrit la bulle | `missingDayNotice`, texte fixe | MEMO, avec les mots du fil |
+| Y a-t-il une question | non — « le bouton est la question » | oui, une : voulu ou oublié |
+| Quand l'appel tombe | — | la carte fixe parle, et `model` dit « scripted » |
+
+Le tour où la carte s'accroche — « Je valide mes photos », le seul instant au
+repos du déroulé — est un tour **scripté** : le modèle n'y est pas appelé. La
+question du trou est donc un **troisième appel**, sur le modèle du second
+(celui qui extrait le contexte du voyage) : son prompt système, son schéma, sa
+validation, et son repli. Le § 8 du prompt de conversation **ne change pas** :
+MEMO ne relève toujours jamais un trou de lui-même dans le fil, et ce qu'on a
+mesuré le matin du 21/10 reste valable.
+
+Ce que la validation jette, plutôt que de le rattraper : une bulle sans
+question, avec deux questions, de plus de 240 caractères, vide, ou qui porte du
+Markdown. Dans tous ces cas la carte fixe parle. Sur un oubli, une phrase
+neutre vaut mieux qu'une question de travers.
+
+Deux scènes neuves, et le banc a son mode (`--missing-day`) — un trou d'un
+jour, un trou de deux. Les deux passent du premier coup :
+
+> Entre Testaccio et l'Aventin, le samedi 26 septembre reste silencieux.
+> Journée volontairement calme ou simplement oubliée en chemin ? Si tu veux la
+> raconter, « Compléter l'étape manquante » est là, sinon on le laisse comme ça.
+
+Une correction dans le banc, la quatrième de cette famille : les deux
+apostrophes se valent quand on compare le libellé du bouton. Le catalogue porte
+la typographique (’), le modèle écrit la droite (') — à l'écran c'est le même
+libellé.
+
+**Le plafond de deux jours reste** (Hugo, 21/10) : au-delà, ce n'est plus un
+oubli mais une façon de raconter, et seule la manière de demander a changé.
+
 ### L'outil de relecture
 
 ```bash
 cd backend && npm run conversation:eval            # Claude, sur toutes les scènes
 cd backend && npm run conversation:eval -- --heuristic   # le moteur de règles, sans clé
+cd backend && npm run conversation:eval -- --missing-day  # la question du trou
 ```
 
 Le script (`backend/scripts/conversation-eval.ts`) fait parler MEMO sur les
@@ -672,3 +848,10 @@ exactement ce que le modèle doit faire mieux.
 | 12/10/2026 | « À l'oral » corrige la fiche au lieu d'ajouter un souvenir ; la correction remplace ce qu'elle contredit | Hugo |
 | 12/10/2026 | Une étape sautée se clôt après la suivante : MEMO y revient une fois, validation ou photos | Hugo |
 | 12/10/2026 | La relance de l'accueil suit la dernière étape racontée quand son lieu est connu ; la photo du voyage est, à défaut d'une photo choisie, la dernière envoyée dans le fil | Hugo |
+| 19/10/2026 | Une suggestion d'étape manquante, calculée par le code sur un trou **refermé** de deux jours au plus, voyage en cours et rythme quotidien ; une fois par journée, deux refus et plus jamais — le silence vaut refus | Hugo |
+| 19/10/2026 | Raconter une journée passée se fait par ce bouton, qui date le récit suivant sur elle ; pas de choix de date libre, et des puces datées seulement quand il manque deux journées | Hugo |
+| 21/10/2026 | Un `enum` de schéma de sortie ne porte pas de `type` à côté : l'API refuse l'union, et le repli silencieux rendait la panne invisible hors du banc (§ 13) | reco Claude |
+| 21/10/2026 | Un mot du vocabulaire du prompt ne s'emploie pas au sens courant ailleurs dans le prompt : « relance » au § 8 faisait écrire des relances au § 7, mesuré à 6 sur 8 | reco Claude |
+| 21/10/2026 | C'est MEMO qui pose la question du trou, et il demande si la journée est sautée exprès ou oubliée ; le code continue de trouver le trou, et la carte fixe reste le repli | Hugo |
+| 21/10/2026 | Le plafond de deux jours ne bouge pas : seule la façon de demander change | Hugo |
+| 22/10/2026 | Les maquettes « Chat — Smart reco » montrent des puces « Aujourd'hui / Hier » et un texte de carte en gabarit (« J'ai détecté un trou… ») : elles sont antérieures au 19/10 et on garde l'existant — puces datées seulement sur deux journées manquantes, en libellés absolus, et la question écrite par MEMO | Hugo |

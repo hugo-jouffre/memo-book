@@ -72,6 +72,24 @@ extension ChatThread {
     /// vocal qui a fait tomber le crédit à zéro, la bulle « reviens demain » de
     /// MEMO avec son bouton « Raconter sans limite », et un message écrit
     /// ensuite hors ligne que le serveur a refusé — il attend demain, en gris.
+    /// Le fil où MEMO relève une journée manquante — la carte
+    /// « ✦ Suggestions », son bouton et son « Ignorer » (19/10/2026).
+    public static func missingDayFixture(tripId: String) -> ChatThread {
+        var thread = fixture(tripId: tripId)
+        thread.messages.append(
+            ChatMessage(
+                id: "memo-missing-day",
+                author: .memo,
+                body: .text(ChatFixtureCopy.missingDayMessage),
+                sentAt: Date.fixture(27, 8, 2026),
+                stepId: thread.context.stepId,
+                callToAction: ChatFixtureCopy.missingDayCallToAction
+            )
+        )
+        thread.suggestions = []
+        return thread
+    }
+
     /// Le micro et le clavier sont pâlis.
     public static func creditExhaustedFixture(tripId: String) -> ChatThread {
         var thread = fixture(tripId: tripId)
@@ -323,6 +341,20 @@ public enum ChatCreditFixture {
 
 /// Les textes des bulles d'exemple qui portent un bouton.
 public enum ChatFixtureCopy {
+    /// La carte « ✦ Suggestions » d'une journée manquante (19/10/2026). Le
+    /// texte est celui que le serveur compose (`missingDayNotice`,
+    /// `services/conversationCopy.ts`), recopié pour l'aperçu.
+    public static let missingDayMessage =
+        "Entre ton récit du mardi 25 et celui du jeudi 27, il me manque le mercredi 26 août. "
+        + "Si tu veux me le raconter, touche « Compléter l’étape manquante » juste en dessous — sinon on le laisse comme ça."
+
+    public static let missingDayCallToAction = ChatCallToAction(
+        id: "fill_missing_day",
+        kind: .fillMissingDay,
+        label: "Compléter l’étape manquante",
+        eyebrow: "Suggestions"
+    )
+
     /// La bulle de la maquette `3653:17090`, sous laquelle MEMO propose
     /// « Modifier l’autorisation ».
     public static let limitedPhotosMessage =
