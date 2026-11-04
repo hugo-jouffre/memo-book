@@ -83,7 +83,16 @@ COPY backend/certs ./certs
 COPY ["MemoBook Generator/templates", "/app/MemoBook Generator/templates"]
 # Le composeur de mise en page de l'atelier : l'app compose son carnet avec le
 # même code (`src/services/bookComposer.ts`, Hugo 13/10/2026).
+#
+# ⚠️ **Ses `require` voyagent avec lui.** `voyage.js` manquait depuis le
+# 08/10/2026 (`6941f81`, les chiffres du voyage) : l'image partait sans lui,
+# et **toute composition échouait en production** sur « Cannot find module
+# './voyage.js' » — à l'import, avant même de structurer. Rien ne pouvait le
+# voir : ça compile, ça teste, ça se déploie, et ça ne casse qu'au premier
+# vrai carnet. `test/composeurEmbarque.test.ts` relit ce fichier et refuse
+# qu'un `require` du composeur n'y soit pas copié.
 COPY ["MemoBook Generator/public/mise-en-page.js", "/app/MemoBook Generator/public/mise-en-page.js"]
+COPY ["MemoBook Generator/public/voyage.js", "/app/MemoBook Generator/public/voyage.js"]
 COPY agents /app/agents
 COPY assets /app/assets
 
