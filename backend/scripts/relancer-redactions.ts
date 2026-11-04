@@ -6,6 +6,7 @@
  *
  *   railway run --service worker -- npm run redaction:epaves
  *   railway run --service worker -- npm run redaction:epaves -- --relancer --max 5
+ *   railway run --service worker -- npm run redaction:epaves -- --relancer --entree <id>
  *
  * D'où elles viennent : pg-boss fait expirer un job que personne n'a dépilé,
  * puis l'archive ; l'entrée, elle, reste à `pending` pour toujours. Le
@@ -27,6 +28,8 @@ import { strandedBefore, type RedactJob } from "../src/jobs/redact.js";
 const relancer = process.argv.includes("--relancer");
 const maxIndex = process.argv.indexOf("--max");
 const max = maxIndex === -1 ? Number.POSITIVE_INFINITY : Number(process.argv[maxIndex + 1]);
+const entreeIndex = process.argv.indexOf("--entree");
+const entree = entreeIndex === -1 ? null : process.argv[entreeIndex + 1];
 
 if (Number.isNaN(max) || max <= 0) {
   console.error("--max attend un nombre de relances supérieur à zéro.");
@@ -35,20 +38,36 @@ if (Number.isNaN(max) || max <= 0) {
 
 const context = createContext(loadEnv());
 
-// Les mêmes conditions que la route de relance : une photo n'a rien à
-// rédiger, un texte corrigé à la main ne se réécrit pas par-dessus, et sans
-// transcription il n'y a pas de matière.
-const epaves = await context.prisma.entry.findMany({
-  where: {
-    redactionStatus: { in: ["pending", "processing"] },
-    updatedAt: { lt: strandedBefore() },
-    kind: { not: "photo" },
-    editedText: null,
-    NOT: { transcript: null },
-  },
-  select: { id: true, memoId: true, redactionStatus: true, updatedAt: true },
-  orderBy: { updatedAt: "asc" },
-});
+// Exactement ce qui bloque une composition : `pendingRedactionCount` de
+// `jobs/structure.ts` compte toute entrée non-photo en attente, sans regarder
+// le reste. On ne filtre donc ni sur la transcription ni sur une correction
+// manuelle — `jobs/redact.ts` les passe à `ready` dès la première ligne, sans
+// appeler l'IA ni toucher au texte. Les écarter laisserait des carnets
+// bloqués par des entrées qu'on débloque pourtant gratuitement.
+//
+// `--entree` vise une fiche nommée, quel que soit son état et son âge : c'est
+// le geste d'après un échec, quand on veut savoir si la rédaction repasse
+// avant d'engager les autres.
+const epaves = entree
+  ? await context.prisma.entry.findMany({
+      where: { id: entree, kind: { not: "photo" } },
+      select: { id: true, memoId: true, redactionStatus: true, updatedAt: true },
+    })
+  : await context.prisma.entry.findMany({
+      where: {
+        redactionStatus: { in: ["pending", "processing"] },
+        updatedAt: { lt: strandedBefore() },
+        kind: { not: "photo" },
+      },
+      select: { id: true, memoId: true, redactionStatus: true, updatedAt: true },
+      orderBy: { updatedAt: "asc" },
+    });
+
+if (entree && epaves.length === 0) {
+  console.error(`Aucune entrée ${entree} à rédiger (inexistante, ou c'est une photo).`);
+  await context.prisma.$disconnect();
+  process.exit(1);
+}
 
 const carnets = new Set(epaves.map((epave) => epave.memoId)).size;
 console.log(`${epaves.length} épave(s), sur ${carnets} carnet(s).`);
