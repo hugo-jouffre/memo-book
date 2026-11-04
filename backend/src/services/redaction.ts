@@ -818,6 +818,62 @@ const REDACTION_SCHEMA = {
 } as const;
 
 /**
+ * **Le schéma part en deux, et c'est une contrainte d'Anthropic** (04/11/2026).
+ *
+ * Une sortie contrainte par schéma est compilée en grammaire, et celle-ci a
+ * une taille maximale. Les champs `continuesPrevious` et `moments`, arrivés
+ * les 29-30/10/2026 avec le groupement et le découpage des étapes, ont fait
+ * passer le schéma au-dessus : depuis, **chaque rédaction est refusée** par un
+ * 400 « The compiled grammar is too large », avant même de commencer. La
+ * dernière rédaction réussie en production date du 30 octobre, et rien ne le
+ * disait — l'app n'affiche qu'une phrase générique.
+ *
+ * On a cherché à repasser dessous sans rien perdre, sans y arriver : les
+ * `anyOf: [X, null]` réécrits en type nullable sont refusés par le validateur,
+ * et retirer **toutes** les descriptions fait tomber le schéma de 9 200 à
+ * 3 500 caractères sans rien changer — seule la structure est comptée. Il
+ * fallait donc lui enlever un bloc.
+ *
+ * Alors on demande deux fois : **le récit**, puis **le relevé** qu'il
+ * alimente. Aucun champ n'est perdu. Le relevé lit le texte déjà écrit, ce
+ * qu'il faisait déjà — il le relevait de sa propre page. Le prompt système
+ * étant mis en cache, le second appel ne repaie que son message.
+ */
+const RECIT_KEYS = [
+  "understanding",
+  "title",
+  "text",
+  "weatherKey",
+  "funFact",
+  "funFactTitle",
+  "quiz",
+  "doubts",
+  "continuesPrevious",
+  "moments",
+] as const;
+
+const RELEVE_KEYS = ["coherenceSheet", "insights"] as const;
+
+function sousSchema(keys: readonly string[]) {
+  const properties = Object.fromEntries(
+    keys.map((key) => [key, REDACTION_SCHEMA.properties[key as keyof typeof REDACTION_SCHEMA.properties]]),
+  );
+  return { type: "object", properties, required: [...keys], additionalProperties: false } as const;
+}
+
+export const RECIT_SCHEMA = sousSchema(RECIT_KEYS);
+export const RELEVE_SCHEMA = sousSchema(RELEVE_KEYS);
+
+type RelevePart = Pick<RedactionResult, (typeof RELEVE_KEYS)[number]>;
+type RecitPart = Omit<RedactionResult, "model" | (typeof RELEVE_KEYS)[number]>;
+
+/**
+ * Le relevé ne rédige pas : il lit le texte écrit et en tire des listes. Un
+ * effort bas suffit, et c'est ce qui rend le second appel presque gratuit.
+ */
+const RELEVE_EFFORT: RedactionEffort = "low";
+
+/**
  * Un encart trop long fait échouer la validation du carnet entier
  * (`payloadValidator.ts`), et le schéma ne sait pas compter les caractères.
  * L'encart est facultatif : trop long, il saute — le couper ferait imprimer
@@ -1074,6 +1130,28 @@ export function buildRedactionPrompt(input: RedactionInput): string {
 }
 
 /**
+ * Le second message : la même matière, plus le texte qu'on vient d'écrire, et
+ * on ne demande que ce qui s'en relève. Voir `RECIT_SCHEMA` pour la raison de
+ * cette coupe en deux.
+ */
+function buildRelevePrompt(input: RedactionInput, texte: string): string {
+  return [
+    buildRedactionPrompt(input),
+    "",
+    "## Le texte que tu viens d'écrire pour cette étape",
+    texte,
+    "",
+    "## Ce qui t'est demandé maintenant",
+    "Tu n'écris plus : tu relèves. Rends seulement `coherenceSheet` et `insights`.",
+    "- `coherenceSheet` : l'ancienne fiche, **plus** ce que cette étape ajoute. Ne retire aucune",
+    "  entrée et ne change aucune graphie déjà fixée.",
+    "- `insights` : ce que **cette étape** apporte aux statistiques du profil. Un relevé, pas un",
+    "  total : ne reprends rien des étapes précédentes, et n'invente aucun chiffre. Ce que le",
+    "  récit ne dit pas reste vide ou `null`.",
+  ].join("\n");
+}
+
+/**
  * Rédaction réelle, par Claude.
  *
  * Le prompt système est **le fichier de règles lui-même**, pas une
@@ -1117,21 +1195,26 @@ export class AnthropicRedactor implements Redactor {
     ];
   }
 
-  async redact(input: RedactionInput): Promise<RedactionResult> {
+  /**
+   * Une demande au modèle, contrainte par un schéma, rendue déjà analysée.
+   *
+   * Le prompt système est le même pour les deux appels, et mis en cache : le
+   * relevé ne repaie que son propre message.
+   */
+  private async demander<T>(
+    schema: unknown,
+    prompt: string,
+    effort: RedactionEffort,
+    maxTokens: number,
+  ): Promise<T> {
     const response = await this.client.messages.create({
+      max_tokens: maxTokens,
       model: this.model,
-      // Large : la réflexion et la lecture du vocal comptent dans ce plafond,
-      // et un texte tronqué au milieu d'une phrase est pire qu'une erreur
-      // franche.
-      max_tokens: 16_000,
       thinking: { type: "adaptive" },
-      output_config: {
-        effort: this.effort,
-        format: { type: "json_schema", schema: REDACTION_SCHEMA },
-      },
+      output_config: { effort, format: { type: "json_schema", schema } },
       system: this.buildSystemPrompt(),
-      messages: [{ role: "user", content: buildRedactionPrompt(input) }],
-    });
+      messages: [{ role: "user", content: prompt }],
+    } as never);
 
     // À vérifier avant de lire `content` : un refus renvoie un 200 avec un
     // tableau vide, et `content[0]` planterait sur un souvenir parfaitement
@@ -1155,7 +1238,29 @@ export class AnthropicRedactor implements Redactor {
       throw new Error("Le modèle n'a produit aucun texte exploitable.");
     }
 
-    const parsed = JSON.parse(text) as Omit<RedactionResult, "model">;
+    return JSON.parse(text) as T;
+  }
+
+  async redact(input: RedactionInput): Promise<RedactionResult> {
+    // Large : la réflexion et la lecture du vocal comptent dans ce plafond, et
+    // un texte tronqué au milieu d'une phrase est pire qu'une erreur franche.
+    const recit = await this.demander<RecitPart>(
+      RECIT_SCHEMA,
+      buildRedactionPrompt(input),
+      this.effort,
+      16_000,
+    );
+
+    // Le relevé n'écrit rien : il lit le texte qui vient d'être écrit et en
+    // tire des listes. Un effort bas suffit, et un plafond bien plus court.
+    const releve = await this.demander<RelevePart>(
+      RELEVE_SCHEMA,
+      buildRelevePrompt(input, recit.text),
+      RELEVE_EFFORT,
+      4_000,
+    );
+
+    const parsed: Omit<RedactionResult, "model"> = { ...recit, ...releve };
     return {
       ...parsed,
       ...withinFunFactLimit(parsed),
