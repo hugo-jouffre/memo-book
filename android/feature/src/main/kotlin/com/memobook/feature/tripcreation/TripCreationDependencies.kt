@@ -3,6 +3,7 @@ package com.memobook.feature.tripcreation
 import com.memobook.feature.AppDependencies
 import kotlinx.coroutines.flow.map
 import com.memobook.feature.chat.NotificationsNudge
+import com.memobook.feature.chat.NotificationsPrimer
 
 /**
  * Les six étapes de « Créer un voyage ». Le `tripCreationModel()`
@@ -16,7 +17,15 @@ import com.memobook.feature.chat.NotificationsNudge
  * l'a créé, hors ligne au retour du réseau.
  */
 fun AppDependencies.tripCreationModel(): TripCreationModel = TripCreationModel(
-    save = { draft -> outbox.saveTrip(draft) },
+    save = { draft ->
+        val trip = outbox.saveTrip(draft)
+        // Le voyage est créé **sur cet appareil** : sa conversation posera la
+        // question des notifications à sa première ouverture, si elle n'a
+        // jamais été posée ([NotificationsPrimer]). Revalider le même
+        // brouillon ne l'y met pas deux fois.
+        NotificationsPrimer.markTripCreated(trip.id, settings)
+        trip
+    },
     sync = { id -> outbox.tripSync(id) },
     themes = { api.tripThemes() },
     isOffline = outbox.isOnline.map { !it },

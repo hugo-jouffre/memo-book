@@ -553,7 +553,16 @@ public final class AppDependencies {
     /// réseau.
     public func tripCreationModel() -> TripCreationModel {
         TripCreationModel(
-            save: { [outbox] draft in try await outbox.saveTrip(draft) },
+            save: { [outbox] draft in
+                let trip = try await outbox.saveTrip(draft)
+                // Le voyage est créé **sur cet appareil** : sa conversation
+                // posera la question des notifications à sa première
+                // ouverture, si elle n'a jamais été posée
+                // (``NotificationsPrimer``). Revalider le même brouillon ne
+                // l'y met pas deux fois.
+                NotificationsPrimer.markTripCreated(trip.id)
+                return trip
+            },
             sync: { [outbox] id in await outbox.tripSync(for: id) },
             themes: { [api] in try await api.tripThemes() },
             isOffline: { [outbox] in !outbox.isOnline },

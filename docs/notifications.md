@@ -164,6 +164,18 @@ Côté app (`ios/Modules/Sources/MemoBookFeature/Notifications/`) :
   voyage**, quand on choisit un rythme : c'est le « bon moment » de
   l'onboarding. Passer l'étape ne demande rien. Allumer une alerte dans
   « Gérer mes notifications » la demande aussi, si elle n'a jamais été posée.
+- **Et à la première conversation d'un voyage qu'on vient de créer**, si elle
+  n'a jamais été posée — l'écran « Améliorons MemoBook ensemble »
+  (`ChatNotificationsPrimer`, 03/11/2026). C'est le **recours** de qui a passé
+  l'étape de la création : le fil s'ouvre sur un écran plein qui tient le fond
+  — le titre, la flèche qui désigne l'alerte, et dessous les deux phrases qui
+  disent à quoi sert la réponse — pendant qu'iOS pose sa question par-dessus.
+  Il n'a ni bouton ni sortie : il s'efface dès qu'iOS a sa réponse. Qui a déjà
+  autorisé ou refusé ne le voit jamais, il ne porterait aucune alerte. L'app
+  retient sur l'appareil les voyages créés ici dont la conversation n'a pas
+  encore été ouverte ; l'ouvrir retire le voyage de cette liste, qui se vide
+  donc toute seule. Un co-voyageur venu par un code n'a rien créé : il ne le
+  voit pas, comme pour la bulle ci-dessous.
 - Le jeton part à chaque entrée dans l'app (`POST /v1/push-tokens`), avec le
   fuseau et l'environnement (sandbox pour un build Xcode, production pour
   TestFlight et l'App Store).
