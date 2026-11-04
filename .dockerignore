@@ -29,8 +29,16 @@ MemoBook Generator/server.mjs
 # page, que l'app utilise aussi (`backend/src/services/bookComposer.ts`). Un
 # joker sur le contenu et non le dossier : le dossier exclu, son fichier ne
 # pourrait plus être ré-inclus.
+#
+# ⚠️ **Et ses `require` avec lui.** La règle est en deux moitiés — une ligne
+# ici pour laisser le fichier entrer dans le contexte, une ligne `COPY` dans
+# le Dockerfile pour le poser dans l'image. N'en faire qu'une moitié ne rate
+# pas la construction de la même façon : sans le `!`, Docker s'arrête sur
+# « not found » (04/11/2026, le déploiement de la PR #173) ; sans le `COPY`,
+# il construit très bien une image qui tombera au premier carnet.
 MemoBook Generator/public/*
 !MemoBook Generator/public/mise-en-page.js
+!MemoBook Generator/public/voyage.js
 MemoBook Generator/*.md
 
 # Les exports Figma des aperçus de personnalisation : 146 Mo que le serveur ne

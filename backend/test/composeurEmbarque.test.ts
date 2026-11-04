@@ -22,6 +22,7 @@ import { describe, expect, it } from "vitest";
 const RACINE = resolve(import.meta.dirname, "../..");
 const COMPOSEUR = resolve(RACINE, "MemoBook Generator/public/mise-en-page.js");
 const DOCKERFILE = resolve(RACINE, "backend/Dockerfile");
+const DOCKERIGNORE = resolve(RACINE, ".dockerignore");
 
 /** Les fichiers que le composeur atteint, lui compris, chemins absolus. */
 function fichiersDuComposeur(): string[] {
@@ -43,12 +44,26 @@ function fichiersDuComposeur(): string[] {
 }
 
 describe("le composeur embarqué", () => {
-  it("voyage dans l'image avec tous ses require", () => {
+  const chemins = () => fichiersDuComposeur().map((fichier) => relative(RACINE, fichier));
+
+  it("est copié dans l'image, lui et ses require", () => {
     const dockerfile = readFileSync(DOCKERFILE, "utf8");
-    const manquants = fichiersDuComposeur()
-      .map((fichier) => relative(RACINE, fichier))
-      .filter((chemin) => !dockerfile.includes(chemin));
+    const manquants = chemins().filter((chemin) => !dockerfile.includes(`"${chemin}"`));
 
     expect(manquants, `à copier dans backend/Dockerfile : ${manquants.join(", ")}`).toEqual([]);
+  });
+
+  /**
+   * L'autre moitié de la règle, et celle qui m'a échappé le 04/11/2026 : un
+   * `COPY` ne peut rien poser qu'un `.dockerignore` a gardé hors du contexte.
+   * Le premier essai de correction avait la ligne de copie sans la ligne
+   * d'exception, et la construction s'est arrêtée sur « not found » — le test
+   * d'à côté, lui, était vert.
+   */
+  it("entre dans le contexte de construction", () => {
+    const ignore = readFileSync(DOCKERIGNORE, "utf8");
+    const exclus = chemins().filter((chemin) => !ignore.includes(`!${chemin}`));
+
+    expect(exclus, `à ré-inclure dans .dockerignore (ligne « ! ») : ${exclus.join(", ")}`).toEqual([]);
   });
 });
