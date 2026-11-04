@@ -79,6 +79,65 @@ describe("relancer la rédaction", () => {
       "pending",
     );
   });
+
+  /**
+   * **Une épave se reprend** (04/11/2026). Une entrée laissée en `pending`
+   * par un job expiré n'a plus rien qui la pousse, et la garde contre les
+   * doubles relances l'enfermait : trente et une y dormaient, la plus
+   * ancienne depuis six jours, et leurs carnets ne pouvaient plus se
+   * composer.
+   */
+  async function entryStuckSince(code: string, updatedAt: Date) {
+    const owner = await registerAccount(harness.app);
+    const memo = await harness.prisma.memo.create({
+      data: { ownerAccountId: owner.accountId, title: "Naxos 2026", accessCode: code, stage: "ongoing" },
+    });
+    const entry = await harness.prisma.entry.create({
+      data: {
+        memoId: memo.id,
+        kind: "audio",
+        status: "ready",
+        redactionStatus: "pending",
+        transcript: "Le port de Naxos au couchant.",
+        capturedAt: new Date(),
+      },
+    });
+    // `@updatedAt` ne pose la date que si on ne la dicte pas : on vieillit
+    // l'entrée plutôt que d'attendre un quart d'heure. En SQL brut, la
+    // colonne est sans fuseau et la valeur arrivait décalée d'une heure.
+    await harness.prisma.entry.update({ where: { id: entry.id }, data: { updatedAt } });
+    return { owner, entry };
+  }
+
+  it("reprend une rédaction en attente dont le job a expiré", async () => {
+    const { owner, entry } = await entryStuckSince("REDAC3", new Date(Date.now() - 60 * 60 * 1000));
+    const publish = vi.spyOn(harness.context.queue, "publish").mockResolvedValue();
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: `/v1/entries/${entry.id}/redaction`,
+      headers: { authorization: owner.authorization },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(publish.mock.calls.filter(([name]) => name === JOB_NAMES.redact)).toHaveLength(1);
+  });
+
+  it("laisse tranquille une rédaction qui vient de partir en file", async () => {
+    // Sans ce garde-fou, la reprise des épaves paierait deux fois toute
+    // rédaction qui prend plus d'une seconde.
+    const { owner, entry } = await entryStuckSince("REDAC4", new Date());
+    const publish = vi.spyOn(harness.context.queue, "publish").mockResolvedValue();
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: `/v1/entries/${entry.id}/redaction`,
+      headers: { authorization: owner.authorization },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(publish.mock.calls.filter(([name]) => name === JOB_NAMES.redact)).toHaveLength(0);
+  });
 });
 
 /**
