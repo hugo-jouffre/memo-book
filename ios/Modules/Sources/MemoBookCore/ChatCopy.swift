@@ -540,43 +540,6 @@ public enum ChatCopy {
             """
     }
 
-    // MARK: - Regarder une photo
-
-    /// La visionneuse plein écran d'une photo du fil, et ce qu'on peut en
-    /// faire (Hugo, 15/10/2026 : « on ne peut pas enregistrer les photos ni
-    /// les partager en dehors de l'application »).
-    public enum PhotoViewer {
-        public static let close = "Fermer"
-        public static let save = "Enregistrer"
-        public static let share = "Partager"
-        public static let copy = "Copier"
-
-        /// Ce que VoiceOver annonce du compteur « 2 sur 5 ».
-        public static func position(_ index: Int, of total: Int) -> String {
-            "Photo \(index) sur \(total)"
-        }
-
-        /// La photo est dans la photothèque. Un mot, le temps d'un passage :
-        /// une alerte à congédier pour un geste réussi serait de trop.
-        public static let saved = "Enregistrée dans tes photos"
-        public static let copied = "Copiée"
-
-        /// iOS a refusé l'écriture. Comme pour le micro, il ne redemande
-        /// pas : le seul recours est l'app Réglages.
-        public static let saveDenied = """
-            MemoBook a besoin d’ajouter à tes photos pour enregistrer celle-ci. \
-            Autorise l’accès dans Réglages.
-            """
-
-        /// L'écriture a échoué pour une autre raison — disque plein.
-        public static let saveFailed =
-            "Je n’ai pas réussi à l’enregistrer. Réessaie dans un moment."
-
-        /// La photo n'est pas encore arrivée : rien à enregistrer ni à
-        /// partager tant qu'elle n'est pas là.
-        public static let notReady = "Cette photo n’est pas encore chargée."
-    }
-
     // MARK: - Les échecs
 
     /// Les images choisies n'ont pas pu être écrites sur l'appareil — disque
