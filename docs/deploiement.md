@@ -189,6 +189,12 @@ réelle et le PDF sont simulés. Les deux axes sont indépendants :
 `OPENAI_API_KEY` seule rend la transcription réelle (le PDF reste simulé) ;
 `APITEMPLATE_API_KEY` en plus donne le vrai PDF.
 
+**Et le repli sur le PDF simulé ne se dit nulle part.** Aucun log n'annonce
+quel moteur de rendu a répondu : un carnet composé sans
+`APITEMPLATE_API_KEY` s'annonce prêt, avec une adresse `pdf.example.test` qui
+n'existe pas. `npm run apitemplate:check` (via `railway run`, voir
+`docs/apitemplate.md`) tranche en un appel, sans rien écrire en base.
+
 ## 6. Apple et Google
 
 Ces deux-là échouent **même avec l'API en ligne** si le serveur n'est pas
