@@ -411,8 +411,19 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     const tally = await photosReceivedFor(context, message);
     const placeName = step?.placeName ?? memo.destinationCity;
     const count = input.message.photoCount;
-    if (tally?.zeroRatio) {
-      reply = flowReply(composeBeats("", [photosAtZeroRatio(count)]), [...SUGGESTION_SETS.afterPhotos], "memory", placeName);
+    // **Le 0 % ne s'explique qu'une fois par voyage** (Hugo, 04/11/2026) :
+    // c'est un état stable du carnet, pas un événement. Redit à chaque envoi,
+    // il n'apprenait plus rien et donnait l'impression que les photos étaient
+    // refusées à chaque fois. Dit, les envois suivants se valident comme les
+    // autres.
+    if (tally?.zeroRatio && !(await hasSaidNotice(context, memo.id, ZERO_RATIO_NOTICE))) {
+      reply = flowReply(
+        composeBeats("", [photosAtZeroRatio(count)]),
+        [...SUGGESTION_SETS.afterPhotos],
+        "memory",
+        placeName,
+        ZERO_RATIO_NOTICE,
+      );
     } else if (tally && tally.received < tally.asked) {
       reply = flowReply(
         composeBeats("", [photosMissing(tally.received, tally.asked)]),
@@ -665,6 +676,8 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
                 ...(reply.callToActionId ? { callToAction: { id: reply.callToActionId } } : {}),
                 ...(asksPhotosFor ? { asksPhotosFor } : {}),
                 ...(asksPhotosFor && reply.photosAsked ? { photosAsked: reply.photosAsked } : {}),
+                // Une explication qui ne se redira pas — voir `ConversationReply.notice`.
+                ...(reply.notice ? { notice: reply.notice } : {}),
               }
             : undefined,
         },
@@ -1196,6 +1209,7 @@ function flowReply(
   suggestionIds: ConversationReply["suggestionIds"],
   disposition: ChatDisposition,
   placeName: string | null,
+  notice?: string,
 ): ConversationReply {
   return {
     beats,
@@ -1205,7 +1219,23 @@ function flowReply(
     asksRoseEpineGraine: false,
     callToActionId: null,
     model: "scripted",
+    ...(notice ? { notice } : {}),
   };
+}
+
+/**
+ * La clé de l'explication du ratio à 0 % — rangée dans `payload.notice` de la
+ * bulle qui la porte, comme la bulle « reviens demain » du crédit du jour.
+ */
+const ZERO_RATIO_NOTICE = "photos_at_zero_ratio";
+
+/** MEMO a déjà donné cette explication dans ce voyage. */
+async function hasSaidNotice(context: AppContext, memoId: string, notice: string): Promise<boolean> {
+  const said = await context.prisma.chatMessage.findFirst({
+    where: { memoId, author: "memo", payload: { path: ["notice"], equals: notice } },
+    select: { id: true },
+  });
+  return said !== null;
 }
 
 /** Un rendu prêt : sans lui, le bouton « Voir l’aperçu du carnet » ouvrirait une page vide. */

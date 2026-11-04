@@ -247,6 +247,18 @@ export interface ConversationReply {
    * (`photosReceivedFor`, `converse.ts`).
    */
   photosAsked?: number;
+  /**
+   * **Une explication qui ne se dit qu'une fois par voyage** (Hugo,
+   * 04/11/2026 : « à voir s'ils ne sont pas affichés un peu trop
+   * fréquemment »). Le job la range dans `payload.notice` de la dernière
+   * bulle, et la relit avant de la redire — même clé que la bulle « reviens
+   * demain » du crédit du jour.
+   *
+   * Pour ce qui décrit un **état stable** du carnet, pas un événement : le
+   * ratio réglé à 0 % ne change pas d'un envoi à l'autre, et le répéter à
+   * chaque photo ne dit rien de neuf.
+   */
+  notice?: string;
 }
 
 /** Un tour du contexte du voyage, tel que le répondeur le lit. */

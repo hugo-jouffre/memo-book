@@ -20,15 +20,32 @@ import com.memobook.design.MemoBookSpacing
  * voulue quand il y en a un, et garder la cible telle quelle — le carnet s'en
  * approchera sans rien forcer.
  *
- * Elle passe **avant** la feuille du changement de cible
- * ([PageTargetChangeSheet]) : rien n'a changé tant qu'on n'a pas répondu.
+ * **Les deux premières réponses s'appliquent d'un seul appui** (Hugo,
+ * 04/11/2026). Elles ouvraient derrière elles la feuille qui redemande
+ * « Changer le nombre de pages cible ? » : on venait de choisir, et la même
+ * question revenait. Ce que cette confirmation disait — la règle des deux
+ * changements — se lit donc **ici**, avant l'appui.
+ *
+ * ⚠️ **Le prix de la cible proposée manque encore ici**, là où iOS l'affiche
+ * (`BookCopy.Pages.reachPrice`) : `PrintPricing` n'est pas porté sur Android,
+ * et cet écran n'affiche aucun prix nulle part. À reprendre avec le portage
+ * des prix, pas avant — une seule ligne chiffrée sur un écran qui n'en a
+ * aucune se lirait comme une erreur.
  */
 @Composable
 internal fun PageTargetReachSheet(reach: PageTargetReach, model: BookCustomisationModel) {
-    BrandSheet(
-        BookCopy.Pages.reachTitle,
-        paragraphs = listOf(BookCopy.Pages.reachToday(reach), BookCopy.Pages.reachLevers(reach)),
-    ) {
+    val allowance = model.pageTargetAllowance
+    val paragraphs = buildList {
+        add(BookCopy.Pages.reachToday(reach))
+        add(BookCopy.Pages.reachLevers(reach))
+        // Un changement qui ne compte pas — avant le premier souvenir — n'a
+        // rien à annoncer : la phrase ne paraît que quand le décompte court.
+        if (allowance.changesCount && allowance.changesLeft > 0) {
+            add(BookCopy.Pages.reachCountsAsChange(allowance.changesLeft))
+        }
+    }
+
+    BrandSheet(BookCopy.Pages.reachTitle, paragraphs = paragraphs) {
         Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.s)) {
             BrandButton(
                 BookCopy.Pages.chooseReachable(reach.closestTarget),
