@@ -203,7 +203,12 @@ public struct BrandWaveform: View {
         // ramer le défilement du fil.
         Canvas { context, size in
             let bars = Self.resample(levels, toFit: size.width)
-            let played = Int((self.progress ?? 0) * Double(bars.count))
+            // **La tête de lecture, en points — pas en numéro de barre**
+            // (Hugo, 03/11/2026). Les barres se teintaient à `index < p ×
+            // nombre de barres`, le point se posait ailleurs sur la largeur :
+            // une barre ne fonçait qu'une fois le point bien passé dessus, et
+            // le retard se voyait. Les deux lisent maintenant la même abscisse.
+            let cursor = (self.progress ?? 0) * size.width
 
             for (index, level) in bars.enumerated() {
                 let height = max(Bar.minimumHeight, size.height * level)
@@ -213,9 +218,12 @@ public struct BrandWaveform: View {
                     width: Bar.width,
                     height: height
                 )
+                // Une barre est jouée dès que la tête a passé son **milieu** :
+                // sur son bord gauche elle fonce un cheveu trop tôt, sur son
+                // bord droit un cheveu trop tard.
                 context.fill(
                     Path(roundedRect: rect, cornerRadius: Bar.width / 2),
-                    with: .color(self.progress != nil && index < played ? self.playedTint : self.tint)
+                    with: .color(self.progress != nil && rect.midX <= cursor ? self.playedTint : self.tint)
                 )
             }
         }

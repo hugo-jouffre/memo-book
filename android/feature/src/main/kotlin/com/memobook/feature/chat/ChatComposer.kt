@@ -847,6 +847,11 @@ private fun RoundButton(
         icon = painterResource(icon),
         style = style,
         isRound = true,
+        // **Exactement la hauteur du champ d'à côté** (Hugo, 03/11/2026) : le
+        // micro prenait la hauteur des CTA (50) pour 48 de large — un ovale,
+        // et plus haut que le champ. En rangée pleine largeur, les pavés
+        // gardent la leur : ce sont des capsules, pas des ronds.
+        roundSide = if (fills) null else scaled(MemoBookSpacing.minimumTapTarget),
         fillsWidth = fills,
         contentDescription = label,
         action = action,

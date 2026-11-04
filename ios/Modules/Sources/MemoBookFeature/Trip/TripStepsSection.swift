@@ -247,7 +247,16 @@ struct TripStepCard: View {
         Button(action: onOpen) {
             content
                 .padding(MemoBookSpacing.xs + 2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // ⚠️ **Toute la carte se touche, pas seulement ce qui est
+                // dessiné** (Hugo, 03/11/2026 : « seul le bouton flèche vers
+                // la droite fonctionne à 100 % »). Le `contentShape` de
+                // ``homeCard()`` est posé *autour* du bouton : il ne dit rien
+                // de la zone sensible de son libellé, qui ne suivait donc que
+                // les glyphes du texte et le rond plein de la flèche — entre
+                // les deux, le doigt tombait dans le vide. C'est exactement ce
+                // que ``homeCardHitArea()`` règle, et que les cartes de
+                // l'accueil appellent toutes.
+                .homeCardHitArea()
         }
         .buttonStyle(CardPressStyle())
         .homeCard()
@@ -275,13 +284,17 @@ struct TripStepCard: View {
         }
     }
 
+    /// La vignette de l'étape : sa photo publiée, sinon sa première photo
+    /// racontée — servie sans session (`routes/tripPhotos.ts`), comme la
+    /// couverture du voyage.
+    ///
+    /// ``RemoteImage`` et non `AsyncImage` (Hugo, 03/11/2026) : c'est la même
+    /// classe de photo publique que la couverture, et `AsyncImage` repart de
+    /// zéro à chaque reconstruction — la liste des étapes repassait par son
+    /// motif à chaque défilement. Voir ``RemoteImage``.
     private var thumbnail: some View {
-        AsyncImage(url: step.photoUrl) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                TripCoverPlaceholder(seed: step.id)
-            }
+        RemoteImage(url: step.photoUrl) {
+            TripCoverPlaceholder(seed: step.id)
         }
         .frame(width: thumbnailSide, height: thumbnailSide)
         .clipShape(.rect(cornerRadius: MemoBookSpacing.cornerRadius))

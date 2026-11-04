@@ -576,6 +576,15 @@ struct ChatVoiceBubble: View {
 
     private var isPlaying: Bool { model.player.isPlaying(note.id) }
 
+    /// Le lecteur tient ce vocal — en lecture **ou en pause**. C'est lui qui
+    /// décide si la bulle montre une position ou repart de zéro.
+    private var isLoaded: Bool { model.player.isLoaded(note.id) }
+
+    /// Le doigt est sur la tête de lecture : la position qu'il dicte prend le
+    /// pas sur celle du lecteur, pour que le point ne tremble pas entre deux
+    /// battements.
+    @State private var scrubbed: Double?
+
     var body: some View {
         BrandChatBubble(author: author) {
             // Le bouton, l'onde et la signature partagent **le même axe**, et le
@@ -617,7 +626,7 @@ struct ChatVoiceBubble: View {
     /// L'onde, et la tête de lecture posée dessus : le point de la maquette,
     /// au début de l'onde au repos, qui avance avec la lecture.
     private var track: some View {
-        let progress = isPlaying ? model.player.progress : 0
+        let progress = scrubbed ?? (isLoaded ? model.player.progress : 0)
 
         return BrandWaveform(
             // Le relevé du serveur, ou celui relu dans le fichier quand le
@@ -633,20 +642,58 @@ struct ChatVoiceBubble: View {
                 Circle()
                     .fill(MemoBookColor.ink)
                     .frame(width: dot, height: dot)
-                    .position(
-                        x: dot / 2 + (proxy.size.width - dot) * progress,
-                        y: proxy.size.height / 2
-                    )
+                    // **Le même repère que les barres** (Hugo, 03/11/2026) :
+                    // le point se posait à `dot / 2 + (largeur - dot) × p`,
+                    // les barres se teintaient à `p × largeur` — deux règles
+                    // pour une seule position, d'où le décalage qu'on voyait
+                    // passer. C'est maintenant `p × largeur` des deux côtés ;
+                    // le point déborde d'un demi-rond dans la marge de la
+                    // bulle aux extrémités, comme sur WhatsApp.
+                    .position(x: proxy.size.width * progress, y: proxy.size.height / 2)
+                    .animation(nil, value: progress)
             }
             .allowsHitTesting(false)
         }
+        // Mesurée ici, et non dans le `GeometryReader` du calque : écrire un
+        // état pendant qu'on dessine redessine en boucle.
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { trackWidth = $0 }
+        // **La tête de lecture se déplace au doigt** (Hugo, 03/11/2026).
+        // Posé sur toute l'onde et non sur le seul point : viser un rond de
+        // 12 pt dans une bulle n'est pas un geste, c'est un concours. Un
+        // appui sans glissement déplace aussi la lecture — c'est ce qu'on
+        // attend d'une barre de progression.
+        .contentShape(.rect)
+        .gesture(scrub)
     }
+
+    /// Le glissé qui déplace la lecture. Il ne vaut que pour le vocal **que le
+    /// lecteur tient** : déplacer la tête d'un vocal qu'on n'écoute pas
+    /// déplacerait celle d'un autre.
+    private var scrub: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard isLoaded, trackWidth > 0 else { return }
+                scrubbed = min(max(value.location.x / trackWidth, 0), 1)
+            }
+            .onEnded { value in
+                guard isLoaded, trackWidth > 0 else { return }
+                let position = min(max(value.location.x / trackWidth, 0), 1)
+                model.player.seek(to: position)
+                scrubbed = nil
+            }
+    }
+
+    /// La largeur de l'onde, mesurée une fois : c'est elle qui traduit la
+    /// position du doigt en fraction du vocal.
+    @State private var trackWidth: CGFloat = 0
 
     /// Le chrono compte **en avançant** pendant la lecture, et affiche la durée
     /// totale au repos : c'est ce que fait un lecteur, et c'est ce qu'on
     /// cherche des yeux dans les deux cas.
     private var elapsedLabel: String {
-        (isPlaying ? model.player.elapsed : note.duration).chatDurationLabel
+        // En pause aussi : le chrono garde le temps écoulé, il ne revient pas
+        // à la durée totale (Hugo, 03/11/2026).
+        (isLoaded ? model.player.elapsed : note.duration).chatDurationLabel
     }
 
     private var playButton: some View {

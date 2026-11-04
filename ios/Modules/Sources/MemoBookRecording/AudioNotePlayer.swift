@@ -36,8 +36,16 @@ public enum PlaybackError: Error, LocalizedError {
 @MainActor
 @Observable
 public final class AudioNotePlayer {
-    /// L'identifiant du vocal en cours, `nil` si rien ne joue.
-    public private(set) var playingId: String?
+    /// Le vocal que le lecteur tient — **en train de jouer ou en pause**.
+    /// `nil` quand rien n'est chargé.
+    ///
+    /// ⚠️ Ce n'est plus « celui qui joue » : une pause le garde (Hugo,
+    /// 03/11/2026). C'est ce qui permet à la bulle de rester sur sa position
+    /// au lieu de revenir au début.
+    public private(set) var loadedId: String?
+
+    /// Le vocal chargé joue vraiment — faux en pause.
+    public private(set) var isRunning = false
 
     /// De 0 à 1 : où en est la lecture. C'est lui que la forme d'onde teinte.
     public private(set) var progress: Double = 0
@@ -49,15 +57,25 @@ public final class AudioNotePlayer {
 
     public init() {}
 
-    public func isPlaying(_ id: String) -> Bool { playingId == id }
+    /// Ce vocal est **en train de jouer** — c'est l'état du bouton, qui montre
+    /// alors une pause.
+    public func isPlaying(_ id: String) -> Bool { loadedId == id && isRunning }
 
-    /// Joue le vocal, ou l'arrête s'il est déjà en train de jouer.
+    /// Ce vocal est celui que le lecteur tient, qu'il joue ou qu'il soit en
+    /// pause : c'est lui qui garde sa position, son chrono et sa tête de
+    /// lecture.
+    public func isLoaded(_ id: String) -> Bool { loadedId == id }
+
+    /// Joue le vocal, le met en pause s'il joue déjà, le reprend s'il est en
+    /// pause.
     ///
-    /// Un autre vocal en cours est arrêté sans cérémonie : deux récits qui se
-    /// parlent par-dessus ne s'écoutent ni l'un ni l'autre.
+    /// **La pause garde la position** (Hugo, 03/11/2026, comme WhatsApp) : on
+    /// repart d'où on s'est arrêté, pas du début. Un autre vocal en cours est
+    /// arrêté sans cérémonie : deux récits qui se parlent par-dessus ne
+    /// s'écoutent ni l'un ni l'autre.
     public func toggle(id: String, url: URL) throws {
-        if playingId == id {
-            stop()
+        if loadedId == id {
+            if isRunning { pause() } else { resume() }
             return
         }
 
@@ -83,10 +101,45 @@ public final class AudioNotePlayer {
             throw PlaybackError.unreadable(error)
         }
 
-        playingId = id
+        loadedId = id
+        isRunning = true
         progress = 0
         elapsed = 0
         startTicking()
+    }
+
+    /// Suspend la lecture **sans rien perdre** : le lecteur garde le fichier,
+    /// la position et le chrono. C'est ce que le bouton play rejoue.
+    public func pause() {
+        guard let player, isRunning else { return }
+        ticker?.cancel()
+        ticker = nil
+        player.pause()
+        isRunning = false
+        elapsed = player.currentTime
+        progress = fraction(of: player)
+    }
+
+    /// Reprend là où la pause a laissé la lecture.
+    public func resume() {
+        guard let player, !isRunning else { return }
+        player.play()
+        isRunning = true
+        startTicking()
+    }
+
+    /// Déplace la tête de lecture, de 0 à 1 — le doigt qui fait glisser le
+    /// point sur l'onde (Hugo, 03/11/2026).
+    ///
+    /// Marche **en pause comme en lecture** : c'est souvent à l'arrêt qu'on
+    /// cherche un passage. La position s'écrit tout de suite, sans attendre le
+    /// prochain battement, pour que le point suive le doigt sans retard.
+    public func seek(to fraction: Double) {
+        guard let player else { return }
+        let clamped = min(max(fraction, 0), 1)
+        player.currentTime = player.duration * clamped
+        elapsed = player.currentTime
+        progress = clamped
     }
 
     public func stop() {
@@ -94,7 +147,8 @@ public final class AudioNotePlayer {
         ticker = nil
         player?.stop()
         player = nil
-        playingId = nil
+        loadedId = nil
+        isRunning = false
         progress = 0
         elapsed = 0
 
@@ -104,12 +158,20 @@ public final class AudioNotePlayer {
             .setActive(false, options: .notifyOthersOnDeactivation)
     }
 
+    private func fraction(of player: AVAudioPlayer) -> Double {
+        player.duration > 0 ? min(max(player.currentTime / player.duration, 0), 1) : 0
+    }
+
     /// Trente fois par seconde : assez fin pour que la forme d'onde se remplisse
     /// sans saccade, assez lâche pour ne pas peser sur le défilement du fil.
     private func startTicking() {
         ticker = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(33))
+                // ⚠️ L'annulation **sort tout de suite**. Avec un `try?`, le
+                // battement qui suivait une pause voyait un lecteur arrêté et
+                // appelait `stop()` : la position était perdue, et le vocal
+                // repartait du début (Hugo, 03/11/2026).
+                do { try await Task.sleep(for: .milliseconds(33)) } catch { return }
                 guard let self, let player = self.player else { return }
 
                 // La fin du vocal se lit ici, faute de délégué `Sendable`.
@@ -119,7 +181,7 @@ public final class AudioNotePlayer {
                 }
 
                 self.elapsed = player.currentTime
-                self.progress = player.duration > 0 ? player.currentTime / player.duration : 0
+                self.progress = self.fraction(of: player)
             }
         }
     }

@@ -78,6 +78,7 @@ public struct BrandButton: View {
     private let style: Style
     private let size: Size
     private let isRound: Bool
+    private let roundSide: CGFloat?
     private let alternate: Bool
     private let isLoading: Bool
     private let isSubdued: Bool
@@ -91,6 +92,10 @@ public struct BrandButton: View {
     ///     couleurs du fichier source.
     ///   - isRound: la variante ronde, pour un bouton sans libellé. Le rayon
     ///     devient un demi-cercle et les marges s'égalisent.
+    ///   - roundSide: le **diamètre** imposé à un bouton rond, quand l'écran a
+    ///     une autre hauteur à suivre que la sienne — le micro de la barre du
+    ///     chat, qui doit faire exactement la hauteur du champ d'à côté
+    ///     (Hugo, 03/11/2026). `nil` le laisse se dimensionner tout seul.
     ///   - alternate: à activer quand le bouton est posé sur un fond sombre.
     ///   - isSubdued: pour un lien qui n'appelle à rien — « Besoin d'aide ? »
     ///     en bas d'un écran. Il prend alors la taille et le gris du texte
@@ -111,6 +116,7 @@ public struct BrandButton: View {
         style: Style = .primary,
         size: Size = .regular,
         isRound: Bool = false,
+        roundSide: CGFloat? = nil,
         alternate: Bool = false,
         isLoading: Bool = false,
         isSubdued: Bool = false,
@@ -124,6 +130,7 @@ public struct BrandButton: View {
         self.style = style
         self.size = size
         self.isRound = isRound
+        self.roundSide = roundSide
         self.alternate = alternate
         self.isLoading = isLoading
         self.isSubdued = isSubdued
@@ -167,6 +174,12 @@ public struct BrandButton: View {
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, verticalPadding)
                 .frame(minHeight: minimumHeight)
+                // **Un bouton rond est un carré, sinon c'est un ovale**
+                // (Hugo, 03/11/2026). Le diamètre imposé par l'écran, ou le
+                // plus grand des deux côtés : le micro de la barre du chat
+                // mesurait 48 de large pour 50 de haut, la hauteur des CTA
+                // (``minimumHeight``) l'étirant de deux points.
+                .frame(width: roundFrame, height: roundFrame)
                 .frame(maxWidth: fillsWidth ? .infinity : nil)
                 .background(background)
                 .overlay(border)
@@ -286,11 +299,27 @@ public struct BrandButton: View {
     /// est un bouton d'appoint, et un `link` n'est qu'un mot dans une phrase :
     /// leur imposer 56 pt les transformerait en blocs.
     private var minimumHeight: CGFloat? {
+        // Une capsule pleine largeur garde la hauteur des CTA ; un **cercle**
+        // ne la prend pas, elle le rendrait ovale — voir ``roundFrame``.
+        if isCircle { return nil }
         switch (style, size) {
         case (.link, _), (_, .small): nil
         case (_, .medium): mediumControlHeight
         case (_, .regular): controlHeight
         }
+    }
+
+    /// Un bouton rond qui ne remplit pas sa colonne : un cercle. Rond **et**
+    /// pleine largeur, c'est une capsule — la rangée du bas du chat —, et elle
+    /// garde la hauteur des CTA.
+    private var isCircle: Bool { isRound && !fillsWidth }
+
+    /// Le côté du carré d'un cercle, `nil` pour tout le reste. Le diamètre
+    /// imposé par l'écran s'il y en a un, sinon la boîte du contenu et ses
+    /// marges — la cible tactile de 44 pt reste assurée par le cadre extérieur.
+    private var roundFrame: CGFloat? {
+        guard isCircle else { return nil }
+        return roundSide ?? (lineBox + verticalPadding * 2)
     }
 
     private var verticalPadding: CGFloat {

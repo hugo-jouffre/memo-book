@@ -92,14 +92,23 @@ fun BrandWaveform(
             .clearAndSetSemantics {},
     ) {
         val bars = BrandWaveform.resample(levels, toFit = size.width.toDp().value)
-        val played = (clampedProgress * bars.size).toInt()
+        // **La tête de lecture, en pixels — pas en numéro de barre** (Hugo,
+        // 03/11/2026). Les barres se teintaient à `index < p × nombre de
+        // barres`, le point se posait ailleurs sur la largeur : une barre ne
+        // fonçait qu'une fois le point bien passé dessus, et le retard se
+        // voyait. Les deux lisent maintenant la même abscisse.
+        val cursor = clampedProgress * size.width
         val barWidth = BrandWaveform.Bar.width.toPx()
         val step = barWidth + BrandWaveform.Bar.spacing.toPx()
         val floor = BrandWaveform.Bar.minimumHeight.toPx()
         bars.forEachIndexed { index, level ->
             val height = max(floor, size.height * level)
+            // Une barre est jouée dès que la tête a passé son **milieu** : sur
+            // son bord gauche elle fonce un cheveu trop tôt, sur son bord
+            // droit un cheveu trop tard.
+            val middle = index * step + barWidth / 2
             drawRoundRect(
-                color = if (index < played) playedTint else tint,
+                color = if (middle <= cursor) playedTint else tint,
                 topLeft = Offset(index * step, (size.height - height) / 2),
                 size = androidx.compose.ui.geometry.Size(barWidth, height),
                 cornerRadius = CornerRadius(barWidth / 2),
