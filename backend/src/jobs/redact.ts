@@ -97,6 +97,34 @@ export const ENTRY_FOR_REDACTION = {
 export type EntryForRedaction = Prisma.EntryGetPayload<{ include: typeof ENTRY_FOR_REDACTION }>;
 
 /**
+ * Au-delà, une rédaction annoncée « en attente » ou « en cours » n'a plus de
+ * job derrière elle, et plus rien ne la fera avancer : **c'est une épave**.
+ *
+ * Elle ne vient pas d'un défaut de la rédaction, mais de la file : pg-boss
+ * fait expirer un job que personne n'a dépilé, puis l'archive. L'entrée, elle,
+ * reste à `pending` pour toujours. Trente et une s'y trouvaient le 04/11/2026,
+ * la plus ancienne du 29 octobre, et **aucun chemin de l'app ne les
+ * reprenait** : la relance n'acceptait que `ready` et `failed`, et répondait
+ * 200 sans rien faire. On ne voyait donc ni erreur ni blocage — seulement des
+ * carnets qui refusaient de se composer, parce que `jobs/structure.ts` attend
+ * ces rédactions-là trois minutes avant de renoncer.
+ *
+ * Un quart d'heure, parce qu'une rédaction Opus à effort élevé prend une à
+ * deux minutes et qu'un redémarrage de service peut la décaler. En deçà, on
+ * relancerait un job bien vivant — et on paierait deux fois.
+ *
+ * Le repère est `updatedAt`, que n'importe quelle écriture sur l'entrée
+ * rafraîchit : une épave touchée par ailleurs attend un quart d'heure de plus.
+ * C'est sans conséquence, et ça évite une colonne de plus.
+ */
+export const REDACTION_STRANDED_AFTER_MS = 15 * 60 * 1000;
+
+/** La date avant laquelle une rédaction en attente est une épave. */
+export function strandedBefore(now: Date = new Date()): Date {
+  return new Date(now.getTime() - REDACTION_STRANDED_AFTER_MS);
+}
+
+/**
  * Étape 2 : la transcription brute devient un texte de carnet.
  *
  * Le job est **sérialisé par carnet** de fait : il lit la fiche de cohérence,

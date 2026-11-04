@@ -151,6 +151,34 @@ Le seed pose les deux comptes de test et leurs voyages. Après un `db:seed`, les
 identifiants des voyages changent : une page de voyage ouverte avant renverra un
 404, ce qui est normal.
 
+### « Je n'ai pas réussi à finir cette fiche », ou un carnet qui ne se compose jamais
+
+```bash
+railway run --service worker -- npm run redaction:epaves
+```
+
+Une rédaction peut rester **en épave** : l'entrée annonce `pending` ou
+`processing`, et plus aucun job ne la pousse — pg-boss fait expirer celui que
+personne n'a dépilé, puis l'archive. Rien ne le dit : pas de ligne d'erreur, et
+`entries.redactionError` reste vide puisque le job n'a jamais tourné.
+
+Ça ne s'arrête pas à la fiche. `jobs/structure.ts` attend trois minutes les
+rédactions en cours avant de renoncer : **une seule épave suffit à empêcher la
+composition de tout son carnet**, et l'aperçu n'annonce qu'un échec générique.
+Le 04/11/2026 il y en avait trente et une, la plus ancienne du 29 octobre ;
+aucune rédaction n'avait abouti depuis le 30, et on a cherché deux jours du
+côté du PDF.
+
+Le script les compte ; `--relancer` les remet en file, `--max` borne la
+dépense — chaque relance est une rédaction payée. Depuis le 04/11/2026 la route
+`POST /v1/entries/:id/redaction` les reprend aussi, passé un quart d'heure
+(`REDACTION_STRANDED_AFTER_MS`) : avant, elle rendait 200 sans rien faire et
+l'app croyait avoir relancé.
+
+> ⚠️ Pour lire ce que le serveur sait d'un échec, c'est `entries.redactionError`
+> en base : ce champ **ne part pas dans l'app**, qui n'affiche qu'une phrase
+> générique.
+
 ### « Notre serveur a rencontré un problème inattendu » partout : les quinze connexions
 
 Le pooler Supabase, en **mode session** (port 5432), n'accorde que **15 clients

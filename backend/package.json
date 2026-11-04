@@ -20,6 +20,7 @@
     "stripe:gateway-check": "tsx --env-file=.env scripts/stripe-gateway-check.ts",
     "apns:check": "tsx scripts/apns-check.ts",
     "apitemplate:check": "tsx scripts/apitemplate-check.ts",
+    "redaction:epaves": "tsx scripts/relancer-redactions.ts",
     "fcm:check": "tsx scripts/fcm-check.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

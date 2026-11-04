@@ -326,7 +326,16 @@ describe("garde-fous de l'API", () => {
     expect(reused.json<{ id: string; phase: string }>()).toMatchObject({ id: running.id, phase: "writing" });
 
     // Vingt minutes sans nouvelles : le worker est tombé.
-    await harness.prisma.$executeRaw`UPDATE renders SET "updatedAt" = now() - interval '21 minutes' WHERE id = ${running.id}`;
+    //
+    // Par Prisma, et non par `now() - interval` en SQL (04/11/2026) : la
+    // colonne est **sans fuseau**, et `now()` y arrive converti dans celui de
+    // la session Postgres. Sur une machine à l'heure de Paris, « il y a 21
+    // minutes » s'écrivait 39 minutes dans le futur, le rendu n'était jamais
+    // périmé et ce test échouait — en local seulement, la CI tournant en UTC.
+    await harness.prisma.render.update({
+      where: { id: running.id },
+      data: { updatedAt: new Date(Date.now() - 21 * 60 * 1000) },
+    });
     const replaced = await harness.app.inject({
       method: "POST",
       url: `/v1/memos/${memoId}/renders`,

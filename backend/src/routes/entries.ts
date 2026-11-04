@@ -17,7 +17,7 @@ import {
   refuseForDailyCredit,
   withDailyCredit,
 } from "../services/dailyCredit.js";
-import { finalTextOf } from "../jobs/redact.js";
+import { finalTextOf, strandedBefore } from "../jobs/redact.js";
 import { deleteEntryAndMedia } from "../services/deletion.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
@@ -372,8 +372,21 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
     // une rédaction, c'est vouloir la lire. Sans ça, la nouvelle version
     // arrivait dans une fiche qui continuait d'afficher — et d'imprimer — le
     // brut, sans que rien ne le dise.
+    //
+    // **Une épave se reprend quand même** (04/11/2026) : passé
+    // `REDACTION_STRANDED_AFTER_MS`, une entrée restée `pending` ou
+    // `processing` n'a plus de job derrière elle, et cette garde l'enfermait
+    // — elle rendait 200 sans rien faire, si bien que l'app croyait avoir
+    // relancé. Trente et une entrées y étaient prises, et avec elles la
+    // composition de leurs carnets.
     const claimed = await context.prisma.entry.updateMany({
-      where: { id, redactionStatus: { in: ["ready", "failed"] } },
+      where: {
+        id,
+        OR: [
+          { redactionStatus: { in: ["ready", "failed"] } },
+          { redactionStatus: { in: ["pending", "processing"] }, updatedAt: { lt: strandedBefore() } },
+        ],
+      },
       data: { redactionStatus: "pending", redactionError: null, prefersTranscript: false },
     });
     if (claimed.count === 0) {
