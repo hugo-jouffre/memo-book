@@ -41,10 +41,45 @@ Jamais dans le dépôt ni dans l'app. Deux emplacements :
   > et le run échoue instantanément, sans exécuter le moindre job. C'était le
   > cas de ce workflow jusqu'au 11 août 2026.
 - **Back-end** — `.env`, voir `backend/.env.example`.
+- **Railway** — Variables, sur `api` **et** `worker`. C'est le `worker` qui
+  compose, mais les deux services enregistrent les mêmes jobs
+  (`registerJobs` est appelé dans `app.ts` *comme* dans `worker.ts`), donc
+  l'un ou l'autre peut prendre un rendu : une clé posée sur un seul rend le
+  résultat dépendant de qui dépile.
 
 > 🔐 Toute clé ayant transité par un chat, un ticket ou un commit est à
 > considérer comme compromise : la régénérer depuis le tableau de bord
 > APITemplate avant de la poser en secret.
+
+## La clé fabrique-t-elle un PDF ?
+
+```bash
+railway run --service worker --environment production -- npm run apitemplate:check
+```
+
+**La configuration ne répond pas à cette question, et c'est tout le piège.**
+`RENDERER=auto` retombe sur `FakeBookRenderer` **en silence** quand la clé
+manque (`services/apitemplate.ts`) : le pipeline aboutit, le carnet s'annonce
+prêt, et son `pdfUrl` pointe sur `pdf.example.test`, qui n'existe pas. Rien
+dans les logs ne distingue les deux moteurs — personne n'écrit lequel a
+répondu. On ne s'en aperçoit donc qu'au moment où un voyageur ouvre son
+carnet. C'est ce silence qui a coûté une journée (02/11/2026).
+
+`scripts/apitemplate-check.ts` envoie le jeu d'essai du gabarit par le
+renderer du serveur, tel quel, et attend une URL. Il **ne touche pas à la
+base** et ne crée aucun souvenir : il se lance sur la production sans rien y
+écrire. Par `railway run`, la clé ne passe ni par un fichier ni par un
+terminal. Ses trois réponses :
+
+| Réponse | Ce qu'elle dit |
+|---|---|
+| une URL `s3.eu-central-1…` | la clé est acceptée, le gabarit existe — le vrai PDF marche |
+| `HTTP 403` | clé refusée. Presque toujours la région : voir plus haut, une clé DE appelée sur `rest.apitemplate.io` est rejetée, pas redirigée |
+| `template not found` | clé bonne, mais le gabarit n'a jamais été synchronisé dans **ce** compte |
+
+Il ne couvre pas ce qui précède le rendu. Une composition peut échouer sans
+qu'APITemplate soit en cause : `jobs/structure.ts` attend trois minutes les
+souvenirs encore en rédaction, puis renonce.
 
 ## Les deux appels utilisés
 
