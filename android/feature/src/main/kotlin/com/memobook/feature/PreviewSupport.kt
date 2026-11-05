@@ -39,6 +39,7 @@ import com.memobook.core.NewTextEntry
 import com.memobook.core.OrderContext
 import com.memobook.core.OrderPayment
 import com.memobook.core.OrderQuote
+import com.memobook.core.PageRange
 import com.memobook.core.PageTargetAllowance
 import com.memobook.core.PlacedPrintOrder
 import com.memobook.core.PrintOrder
@@ -1446,7 +1447,24 @@ private object SettingsBox {
      * feuille demande où l'on en est.
      */
     private var settings: TripSettings =
-        TripSettings.fixture.copy(pageTarget = PageTargetAllowance(changesLeft = 1, changesCount = true))
+        TripSettings.fixture.copy(
+            pageTarget = PageTargetAllowance(
+                changesLeft = 1,
+                changesCount = true,
+                // **Ce que le carnet peut atteindre, par ratio** — sans
+                // elles, [PageTargetAllowance.reach] ne juge aucune cible et
+                // la feuille « Cette cible est hors d'atteinte » ne s'ouvre
+                // jamais dans le bac à sable (04/11/2026). Les mêmes
+                // fourchettes que le double d'iOS.
+                reachableByRatio = mapOf(
+                    0 to PageRange(16, 40),
+                    25 to PageRange(20, 50),
+                    50 to PageRange(24, 65),
+                    75 to PageRange(30, 75),
+                    100 to PageRange(36, 90),
+                ),
+            ),
+        )
 
     // Des copies, à l'entrée comme à la sortie : `TripSettings` a des `var`, et
     // le modèle qui en retoucherait une sur place retoucherait la boîte — la
