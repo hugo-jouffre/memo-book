@@ -1,16 +1,21 @@
 # Soumettre l'app à App Review
 
-Préparé le 19/10/2026 pour la version **0.1.0 (build 9)**, après le lot 13.
-Le dernier envoi était le build 8, du 14/09/2026, rejeté le 15/09 en
-**5.1.2(i)** (voir plus bas).
+Mis à jour le 05/11/2026 pour la version **0.2.0 (build 30)**.
+
+La **0.1.0 est approuvée** : le rejet 5.1.2(i) du 15/09 a été levé en
+décochant « Used for Tracking » (voir plus bas), et l'app est publiée. Le
+dernier build reçu par Apple est le **25**, du 28/10. Les builds 28, 29 et un
+premier 30 ont été archivés sans jamais être envoyés — l'Organizer les montre
+à « – ».
 
 ## Ce qui est prêt dans le binaire
 
 | Point | État |
 |---|---|
-| Compile en **Release** pour iPhone | ✅ vérifié le 19/10 (la CI ne compile qu'en Debug) |
 | Adresse de l'API embarquée | ✅ `https://api-production-9f35a.up.railway.app` |
-| Numéro de build | ✅ `CFBundleVersion` 10, dans `ios/project.yml` |
+| Compile en **Release** pour iPhone | ✅ vérifié le 05/11 par `xcodebuild archive` (la CI ne compile qu'en Debug) |
+| Numéro de version | ✅ `CFBundleShortVersionString` 0.2.0, dans `ios/project.yml` |
+| Numéro de build | ✅ `CFBundleVersion` 30, dans `ios/project.yml` |
 | Manifeste de confidentialité | ✅ `ios/App/PrivacyInfo.xcprivacy` (nouveau) : aucun suivi, données liées au compte pour le fonctionnement de l'app, UserDefaults (CA92.1) |
 | Chiffrement | ✅ `ITSAppUsesNonExemptEncryption: false` |
 | Textes des autorisations | ✅ micro, photothèque, appareil photo, dictée |
@@ -96,5 +101,27 @@ l'offre.
   un iPhone avant de soumettre, et refaire le parcours des notes.
 - Un rejet sur l'achat : vérifier que `APP_STORE_APP_APPLE_ID` est posée sur
   `api` et que le serveur accepte le sandbox (`docs/paiements.md` § Trois pièges).
-- Prochain envoi : **build 10**. App Store Connect refuse deux fois le même
-  numéro.
+
+## Les deux numéros, et le piège de celui qu'on oublie
+
+Les deux vivent dans `ios/project.yml`, et nulle part ailleurs : les régler
+dans Xcode les perdrait au prochain `make project`.
+
+- `CFBundleVersion` — **à monter avant chaque envoi**. App Store Connect
+  refuse deux fois le même numéro. Prochain envoi : **build 31**.
+- `CFBundleShortVersionString` — **à monter dès que la version courante est
+  approuvée**. Une version publiée ferme son train : tout build qui s'y
+  présente est refusé en *« Invalid Pre-Release Train »*, quel que soit son
+  numéro de build. C'est ce qui a bloqué l'envoi du 05/11, parti en 0.1.0
+  alors que cette version venait d'être approuvée — d'où le passage en 0.2.0.
+
+Changer l'un des deux impose un `make project`, puis une **nouvelle archive** :
+celle qui est déjà dans l'Organizer porte les anciens numéros.
+
+## Il n'y a pas d'envoi automatique
+
+La CI iOS (`.github/workflows/ci-ios.yml`) compile en Debug et lance les
+tests ; elle n'archive pas et n'envoie rien. Il n'y a pas de fastlane. La
+chaîne est manuelle de bout en bout : `main` à jour → monter les numéros →
+`make project` → **Product ▸ Archive** → **Distribute App**. Côté Android,
+`play-internal.yml` fait ce travail tout seul ; l'iOS n'a pas d'équivalent.
