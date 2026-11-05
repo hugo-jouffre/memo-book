@@ -213,7 +213,15 @@ struct OrderStepLayout<Content: View, Actions: View>: View {
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.top, MemoBookSpacing.s)
-            .padding(.bottom, MemoBookSpacing.m)
+            // **La hauteur du fondu, pas une marge au jugé** (04/11/2026) : le
+            // voile du pied remonte de `fadeHeight` au-dessus de lui
+            // (``BrandFooterScrim``, `padding(.top, -fadeHeight)`), et
+            // `safeAreaInset` ne réserve que la barre. Les 24 pt d'avant
+            // laissaient donc la fin du contenu dans le fondu : sur l'étape de
+            // confirmation, la troisième ligne de « Envie de l'offrir ? »
+            // s'éteignait en gris très clair sur un lime devenu blanc. Elle
+            // était dessinée, elle ne se lisait plus.
+            .padding(.bottom, BrandFooterScrim.fadeHeight)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(.hidden)
