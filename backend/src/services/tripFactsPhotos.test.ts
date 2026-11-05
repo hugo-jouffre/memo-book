@@ -75,29 +75,49 @@ describe("à quelle étape une photo se range", () => {
   });
 
   /**
-   * ⚠️ **Le défaut trouvé le 04/11/2026.** Une photo choisie dans la
-   * photothèque porte sa date EXIF — le jour où elle a été *prise*, pas celui
-   * du récit qu'on vient d'illustrer. Le rangement par défaut la donne au
-   * dernier récit capturé **avant** cette date : elle part dans une étape
-   * d'avant, et celle qu'on illustrait reste sans vignette.
+   * **La date de prise de vue commande** (Hugo, 04/11/2026). Une photo
+   * choisie dans la photothèque porte sa date EXIF : elle va à l'étape qui
+   * couvre ce jour-là, pas au dernier récit **enregistré** avant elle.
    *
-   * Le cas ne se produit que si rien ne l'épingle — ni l'étape d'une carte
-   * ouverte (`message.stepId`), ni le récit que MEMO venait d'illustrer
-   * (`forEntryId`). C'est exactement l'envoi **spontané** de photos.
-   *
-   * Ce test fige le comportement actuel ; il s'inversera le jour où l'on
-   * tranche entre « la date de la photo » et « le moment où on l'envoie ».
+   * C'est la règle qui a changé ce jour-là : l'ancienne comparait la date
+   * EXIF d'une photo à la date d'enregistrement des récits, et la photo
+   * partait systématiquement dans une étape d'avant.
    */
-  it("une photo plus ancienne que le récit en cours part dans l'étape d'avant", () => {
+  it("une photo tombe dans l'étape dont les dates couvrent son jour", () => {
+    const groups = groupIntoSteps([
+      // Une étape de deux jours : le second récit prolonge le premier.
+      entry("recit-nikko", "audio", 0),
+      { ...entry("recit-nikko-suite", "audio", 40), continuesPrevious: true },
+      // Racontée plus tard, mais vécue après : elle ne couvre pas la photo.
+      entry("recit-tokyo", "audio", 90),
+      entry("photo-prise-a-nikko", "photo", 20),
+    ]);
+    const nikko = groups.find((group) => group.entries[0]!.id === "recit-nikko")!;
+    expect(nikko.entries.map((one) => one.id)).toContain("photo-prise-a-nikko");
+  });
+
+  it("la plus courte des étapes qui la couvrent l'emporte — c'est la plus précise", () => {
+    const groups = groupIntoSteps([
+      // Une étape large, du début à la fin du séjour.
+      entry("recit-sejour", "audio", 0),
+      { ...entry("recit-sejour-fin", "audio", 100), continuesPrevious: true },
+      // Une étape d'un jour, dedans.
+      entry("recit-nikko", "audio", 48),
+      { ...entry("recit-nikko-soir", "audio", 52), continuesPrevious: true },
+      entry("photo", "photo", 50),
+    ]);
+    const nikko = groups.find((group) => group.entries[0]!.id === "recit-nikko")!;
+    expect(nikko.entries.map((one) => one.id)).toContain("photo");
+  });
+
+  it("aucune étape ne couvre son jour : la plus proche la prend", () => {
     const groups = groupIntoSteps([
       entry("recit-nikko", "audio", 0),
       entry("recit-tokyo", "audio", 30),
-      entry("photo-prise-a-nikko", "photo", 10),
+      entry("photo", "photo", 25),
     ]);
-    const nikko = groups.find((group) => group.entries[0]!.id === "recit-nikko")!;
     const tokyo = groups.find((group) => group.entries[0]!.id === "recit-tokyo")!;
-    expect(nikko.entries.map((one) => one.id)).toContain("photo-prise-a-nikko");
-    expect(tokyo.entries.map((one) => one.id)).not.toContain("photo-prise-a-nikko");
+    expect(tokyo.entries.map((one) => one.id)).toContain("photo");
   });
 
   it("…sauf épinglée sur le récit que MEMO venait d'illustrer", () => {

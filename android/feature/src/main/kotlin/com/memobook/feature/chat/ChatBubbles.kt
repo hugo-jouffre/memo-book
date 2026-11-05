@@ -1070,13 +1070,14 @@ object ChatTranscriptBubble {
      * texte écoute encore, quel que soit son temps : le moteur local n'en pose
      * pas.
      */
-    enum class Stage { Listening, Writing, Ready, Failed }
+    enum class Stage { Listening, Writing, Ready, Unwritten, Failed }
 
     fun stage(card: TranscriptCard): Stage {
         if (card.text == null) return Stage.Listening
         return when (card.phase) {
             TranscriptCard.Phase.Listening -> Stage.Listening
             TranscriptCard.Phase.Writing -> Stage.Writing
+            TranscriptCard.Phase.Unwritten -> Stage.Unwritten
             TranscriptCard.Phase.Failed -> Stage.Failed
             TranscriptCard.Phase.Ready, is TranscriptCard.Phase.Unknown -> Stage.Ready
         }
@@ -1088,6 +1089,7 @@ object ChatTranscriptBubble {
             Stage.Listening -> ChatCopy.transcriptPending
             Stage.Writing -> "${ChatCopy.transcriptWriting} ${card.text.orEmpty()}"
             Stage.Failed -> "${ChatCopy.transcriptFailed} ${card.text.orEmpty()}"
+            Stage.Unwritten -> "${ChatCopy.transcriptUnwritten} ${card.text.orEmpty()}"
             Stage.Ready -> listOfNotNull(card.heading, card.text).joinToString(". ")
         }
         val validated = if (card.isValidated) " ${ChatCopy.Voice.validated}." else ""
@@ -1157,10 +1159,23 @@ private fun TranscriptBody(card: TranscriptCard, stage: ChatTranscriptBubble.Sta
             Narrative(card.text.orEmpty(), MemoBookColor.inkMuted, isExpanded, onToggleExpansion)
         }
 
+        // **La transcription a échoué** : rien à lire, et la seule panne de la
+        // fiche qui mérite du rouge.
         ChatTranscriptBubble.Stage.Failed -> Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {
             BrandText(ChatCopy.transcriptFailed, MemoBookFont.caption, Modifier.clearAndSetSemantics {}, color = MemoBookColor.error)
             val text = card.text
             if (!text.isNullOrEmpty()) Narrative(text, MemoBookColor.inkMuted, isExpanded, onToggleExpansion)
+        }
+
+        // **La rédaction a échoué, pas la transcription** (Hugo, 04/11/2026).
+        // Le mot-pour-mot est là, et c'est lui qui part dans le carnet : il se
+        // lit donc à l'encre, comme un texte retenu, sous une phrase grise qui
+        // dit ce qui manque. Du rouge au-dessus d'un texte complet disait une
+        // perte qui n'a pas eu lieu.
+        ChatTranscriptBubble.Stage.Unwritten -> Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {
+            BrandText(ChatCopy.transcriptUnwritten, MemoBookFont.caption, Modifier.clearAndSetSemantics {}, color = MemoBookColor.inkMuted)
+            val text = card.text
+            if (!text.isNullOrEmpty()) Narrative(text, MemoBookColor.ink, isExpanded, onToggleExpansion)
         }
 
         ChatTranscriptBubble.Stage.Ready -> Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {

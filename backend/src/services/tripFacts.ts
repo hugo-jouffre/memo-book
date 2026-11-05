@@ -219,10 +219,7 @@ export function groupIntoSteps(
     }
 
     const illustrated = pins.illustrates.get(photo.id);
-    const target =
-      (illustrated ? storyOf.get(illustrated) : undefined) ??
-      stories.findLast((group) => group.entries[0]!.capturedAt.getTime() <= photo.capturedAt.getTime()) ??
-      stories[0];
+    const target = (illustrated ? storyOf.get(illustrated) : undefined) ?? stepCovering(stories, photo);
     if (target) target.entries.push(photo);
     else loose.push(photo);
   }
@@ -230,6 +227,50 @@ export function groupIntoSteps(
   const groups = [...stories, ...pinnedOnly.values()];
   if (loose.length > 0) groups.push({ place: null, entries: loose, stepId: null, pinned: false });
   return groups;
+}
+
+/**
+ * **L'étape du jour où la photo a été prise** (Hugo, 04/11/2026 : « on prend
+ * en compte la date de la photo, càd le moment où elle a été prise »).
+ *
+ * Celle dont les dates **couvrent** ce jour-là ; plusieurs se chevauchant, la
+ * plus courte gagne — c'est la plus précise. Aucune ne le couvre : la plus
+ * proche, d'un côté ou de l'autre.
+ *
+ * ⚠️ Elle remplace « le dernier récit raconté **avant** la photo ». Une photo
+ * choisie dans la photothèque porte sa date EXIF, celle du jour où on l'a
+ * prise : comparée à la date d'**enregistrement** des récits, elle partait
+ * systématiquement dans une étape d'avant, et celle qu'on illustrait restait
+ * sans vignette (04/11/2026). Une photo prise à l'appareil ne bouge pas : sa
+ * date est celle du moment, et elle tombe dans l'étape du moment.
+ */
+function stepCovering(stories: StepGroup[], photo: FactEntry): StepGroup | undefined {
+  if (stories.length === 0) return undefined;
+  const taken = photo.capturedAt.getTime();
+  const span = (group: StepGroup) => {
+    const times = group.entries.map((entry) => entry.capturedAt.getTime());
+    return { from: Math.min(...times), to: Math.max(...times) };
+  };
+
+  let covering: { group: StepGroup; width: number } | null = null;
+  let nearest: { group: StepGroup; distance: number } | null = null;
+
+  for (const group of stories) {
+    const { from, to } = span(group);
+    if (taken >= from && taken <= to) {
+      const width = to - from;
+      // La plus courte l'emporte : une étape d'un jour est plus précise
+      // qu'une étape d'une semaine qui la contient.
+      if (!covering || width < covering.width) covering = { group, width };
+      continue;
+    }
+    const distance = taken < from ? from - taken : taken - to;
+    // Strictement plus proche : à égalité, la première reste — l'ordre du
+    // voyage départage, comme avant.
+    if (!nearest || distance < nearest.distance) nearest = { group, distance };
+  }
+
+  return covering?.group ?? nearest?.group;
 }
 
 /**

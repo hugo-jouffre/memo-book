@@ -62,11 +62,28 @@ function twoVersionsOf(entry: { transcript: string | null; redactedText: string 
 }
 
 /** Où en est la fiche d'un souvenir : ce que la bulle dessine en trois temps. */
-export type TranscriptPhase = "listening" | "writing" | "ready" | "failed";
+export type TranscriptPhase = "listening" | "writing" | "ready" | "unwritten" | "failed";
 
+/**
+ * Où en est la fiche — `docs/conversation.md` § 5.
+ *
+ * **Deux échecs, pas un** (Hugo, 04/11/2026). Ils tenaient dans le même
+ * `failed`, et la fiche disait « Je n'ai pas réussi à finir cette fiche »
+ * au-dessus d'un texte complet : alarmant, et faux.
+ *
+ * - `failed` : la **transcription** a échoué. Il n'y a rien à lire, et c'est
+ *   la seule panne qui mérite du rouge.
+ * - `unwritten` : la transcription est là, c'est la **rédaction** qui a
+ *   échoué. Le mot-pour-mot s'affiche et part dans le carnet
+ *   (`finalTextOf`) — rien n'est perdu, il manque la mise en forme.
+ *
+ * Une app plus ancienne décode `unwritten` en `unknown` et l'affiche comme
+ * une fiche prête : le texte est là, sans alerte. C'est le bon repli.
+ */
 export function transcriptPhaseOf(entry: EntryWithMedia): TranscriptPhase {
-  if (entry.status === "failed" || entry.redactionStatus === "failed") return "failed";
+  if (entry.status === "failed") return "failed";
   if (entry.status === "pending" || entry.status === "processing") return "listening";
+  if (entry.redactionStatus === "failed") return "unwritten";
   if (entry.redactionStatus === "pending" || entry.redactionStatus === "processing") return "writing";
   return "ready";
 }
@@ -248,7 +265,7 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbe
         transcript: {
           title: transcriptTitle(stepNumbers?.get(message.id) ?? null),
           // Le titre que la rédaction a donné au récit — celui de l'étape dans le carnet.
-          heading: phase === "ready" || phase === "failed" ? entry.suggestedTitle : null,
+          heading: phase === "ready" || phase === "unwritten" ? entry.suggestedTitle : null,
           capturedAt: entry.capturedAt.toISOString(),
           placeLabel: entry.placeLabel,
           duration: entry.media?.durationSeconds ?? null,

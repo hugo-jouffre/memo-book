@@ -888,13 +888,14 @@ struct ChatTranscriptBubble: View {
     /// Les trois temps de la fiche — `docs/conversation.md` § 5. Une fiche sans
     /// texte écoute encore, quel que soit son temps : le moteur local n'en
     /// pose pas.
-    private enum Stage { case listening, writing, ready, failed }
+    private enum Stage { case listening, writing, ready, unwritten, failed }
 
     private var stage: Stage {
         guard card.text != nil else { return .listening }
         switch card.phase {
         case .listening: return .listening
         case .writing: return .writing
+        case .unwritten: return .unwritten
         case .failed: return .failed
         case .ready, .unknown: return .ready
         }
@@ -927,6 +928,7 @@ struct ChatTranscriptBubble: View {
         case .listening: state = ChatCopy.transcriptPending
         case .writing: state = "\(ChatCopy.transcriptWriting) \(card.text ?? "")"
         case .failed: state = "\(ChatCopy.transcriptFailed) \(card.text ?? "")"
+        case .unwritten: state = "\(ChatCopy.transcriptUnwritten) \(card.text ?? "")"
         case .ready: state = [isShowingRawText ? nil : card.heading, shownText].compactMap { $0 }.joined(separator: ". ")
         }
         let validated = card.isValidated ? " \(ChatCopy.Voice.validated)." : ""
@@ -1017,6 +1019,8 @@ struct ChatTranscriptBubble: View {
                 narrative(card.text ?? "", tint: MemoBookColor.inkMuted)
             }
 
+        // **La transcription a échoué** : rien à lire, et la seule panne de
+        // la fiche qui mérite du rouge.
         case .failed:
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
                 Text(ChatCopy.transcriptFailed)
@@ -1025,6 +1029,22 @@ struct ChatTranscriptBubble: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let text = card.text, !text.isEmpty {
                     narrative(text, tint: MemoBookColor.inkMuted)
+                }
+            }
+
+        // **La rédaction a échoué, pas la transcription** (Hugo,
+        // 04/11/2026). Le mot-pour-mot est là, et c'est lui qui part dans le
+        // carnet : il se lit donc à l'encre, comme un texte retenu, sous une
+        // phrase grise qui dit ce qui manque. Du rouge au-dessus d'un texte
+        // complet disait une perte qui n'a pas eu lieu.
+        case .unwritten:
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                Text(ChatCopy.transcriptUnwritten)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let text = card.text, !text.isEmpty {
+                    narrative(text, tint: MemoBookColor.ink)
                 }
             }
 
