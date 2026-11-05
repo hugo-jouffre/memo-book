@@ -18,7 +18,7 @@ import {
   VALIDATION_QUESTION,
   tooShort,
   PHOTOS_VALIDATED,
-  photosToValidate,
+  photosKept,
   photosWanted,
   validationQuestionFor,
 } from "../src/services/conversationCopy.js";
@@ -503,11 +503,20 @@ describe("parler à MEMO", () => {
     const photos = thread.messages.find((message) => message.id === id);
     expect(photos?.body.kind === "photos" && photos.body.photos).toHaveLength(2);
     expect(await harness.prisma.entry.count({ where: { memoId: memo.id, kind: "photo" } })).toBe(2);
-    // MEMO demande de valider les photos, et dit que ça crée la page.
-    expect(memoBubbles(thread).at(-1)?.body).toEqual({ kind: "text", text: photosToValidate(2) });
-    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos-ok", "photos-more"]);
+    // **L'envoi vaut validation** (Hugo, 03/11/2026) : MEMO dit ce qu'il en
+    // fait, sans rien demander, et les photos sont déjà dans le carnet.
+    expect(memoBubbles(thread).at(-1)?.body).toEqual({ kind: "text", text: photosKept(2) });
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual([
+      "photos-more",
+      "preview",
+      "dictate",
+    ]);
+    expect(
+      await harness.prisma.entry.count({ where: { memoId: memo.id, kind: "photo", validatedAt: null } }),
+    ).toBe(0);
+    expect(await harness.prisma.render.count({ where: { memoId: memo.id } })).toBe(1);
 
-    // « Je valide mes photos » : les photos sont validées, le carnet se recompose.
+    // La puce d'avant reste comprise : une app plus ancienne l'envoie encore.
     const { response: validation } = await say(memo.id, SUGGESTIONS["photos-ok"].label, {
       suggestionId: "photos-ok",
     });
@@ -515,10 +524,6 @@ describe("parler à MEMO", () => {
     const after = await readThread(memo.id);
     expect(memoBubbles(after).at(-1)?.body).toEqual({ kind: "text", text: PHOTOS_VALIDATED });
     expect(after.suggestions.map((suggestion) => suggestion.id)).toEqual(["preview", "dictate", "write"]);
-    expect(
-      await harness.prisma.entry.count({ where: { memoId: memo.id, kind: "photo", validatedAt: null } }),
-    ).toBe(0);
-    expect(await harness.prisma.render.count({ where: { memoId: memo.id } })).toBe(1);
   });
 
   it("ne double pas un message renvoyé avec le même identifiant", async () => {
@@ -1083,7 +1088,7 @@ describe("valider", () => {
     const withPhotos = await readThread(memo.id);
     const photos = withPhotos.messages.filter((message) => message.body.kind === "photos").at(-1);
     expect(photos?.body.kind === "photos" && photos.body.photos).toHaveLength(budget.photos);
-    expect(memoBubbles(withPhotos).at(-1)?.body).toEqual({ kind: "text", text: photosToValidate(budget.photos) });
+    expect(memoBubbles(withPhotos).at(-1)?.body).toEqual({ kind: "text", text: photosKept(budget.photos) });
     // Une commande se répond sans modèle.
     expect(responder.calls).toBe(callsBefore);
 

@@ -15,9 +15,12 @@ import {
 import {
   OPENING_PAUSE_MS,
   SUGGESTION_SETS,
+  photosWanted,
+  redactionKeptFor,
   splitQuestionFor,
   validationQuestionFor,
 } from "./conversationCopy.js";
+import { forTargetOf, photoRequestFor } from "./photoRequest.js";
 import type { RedactedNeighbour } from "./redaction.js";
 import { contextVoiceOf } from "./tripContext.js";
 
@@ -453,6 +456,82 @@ export async function askToSplit(
   return true;
 }
 
+/**
+ * **Le texte rédigé est gardé d'office** (Hugo, 03/11/2026 : « on veut que ce
+ * soit bon du premier coup et qu'on n'ait pas d'action supplémentaire à
+ * rajouter »).
+ *
+ * La rédaction finie, le souvenir est validé, MEMO le dit, et il enchaîne sur
+ * les photos qu'il lui faut — ce que « Ça me convient » faisait avant en un
+ * appui de plus. Retoucher reste sous la bulle, à la main ou à l'oral.
+ *
+ * `asksPhotosFor` part avec la bulle : c'est lui qui rangera les photos qui
+ * suivent dans l'étape de **ce** récit (`photosTargetEntryId`).
+ *
+ * Rend `false` quand il n'y a rien à dire — pas de fiche, ou un souvenir déjà
+ * validé —, exactement comme la question qu'elle remplace.
+ */
+export async function confirmRedaction(db: Db, entryId: string, doubts: readonly string[] = []): Promise<boolean> {
+  const card = await db.chatMessage.findFirst({
+    where: { entryId, author: "memo", kind: "transcript" },
+    include: { entry: true },
+    orderBy: { seq: "desc" },
+  });
+  if (!card?.entry || card.entry.validatedAt) return false;
+
+  // Idempotent : deux rédactions pour un même souvenir ne le valident qu'une
+  // fois, et la seconde ne reparle pas.
+  const { count } = await db.entry.updateMany({
+    where: { id: entryId, validatedAt: null },
+    data: { validatedAt: new Date() },
+  });
+  if (count === 0) return false;
+
+  const kept = redactionKeptFor(doubts);
+  const written = finalTextOf(card.entry)?.trim() ?? "";
+  const budget = written ? await photoRequestFor(db, card.memoId, written) : null;
+  // À 0 % de photos, le carnet n'en porte aucune : on ne réclame pas au
+  // voyageur des images que le gabarit jettera.
+  const asksPhotos = budget !== null && budget.photos > 0;
+
+  const beats = asksPhotos
+    ? [kept, photosWanted(budget.photos, budget.pages, forTargetOf(budget))]
+    : [kept];
+
+  for (const [index, text] of beats.entries()) {
+    const isLast = index === beats.length - 1;
+    await db.chatMessage.create({
+      data: {
+        memoId: card.memoId,
+        author: "memo",
+        kind: "text",
+        text,
+        replyToId: card.replyToId,
+        stepId: card.stepId,
+        pauseMilliseconds: pauseBeforeSaying(text),
+        model: "scripted",
+        payload: isLast
+          ? {
+              suggestions: [
+                ...(asksPhotos
+                  ? SUGGESTION_SETS.afterRedaction
+                  : SUGGESTION_SETS.afterRedactionWithoutPhotos),
+              ],
+              ...(asksPhotos ? { asksPhotosFor: entryId, photosAsked: budget.photos } : {}),
+            }
+          : undefined,
+      },
+    });
+  }
+  return true;
+}
+
+/**
+ * La question d'avant — « Il te convient ? ». Elle ne se pose plus dans le
+ * déroulé (voir ``confirmRedaction``), et reste pour l'étape sautée à
+ * laquelle MEMO revient : celle-là n'a jamais été validée, et c'est bien une
+ * question qu'on lui pose.
+ */
 export async function askValidation(db: Db, entryId: string, doubts: readonly string[] = []): Promise<boolean> {
   const card = await db.chatMessage.findFirst({
     where: { entryId, author: "memo", kind: "transcript" },

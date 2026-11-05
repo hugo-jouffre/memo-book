@@ -38,7 +38,7 @@ import {
   isGapDayId,
   missingDayListening,
   missingDayNotice,
-  photosToValidate,
+  photosKept,
   photosWanted,
   returnForPhotos,
   returnToValidate,
@@ -65,9 +65,8 @@ import {
 import { platformOfPayload, platformPayload } from "../services/appPlatform.js";
 import { localDate } from "../services/localCalendar.js";
 import { CALLS_TO_ACTION } from "../services/callsToAction.js";
-import { photoBudgetFor } from "../services/photoBudget.js";
+import { forTargetOf, photoRequestFor, type PhotoRequest } from "../services/photoRequest.js";
 import { measurePhoto } from "../services/photoOrientation.js";
-import { photosForTarget, tripDays } from "../services/pageTarget.js";
 import { ensureRenderInProgress } from "../services/renderTrigger.js";
 import { samplePhotoJpegs } from "../services/samplePhotos.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
@@ -439,7 +438,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
         placeName,
       );
     } else {
-      reply = flowReply(composeBeats("", [photosToValidate(count)]), [...SUGGESTION_SETS.afterPhotos], "memory", placeName);
+      reply = flowReply(composeBeats("", [photosKept(count)]), [...SUGGESTION_SETS.afterPhotos], "memory", placeName);
     }
   }
   if (!reply) {
@@ -506,19 +505,25 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   const photosFor =
     message.suggestionId === "accept" && message.entryId && reply.beats.length > 1 ? message.entryId : null;
 
-  // « Je valide mes photos » clôt une étape : si on avait sauté celle d'avant
-  // pour raconter celle-ci, MEMO y revient (Hugo, 12/10/2026).
-  const closing = message.suggestionId === "photos-ok" ? await stepToClose(context, memo.id, message.seq, state) : null;
+  // **L'arrivée des photos vaut validation** (Hugo, 03/11/2026 : « on veut
+  // que ce soit bon du premier coup et qu'on n'ait pas d'action
+  // supplémentaire à rajouter »). C'est donc ce moment-là, et non la puce
+  // « Je valide mes photos », qui clôt une étape et ouvre les relances.
+  //
+  // La puce reste comprise : une app plus ancienne l'envoie encore, et elle
+  // doit continuer de marcher exactement comme avant.
+  const photosAreKept = (!message.suggestionId && kind === "photos") || message.suggestionId === "photos-ok";
+
+  // Clore une étape : si on avait sauté celle d'avant pour raconter celle-ci,
+  // MEMO y revient (Hugo, 12/10/2026).
+  const closing = photosAreKept ? await stepToClose(context, memo.id, message.seq, state) : null;
 
   // **L'étape manquante** (19/10/2026). Au même moment que l'étape sautée —
   // « Je valide mes photos », le seul instant vraiment au repos du déroulé —
   // et jamais dans le même tour qu'elle : deux relances d'affilée, c'est une
   // de trop. Tout le reste du contrat tombe de cet ancrage unique : jamais au
   // milieu d'un souvenir, ni sous une précision, ni après un refus.
-  const found =
-    message.suggestionId === "photos-ok" && !closing
-      ? await gapToOffer(context, memo, state, now, timeZone)
-      : null;
+  const found = photosAreKept && !closing ? await gapToOffer(context, memo, state, now, timeZone) : null;
   // **C'est MEMO qui pose la question** (21/10/2026, Hugo) : le code a trouvé
   // le trou, le modèle demande s'il est voulu ou oublié. Un appel qui tombe,
   // ou une bulle hors contrat, laisse parler la carte fixe — le trou se dit
@@ -763,7 +768,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     await queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
   }
 
-  if (message.suggestionId === "photos-ok") await validatePhotos(context, memo.id, now);
+  if (photosAreKept) await validatePhotos(context, memo.id, now);
 
   logger.info(
     {
@@ -962,7 +967,7 @@ async function stepToClose(
     number,
     title: previous.suggestedTitle,
     reason,
-    budget: await photoRequestFor(context, memoId, text.trim()),
+    budget: await photoRequestFor(context.prisma, memoId, text.trim()),
   };
 }
 
@@ -1248,71 +1253,6 @@ async function hasReadyRender(context: AppContext, memoId: string): Promise<bool
 }
 
 /** Ce que MEMO demande pour un souvenir : les photos du ratio, et celles que la cible exige en plus. */
-interface PhotoRequest {
-  /** Toutes les photos à demander. */
-  photos: number;
-  /** Les pages de l'étape, pages de photos de la cible comprises. */
-  pages: number;
-  /** Les pages de photos que la cible ajoute, et leurs photos (`photosForTarget`). */
-  extraPages: number;
-  extraPhotos: number;
-  targetPageCount: number;
-  /** Le carnet est à 0 % : aucune photo ne s'imprime. */
-  zeroRatio: boolean;
-}
-
-/**
- * Le nombre de photos à demander pour un récit validé, lu au moment où la
- * question se pose — le voyageur peut changer son ratio ou sa cible à tout
- * moment, et l'étape suivante doit en tenir compte :
- *
- * 1. **le ratio** : la part de photos que le récit appelle (`photoBudget.ts`),
- *    avec les fun facts et les décorations ;
- * 2. **la cible** : les pages de photos qu'il manque pour que le carnet
- *    l'atteigne, trois photos chacune (`photosForTarget`, Hugo, 18/10/2026).
- */
-async function photoRequestFor(context: AppContext, memoId: string, text: string): Promise<PhotoRequest> {
-  const memo = await context.prisma.memo.findUnique({
-    where: { id: memoId },
-    select: {
-      photoTextRatio: true,
-      funFactsEnabled: true,
-      decorationQuota: true,
-      targetPageCount: true,
-      startDate: true,
-      endDate: true,
-      narrationPace: true,
-      _count: { select: { steps: true } },
-    },
-  });
-  const budget = photoBudgetFor(text, memo ?? {});
-  const base = { photos: budget.photos, pages: budget.pages, extraPages: 0, extraPhotos: 0 };
-  const targetPageCount = memo?.targetPageCount ?? 0;
-  if (!memo || budget.photos === 0 || !text) return { ...base, targetPageCount, zeroRatio: budget.ratio === 0 };
-  const extra = photosForTarget({
-    targetPageCount,
-    ratio: budget.ratio,
-    days: tripDays(memo.startDate, memo.endDate),
-    pace: memo.narrationPace,
-    writtenSteps: memo._count.steps,
-    stepPages: budget.pages,
-  });
-  return {
-    photos: budget.photos + extra.extraPhotos,
-    pages: budget.pages + extra.extraPages,
-    ...extra,
-    targetPageCount,
-    zeroRatio: false,
-  };
-}
-
-/** Ce que `photosWanted` dit de la cible, quand elle demande des photos en plus. */
-function forTargetOf(request: PhotoRequest) {
-  return request.extraPhotos > 0
-    ? { photos: request.extraPhotos, pages: request.extraPages, target: request.targetPageCount }
-    : null;
-}
-
 /**
  * **Ce qui est arrivé, comparé à ce qui a été demandé** (Hugo, 18/10/2026) :
  * toutes les photos envoyées pour ce récit depuis la question, ce tour
@@ -1344,7 +1284,7 @@ async function photosReceivedFor(
   ]);
   const received = batches.reduce((total, batch) => total + entryIdsOf(batch.payload).length, 0);
   const stored = (question?.payload as { photosAsked?: unknown } | null)?.photosAsked;
-  const request = await photoRequestFor(context, message.memoId, ((entry && finalTextOf(entry)) ?? "").trim());
+  const request = await photoRequestFor(context.prisma, message.memoId, ((entry && finalTextOf(entry)) ?? "").trim());
   if (request.zeroRatio) return { received, asked: 0, zeroRatio: true };
   const asked = typeof stored === "number" && stored > 0 ? stored : request.photos;
   return { received, asked, zeroRatio: false };
@@ -1368,7 +1308,7 @@ async function acceptReply(
   if (!entry || !validated) {
     return flowReply(composeBeats(received, [acknowledged]), [...SUGGESTION_SETS.afterAccept], "command", null);
   }
-  const budget = await photoRequestFor(context, entry.memoId, validated.trim());
+  const budget = await photoRequestFor(context.prisma, entry.memoId, validated.trim());
   // À 0 % de photos, le carnet n'en porte aucune : on ne réclame pas au
   // voyageur des images que le gabarit jettera.
   if (budget.photos === 0) {
@@ -1412,7 +1352,7 @@ async function attachSamplePhotos(
   const target = targetId ? await prisma.entry.findUnique({ where: { id: targetId } }) : null;
   const current = target ? null : await loadCurrentEntry(prisma, message.memoId, message.seq);
   const count = (
-    await photoRequestFor(context, message.memoId, ((target ? finalTextOf(target) : current?.text) ?? "").trim())
+    await photoRequestFor(context.prisma, message.memoId, ((target ? finalTextOf(target) : current?.text) ?? "").trim())
   ).photos;
   const jpegs = await samplePhotoJpegs(count);
   const stored = await Promise.all(

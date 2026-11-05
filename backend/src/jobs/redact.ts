@@ -11,7 +11,7 @@ import {
 } from "../services/redaction.js";
 
 import { describeTripContext, parseTripContext } from "../services/tripContext.js";
-import { askToSplit, askValidation, firstNameOf } from "../services/conversationThread.js";
+import { askToSplit, confirmRedaction, firstNameOf } from "../services/conversationThread.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 
 export interface RedactJob {
@@ -317,9 +317,10 @@ export async function redactEntry(
       "Souvenir rédigé",
     );
     // **Le découpage se demande avant le texte** (28/10/2026) : si l'on
-    // sépare, les textes changent entièrement, et valider d'abord ne
-    // servirait à rien. Sinon, « Il te convient ? » d'abord : c'est la bulle
-    // que le voyageur attend.
+    // sépare, les textes changent entièrement, et garder d'abord ne servirait
+    // à rien. Sinon le texte est gardé d'office, et MEMO enchaîne sur ses
+    // photos (`confirmRedaction`, 03/11/2026) : c'est la bulle que le
+    // voyageur attend, sans la question qu'il devait cocher.
     //
     // Les étapes et les chiffres du voyage (T227) se recalculent ensuite —
     // une transaction verrouillée qui la retardait sans rien lui apporter ;
@@ -327,7 +328,7 @@ export async function redactEntry(
     // l'app.
     if (!rewrite) {
       const asked = await askToSplit(prisma, entryId, result.moments);
-      if (!asked) await askValidation(prisma, entryId, result.doubts);
+      if (!asked) await confirmRedaction(prisma, entryId, result.doubts);
     }
     await refreshTripFactsQuietly(context, entry.memoId);
   } catch (cause) {
@@ -338,8 +339,11 @@ export async function redactEntry(
     });
     // Sans relevé, le souvenir compte quand même (T227).
     await refreshTripFactsQuietly(context, entry.memoId);
-    // La fiche garde le texte brut : il se valide quand même.
-    if (!rewrite) await askValidation(prisma, entryId).catch(() => false);
+    // La fiche garde le texte brut, et il part dans le carnet comme un
+    // autre : il se garde donc d'office lui aussi (`finalTextOf` retombe sur
+    // la transcription). La fiche dit à côté que la mise en forme manque —
+    // voir `transcriptPhaseOf`, phase `unwritten`.
+    if (!rewrite) await confirmRedaction(prisma, entryId).catch(() => false);
     throw cause;
   }
 }
