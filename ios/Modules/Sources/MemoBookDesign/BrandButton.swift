@@ -302,7 +302,10 @@ public struct BrandButton: View {
         // Une capsule pleine largeur garde la hauteur des CTA ; un **cercle**
         // ne la prend pas, elle le rendrait ovale — voir ``roundFrame``.
         if isCircle { return nil }
-        switch (style, size) {
+        // `return switch` et non un `switch` nu : depuis la ligne au-dessus,
+        // le corps n'est plus une seule expression, et chaque cas doit dire
+        // ce qu'il rend. C'est la forme qu'emploie déjà ``horizontalPadding``.
+        return switch (style, size) {
         case (.link, _), (_, .small): nil
         case (_, .medium): mediumControlHeight
         case (_, .regular): controlHeight
