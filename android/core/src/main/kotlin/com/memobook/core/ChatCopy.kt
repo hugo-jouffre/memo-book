@@ -161,9 +161,24 @@ object ChatCopy {
      */
     const val transcriptWriting = "Je rédige…"
 
-    /** La transcription ou la rédaction a échoué ; le brut reste s'il existe. */
+    /**
+     * **La transcription a échoué** : il n'y a rien à lire. C'est la seule
+     * panne de la fiche qui mérite du rouge.
+     */
     const val transcriptFailed =
-        "Je n’ai pas réussi à finir cette fiche. Tu peux la corriger à la main, ou réenregistrer."
+        "Je n’ai pas réussi à écouter ce vocal. Tu peux l’écrire à la main, ou le réenregistrer."
+
+    /**
+     * **La rédaction a échoué, pas la transcription** (Hugo, 04/11/2026).
+     *
+     * Les deux cas tenaient dans la même phrase rouge, et la fiche disait
+     * « Je n'ai pas réussi à finir cette fiche » au-dessus d'un texte
+     * complet : alarmant, et faux. Ici le mot-pour-mot est là, et c'est lui
+     * qui part dans le carnet — rien n'est perdu, il manque la mise en
+     * forme. Ton neutre, donc, et « Ré-analyser » juste en dessous.
+     */
+    const val transcriptUnwritten =
+        "Je n’ai pas réussi à mettre ton vocal en forme. Voici ce que tu as dit, mot pour mot — tu peux le garder, le corriger, ou me faire réessayer."
 
     /**
      * Ce que le voyageur « dit » en envoyant une correction au clavier : la

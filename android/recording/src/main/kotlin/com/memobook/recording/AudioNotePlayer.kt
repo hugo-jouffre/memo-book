@@ -40,8 +40,17 @@ sealed class PlaybackError(override val message: String, cause: Throwable? = nul
  */
 class AudioNotePlayer(private val context: Context) {
     data class State(
-        /** L'identifiant du vocal en cours, `null` si rien ne joue. */
-        val playingId: String? = null,
+        /**
+         * Le vocal que le lecteur tient — **en train de jouer ou en pause**.
+         * `null` quand rien n'est chargé.
+         *
+         * ⚠️ Ce n'est plus « celui qui joue » : une pause le garde (Hugo,
+         * 03/11/2026). C'est ce qui permet à la bulle de rester sur sa
+         * position au lieu de revenir au début.
+         */
+        val loadedId: String? = null,
+        /** Le vocal chargé joue vraiment — faux en pause. */
+        val isRunning: Boolean = false,
         /** De 0 à 1 : où en est la lecture. C'est lui que la forme d'onde teinte. */
         val progress: Double = 0.0,
         /** En secondes. */
@@ -51,24 +60,34 @@ class AudioNotePlayer(private val context: Context) {
     private val mutableState = MutableStateFlow(State())
     val state: StateFlow<State> = mutableState.asStateFlow()
 
-    val playingId: String? get() = state.value.playingId
+    val loadedId: String? get() = state.value.loadedId
 
     private var player: MediaPlayer? = null
     private var ticker: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var focusRequest: AudioFocusRequest? = null
 
-    fun isPlaying(id: String): Boolean = playingId == id
+    /** Ce vocal est **en train de jouer** — c'est l'état du bouton, qui montre alors une pause. */
+    fun isPlaying(id: String): Boolean = loadedId == id && state.value.isRunning
 
     /**
-     * Joue le vocal, ou l'arrête s'il est déjà en train de jouer.
+     * Ce vocal est celui que le lecteur tient, qu'il joue ou qu'il soit en
+     * pause : c'est lui qui garde sa position, son chrono et sa tête de lecture.
+     */
+    fun isLoaded(id: String): Boolean = loadedId == id
+
+    /**
+     * Joue le vocal, le met en pause s'il joue déjà, le reprend s'il est en
+     * pause.
      *
-     * Un autre vocal en cours est arrêté sans cérémonie : deux récits qui se
-     * parlent par-dessus ne s'écoutent ni l'un ni l'autre.
+     * **La pause garde la position** (Hugo, 03/11/2026, comme WhatsApp) : on
+     * repart d'où on s'est arrêté, pas du début. Un autre vocal en cours est
+     * arrêté sans cérémonie : deux récits qui se parlent par-dessus ne
+     * s'écoutent ni l'un ni l'autre.
      */
     fun toggle(id: String, file: File) {
-        if (playingId == id) {
-            stop()
+        if (loadedId == id) {
+            if (state.value.isRunning) pause() else resume()
             return
         }
 
@@ -107,8 +126,48 @@ class AudioNotePlayer(private val context: Context) {
         }
         this.player = player
 
-        mutableState.value = State(playingId = id)
+        mutableState.value = State(loadedId = id, isRunning = true)
         startTicking()
+    }
+
+    /**
+     * Suspend la lecture **sans rien perdre** : le lecteur garde le fichier,
+     * la position et le chrono. C'est ce que le bouton play rejoue.
+     */
+    fun pause() {
+        val player = player ?: return
+        if (!state.value.isRunning) return
+        ticker?.cancel()
+        ticker = null
+        runCatching { player.pause() }
+        mutableState.value = state.value.copy(isRunning = false)
+    }
+
+    /** Reprend là où la pause a laissé la lecture. */
+    fun resume() {
+        val player = player ?: return
+        if (state.value.isRunning) return
+        runCatching { player.start() }
+        mutableState.value = state.value.copy(isRunning = true)
+        startTicking()
+    }
+
+    /**
+     * Déplace la tête de lecture, de 0 à 1 — le doigt qui fait glisser le
+     * point sur l'onde (Hugo, 03/11/2026).
+     *
+     * Marche **en pause comme en lecture** : c'est souvent à l'arrêt qu'on
+     * cherche un passage. La position s'écrit tout de suite, sans attendre le
+     * prochain battement, pour que le point suive le doigt sans retard.
+     */
+    fun seek(fraction: Double) {
+        val player = player ?: return
+        val clamped = fraction.coerceIn(0.0, 1.0)
+        val duration = runCatching { player.duration }.getOrDefault(0)
+        if (duration <= 0) return
+        val position = (duration * clamped).toInt()
+        runCatching { player.seekTo(position) }
+        mutableState.value = state.value.copy(progress = clamped, elapsed = position / 1000.0)
     }
 
     fun stop() {

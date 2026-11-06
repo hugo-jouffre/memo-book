@@ -187,6 +187,23 @@ fun ChatView(
         scope.launch { refreshNotificationAuthorization() }
     }
 
+    // L'écran qui accompagne la question du système sur les notifications, à
+    // la première conversation d'un voyage qu'on vient de créer — voir
+    // `ChatNotificationsPrimer`. Décidé **une fois**, à l'arrivée : il
+    // consomme cette première ouverture.
+    var showsNotificationsPrimer by remember { mutableStateOf(false) }
+    LaunchedEffect(tripId) {
+        val isFirstOpening = NotificationsPrimer.consumeFirstOpening(tripId, settings)
+        showsNotificationsPrimer = NotificationsPrimer.isShown(
+            isFirstOpeningOfANewTrip = isFirstOpening,
+            authorization = NotificationsNudge.systemAuthorization(context, settings),
+        )
+    }
+    val onPrimerAnswered: suspend () -> Unit = {
+        showsNotificationsPrimer = false
+        refreshNotificationAuthorization()
+    }
+
     // La page de MemoBook dans les Paramètres du téléphone : le seul recours
     // après un micro refusé pour de bon — et le chemin de l'accès aux photos,
     // le bouton « Modifier l’autorisation » d'une bulle de MEMO.
@@ -280,8 +297,10 @@ fun ChatView(
                     isSettled = isSettled,
                     isAwaitingServer = isAwaitingServer,
                     notificationAuthorization = notificationAuthorization,
+                    showsNotificationsPrimer = showsNotificationsPrimer,
                     photosDeniedMessage = photos.deniedMessage,
                     onRefreshNotifications = refreshNotificationAuthorization,
+                    onPrimerAnswered = onPrimerAnswered,
                     onHeaderBottom = { headerBottom = it },
                     onBack = onBack,
                     onOpenFromServer = openFromServer,
@@ -436,8 +455,10 @@ private fun ChatConversation(
     isSettled: Boolean,
     isAwaitingServer: Boolean,
     notificationAuthorization: NotificationAuthorization?,
+    showsNotificationsPrimer: Boolean,
     photosDeniedMessage: String?,
     onRefreshNotifications: suspend () -> Unit,
+    onPrimerAnswered: suspend () -> Unit,
     onHeaderBottom: (Dp) -> Unit,
     onBack: () -> Unit,
     onOpenFromServer: (ChatIntent) -> Unit,
@@ -685,6 +706,27 @@ private fun ChatConversation(
             val shown = remember { mutableStateOf(preview) }
             if (preview != null) shown.value = preview
             shown.value?.let { ChatPreviewBanner(it, onOpen = { onOpenFromServer(ChatIntent.OpenBookPreview(tripId)) }) }
+        }
+
+        // **Sous l'en-tête et la barre d'envoi**, posé avant elles dans la
+        // boîte : la maquette les garde visibles autour de la fenêtre du
+        // système. Opaque dans leur marge, donc le fil ne se lit ni ne se
+        // touche pendant ce temps-là.
+        AnimatedVisibility(
+            visible = showsNotificationsPrimer,
+            // Il est là **dès l'arrivée** : rien à faire entrer. Seule sa
+            // sortie se fond, quand le système a sa réponse.
+            enter = fadeIn(snap()),
+            exit = if (reduceMotion) fadeOut(snap()) else fadeOut(SwiftMotion.smooth(0.3f)),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            ChatNotificationsPrimer(
+                onAnswered = onPrimerAnswered,
+                modifier = Modifier.padding(
+                    top = with(density) { headerHeight.toDp() },
+                    bottom = with(density) { footerHeight.toDp() },
+                ),
+            )
         }
 
         // L'en-tête, et sous lui la pastille du contexte — **dans** sa marge et

@@ -81,6 +81,29 @@ export const AFTER_TRANSCRIPT =
 export const VALIDATION_QUESTION = "Voilà ton texte pour le carnet. Il te convient ?";
 
 /**
+ * **Le texte est gardé, sans rien demander** (Hugo, 03/11/2026 : « on veut
+ * que ce soit bon du premier coup et qu'on n'ait pas d'action supplémentaire
+ * à rajouter »).
+ *
+ * Elle remplace ``VALIDATION_QUESTION`` dans le déroulé : la rédaction finie,
+ * le souvenir est validé et compte dans le carnet. Retoucher reste à un
+ * appui — les puces « à la main » et « à l'oral » sont sous la bulle —, mais
+ * ce n'est plus un passage obligé.
+ *
+ * ``VALIDATION_QUESTION`` reste : une app plus ancienne pose encore la
+ * question, et « Ça me convient » doit continuer de marcher.
+ */
+export function redactionKeptFor(doubts: readonly string[]): string {
+  const [first, second] = doubts.map((doubt) => `« ${doubt} »`);
+  const kept = "Voilà ton texte pour le carnet : je le garde tel quel, et ton carnet compte une étape de plus.";
+  if (!first) return `${kept} Tu peux le retoucher quand tu veux.`;
+  const missing = second
+    ? `Je n’ai compris ni ${first} ni ${second} : je les ai laissés de côté.`
+    : `Je n’ai pas compris ${first} : je l’ai laissé de côté.`;
+  return `${kept} ${missing} Redis-${second ? "les" : "le"}-moi autrement si tu veux ${second ? "qu’ils y soient" : "qu’il y soit"}.`;
+}
+
+/**
  * La même bulle, quand l'écrivain a laissé de côté un passage qu'il n'a pas
  * compris (`RedactionResult.doubts`) — « des Australiens totalement je tarbé ».
  * Ce n'est pas une question de plus : c'est la même, qui dit ce qui manque, pour
@@ -348,21 +371,18 @@ export function figure(value: string): string {
 }
 
 /**
- * Les photos d'un souvenir reçues : MEMO demande de les valider, et dit ce que
- * ça fait — la page de l'étape se crée dans le carnet, et se prévisualise.
- * L'étape suivante ne vient qu'après (Hugo, 01/10/2026).
+ * Les photos d'un souvenir reçues : MEMO dit ce qu'il en fait — la page de
+ * l'étape se crée dans le carnet, et se prévisualise.
+ *
+ * **Plus de question** (Hugo, 03/11/2026 : « on veut que ce soit bon du
+ * premier coup et qu'on n'ait pas d'action supplémentaire à rajouter ») :
+ * l'envoi vaut validation. Les photos partent dans le carnet à leur arrivée,
+ * et « Ajouter d'autres photos » reste sous la bulle pour qui en a d'autres.
  */
-export function photosToValidate(count: number): string {
-  // Une seule photo : « la », jamais « les » (Hugo, 12/10/2026).
-  if (count === 1) {
-    return (
-      "J’ai bien reçu ta photo. Si tu la valides, je crée la page de cette étape dans " +
-      "ton carnet, et tu pourras la prévisualiser. Tu la valides ?"
-    );
-  }
+export function photosKept(count: number): string {
   return (
-    `J’ai bien reçu tes ${count} photos. Si tu les valides, je crée la page de cette étape dans ` +
-    "ton carnet, et tu pourras la prévisualiser. Tu les valides ?"
+    `J’ai bien reçu ${tesPhotos(count)} : je crée la page de cette étape dans ton carnet, ` +
+    "et tu pourras la prévisualiser."
   );
 }
 
@@ -379,8 +399,8 @@ export function photosMissing(received: number, asked: number): string {
   const encore = missing === 1 ? "encore une" : `encore ${missing}`;
   return (
     `J’ai bien reçu ${tesPhotos(received)}. Il m’en faudrait ${encore} pour remplir cette étape ` +
-    `comme prévu : tu en ajoutes ? Si tu valides maintenant, je compose la page avec ` +
-    `${received === 1 ? "celle-ci" : "celles-ci"}, et ton carnet aura un peu moins de photos et de pages que tes réglages.`
+    `comme prévu : tu en ajoutes ? Je compose la page avec ` +
+    `${received === 1 ? "celle-ci" : "celles-ci"} en attendant, et ton carnet aura un peu moins de photos et de pages que tes réglages.`
   );
 }
 
@@ -396,7 +416,7 @@ export function photosBeyondAsked(received: number, asked: number): string {
     `J’ai bien reçu tes ${received} photos, j’en avais demandé ${asked}. Je les garde toutes : ` +
     `${extra === 1 ? "celle en plus ira" : `les ${extra} en plus iront`} sur une page de photos à la fin de l’étape. ` +
     "Ton carnet s’écartera un peu de tes réglages — un peu plus de photos que ton ratio, et une ou deux pages " +
-    `de plus que ta cible. Tu ${received === 1 ? "la" : "les"} valides ?`
+    "de plus que ta cible."
   );
 }
 
@@ -404,8 +424,7 @@ export function photosBeyondAsked(received: number, asked: number): string {
 export function photosAtZeroRatio(received: number): string {
   return (
     `J’ai bien reçu ${tesPhotos(received)}. Ton carnet est réglé sur 0 % de photos : je ${received === 1 ? "la" : "les"} garde avec ` +
-    "ce souvenir, mais elles n’entreront pas dans le carnet tant que le ratio photo / texte reste à 0 %. " +
-    `Tu ${received === 1 ? "la" : "les"} valides ?`
+    "ce souvenir, mais elles n’entreront pas dans le carnet tant que le ratio photo / texte reste à 0 %."
   );
 }
 
@@ -802,12 +821,25 @@ export const SUGGESTION_SETS = {
   afterAccept: ["dictate", "photos", "later"],
   /** Le texte validé, les photos demandées : les importer, ou passer à la suite. */
   askPhotos: ["photos", "dictate"],
-  afterPhotos: ["photos-ok", "photos-more"],
-  /** Il en manque : en ajouter d'abord, valider quand même ensuite. */
-  photosMissing: ["photos-more", "photos-ok"],
+  /**
+   * Les photos sont gardées dès leur arrivée (Hugo, 03/11/2026) : il n'y a
+   * plus rien à valider. Reste ce qu'on peut faire ensuite — en ajouter,
+   * aller voir la page, raconter la suite.
+   */
+  afterPhotos: ["photos-more", "preview", "dictate"],
+  /** Il en manque : en ajouter est la première chose à proposer. */
+  photosMissing: ["photos-more", "preview", "dictate"],
   afterPhotosValidated: ["preview", "dictate", "write"],
   /** Après une correction au clavier : il reste à valider pour passer aux photos. */
   afterEdit: ["accept", "edit-hand"],
+  /**
+   * Le texte gardé d'office, et ses photos demandées : les importer, ou le
+   * retoucher — à la main ou à l'oral. Retoucher n'est plus un passage
+   * obligé, mais ça reste à un appui (Hugo, 03/11/2026).
+   */
+  afterRedaction: ["photos", "edit-hand", "edit-voice"],
+  /** Le même, à 0 % de photos : il n'y en a aucune à demander. */
+  afterRedactionWithoutPhotos: ["dictate", "edit-hand", "edit-voice"],
   split: ["split", "keep"],
   none: [],
 } as const satisfies Record<string, readonly SuggestionId[]>;

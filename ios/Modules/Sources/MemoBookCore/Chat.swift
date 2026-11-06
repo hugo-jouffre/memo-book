@@ -140,7 +140,11 @@ public struct TranscriptCard: Sendable, Hashable {
         case writing
         /// Le texte rédigé — ce qui ira dans le carnet.
         case ready
-        /// La transcription ou la rédaction a échoué ; `text` garde le brut s'il existe.
+        /// **La rédaction a échoué, pas la transcription** (04/11/2026) :
+        /// `text` porte le mot-pour-mot, et c'est lui qui part dans le
+        /// carnet. Rien n'est perdu ; il manque la mise en forme.
+        case unwritten
+        /// **La transcription a échoué** : il n'y a rien à lire.
         case failed
         /// Un temps que le serveur connaît et pas cette version de l'app.
         case unknown(String)
@@ -241,7 +245,7 @@ public struct TranscriptCard: Sendable, Hashable {
     public var isSettling: Bool {
         switch phase {
         case .listening, .writing: true
-        case .ready, .failed, .unknown: false
+        case .ready, .unwritten, .failed, .unknown: false
         }
     }
 }
@@ -303,6 +307,7 @@ extension TranscriptCard.Phase: Codable {
             case "listening": .listening
             case "writing": .writing
             case "ready": .ready
+            case "unwritten": .unwritten
             case "failed": .failed
             default: .unknown(raw)
             }
@@ -318,6 +323,7 @@ extension TranscriptCard.Phase: Codable {
         case .listening: "listening"
         case .writing: "writing"
         case .ready: "ready"
+        case .unwritten: "unwritten"
         case .failed: "failed"
         case .unknown(let raw): raw
         }

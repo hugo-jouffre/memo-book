@@ -54,6 +54,10 @@ import androidx.compose.ui.unit.dp
  * @param icon teintée par la couleur du bouton, quelles que soient les couleurs
  *   du fichier source.
  * @param isRound la variante ronde, pour un bouton sans libellé.
+ * @param roundSide le **diamètre** imposé à un bouton rond, quand l'écran a
+ *   une autre hauteur à suivre que la sienne — le micro de la barre du chat,
+ *   qui doit faire exactement la hauteur du champ d'à côté (Hugo, 03/11/2026).
+ *   `null` le laisse se dimensionner tout seul.
  * @param alternate à activer quand le bouton est posé sur un fond sombre.
  * @param isSubdued pour un lien qui n'appelle à rien — « Besoin d'aide ? » :
  *   la taille et le gris du texte secondaire. N'a de sens qu'avec [Style.Link].
@@ -75,6 +79,7 @@ fun BrandButton(
     style: BrandButton.Style = BrandButton.Style.Primary,
     size: BrandButton.Size = BrandButton.Size.Regular,
     isRound: Boolean = false,
+    roundSide: Dp? = null,
     alternate: Boolean = false,
     isLoading: Boolean = false,
     isSubdued: Boolean = false,
@@ -94,11 +99,20 @@ fun BrandButton(
     // part de leur carré de 24 ; on agrandit le dessin, la boîte reste.
     val iconSide = scaled(24.dp)
     val iconGlyphSide = scaled(28.dp)
+    // Rond **et** pleine largeur, c'est une capsule — la rangée du bas du
+    // chat —, et elle garde la hauteur des CTA. Rond seul, c'est un cercle :
+    // la hauteur des CTA l'étirerait en ovale (48 de large pour 50 de haut).
+    val isCircle = isRound && !fillsWidth
     val minimumHeight: Dp? = when {
+        isCircle -> null
         style == BrandButton.Style.Link || size == BrandButton.Size.Small -> null
         size == BrandButton.Size.Medium -> scaled(MemoBookSpacing.mediumControlHeight)
         else -> scaled(MemoBookSpacing.controlHeight)
     }
+    // Le côté du carré d'un cercle : le diamètre imposé par l'écran s'il y en
+    // a un, sinon la boîte du contenu et ses marges. La cible tactile de 44
+    // reste assurée par le cadre extérieur.
+    val circleSide: Dp? = if (isCircle) roundSide ?: (lineBox + metrics.verticalPadding * 2) else null
 
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -128,6 +142,9 @@ fun BrandButton(
                 .alpha(pressAlpha)
                 .then(if (fillsWidth) Modifier.fillMaxWidth() else Modifier)
                 .then(minimumHeight?.let { Modifier.heightIn(min = it) } ?: Modifier)
+                // **Un bouton rond est un carré, sinon c'est un ovale**
+                // (Hugo, 03/11/2026).
+                .then(circleSide?.let { Modifier.size(it) } ?: Modifier)
                 .background(colors.background, shape)
                 .then(colors.border?.let { Modifier.border(1.dp, it, shape) } ?: Modifier)
                 .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)

@@ -771,6 +771,29 @@ object BookCopy {
         }
 
         fun chooseReachable(pages: Int): String = "Choisir $pages pages"
+
+        /**
+         * **Ce que coûtera le carnet à la cible proposée** (Hugo,
+         * 04/11/2026). La feuille applique le changement d'un seul appui : le
+         * prix doit donc se lire **avant**, pas après.
+         *
+         * ⚠️ **Pas encore employé sur Android** : `PrintPricing` n'y est pas
+         * porté, et cet écran n'affiche aucun prix. La phrase existe pour que
+         * les deux copies restent jumelles le jour du portage.
+         */
+        fun reachPrice(pages: Int, price: String): String = "À $pages pages, ton carnet coûtera $price."
+
+        /**
+         * Ce que l'appui consomme. Il remplace la confirmation qui s'ouvrait
+         * derrière le bouton (Hugo, 04/11/2026) : sans elle, c'est ici que la
+         * règle des deux changements doit se dire.
+         */
+        fun reachCountsAsChange(changesLeft: Int): String =
+            if (changesLeft <= 1) {
+                "C’est ton dernier changement de nombre de pages cible pour ce voyage."
+            } else {
+                "C’est l’un des deux changements de nombre de pages cible du voyage : il t’en restera ${changesLeft - 1}."
+            }
         fun raiseRatio(ratio: Int): String = "Passer à $ratio % de photos"
         fun keepAnyway(pages: Int): String = "Garder $pages pages quand même"
 

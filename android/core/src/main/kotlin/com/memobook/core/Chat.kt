@@ -209,7 +209,14 @@ data class TranscriptCard(
         /** Le texte rédigé — ce qui ira dans le carnet. */
         data object Ready : Phase { override val rawValue = "ready" }
 
-        /** La transcription ou la rédaction a échoué ; `text` garde le brut s'il existe. */
+        /**
+         * **La rédaction a échoué, pas la transcription** (04/11/2026) :
+         * `text` porte le mot-pour-mot, et c'est lui qui part dans le
+         * carnet. Rien n'est perdu ; il manque la mise en forme.
+         */
+        data object Unwritten : Phase { override val rawValue = "unwritten" }
+
+        /** **La transcription a échoué** : il n'y a rien à lire. */
         data object Failed : Phase { override val rawValue = "failed" }
 
         /** Un temps que le serveur connaît et pas cette version de l'app. */
@@ -220,6 +227,7 @@ data class TranscriptCard(
                 "listening" -> Listening
                 "writing" -> Writing
                 "ready" -> Ready
+                "unwritten" -> Unwritten
                 "failed" -> Failed
                 else -> Unknown(raw)
             }
@@ -239,7 +247,7 @@ data class TranscriptCard(
     val isSettling: Boolean
         get() = when (phase) {
             Phase.Listening, Phase.Writing -> true
-            Phase.Ready, Phase.Failed, is Phase.Unknown -> false
+            Phase.Ready, Phase.Unwritten, Phase.Failed, is Phase.Unknown -> false
         }
 
     /**

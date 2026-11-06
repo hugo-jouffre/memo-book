@@ -211,18 +211,43 @@ public final class BookCustomisationModel {
     }
 
     /// « Choisir N pages » : la cible atteignable la plus proche.
+    ///
+    /// **Elle s'applique d'un seul appui** (Hugo, 04/11/2026 : « ça devrait
+    /// simplement appliquer le changement directement »). Elle ouvrait une
+    /// seconde feuille qui redemandait « Changer le nombre de pages cible ? » :
+    /// on venait de choisir, on se retrouvait devant la même question, et ça
+    /// se lisait comme un renvoi vers le réglage. La règle des deux
+    /// changements et le prix se disent maintenant **avant**, sur la feuille
+    /// qu'on regarde (``BookCopy/Pages/reachCountsAsChange(changesLeft:)``).
+    ///
+    /// La feuille du résultat — « C'est noté », et l'offre de réécriture —
+    /// reste : ce n'est pas une question, c'est ce que le changement a fait.
     public func chooseReachableTarget() {
         guard let reach = pageTargetReach else { return }
         pageTargetReach = nil
-        setTargetPageCount(reach.closestTarget)
+        applyTargetPageCount(reach.closestTarget)
     }
 
-    /// « Passer à 75 % de photos » : le ratio qui ouvre la cible, puis la cible.
+    /// « Passer à 75 % de photos » : le ratio qui ouvre la cible, puis la
+    /// cible. Même chemin direct que ci-dessus — c'est le même geste.
     public func raiseRatioForTarget() {
         guard let reach = pageTargetReach, let ratio = reach.ratioThatReaches else { return }
         pageTargetReach = nil
         edit(.photoTextRatio(ratio)) { $0.photoTextRatio = ratio }
-        setTargetPageCount(reach.target)
+        applyTargetPageCount(reach.target)
+    }
+
+    /// Pose la cible **sans la faire confirmer**, quand l'écran l'a déjà
+    /// annoncée — son prix et ce qu'elle consomme.
+    ///
+    /// Le décompte des deux changements est inchangé : un changement qui ne
+    /// compte pas part tout seul, le dernier épuisé pose la note orange.
+    private func applyTargetPageCount(_ pages: Int) {
+        setTargetPageCount(pages)
+        // `setTargetPageCount` s'arrête sur l'étape « confirmer » ; on la
+        // franchit pour elle. Rien à franchir si elle n'a rien ouvert — un
+        // changement qui ne compte pas, ou la limite atteinte.
+        confirmPageTargetChange()
     }
 
     /// « Garder N pages quand même » : la cible part telle quelle. Le carnet

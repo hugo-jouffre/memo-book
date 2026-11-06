@@ -327,16 +327,35 @@ class BookCustomisationModel(
     fun chooseReachableTarget() {
         val reach = _state.value.pageTargetReach ?: return
         _state.update { it.copy(pageTargetReach = null) }
-        setTargetPageCount(reach.closestTarget)
+        applyTargetPageCount(reach.closestTarget)
     }
 
-    /** « Passer à 75 % de photos » : le ratio qui ouvre la cible, puis la cible. */
+    /**
+     * « Passer à 75 % de photos » : le ratio qui ouvre la cible, puis la
+     * cible. Même chemin direct que ci-dessus — c'est le même geste.
+     */
     fun raiseRatioForTarget() {
         val reach = _state.value.pageTargetReach ?: return
         val ratio = reach.ratioThatReaches ?: return
         _state.update { it.copy(pageTargetReach = null) }
         edit(BookCustomisationEdit.PhotoTextRatio(ratio)) { it.copy(photoTextRatio = ratio) }
-        setTargetPageCount(reach.target)
+        applyTargetPageCount(reach.target)
+    }
+
+    /**
+     * Pose la cible **sans la faire confirmer**, quand l'écran l'a déjà
+     * annoncée — ce qu'elle consomme, et son prix le jour où `PrintPricing`
+     * sera porté ici.
+     *
+     * Le décompte des deux changements est inchangé : un changement qui ne
+     * compte pas part tout seul, le dernier épuisé pose la note orange.
+     */
+    private fun applyTargetPageCount(pages: Int) {
+        setTargetPageCount(pages)
+        // `setTargetPageCount` s'arrête sur l'étape « confirmer » ; on la
+        // franchit pour elle. Rien à franchir si elle n'a rien ouvert — un
+        // changement qui ne compte pas, ou la limite atteinte.
+        confirmPageTargetChange()
     }
 
     /**

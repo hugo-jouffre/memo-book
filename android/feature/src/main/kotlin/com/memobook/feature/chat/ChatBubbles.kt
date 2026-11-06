@@ -36,6 +36,10 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -765,7 +769,10 @@ internal fun chatImage(model: ChatModel, url: URI): ImageBitmap? {
 @Composable
 fun ChatVoiceBubble(note: VoiceNote, author: ChatAuthor, portrait: ChatPortrait?, model: ChatModel, levels: List<Double>) {
     val player by model.player.state.collectAsStateWithLifecycle()
-    val isPlaying = player.playingId == note.id
+    val isPlaying = player.loadedId == note.id && player.isRunning
+    // Le lecteur tient ce vocal — en lecture **ou en pause**. C'est lui qui
+    // décide si la bulle montre une position ou repart de zéro.
+    val isLoaded = player.loadedId == note.id
     val glyph = scaled(MemoBookSpacing.sectionGap)
     val markSide = scaled(MemoBookSpacing.xl + 8.dp)
     val density = LocalDensity.current
@@ -808,12 +815,19 @@ fun ChatVoiceBubble(note: VoiceNote, author: ChatAuthor, portrait: ChatPortrait?
                     .widthIn(min = MemoBookSpacing.xl * 2),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                VoiceTrack(levels, progress = if (isPlaying) player.progress else 0.0)
+                VoiceTrack(
+                    levels,
+                    progress = if (isLoaded) player.progress else 0.0,
+                    canScrub = isLoaded,
+                    onScrub = model.player::seek,
+                )
                 // Le chrono compte **en avançant** pendant la lecture, et
                 // affiche la durée totale au repos : c'est ce que fait un
                 // lecteur, et c'est ce qu'on cherche des yeux dans les deux cas.
                 BrandText(
-                    (if (isPlaying) player.elapsed else note.duration).chatDurationLabel,
+                    // En pause aussi : le chrono garde le temps écoulé, il ne
+                    // revient pas à la durée totale (Hugo, 03/11/2026).
+                    (if (isLoaded) player.elapsed else note.duration).chatDurationLabel,
                     MemoBookFont.caption.copy(fontFeatureSettings = "tnum"),
                     maxLines = 1,
                 )
@@ -829,16 +843,76 @@ fun ChatVoiceBubble(note: VoiceNote, author: ChatAuthor, portrait: ChatPortrait?
     }
 }
 
-/** L'onde, et la tête de lecture posée dessus : le point de la maquette, au début de l'onde au repos, qui avance avec la lecture. */
+/**
+ * L'onde, et la tête de lecture posée dessus : le point de la maquette, au
+ * début de l'onde au repos, qui avance avec la lecture — et **que le doigt
+ * déplace** (Hugo, 03/11/2026).
+ *
+ * @param canScrub le lecteur tient ce vocal : déplacer la tête d'un vocal
+ *   qu'on n'écoute pas déplacerait celle d'un autre.
+ */
 @Composable
-private fun VoiceTrack(levels: List<Double>, progress: Double) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        BrandWaveform(levels = levels, progress = progress, tint = MemoBookColor.inkMuted, playedTint = MemoBookColor.ink)
+private fun VoiceTrack(
+    levels: List<Double>,
+    progress: Double,
+    canScrub: Boolean,
+    onScrub: (Double) -> Unit,
+) {
+    // Le doigt est sur la tête de lecture : la position qu'il dicte prend le
+    // pas sur celle du lecteur, pour que le point ne tremble pas entre deux
+    // battements.
+    var scrubbed by remember { mutableStateOf<Float?>(null) }
+    var trackWidth by remember { mutableIntStateOf(0) }
+    val shown = scrubbed ?: progress.toFloat().coerceIn(0f, 1f)
+
+    val release: (Float) -> Unit = { x ->
+        if (trackWidth > 0) onScrub((x / trackWidth).coerceIn(0f, 1f).toDouble())
+        scrubbed = null
+    }
+
+    BoxWithConstraints(
+        Modifier
+            .fillMaxWidth()
+            .onSizeChanged { trackWidth = it.width }
+            // Posé sur toute l'onde et non sur le seul point : viser un rond
+            // de 12 dp dans une bulle n'est pas un geste, c'est un concours.
+            // Un appui sans glissement déplace aussi la lecture — c'est ce
+            // qu'on attend d'une barre de progression.
+            .then(
+                if (canScrub) {
+                    Modifier.pointerInput(trackWidth) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { offset ->
+                                if (trackWidth > 0) scrubbed = (offset.x / trackWidth).coerceIn(0f, 1f)
+                            },
+                            onDragEnd = { scrubbed?.let { onScrub(it.toDouble()) }; scrubbed = null },
+                            onDragCancel = { scrubbed = null },
+                        ) { change, _ ->
+                            if (trackWidth > 0) scrubbed = (change.position.x / trackWidth).coerceIn(0f, 1f)
+                        }
+                    } then Modifier.pointerInput(trackWidth) {
+                        detectTapGestures { offset -> release(offset.x) }
+                    }
+                } else {
+                    Modifier
+                },
+            ),
+    ) {
+        BrandWaveform(
+            levels = levels,
+            progress = shown.toDouble(),
+            tint = MemoBookColor.inkMuted,
+            playedTint = MemoBookColor.ink,
+        )
         val dot = MemoBookSpacing.snug
         Box(
             Modifier
                 .align(Alignment.CenterStart)
-                .offset(x = (maxWidth - dot) * progress.toFloat().coerceIn(0f, 1f))
+                // **Le même repère que les barres** (Hugo, 03/11/2026) : le
+                // point se posait à `(largeur - rond) × p`, les barres se
+                // teintaient à `p × largeur` — deux règles pour une seule
+                // position, d'où le décalage qu'on voyait passer.
+                .offset(x = maxWidth * shown - dot / 2)
                 .size(dot)
                 .background(MemoBookColor.ink, CircleShape),
         )
@@ -996,13 +1070,14 @@ object ChatTranscriptBubble {
      * texte écoute encore, quel que soit son temps : le moteur local n'en pose
      * pas.
      */
-    enum class Stage { Listening, Writing, Ready, Failed }
+    enum class Stage { Listening, Writing, Ready, Unwritten, Failed }
 
     fun stage(card: TranscriptCard): Stage {
         if (card.text == null) return Stage.Listening
         return when (card.phase) {
             TranscriptCard.Phase.Listening -> Stage.Listening
             TranscriptCard.Phase.Writing -> Stage.Writing
+            TranscriptCard.Phase.Unwritten -> Stage.Unwritten
             TranscriptCard.Phase.Failed -> Stage.Failed
             TranscriptCard.Phase.Ready, is TranscriptCard.Phase.Unknown -> Stage.Ready
         }
@@ -1014,6 +1089,7 @@ object ChatTranscriptBubble {
             Stage.Listening -> ChatCopy.transcriptPending
             Stage.Writing -> "${ChatCopy.transcriptWriting} ${card.text.orEmpty()}"
             Stage.Failed -> "${ChatCopy.transcriptFailed} ${card.text.orEmpty()}"
+            Stage.Unwritten -> "${ChatCopy.transcriptUnwritten} ${card.text.orEmpty()}"
             Stage.Ready -> listOfNotNull(card.heading, card.text).joinToString(". ")
         }
         val validated = if (card.isValidated) " ${ChatCopy.Voice.validated}." else ""
@@ -1083,10 +1159,23 @@ private fun TranscriptBody(card: TranscriptCard, stage: ChatTranscriptBubble.Sta
             Narrative(card.text.orEmpty(), MemoBookColor.inkMuted, isExpanded, onToggleExpansion)
         }
 
+        // **La transcription a échoué** : rien à lire, et la seule panne de la
+        // fiche qui mérite du rouge.
         ChatTranscriptBubble.Stage.Failed -> Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {
             BrandText(ChatCopy.transcriptFailed, MemoBookFont.caption, Modifier.clearAndSetSemantics {}, color = MemoBookColor.error)
             val text = card.text
             if (!text.isNullOrEmpty()) Narrative(text, MemoBookColor.inkMuted, isExpanded, onToggleExpansion)
+        }
+
+        // **La rédaction a échoué, pas la transcription** (Hugo, 04/11/2026).
+        // Le mot-pour-mot est là, et c'est lui qui part dans le carnet : il se
+        // lit donc à l'encre, comme un texte retenu, sous une phrase grise qui
+        // dit ce qui manque. Du rouge au-dessus d'un texte complet disait une
+        // perte qui n'a pas eu lieu.
+        ChatTranscriptBubble.Stage.Unwritten -> Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {
+            BrandText(ChatCopy.transcriptUnwritten, MemoBookFont.caption, Modifier.clearAndSetSemantics {}, color = MemoBookColor.inkMuted)
+            val text = card.text
+            if (!text.isNullOrEmpty()) Narrative(text, MemoBookColor.ink, isExpanded, onToggleExpansion)
         }
 
         ChatTranscriptBubble.Stage.Ready -> Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs)) {

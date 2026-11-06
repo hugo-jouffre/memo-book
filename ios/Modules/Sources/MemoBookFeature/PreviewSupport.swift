@@ -1370,7 +1370,20 @@ private actor SettingsBox {
     /// la feuille demande où l'on en est.
     private var settings: TripSettings = {
         var settings = TripSettings.fixture
-        settings.pageTarget = PageTargetAllowance(changesLeft: 1, changesCount: true)
+        settings.pageTarget = PageTargetAllowance(
+            changesLeft: 1,
+            changesCount: true,
+            // **Ce que le carnet peut atteindre, par ratio** — sans elles,
+            // ``PageTargetAllowance/reach(of:ratio:)`` ne juge aucune cible
+            // et la feuille « Cette cible est hors d'atteinte » ne s'ouvre
+            // jamais dans le bac à sable (04/11/2026). Les fourchettes d'un
+            // voyage de trois semaines : plus de photos, plus de pages.
+            // Poussé au bout, le curseur personnalisé sort de la fourchette
+            // et la feuille paraît — c'est tout ce qu'il faut pour la voir.
+            reachableByRatio: [0: .init(min: 16, max: 40), 25: .init(min: 20, max: 50),
+                               50: .init(min: 24, max: 65), 75: .init(min: 30, max: 75),
+                               100: .init(min: 36, max: 90)]
+        )
         return settings
     }()
 

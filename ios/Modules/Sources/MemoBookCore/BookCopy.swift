@@ -689,6 +689,28 @@ public enum BookCopy {
         }
 
         public static func chooseReachable(_ pages: Int) -> String { "Choisir \(pages) pages" }
+
+        /// **Ce que coûtera le carnet à la cible proposée** (Hugo,
+        /// 04/11/2026 : « le changement de prix du carnet doit être très
+        /// clair »). La feuille applique le changement d'un seul appui : le
+        /// prix doit donc se lire **avant**, pas après.
+        ///
+        /// Le prix du palier de `cible + tolérance`, comme les options de
+        /// l'écran — annoncer le haut de la fourchette, c'est promettre un
+        /// prix qu'on ne dépassera pas. `nil` sans grille servie : la phrase
+        /// ne paraît pas, mieux vaut pas de prix qu'un prix faux.
+        public static func reachPrice(pages: Int, price: String) -> String {
+            "À \(pages) pages, ton carnet coûtera \(price)."
+        }
+
+        /// Ce que l'appui consomme. Il remplace la confirmation qui s'ouvrait
+        /// derrière le bouton (Hugo, 04/11/2026) : sans elle, c'est ici que
+        /// la règle des deux changements doit se dire.
+        public static func reachCountsAsChange(changesLeft: Int) -> String {
+            changesLeft <= 1
+                ? "C’est ton dernier changement de nombre de pages cible pour ce voyage."
+                : "C’est l’un des deux changements de nombre de pages cible du voyage : il t’en restera \(changesLeft - 1)."
+        }
         public static func raiseRatio(_ ratio: Int) -> String { "Passer à \(ratio) % de photos" }
         public static func keepAnyway(_ pages: Int) -> String { "Garder \(pages) pages quand même" }
 

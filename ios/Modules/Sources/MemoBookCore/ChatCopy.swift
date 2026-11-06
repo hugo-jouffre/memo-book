@@ -143,8 +143,21 @@ public enum ChatCopy {
     /// en gris pendant ce temps (`docs/conversation.md` § 5).
     public static let transcriptWriting = "Je rédige…"
 
-    /// La transcription ou la rédaction a échoué ; le brut reste s'il existe.
-    public static let transcriptFailed = "Je n’ai pas réussi à finir cette fiche. Tu peux la corriger à la main, ou réenregistrer."
+    /// **La transcription a échoué** : il n'y a rien à lire. C'est la seule
+    /// panne de la fiche qui mérite du rouge.
+    public static let transcriptFailed =
+        "Je n’ai pas réussi à écouter ce vocal. Tu peux l’écrire à la main, ou le réenregistrer."
+
+    /// **La rédaction a échoué, pas la transcription** (Hugo, 04/11/2026).
+    ///
+    /// Les deux cas tenaient dans la même phrase rouge, et la fiche disait
+    /// « Je n'ai pas réussi à finir cette fiche » au-dessus d'un texte
+    /// complet : alarmant, et faux. Ici le mot-pour-mot est là, et c'est lui
+    /// qui part dans le carnet — rien n'est perdu, il manque la mise en
+    /// forme. Ton neutre, donc, et « Ré-analyser » juste en dessous
+    /// (``Transcript/reanalyse``) pour la redemander.
+    public static let transcriptUnwritten =
+        "Je n’ai pas réussi à mettre ton vocal en forme. Voici ce que tu as dit, mot pour mot — tu peux le garder, le corriger, ou me faire réessayer."
 
     /// **Les deux versions d'un souvenir** (Hugo, 28/10/2026) : ce que MEMO a
     /// rédigé, et ce qu'on a dit mot pour mot. La fiche passe de l'une à

@@ -219,6 +219,22 @@ public struct ChatView: View {
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) { notificationAuthorization = status }
     }
 
+    /// L'écran qui accompagne la question d'iOS sur les notifications — voir
+    /// ``ChatNotificationsPrimer``. Décidé **une fois**, à l'arrivée : la
+    /// première ouverture se consomme, et `.task` repart à chaque retour sur
+    /// l'écran.
+    @State private var showsNotificationsPrimer = false
+
+    private func decideNotificationsPrimer() async {
+        let isFirstOpening = NotificationsPrimer.consumeFirstOpening(of: tripId)
+        let authorization = await NotificationsNudge.systemAuthorization()
+        guard NotificationsPrimer.isShown(
+            isFirstOpeningOfANewTrip: isFirstOpening,
+            authorization: authorization
+        ) else { return }
+        showsNotificationsPrimer = true
+    }
+
     /// Ce que le défilement a parcouru — voir ``ChatScrollTracker``. Un
     /// objet **non observé** gardé par `@State` : ses compteurs changent à
     /// chaque image de défilement, et rien à l'écran n'en dépend directement.
@@ -280,6 +296,9 @@ public struct ChatView: View {
             guard scenePhase == .active else { return }
             await refreshNotificationAuthorization()
         }
+        // L'écran de la question, à la première conversation d'un voyage
+        // qu'on vient de créer. Une seule fois : il consomme son ouverture.
+        .task { await decideNotificationsPrimer() }
         // La session d'abonnement, prêtée au modèle : un achat fait passer le
         // crédit du jour en illimité tout de suite — plus de bandeau, plus de
         // micro pâli —, sans attendre que le serveur le redise.
@@ -443,6 +462,20 @@ public struct ChatView: View {
             .onDisappear {
                 bannerLingerTask?.cancel()
                 bannerLingerTask = nil
+            }
+            // **Sous l'en-tête et la barre d'envoi**, posé avant elles : la
+            // maquette les garde visibles autour de l'alerte d'iOS. Opaque,
+            // donc le fil ne se lit ni ne se touche pendant ce temps-là.
+            .overlay {
+                if showsNotificationsPrimer {
+                    ChatNotificationsPrimer {
+                        withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+                            showsNotificationsPrimer = false
+                        }
+                        await refreshNotificationAuthorization()
+                    }
+                    .transition(.opacity)
+                }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
