@@ -248,15 +248,16 @@ describe("l'achat depuis l'app", () => {
     expect(await harness.prisma.subscriptionTransaction.count()).toBe(1);
   });
 
-  it("refuse un achat fait depuis un autre compte MemoBook", async () => {
+  it("transfère au compte connecté un achat fait depuis un autre compte MemoBook", async () => {
+    // Comme RevenueCat : l'abonnement suit l'identifiant Apple du téléphone.
     const account = await registerAccount(harness.app);
     const other = await registerAccount(harness.app, "autre@memobook.app");
 
     const response = await purchase(account.authorization, transaction({ appAccountToken: other.accountId }));
 
-    expect(response.statusCode).toBe(403);
-    expect(response.json<{ error: string }>().error).toBe("transaction_account_mismatch");
-    expect(await harness.prisma.subscription.count()).toBe(0);
+    expect(response.statusCode).toBe(200);
+    expect(await isUnlimited(account.accountId)).toBe(true);
+    expect(await isUnlimited(other.accountId)).toBe(false);
   });
 
   it("restaure sur un nouveau compte un achat fait depuis un compte supprimé", async () => {
@@ -272,16 +273,34 @@ describe("l'achat depuis l'app", () => {
     expect(await isUnlimited(account.accountId)).toBe(true);
   });
 
-  it("refuse un abonnement Apple déjà rattaché à un autre compte", async () => {
-    // Même identifiant Apple, deux comptes MemoBook : un paiement n'ouvre qu'un abonnement.
+  it("transfère un abonnement Apple déjà rattaché à un autre compte (Restaurer mes achats)", async () => {
+    // Même identifiant Apple, deux comptes MemoBook : le compte connecté prend
+    // l'abonnement, l'ancien le perd. Un paiement n'ouvre toujours qu'un abonnement.
     const first = await registerAccount(harness.app);
     const second = await registerAccount(harness.app, "second@memobook.app");
     await purchase(first.authorization, transaction());
 
     const response = await purchase(second.authorization, transaction({ transactionId: "2000000000000002" }));
 
-    expect(response.statusCode).toBe(409);
-    expect(response.json<{ error: string }>().error).toBe("subscription_owned_elsewhere");
+    expect(response.statusCode).toBe(200);
+    expect(await harness.prisma.subscription.count()).toBe(1);
+    expect(await isUnlimited(second.accountId)).toBe(true);
+    expect(await isUnlimited(first.accountId)).toBe(false);
+  });
+
+  it("transfère même en rejouant une transaction déjà connue", async () => {
+    // « Restaurer » renvoie souvent la même transaction : le propriétaire change
+    // quand même, sans inscrire deux fois la période.
+    const first = await registerAccount(harness.app);
+    const second = await registerAccount(harness.app, "second@memobook.app");
+    const tx = transaction();
+    await purchase(first.authorization, tx);
+
+    expect((await purchase(second.authorization, tx)).statusCode).toBe(200);
+
+    expect(await harness.prisma.subscriptionTransaction.count()).toBe(1);
+    expect(await isUnlimited(second.accountId)).toBe(true);
+    expect(await isUnlimited(first.accountId)).toBe(false);
   });
 
   it("refuse une transaction qu'Apple n'a pas signée", async () => {

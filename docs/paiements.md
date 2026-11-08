@@ -588,6 +588,28 @@ plus rien n'invite à couper un abonnement qui ne se renouvellera pas.
 | `providerUpdatedAt` | `appStoreSubscriptions.ts` | Un événement en retard qui rouvrirait un abonnement coupé |
 | `finish()` après le 2xx seulement | `SubscriptionStore.swift` | Perdre un achat fait dans un tunnel |
 
+### L'abonnement suit le store, pas le compte : transfert (08/11/2026)
+
+Hugo, 08/11/2026 : « utilise la pratique RevenueCat ». Avant, une transaction
+envoyée depuis un autre compte MemoBook que celui de la ligne était refusée
+(403 `transaction_account_mismatch`, 409 `subscription_owned_elsewhere`). Un
+client qui recréait un compte, ou passait de Google Sign In à Apple Sign In sur
+le même téléphone, restait bloqué devant le paywall : « Cet abonnement Apple est
+déjà rattaché à un autre compte MemoBook ».
+
+Désormais, comme le réglage par défaut de RevenueCat (« transfer to new App User
+ID ») :
+
+| Qui envoie | Ce qui se passe |
+|---|---|
+| l'app, compte connecté = compte de la ligne | mise à jour normale |
+| l'app, autre compte (achat ou « Restaurer mes achats ») | **le compte connecté prend la ligne**, l'ancien perd l'illimité ; `memoId` repart à zéro |
+| Apple / Google (notification) | suit la ligne là où elle est, ne transfère jamais |
+
+Un paiement n'ouvre toujours qu'un abonnement : la ligne change de propriétaire,
+elle ne se double pas. Chaque transfert est journalisé (« Abonnement App Store
+transféré vers le compte connecté »), avec l'ancien et le nouveau compte.
+
 ### 🚨 Apple seul résilie
 
 **Aucune app ne peut résilier à la place de son client.** C'est pourquoi la
@@ -723,12 +745,12 @@ Google ─ Pub/Sub push ─ POST /v1/webhooks/google-play
 | `PENDING` | rien d'écrit — 422 `purchase_pending` | non |
 
 Les codes que l'app attend (`AppDependencies.deliveringTransaction`) :
-**400** jeton inconnu ou autre produit, **403** achat fait depuis un autre
-compte MemoBook (`obfuscatedExternalAccountId`), **409** abonnement déjà
-rattaché à un autre compte — définitifs ; **422** en attente de paiement,
-**503** Google injoignable ou serveur non configuré — l'app réessaiera. Un
-achat **sans** id de compte (code promo utilisé dans le Play Store) ou au nom
-d'un compte supprimé se rattache au compte qui l'envoie, comme chez Apple.
+**400** jeton inconnu ou autre produit — définitif ; **422** en attente de
+paiement, **503** Google injoignable ou serveur non configuré — l'app
+réessaiera. Un achat fait depuis un autre compte MemoBook, ou déjà rattaché à
+un autre compte, **est transféré au compte qui l'envoie**, comme chez Apple
+(voir « L'abonnement suit le store, pas le compte », 08/11/2026). Les 403 et 409
+ne sont plus renvoyés.
 
 **Google seul résilie**, comme Apple : `POST /v1/profile/subscription/cancel`
 n'enregistre que la raison d'un abonnement Play. Le profil dit quel store tient

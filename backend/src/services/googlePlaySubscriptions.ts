@@ -135,37 +135,38 @@ async function writeGooglePlayPurchase(
       : Promise.resolve(null),
   ]);
 
-  if (input.accountId !== undefined) {
-    // L'achat a été fait **depuis un autre compte MemoBook** sur ce téléphone :
-    // l'app pose l'id du compte connecté à l'achat (`setObfuscatedAccountId`).
-    // Un compte supprimé depuis ne compte pas — Google continue de prélever,
-    // et le nouveau compte doit pouvoir restaurer. Un achat sans id (un code
-    // promo utilisé dans le Play Store) se rattache au compte qui l'envoie.
-    if (
-      purchase.accountId !== null &&
-      purchase.accountId !== input.accountId &&
-      (await prisma.account.findUnique({ where: { id: purchase.accountId }, select: { id: true } })) !== null
-    ) {
-      throw new HttpError(403, "Cet achat a été fait depuis un autre compte MemoBook.", "transaction_account_mismatch");
-    }
-    if (existing && existing.accountId !== input.accountId) {
-      throw new HttpError(
-        409,
-        "Cet abonnement Google Play est déjà rattaché à un autre compte MemoBook.",
-        "subscription_owned_elsewhere",
-      );
-    }
-  }
+  // **Transfert, comme RevenueCat** (Hugo, 08/11/2026) : l'abonnement suit le
+  // compte Google du téléphone. Quand l'app envoie un achat (ou une
+  // restauration) depuis un compte MemoBook qui n'est pas celui de la ligne,
+  // ou pas celui posé à l'achat (`setObfuscatedAccountId`), le compte
+  // connecté prend l'abonnement et l'ancien le perd. Les notifications de
+  // Google (sans `input.accountId`) ne transfèrent jamais.
+  const transferFrom =
+    input.accountId !== undefined && existing && existing.accountId !== input.accountId
+      ? existing.accountId
+      : null;
 
   const candidate =
-    existing?.accountId ??
     input.accountId ??
+    existing?.accountId ??
     (linked?.provider === "google_play" ? linked.accountId : null) ??
     purchase.accountId;
   if (!candidate) return null;
   const account = await prisma.account.findUnique({ where: { id: candidate }, select: { id: true } });
   if (!account) return null;
   const accountId = account.id;
+
+  if (transferFrom) {
+    context.logger.info(
+      {
+        subscriptionId: existing!.id,
+        purchaseToken: purchase.purchaseToken,
+        fromAccountId: transferFrom,
+        toAccountId: accountId,
+      },
+      "Abonnement Google Play transféré vers le compte connecté",
+    );
+  }
 
   const memoId = input.memoId ? await visibleMemoId(context, accountId, input.memoId) : null;
   const state = googlePlayState(purchase, observedAt, input.revoked === true);
@@ -189,11 +190,17 @@ async function writeGooglePlayPurchase(
       ...(memoId === null ? {} : { memoId }),
     };
 
+    // Un transfert change de propriétaire même quand la lecture est ancienne ;
+    // le voyage de l'ancien compte ne suit pas.
+    const transfer = transferFrom ? { accountId, memoId } : null;
+
     const subscription =
       isStale && existing
-        ? existing
+        ? transfer
+          ? await tx.subscription.update({ where: { id: existing.id }, data: transfer })
+          : existing
         : existing
-          ? await tx.subscription.update({ where: { id: existing.id }, data: fields })
+          ? await tx.subscription.update({ where: { id: existing.id }, data: { ...fields, ...transfer } })
           : await tx.subscription.create({
               data: {
                 ...fields,

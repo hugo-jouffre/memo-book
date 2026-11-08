@@ -245,19 +245,20 @@ describe("l'achat depuis l'app Android", () => {
     expect(oauthCalls).toBe(1);
   });
 
-  it("refuse en 403 un achat fait depuis un autre compte MemoBook", async () => {
+  it("transfère au compte connecté un achat fait depuis un autre compte MemoBook", async () => {
+    // Comme RevenueCat : l'abonnement suit le compte Google du téléphone.
     const payer = await registerAccount(harness.app, "payeur@memobook.app");
     const other = await registerAccount(harness.app, "autre@memobook.app");
     playPurchase("jeton-1", payer.accountId);
 
     const response = await deliver(other.authorization, "jeton-1");
 
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toMatchObject({ error: "transaction_account_mismatch" });
-    expect(acknowledged).toEqual([]);
+    expect(response.statusCode).toBe(200);
+    expect(await hasUnlimitedAccess(harness.prisma, other.accountId)).toBe(true);
+    expect(await hasUnlimitedAccess(harness.prisma, payer.accountId)).toBe(false);
   });
 
-  it("refuse en 409 un abonnement déjà rattaché à un autre compte", async () => {
+  it("transfère un abonnement déjà rattaché à un autre compte", async () => {
     const first = await registerAccount(harness.app, "premier@memobook.app");
     const second = await registerAccount(harness.app, "second@memobook.app");
     // Pris dans le Play Store (un code promo) : sans id de compte.
@@ -266,8 +267,10 @@ describe("l'achat depuis l'app Android", () => {
     expect((await deliver(first.authorization, "jeton-1")).statusCode).toBe(200);
     const response = await deliver(second.authorization, "jeton-1");
 
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({ error: "subscription_owned_elsewhere" });
+    expect(response.statusCode).toBe(200);
+    expect(await harness.prisma.subscription.count()).toBe(1);
+    expect(await hasUnlimitedAccess(harness.prisma, second.accountId)).toBe(true);
+    expect(await hasUnlimitedAccess(harness.prisma, first.accountId)).toBe(false);
   });
 
   it("refuse en 400 un jeton que Google ne connaît pas, un autre produit, un produit inconnu", async () => {
