@@ -712,10 +712,10 @@ describe("une étape par récit (Hugo, 12/10/2026)", () => {
     const [step] = await readSteps(memo.id);
     const photo = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id, kind: "photo" } });
     expect(step?.entryIds).toEqual([story.id, photo.id]);
-    // La vignette et la photo du voyage, servies sans session.
-    expect(step?.photoUrl).toMatch(/\/v1\/trip-photos\/[0-9a-f-]{36}\.jpg$/);
-    const served = await harness.app.inject({ method: "GET", url: new URL(step!.photoUrl!).pathname });
-    expect(served.statusCode).toBe(200);
+    // La vignette de l'étape. L'arrivée des photos les garde d'office
+    // (03/11/2026) : elles sont publiées tout de suite, et la vignette est
+    // donc déjà celle du CDN, plus la route publique du chat.
+    expect(step?.photoUrl).toMatch(/^https:\/\/cdn\.example\.test\/.+\.jpg$/);
     const home = await harness.app.inject({ method: "GET", url: "/v1/home", headers: { authorization: owner.authorization } });
     expect(home.json<{ trips: { coverPhotoUrl: string | null }[] }>().trips[0]?.coverPhotoUrl).toBe(step?.photoUrl);
   });
@@ -1374,6 +1374,12 @@ describe("l'étape manquante", () => {
   /** Un voyage troué : raconté J-5, J-4 et J-2, rien le J-3. */
   async function seedHoledTrip() {
     const memo = await seedTrip(owner.accountId);
+    // **Un carnet sans photos** : chaque récit gardé d'office (03/11/2026)
+    // réclamerait les siennes, et à l'arrivée de la première photo MEMO
+    // reviendrait d'abord à l'étape J-4 restée sans images (`stepToClose`) —
+    // une relance qui passe avant la carte, jamais deux d'affilée. À 0 %,
+    // aucune photo n'est demandée : il ne reste que le trou.
+    await harness.prisma.memo.update({ where: { id: memo.id }, data: { photoTextRatio: 0 } });
     const day = (back: number) => {
       const date = new Date();
       date.setUTCDate(date.getUTCDate() - back);
