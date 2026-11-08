@@ -120,6 +120,22 @@ describe("à quelle étape une photo se range", () => {
     expect(tokyo.entries.map((one) => one.id)).toContain("photo");
   });
 
+  it("une photo déjà rangée n'élargit pas les dates de son étape", () => {
+    // La première photo tombe à Nikko (la plus proche). Si elle élargissait
+    // l'étape jusqu'à elle, la seconde, prise juste après, la suivrait au
+    // lieu d’aller à Tokyo, pourtant plus proche de son jour (10 contre 20).
+    const groups = groupIntoSteps([
+      entry("recit-nikko", "audio", 0),
+      entry("recit-tokyo", "audio", 30),
+      entry("photo-1", "photo", 14),
+      entry("photo-2", "photo", 20),
+    ]);
+    const nikko = groups.find((group) => group.entries[0]!.id === "recit-nikko")!;
+    const tokyo = groups.find((group) => group.entries[0]!.id === "recit-tokyo")!;
+    expect(nikko.entries.map((one) => one.id)).toEqual(["recit-nikko", "photo-1"]);
+    expect(tokyo.entries.map((one) => one.id)).toEqual(["recit-tokyo", "photo-2"]);
+  });
+
   it("…sauf épinglée sur le récit que MEMO venait d'illustrer", () => {
     const pins: StepPins = { stepOf: new Map(), illustrates: new Map([["photo-prise-a-nikko", "recit-tokyo"]]) };
     const groups = groupIntoSteps(
