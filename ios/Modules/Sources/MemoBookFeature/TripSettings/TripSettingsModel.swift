@@ -157,7 +157,7 @@ public final class TripSettingsModel {
     #if DEBUG
         /// Les états du crédit que le panneau de bac à sable rejoue.
         public enum DailyCreditDebugState: CaseIterable, Sendable {
-            /// Rien raconté aujourd'hui : 5 minutes devant soi.
+            /// Rien raconté aujourd'hui : 2 minutes devant soi.
             case fresh
             /// Trente secondes : le seuil où la barre d'enregistrement prévient.
             case lastSeconds

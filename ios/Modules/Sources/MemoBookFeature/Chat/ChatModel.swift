@@ -149,7 +149,7 @@ public final class ChatModel {
     /// dernier geste de la session.
     ///
     /// **Hors ligne et sans rien savoir du crédit, le pot du catalogue**
-    /// (03/10/2026) : cinq minutes pleines, moins ce qui attend dans la file,
+    /// (03/10/2026) : deux minutes pleines, moins ce qui attend dans la file,
     /// tant que la session ne sait pas le compte illimité — elle l'apprend
     /// au lancement du cache de l'accueil, ou du profil. Ne rien compter
     /// laissait dicter un vocal de six minutes, sans bandeau ni coupure, que

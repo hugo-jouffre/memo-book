@@ -480,7 +480,7 @@ class TripSettingsModel(
 
     /** Les états du crédit que le panneau de bac à sable rejoue. Debug seulement. */
     enum class DailyCreditDebugState {
-        /** Rien raconté aujourd'hui : 5 minutes devant soi. */
+        /** Rien raconté aujourd'hui : 2 minutes devant soi. */
         Fresh,
 
         /** Trente secondes : le seuil où la barre d'enregistrement prévient. */

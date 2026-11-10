@@ -272,12 +272,12 @@ class HomeModelTest {
         val model = HomeModel(source = { cachedFeed }, outbox = outbox)
         model.load()
 
-        model.upload(voice(seconds = 180.0))
+        model.upload(voice(seconds = 60.0))
         model.load()
-        assertEquals(180_000, model.ongoingTripCredit?.usedMs)
+        assertEquals(60_000, model.ongoingTripCredit?.usedMs)
 
         model.load()
-        assertEquals(180_000, model.ongoingTripCredit?.usedMs)
+        assertEquals(60_000, model.ongoingTripCredit?.usedMs)
     }
 
     // MARK: - Le rappel de fin de voyage (Android seulement)

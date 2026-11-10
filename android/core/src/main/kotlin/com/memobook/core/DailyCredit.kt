@@ -20,7 +20,7 @@ import java.util.Locale
 /**
  * **Le crédit du jour d'un voyage** (Hugo, 03/10/2026).
  *
- * Tout le monde raconte gratuitement, dans la limite de **5 minutes par jour
+ * Tout le monde raconte gratuitement, dans la limite de **2 minutes par jour
  * et par voyage**, partagées entre les co-voyageurs qui ne sont pas abonnés.
  * Un seul crédit pour le vocal et l'écrit : un vocal consomme sa durée, un
  * texte une minute pour 800 caractères. Les photos ne consomment rien.
@@ -75,7 +75,7 @@ data class DailyCredit(
      * compte arrive toujours avec le solde.
      */
     object Catalog {
-        const val limitMs = 300_000
+        const val limitMs = 120_000
         const val textMsPerCharacter = 75
         const val warningRemainingMs = 30_000
         const val urgentRemainingMs = 5_000
@@ -470,7 +470,7 @@ object DailyCreditCopy {
      * l'app la pose elle-même hors ligne, le serveur la pose en ligne.
      */
     const val exhaustedMessage =
-        "Quelle journée ! Ce voyage a déjà raconté ses 5 minutes du jour. Je garde tout précieusement : reviens demain pour la suite, le crédit se recharge à minuit."
+        "Quelle journée ! Ce voyage a déjà raconté ses 2 minutes du jour. Je garde tout précieusement : reviens demain pour la suite, le crédit se recharge à minuit."
 
     // — Les réglages du voyage
 

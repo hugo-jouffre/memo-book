@@ -156,7 +156,7 @@ fun ChatView(
     // Le paywall, ouvert par le bouton « Raconter sans limite » d'une bulle de
     // MEMO, ou par le bandeau « Crédit du jour épuisé » au-dessus de la barre
     // (Hugo, 03/10/2026). Plus jamais par le micro lui-même : tout le monde
-    // raconte, cinq minutes par jour et par voyage.
+    // raconte, deux minutes par jour et par voyage.
     var showsPaywall by remember { mutableStateOf(false) }
 
     // Le fil est posé : ce qui arrive **ensuite** est un envoi ou une réponse,

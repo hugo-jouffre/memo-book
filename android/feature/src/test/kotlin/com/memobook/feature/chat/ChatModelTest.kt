@@ -1192,7 +1192,7 @@ class ChatModelTest {
 
         assertTrue(model.isOffline)
         assertNull(model.dailyCredit, "Rien de servi.")
-        assertEquals(240_000, model.credit?.remainingMs, "Cinq minutes, moins la minute qui attend.")
+        assertEquals(60_000, model.credit?.remainingMs, "Deux minutes, moins la minute qui attend.")
         assertEquals(false, model.credit?.isUnlimited)
         model.composer = ChatComposerMode.Writing
         model.draft = "a".repeat(3_201)

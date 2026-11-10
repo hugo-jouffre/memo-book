@@ -584,7 +584,7 @@ final class APIClientTests: XCTestCase {
             json: """
                 { "error": "daily_credit_exhausted",
                   "message": "Le crédit du jour de ce voyage est épuisé. Reviens demain pour continuer, ou passe en illimité.",
-                  "dailyCredit": { "isUnlimited": false, "limitMs": 300000, "usedMs": 300000, "remainingMs": 0,
+                  "dailyCredit": { "isUnlimited": false, "limitMs": 120000, "usedMs": 120000, "remainingMs": 0,
                                    "textMsPerCharacter": 75, "warningRemainingMs": 30000, "urgentRemainingMs": 5000,
                                    "day": "2026-10-03", "resetsAt": "2026-10-03T22:00:00.000Z" } }
                 """

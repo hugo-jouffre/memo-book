@@ -82,7 +82,7 @@ import com.memobook.payments.PurchaseOutcome
  * de `Paywall/PaywallView.swift`.
  *
  * **Il vend l'illimité, pas le droit de raconter** (Hugo, 03/10/2026). Tout le
- * monde raconte cinq minutes par jour et par voyage ; l'abonnement, 4,99 € par
+ * monde raconte deux minutes par jour et par voyage ; l'abonnement, 4,99 € par
  * mois, rend le récit illimité pour l'abonné. Le paywall s'ouvre donc sur une
  * envie — « Tu as tant de choses à raconter ! » —, jamais sur un mur : on peut
  * le refermer et continuer demain.
@@ -619,7 +619,7 @@ object PaywallCopy {
     const val storiesTitleLead = "Tu as tant de "
     const val storiesTitleStrong = "choses à raconter !"
     const val storiesBodyLead =
-        "Et c’est exactement ce qu’on espérait. Un voyage ne tient pas en 5 minutes par jour : chaque détail que tu racontes, c’est une page de plus "
+        "Et c’est exactement ce qu’on espérait. Un voyage ne tient pas en 2 minutes par jour : chaque détail que tu racontes, c’est une page de plus "
     const val storiesBodyStrong = "dans ton carnet."
 
     // — Écran 2 : les détails qui s'effacent
@@ -638,7 +638,7 @@ object PaywallCopy {
      * (`DAILY_CREDIT_LIMIT_MS`) ; s'il bougeait, ce texte bougerait avec.
      */
     val detailsFootnote = listOf(
-        "Gratuit : 5 minutes par jour et par voyage, à l’oral comme à l’écrit.",
+        "Gratuit : 2 minutes par jour et par voyage, à l’oral comme à l’écrit.",
         "—",
         "Illimité : raconte autant que tu veux, sur tous tes voyages.",
     )

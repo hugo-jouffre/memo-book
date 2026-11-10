@@ -125,7 +125,7 @@ object PrivacyPolicy {
             LegalBlock.Heading("2.7 Compteur d’usage quotidien (crédit du jour)"),
             LegalBlock.Lines(listOf(
                 "**Données collectées :** pour chaque voyage et chaque jour, la durée cumulée des enregistrements vocaux et le nombre de caractères des textes envoyés, ainsi que le fuseau horaire de votre téléphone, qui fixe l’heure de minuit",
-                "**Finalité :** appliquer la limite d’utilisation gratuite (le crédit du jour de 5 minutes par voyage) et vous indiquer ce qu’il reste",
+                "**Finalité :** appliquer la limite d’utilisation gratuite (le crédit du jour de 2 minutes par voyage) et vous indiquer ce qu’il reste",
                 "**Base légale :** exécution du contrat (article 6.1.b du RGPD)",
                 "**Durée de conservation :** tant que le voyage existe ; le compteur est supprimé avec lui",
             )),

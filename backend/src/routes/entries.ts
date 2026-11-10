@@ -71,7 +71,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
    * **La route ancienne** — l'écran d'un carnet hors du chat l'appelle encore.
    * Elle se décompte du crédit du jour comme le chat (Hugo, 03/10/2026) : un
    * texte ses caractères, un vocal sa durée mesurée, une photo rien. Sans ça,
-   * elle aurait été la porte de derrière des 5 minutes. Pas d'identifiant
+   * elle aurait été la porte de derrière des 2 minutes. Pas d'identifiant
    * client ici, donc pas d'idempotence : un envoi rejoué compte deux fois,
    * comme il écrit deux souvenirs.
    *
@@ -256,7 +256,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
    * Au-delà, la correction paie comme un texte (75 ms par caractère) ; pot
    * vide, elle est refusée en entier — « au-delà de 200 caractères modifiés,
    * la correction passe par l’illimité ». Sinon le clavier contournerait les
-   * 5 minutes. Un abonné ne compte rien, et n'entame pas les 200 de ses
+   * 2 minutes. Un abonné ne compte rien, et n'entame pas les 200 de ses
    * co-voyageurs.
    */
   app.patch("/v1/entries/:id", async (request) => {

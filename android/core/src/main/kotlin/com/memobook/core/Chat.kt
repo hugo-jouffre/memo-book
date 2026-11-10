@@ -434,7 +434,7 @@ sealed interface ChatDelivery {
 
     /**
      * Le tour coûte **plus qu'une journée entière** de crédit — un vocal de
-     * plus de 5:03, un texte de plus de 4 000 caractères —, ou le serveur l'a
+     * plus de 2:03, un texte de plus de 1 600 caractères —, ou le serveur l'a
      * dit (`daily_credit_too_long`). Attendre demain n'y changerait rien : le
      * pot plein le refuserait encore. Il reste sur le téléphone, la bulle dit
      * « Trop long pour une journée · Passer en illimité », et il repart dès

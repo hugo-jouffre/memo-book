@@ -170,7 +170,7 @@ export interface ConversationInput {
     /**
      * Celui qui vient de parler raconte sans limite (abonnement vivant, ou
      * résilié mais payé jusqu'à `renewsAt` — `hasUnlimitedAccess`). MEMO ne
-     * décrit pas les 5 minutes du jour à qui ne les compte plus.
+     * décrit pas les 2 minutes du jour à qui ne les compte plus.
      */
     isUnlimited: boolean;
     /**

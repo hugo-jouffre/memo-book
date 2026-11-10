@@ -454,7 +454,7 @@ private struct SubscriptionCallout: View {
 /// feuilles de résiliation et les quatre raisons, où Figma emploie la droite.
 ///
 /// **Résilier ne ferme plus le micro** (Hugo, 03/10/2026) : sans abonnement, on
-/// retrouve le crédit du jour — cinq minutes par jour et par voyage. Les
+/// retrouve le crédit du jour — deux minutes par jour et par voyage. Les
 /// phrases qui annonçaient « tu ne pourras plus dicter tes souvenirs » disent
 /// désormais ce qu'on retrouve, et la période payée est **celle de l'abonné** :
 /// le mois, ou la semaine d'un abonné de l'ancienne formule, toujours honoré
@@ -466,7 +466,7 @@ private struct SubscriptionCallout: View {
 enum SubscriptionCopy {
     /// Ce qu'on retrouve sans abonnement — la même phrase dans les trois
     /// feuilles de résiliation, pour qu'elles ne se contredisent pas.
-    static let dailyCreditBack = "tu retrouves le crédit du jour : 5 minutes par jour et par voyage"
+    static let dailyCreditBack = "tu retrouves le crédit du jour : 2 minutes par jour et par voyage"
 
     /// « mois » est masculin, « semaine » féminin : les phrases de la
     /// résiliation s'accordent sur la période payée plutôt que d'y glisser un
@@ -725,7 +725,7 @@ enum SubscriptionCopy {
         guard let graceEnd else {
             return [
                 "L’abonnement s’arrête aujourd’hui.",
-                "Tu retrouves le crédit du jour : 5 minutes par jour et par voyage, \(keepsBook)",
+                "Tu retrouves le crédit du jour : 2 minutes par jour et par voyage, \(keepsBook)",
             ]
         }
         return [
@@ -763,7 +763,7 @@ enum SubscriptionCopy {
                 "La période que tu avais réglée est terminée, et l’abonnement ne s’est pas renouvelé."
             }
         return
-            "\(opening) Tu retrouves 5 minutes par jour et par voyage. Pour raconter sans compter, réabonne-toi."
+            "\(opening) Tu retrouves 2 minutes par jour et par voyage. Pour raconter sans compter, réabonne-toi."
     }
 
     static let endedDismiss = "D’accord"

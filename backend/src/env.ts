@@ -103,7 +103,7 @@ const schema = z.object({
    *
    * **Pour tous, abonnés compris** (Hugo, 03/10/2026) : l'illimité de
    * l'abonnement est celui du récit, pas celui d'un robot. Ce n'est pas le
-   * crédit du jour (5 minutes par voyage, `services/dailyCredit.ts`), dont les
+   * crédit du jour (2 minutes par voyage, `services/dailyCredit.ts`), dont les
    * constantes vivent dans le code et partent avec le solde — jamais ici.
    */
   CHAT_DAILY_TURN_CAP: z.coerce.number().int().positive().default(150),

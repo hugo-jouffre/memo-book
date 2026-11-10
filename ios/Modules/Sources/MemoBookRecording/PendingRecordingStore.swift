@@ -66,7 +66,7 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
 
     /// **Il attend l'illimité** (03/10/2026) : il coûte plus qu'une journée
     /// entière de crédit — un vocal de plus de 5:03, un texte de plus de
-    /// 4 000 caractères —, et le serveur le refusera chaque jour, pot plein
+    /// 1 600 caractères —, et le serveur le refusera chaque jour, pot plein
     /// compris. Ni renvoyé, ni réveillé à minuit : il repart quand le compte
     /// passe en illimité (``RecordingOutbox/releaseCreditHolds()``). Jamais
     /// jeté — ce serait perdre ce qu'on a raconté.

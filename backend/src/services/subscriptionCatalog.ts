@@ -10,7 +10,7 @@
  *
  * **L'offre, depuis le 03/10/2026 (Hugo)** : un abonnement **mensuel à 4,99 €**,
  * qui rend le récit illimité pour l'abonné. Tout le monde raconte gratuitement
- * 5 minutes par jour et par voyage (`dailyCredit.ts`) ; il n'y a plus ni étapes
+ * 2 minutes par jour et par voyage (`dailyCredit.ts`) ; il n'y a plus ni étapes
  * offertes, ni limites de souvenirs à étendre, ni abonnement hebdomadaire, ni
  * abonnements déduits du prix du carnet. L'ancien modèle est sur la branche
  * `icebox/abonnement-hebdomadaire`.

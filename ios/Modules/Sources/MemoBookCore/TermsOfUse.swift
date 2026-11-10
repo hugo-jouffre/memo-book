@@ -86,7 +86,7 @@ public enum TermsOfUse {
                 "Recevoir un carnet illustré généré automatiquement",
                 "Accéder à une version numérique de son carnet",
             ]),
-            .paragraph("Cette utilisation gratuite est limitée par un crédit du jour : chaque voyage peut recevoir 5 minutes de récit par jour, partagées entre ses participants non abonnés. Un enregistrement vocal consomme sa durée, un texte écrit consomme une minute pour 800 caractères, et les photos ne consomment rien."),
+            .paragraph("Cette utilisation gratuite est limitée par un crédit du jour : chaque voyage peut recevoir 2 minutes de récit par jour, partagées entre ses participants non abonnés. Un enregistrement vocal consomme sa durée, un texte écrit consomme une minute pour 800 caractères, et les photos ne consomment rien."),
             .paragraph("Le crédit se renouvelle chaque jour à minuit, à l’heure du téléphone de l’utilisateur. Lorsqu’il est épuisé, l’enregistrement en cours s’arrête : les contenus déjà enregistrés sont conservés, et le récit peut reprendre le lendemain ou sans limite avec un abonnement (chapitre 5)."),
             .paragraph("MemoBook peut faire évoluer le service gratuit, notamment le montant du crédit du jour. Les changements importants sont annoncés dans l’application et ne s’appliquent jamais rétroactivement à une période d’abonnement déjà payée."),
 

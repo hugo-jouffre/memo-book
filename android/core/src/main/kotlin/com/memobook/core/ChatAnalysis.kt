@@ -838,7 +838,9 @@ internal object Lexicon {
     /** Ce qui rattache une locution au récit, cherché **en début de mot**. */
     val creditAnchors: Set<String> = setOf(
         "racont", "recit", "enregistr", "vocal", "vocaux", "abonn", "illimit", "aujourd",
-        "par jour", "du jour", "minuit", "se recharg", "5 minutes", "cinq minutes",
+        "par jour", "du jour", "minuit", "se recharg", "2 minutes", "deux minutes",
+        // Les builds d'avant le 10/11/2026 disaient cinq : on comprend encore la question.
+        "5 minutes", "cinq minutes",
     )
 
     /**

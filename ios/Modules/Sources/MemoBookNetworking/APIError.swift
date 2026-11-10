@@ -56,7 +56,7 @@ public enum APIError: Error, LocalizedError, Sendable {
     public static let dailyCreditExhaustedCode = "daily_credit_exhausted"
 
     /// Le code du refus d'un tour **plus long qu'une journée entière** de
-    /// crédit — un vocal de plus de 5:03, un texte de plus de 4 000 caractères
+    /// crédit — un vocal de plus de 2:03, un texte de plus de 1 600 caractères
     /// (03/10/2026). Il arrive en ``server(statusCode:code:message:)`` : rien
     /// à porter d'autre que le code, et la file le reconnaît par lui — voir
     /// ``isDailyCreditTooLong``. Attendre demain n'y changerait rien : le tour

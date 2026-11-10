@@ -87,7 +87,7 @@ object DailyCreditSheetCopy {
         "Ton abonnement ne se renouvellera pas : tu racontes sans limite jusqu’au $on, puis tu retrouves les ${spelledDuration(limitMs)} du jour."
 
     /**
-     * « 5 minutes », « 1 minute » — en toutes lettres quand la durée tombe
+     * « 2 minutes », « 1 minute » — en toutes lettres quand la durée tombe
      * sur une minute ronde, ce qui est le cas du crédit. Sinon la forme
      * courte de [DailyCreditCopy.duration].
      */

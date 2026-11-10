@@ -107,7 +107,7 @@ describe("inscription et connexion par mot de passe", () => {
 
   it("ouvre tout compte sur le crédit du jour : ni étapes offertes, ni abonnement", async () => {
     // Plus d'étapes offertes (Hugo, 03/10/2026) : tout le monde raconte
-    // 5 minutes par jour et par voyage, quel que soit le chemin d'entrée.
+    // 2 minutes par jour et par voyage, quel que soit le chemin d'entrée.
     const travellerOf = async (token: string) =>
       (
         await harness.app.inject({ method: "GET", url: "/v1/home", headers: { authorization: `Bearer ${token}` } })

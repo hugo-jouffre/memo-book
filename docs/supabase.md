@@ -142,7 +142,7 @@ et imprimable avec une commande en production, un à venir — une cagnotte
 alimentée par son registre, un abonnement mensuel actif (récit illimité), les
 mises en avant de l'écran de bienvenue et la modale d'avis. Un second compte,
 `demo@memo-book.com` (même mot de passe), reste **gratuit** : c'est lui qui
-montre le crédit du jour — 5 minutes de récit par voyage et par jour.
+montre le crédit du jour — 2 minutes de récit par voyage et par jour.
 
 Vérifie côté serveur avant de lancer Xcode :
 

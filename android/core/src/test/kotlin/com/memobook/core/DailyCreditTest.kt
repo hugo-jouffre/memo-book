@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  * que `DailyCreditTests.swift`.
  *
  * Le serveur tranche (`services/dailyCredit.ts`) ; ici on ne teste que ce que
- * l'app en déduit pour prévenir — à 4:30, à 4:55, à 5:00 — et ce qu'elle
+ * l'app en déduit pour prévenir — à 1:30, à 1:55, à 2:00 — et ce qu'elle
  * affiche dans les réglages du voyage.
  */
 class DailyCreditTest {
@@ -34,7 +34,7 @@ class DailyCreditTest {
     fun remainingNeverGoesNegative() {
         // Un vocal accepté dans la tolérance (3 s) peut faire dépasser : la
         // ligne doit lire « Plus rien », pas « -2 s ».
-        val credit = DailyCredit(usedMs = 303_000)
+        val credit = DailyCredit(usedMs = 123_000)
         assertEquals(0, credit.remainingMs)
         assertEquals(1.0, credit.fraction)
         assertTrue(credit.isExhausted)
@@ -42,8 +42,8 @@ class DailyCreditTest {
 
     @Test
     fun fractionIsWhatTheTripHasAlreadyTold() {
-        val credit = DailyCredit(usedMs = 100_000)
-        assertEquals(200_000, credit.remainingMs)
+        val credit = DailyCredit(usedMs = 40_000)
+        assertEquals(80_000, credit.remainingMs)
         assertEquals(1.0 / 3.0, credit.fraction, absoluteTolerance = 0.0001)
         assertFalse(credit.isExhausted)
     }
@@ -79,7 +79,7 @@ class DailyCreditTest {
 
     @Test
     fun phasesFollowTheServedThresholds() {
-        val full = credit(remaining = 300_000)
+        val full = credit(remaining = 120_000)
         assertEquals(DailyCredit.Phase.Calm, full.phase(remainingMs = 30_001))
         assertEquals(DailyCredit.Phase.Warning, full.phase(remainingMs = 30_000))
         assertEquals(DailyCredit.Phase.Warning, full.phase(remainingMs = 5_001))
@@ -163,11 +163,11 @@ class DailyCreditTest {
      */
     @Test
     fun theSlackTravelsWithTheBalance() {
-        val served = decode("""{"usedMs":299400,"exhaustionSlackMs":500}""")
+        val served = decode("""{"usedMs":119400,"exhaustionSlackMs":500}""")
         assertEquals(500, served.exhaustionSlackMs)
         assertFalse(served.isExhausted, "600 ms, au-dessus du seuil servi.")
 
-        val older = decode("""{"usedMs":299400}""")
+        val older = decode("""{"usedMs":119400}""")
         assertEquals(1_000, older.exhaustionSlackMs)
         assertTrue(older.isExhausted)
     }
@@ -188,7 +188,7 @@ class DailyCreditTest {
      */
     @Test
     fun theLaterDayWins() {
-        val yesterday = DailyCredit(usedMs = 300_000, day = "2026-10-02", resetsAt = midnight(after = 2))
+        val yesterday = DailyCredit(usedMs = 120_000, day = "2026-10-02", resetsAt = midnight(after = 2))
         val today = DailyCredit(usedMs = 60_000, day = "2026-10-03", resetsAt = midnight(after = 3))
         assertEquals(today, yesterday.merged(with = today))
         assertEquals(today, today.merged(with = yesterday))
@@ -196,13 +196,13 @@ class DailyCreditTest {
 
     /**
      * Le même jour, le plus consommé l'emporte : la consommation d'une
-     * journée ne fait que croître. Le cache du matin (5:00) ne passe pas
+     * journée ne fait que croître. Le cache du matin (2:00) ne passe pas
      * devant celui de l'accueil relu après un vocal de 4 minutes.
      */
     @Test
     fun onTheSameDayTheMostSpentWins() {
         val morning = DailyCredit(usedMs = 0, day = "2026-10-03", resetsAt = midnight(after = 3))
-        val afternoon = DailyCredit(usedMs = 240_000, day = "2026-10-03", resetsAt = midnight(after = 3))
+        val afternoon = DailyCredit(usedMs = 60_000, day = "2026-10-03", resetsAt = midnight(after = 3))
         assertEquals(60_000, morning.merged(with = afternoon).remainingMs)
         assertEquals(60_000, afternoon.merged(with = morning).remainingMs)
     }
@@ -229,7 +229,7 @@ class DailyCreditTest {
     @Test
     fun aRefreshedCreditIsRankedByItsRecharge() {
         val morning = at(3, hour = 9)
-        val yesterday = DailyCredit(usedMs = 300_000, day = "2026-10-02", resetsAt = midnight(after = 2))
+        val yesterday = DailyCredit(usedMs = 120_000, day = "2026-10-02", resetsAt = midnight(after = 2))
         val refreshed = yesterday.refreshed(now = morning, zone = paris)
         assertNull(refreshed.day)
         assertEquals(0, yesterday.merged(with = refreshed).usedMs)
@@ -261,8 +261,8 @@ class DailyCreditTest {
         val midnight = at(4)
         val morning = at(4, hour = 9)
         val yesterday = DailyCredit(
-            limitMs = 300_000,
-            usedMs = 300_000,
+            limitMs = 120_000,
+            usedMs = 120_000,
             textMsPerCharacter = 60,
             day = "2026-10-03",
             resetsAt = midnight,
@@ -303,8 +303,8 @@ class DailyCreditTest {
     @Test
     fun theLongestTurnADayAllows() {
         val credit = DailyCredit()
-        assertEquals(303_000, credit.limitWithTolerance(forVoice = true))
-        assertEquals(300_000, credit.limitWithTolerance(forVoice = false))
+        assertEquals(123_000, credit.limitWithTolerance(forVoice = true))
+        assertEquals(120_000, credit.limitWithTolerance(forVoice = false))
     }
 
     // MARK: - L'écrit
@@ -315,7 +315,7 @@ class DailyCreditTest {
         assertEquals(225, credit.cost(ofText = "abc"))
         // 800 caractères valent une minute ; 4 000, tout le crédit.
         assertEquals(60_000, credit.cost(ofText = "a".repeat(800)))
-        assertEquals(300_000, credit.cost(ofText = "a".repeat(4_000)))
+        assertEquals(120_000, credit.cost(ofText = "a".repeat(1_600)))
     }
 
     @Test
@@ -354,9 +354,9 @@ class DailyCreditTest {
             """
             {
               "isUnlimited": false,
-              "limitMs": 300000,
-              "usedMs": 120000,
-              "remainingMs": 180000,
+              "limitMs": 120000,
+              "usedMs": 48000,
+              "remainingMs": 72000,
               "textMsPerCharacter": 75,
               "warningRemainingMs": 30000,
               "urgentRemainingMs": 5000,
@@ -367,8 +367,8 @@ class DailyCreditTest {
         )
 
         assertFalse(credit.isUnlimited)
-        assertEquals(120_000, credit.usedMs)
-        assertEquals(180_000, credit.remainingMs)
+        assertEquals(48_000, credit.usedMs)
+        assertEquals(72_000, credit.remainingMs)
         assertEquals("2026-10-03", credit.day)
         assertEquals(MemoBookDate.parse("2026-10-03T22:00:00.000Z"), credit.resetsAt)
     }
@@ -381,7 +381,7 @@ class DailyCreditTest {
 
         assertFalse(credit.isUnlimited)
         assertEquals(42_000, credit.usedMs)
-        assertEquals(300_000, credit.limitMs)
+        assertEquals(120_000, credit.limitMs)
         assertEquals(75, credit.textMsPerCharacter)
         assertEquals(30_000, credit.warningRemainingMs)
         assertEquals(5_000, credit.urgentRemainingMs)
@@ -422,7 +422,7 @@ class DailyCreditTest {
 
     @Test
     fun durations() {
-        assertEquals("5 min", DailyCreditCopy.duration(300_000))
+        assertEquals("2 min", DailyCreditCopy.duration(120_000))
         assertEquals("3 min 20", DailyCreditCopy.duration(200_000))
         assertEquals("3 min 05", DailyCreditCopy.duration(185_000))
         assertEquals("45 s", DailyCreditCopy.duration(45_000))
@@ -451,7 +451,7 @@ class DailyCreditTest {
         assertEquals("45 s restantes", DailyCreditCopy.rowValue(credit(remaining = 45_000)))
         assertEquals("Épuisé", DailyCreditCopy.rowValue(credit(remaining = 0)))
         assertEquals("Illimité", DailyCreditCopy.rowValue(credit(remaining = 0, isUnlimited = true)))
-        assertEquals("5 min par jour pour tout le voyage", DailyCreditCopy.rowCaption(limitMs = 300_000))
+        assertEquals("2 min par jour pour tout le voyage", DailyCreditCopy.rowCaption(limitMs = 120_000))
     }
 
     @Test
@@ -468,13 +468,13 @@ class DailyCreditTest {
     @Test
     fun sheetReadsTheScaleFromTheBalance() {
         assertEquals(
-            "5 minutes par jour pour ce voyage, à partager entre les co-voyageurs qui ne sont pas abonnés.",
-            DailyCreditCopy.Sheet.sharing(limitMs = 300_000),
+            "2 minutes par jour pour ce voyage, à partager entre les co-voyageurs qui ne sont pas abonnés.",
+            DailyCreditCopy.Sheet.sharing(limitMs = 120_000),
         )
         assertTrue(DailyCreditCopy.Sheet.consumption(textMsPerCharacter = 75).contains("800 caractères valent une minute"))
         assertEquals("1 minute", DailyCreditCopy.Sheet.spelledDuration(60_000))
         assertEquals("1 min 30", DailyCreditCopy.Sheet.spelledDuration(90_000))
-        assertTrue(DailyCreditCopy.Sheet.unlimitedExplanation(limitMs = 300_000).contains("les 5 minutes du jour"))
+        assertTrue(DailyCreditCopy.Sheet.unlimitedExplanation(limitMs = 120_000).contains("les 2 minutes du jour"))
     }
 
     @Test
@@ -494,7 +494,7 @@ class DailyCreditTest {
             DailyCreditCopy.Sheet.recharge,
             DailyCreditCopy.Sheet.remaining(DailyCredit()),
             DailyCreditCopy.Sheet.consumption(textMsPerCharacter = 75),
-            DailyCreditCopy.Sheet.unlimitedExplanation(limitMs = 300_000),
+            DailyCreditCopy.Sheet.unlimitedExplanation(limitMs = 120_000),
         )
         for (text in texts) {
             assertFalse(text.contains("'"), "apostrophe droite dans « $text »")

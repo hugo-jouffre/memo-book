@@ -657,11 +657,11 @@ class ProfileModelTest {
     @Test
     fun theGaugeFillsWithWhatIsTold() {
         assertEquals(0.0, DailyCredit(usedMs = 0).fraction)
-        assertEquals(0.2, DailyCredit(usedMs = 60_000).fraction, absoluteTolerance = 0.0001)
+        assertEquals(0.5, DailyCredit(usedMs = 60_000).fraction, absoluteTolerance = 0.0001)
         assertEquals(1.0, DailyCredit(usedMs = DailyCredit.Catalog.limitMs).fraction)
         assertEquals(
-            "3 min 20 restantes sur 5 min",
-            DailyCreditSheetCopy.gaugeAccessibilityValue(DailyCredit(usedMs = 100_000)).replace('\u00A0', ' ').replace('\u202F', ' '),
+            "1 min 20 restantes sur 2 min",
+            DailyCreditSheetCopy.gaugeAccessibilityValue(DailyCredit(usedMs = 40_000)).replace('\u00A0', ' ').replace('\u202F', ' '),
         )
     }
 

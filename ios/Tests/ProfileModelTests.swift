@@ -658,11 +658,11 @@ final class ProfileModelTests: XCTestCase {
     /// chiffre d'à côté qui dit le reste.
     func testTheGaugeFillsWithWhatIsTold() {
         XCTAssertEqual(DailyCredit(usedMs: 0).fraction, 0)
-        XCTAssertEqual(DailyCredit(usedMs: 60_000).fraction, 0.2, accuracy: 0.0001)
+        XCTAssertEqual(DailyCredit(usedMs: 60_000).fraction, 0.5, accuracy: 0.0001)
         XCTAssertEqual(DailyCredit(usedMs: DailyCredit.Catalog.limitMs).fraction, 1)
         XCTAssertEqual(
-            DailyCreditCopy.Sheet.gaugeAccessibilityValue(DailyCredit(usedMs: 100_000)),
-            "3 min 20 restantes sur 5 min"
+            DailyCreditCopy.Sheet.gaugeAccessibilityValue(DailyCredit(usedMs: 40_000)),
+            "1 min 20 restantes sur 2 min"
         )
     }
 
@@ -760,12 +760,12 @@ final class ProfileModelTests: XCTestCase {
         let model = HomeModel(source: { cachedFeed }, outbox: outbox)
         await model.load()
 
-        await model.upload(voice(seconds: 180))
+        await model.upload(voice(seconds: 60))
         await model.load()
-        XCTAssertEqual(model.ongoingTripCredit?.usedMs, 180_000)
+        XCTAssertEqual(model.ongoingTripCredit?.usedMs, 60_000)
 
         await model.load()
-        XCTAssertEqual(model.ongoingTripCredit?.usedMs, 180_000)
+        XCTAssertEqual(model.ongoingTripCredit?.usedMs, 60_000)
     }
 
     // MARK: - Le bac à sable (03/10/2026)

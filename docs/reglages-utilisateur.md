@@ -220,14 +220,14 @@ s'imprimera vraiment qu'une fois cette face ajoutée à `build-font-css.ts`.
 
 ## Le crédit du jour
 
-**Chaque voyage peut raconter 5 minutes par jour**, partagées entre ses
+**Chaque voyage peut raconter 2 minutes par jour**, partagées entre ses
 co-voyageurs qui ne sont pas abonnés (Hugo, 03/10/2026). Il remplace à la fois
 les trois étapes offertes et les limites de souvenirs hebdomadaires : il n'y a
 plus de palier d'entrée, ni d'extension à acheter.
 
 | | Sans abonnement | Abonné (4,99 €/mois) |
 |---|---|---|
-| Récit | 5 minutes par jour et par voyage, à partager | Illimité — et il ne prend rien au pot commun |
+| Récit | 2 minutes par jour et par voyage, à partager | Illimité — et il ne prend rien au pot commun |
 | Ce qui consomme | un vocal : sa durée ; un texte : 75 ms par caractère (800 caractères = 1 min) | rien |
 | Photos | libres | libres |
 
