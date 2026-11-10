@@ -323,6 +323,7 @@ public final class AppDependencies {
                 if await outbox.discardLocalTrip(id) { return }
                 try await api.deleteMemo(id: id)
             },
+            restore: { [api] id in try await api.restoreMemo(id: id) },
             join: { [api] code in try await api.joinTrip(code: code) }
         )
     }

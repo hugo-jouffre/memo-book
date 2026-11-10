@@ -438,6 +438,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await sendIgnoringResponse(method: "DELETE", path: "/v1/memos/\(id)")
     }
 
+    public func restoreMemo(id: String) async throws {
+        try await sendIgnoringResponse(method: "POST", path: "/v1/memos/\(id)/restore")
+    }
+
     public func deleteEntry(id: String) async throws {
         try await sendIgnoringResponse(method: "DELETE", path: "/v1/entries/\(id)")
     }

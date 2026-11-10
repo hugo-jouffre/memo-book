@@ -44,8 +44,12 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.memobook.core.DeletedTrip
+import com.memobook.core.HomeCopy
 import com.memobook.core.HomeFeed
 import com.memobook.core.Showcase
+import com.memobook.design.ActivitySpinner
+import com.memobook.design.BrandButton
 import com.memobook.design.BrandTagPill
 import com.memobook.design.BrandText
 import com.memobook.design.MemoBookColor
@@ -493,5 +497,54 @@ private fun HomeSectionsPreview() {
         UpcomingTripInvite {}
         PastTripsPlaceholder()
         HomeFeed.fixture.showcase?.let { ShowcaseCard(it) {} }
+    }
+}
+
+/**
+ * **Une ligne de la corbeille** — un voyage jeté, et le jour où il s'effacera
+ * (Hugo, 10/11/2026). Le jumeau de `DeletedTripRow` sur iOS.
+ *
+ * Volontairement pauvre : pas de photo, pas de tiroir, pas de geste
+ * d'ouverture. Un voyage jeté ne se lit pas — le serveur le refuserait —, et
+ * une ligne qui ressemble à une carte donnerait envie d'essayer. Elle ne porte
+ * donc qu'un titre, un compte à rebours et un bouton.
+ */
+@Composable
+fun DeletedTripRow(
+    trip: DeletedTrip,
+    isRestoring: Boolean,
+    onRestore: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier.fillMaxWidth().padding(vertical = MemoBookSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.s),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            BrandText(
+                trip.title,
+                MemoBookFont.bodySemibold,
+                color = MemoBookColor.inkMuted,
+                maxLines = 1,
+            )
+            BrandText(
+                HomeCopy.Trash.erasesIn(HomeCopy.Trash.daysLeft(until = trip.purgeAt)),
+                MemoBookFont.caption,
+                color = MemoBookColor.inkMuted,
+            )
+        }
+
+        if (isRestoring) {
+            ActivitySpinner(MemoBookColor.inkMuted)
+        } else {
+            BrandButton(
+                HomeCopy.Trash.restore,
+                style = BrandButton.Style.Link,
+                size = BrandButton.Size.Small,
+                contentDescription = HomeCopy.Trash.restoreVoice(trip.title),
+                action = onRestore,
+            )
+        }
     }
 }

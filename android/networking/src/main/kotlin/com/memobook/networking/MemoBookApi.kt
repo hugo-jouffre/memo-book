@@ -324,7 +324,18 @@ interface MemoBookApi {
     suspend fun memos(): List<MemoSummary>
     suspend fun createMemo(memo: NewMemo): Memo
     suspend fun memo(id: String): MemoDetail
+    /**
+     * `DELETE /v1/memos/:id` — **jette** un carnet : il part à la corbeille,
+     * d'où son propriétaire peut le reprendre pendant trente jours. Il quitte
+     * toutes les vues aussitôt, celles de ses co-voyageurs comprises.
+     */
     suspend fun deleteMemo(id: String)
+
+    /**
+     * `POST /v1/memos/:id/restore` — le sort de la corbeille, entier. `404`
+     * s'il n'y est plus : repris ailleurs, ou effacé au bout de trente jours.
+     */
+    suspend fun restoreMemo(id: String)
 
     /**
      * `DELETE /v1/entries/:id` — efface un souvenir, pour tous les

@@ -558,6 +558,13 @@ internal class PreviewApi(
         synchronized(lock) { memosById.remove(id) }
     }
 
+    /**
+     * Le bac à sable ne tient pas de corbeille : un voyage jeté y disparaît,
+     * et rien ne le rend. Les écrans qui comptent sont ceux qu'on regarde,
+     * pas la mécanique des trente jours — elle se vérifie en test.
+     */
+    override suspend fun restoreMemo(id: String) {}
+
     override suspend fun deleteEntry(id: String) {
         SandboxNetwork.failIfOffline()
         synchronized(lock) { deletedEntryIds += id }

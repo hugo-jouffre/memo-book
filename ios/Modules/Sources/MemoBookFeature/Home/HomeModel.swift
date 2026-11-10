@@ -35,6 +35,11 @@ public final class HomeModel {
     public private(set) var upcomingTrips: [Trip] = []
     public private(set) var pastTrips: [Trip] = []
 
+    /// **La corbeille** : les voyages jetés, du plus récent au plus ancien.
+    /// Vide presque toujours — la section ne paraît que s'il y a quelque
+    /// chose dedans.
+    public private(set) var deletedTrips: [DeletedTrip] = []
+
     /// La file de départ des vocaux. C'est elle qui sait s'il y a du réseau, ce
     /// qui attend sur le disque et ce qui est en train de partir.
     public let outbox: RecordingOutbox
@@ -47,6 +52,13 @@ public final class HomeModel {
     /// Supprime un voyage — `DELETE /v1/memos/:id`. `nil` en aperçu, où la
     /// carte disparaît comme si c'était fait.
     private let remove: ((String) async throws -> Void)?
+
+    /// Sort un voyage de la corbeille — `POST /v1/memos/:id/restore`. `nil`
+    /// en aperçu, où la ligne disparaît comme si c'était fait.
+    private let restore: ((String) async throws -> Void)?
+
+    /// Le voyage dont la restauration est partie, le temps qu'elle aboutisse.
+    public private(set) var restoringTripId: String?
 
     /// Rejoint un voyage par son code — `POST /v1/trips/join`. `nil` en
     /// aperçu, où le code de la maquette ouvre le premier voyage du jeu
@@ -81,12 +93,14 @@ public final class HomeModel {
         cached: CachedValue<HomeFeed>? = nil,
         outbox: RecordingOutbox = RecordingOutbox(),
         remove: ((String) async throws -> Void)? = nil,
+        restore: ((String) async throws -> Void)? = nil,
         join: ((String) async throws -> CreatedTrip)? = nil
     ) {
         self.source = source
         self.cached = cached
         self.outbox = outbox
         self.remove = remove
+        self.restore = restore
         self.joinByCode = join
     }
 
@@ -182,6 +196,7 @@ public final class HomeModel {
         ongoingTrips = loaded.ongoingTrips
         upcomingTrips = loaded.upcomingTrips
         pastTrips = loaded.pastTrips
+        deletedTrips = loaded.deletedTrips
     }
 
     /// Envoie le vocal qu'on vient d'enregistrer.
@@ -292,7 +307,47 @@ public final class HomeModel {
                 try await remove(id)
                 await load()
             } else if let feed {
-                apply(HomeFeed(traveller: feed.traveller, trips: feed.trips.filter { $0.id != id }, showcase: feed.showcase))
+                apply(
+                    HomeFeed(
+                        traveller: feed.traveller,
+                        trips: feed.trips.filter { $0.id != id },
+                        deletedTrips: feed.deletedTrips,
+                        showcase: feed.showcase
+                    )
+                )
+            }
+            return true
+        } catch {
+            deletionError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// **Sort un voyage de la corbeille** (Hugo, 10/11/2026).
+    ///
+    /// La ligne disparaît **sur la réponse du serveur**, comme la suppression :
+    /// un voyage purgé entre-temps rend `404`, et il ne faut pas l'avoir déjà
+    /// remis dans la liste. L'accueil se recharge ensuite — le voyage revient
+    /// dans sa section, avec ses compteurs.
+    @discardableResult
+    public func restoreTrip(id: String) async -> Bool {
+        restoringTripId = id
+        deletionError = nil
+        defer { restoringTripId = nil }
+
+        do {
+            if let restore {
+                try await restore(id)
+                await load()
+            } else if let feed {
+                apply(
+                    HomeFeed(
+                        traveller: feed.traveller,
+                        trips: feed.trips,
+                        deletedTrips: feed.deletedTrips.filter { $0.id != id },
+                        showcase: feed.showcase
+                    )
+                )
             }
             return true
         } catch {

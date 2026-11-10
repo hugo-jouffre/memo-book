@@ -52,6 +52,7 @@ fun AppDependencies.homeModel(): HomeModel {
         remove = { id ->
             if (!outbox.discardLocalTrip(id)) api.deleteMemo(id)
         },
+        restore = { id -> api.restoreMemo(id) },
         join = { code -> api.joinTrip(code) },
         subscriptionIsManagedByAppStore = {
             val profile: TravellerProfile = readProfile()

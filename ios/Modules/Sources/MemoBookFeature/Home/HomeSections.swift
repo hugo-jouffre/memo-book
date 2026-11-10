@@ -356,3 +356,42 @@ struct PastTripsPlaceholder: View {
             .brandDashedCard()
     }
 }
+
+/// **Une ligne de la corbeille** — un voyage jeté, et le jour où il s'effacera
+/// (Hugo, 10/11/2026).
+///
+/// Volontairement pauvre : pas de photo, pas de tiroir, pas de geste
+/// d'ouverture. Un voyage jeté ne se lit pas — le serveur le refuserait —, et
+/// une ligne qui ressemble à une carte donnerait envie d'essayer. Elle ne
+/// porte donc qu'un titre, un compte à rebours et un bouton.
+struct DeletedTripRow: View {
+    let trip: DeletedTrip
+    let isRestoring: Bool
+    let onRestore: () -> Void
+
+    var body: some View {
+        HStack(spacing: MemoBookSpacing.s) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(trip.title)
+                    .font(MemoBookFont.bodySemibold)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .lineLimit(1)
+
+                Text(HomeCopy.Trash.erasesIn(days: HomeCopy.Trash.daysLeft(until: trip.purgeAt)))
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+            }
+
+            Spacer(minLength: MemoBookSpacing.xs)
+
+            if isRestoring {
+                ProgressView().controlSize(.mini)
+            } else {
+                BrandButton(HomeCopy.Trash.restore, style: .link, size: .small, action: onRestore)
+                    .accessibilityLabel(HomeCopy.Trash.restoreVoice(title: trip.title))
+            }
+        }
+        .padding(.vertical, MemoBookSpacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
