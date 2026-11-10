@@ -8,6 +8,7 @@ import com.memobook.core.PageTargetReach
 import com.memobook.design.BrandButton
 import com.memobook.design.BrandSheet
 import com.memobook.design.MemoBookSpacing
+import com.memobook.feature.profile.euros
 
 /**
  * **Une cible personnalisée hors d'atteinte** (Hugo, 18/10/2026). Jumeau de
@@ -26,11 +27,9 @@ import com.memobook.design.MemoBookSpacing
  * question revenait. Ce que cette confirmation disait — la règle des deux
  * changements — se lit donc **ici**, avant l'appui.
  *
- * ⚠️ **Le prix de la cible proposée manque encore ici**, là où iOS l'affiche
- * (`BookCopy.Pages.reachPrice`) : `PrintPricing` n'est pas porté sur Android,
- * et cet écran n'affiche aucun prix nulle part. À reprendre avec le portage
- * des prix, pas avant — une seule ligne chiffrée sur un écran qui n'en a
- * aucune se lirait comme une erreur.
+ * Elle annonce aussi **le prix de la cible proposée**, à la tolérance près —
+ * la même règle que les paliers de l'écran (`BookCopy.Pages.reachPrice`).
+ * Rien sans grille servie : mieux vaut pas de prix qu'un prix faux.
  */
 @Composable
 internal fun PageTargetReachSheet(reach: PageTargetReach, model: BookCustomisationModel) {
@@ -38,6 +37,11 @@ internal fun PageTargetReachSheet(reach: PageTargetReach, model: BookCustomisati
     val paragraphs = buildList {
         add(BookCopy.Pages.reachToday(reach))
         add(BookCopy.Pages.reachLevers(reach))
+        // Le prix du carnet à la cible proposée. `null` sans grille : la
+        // ligne ne paraît pas.
+        model.printPricing?.displayedPrice(forTarget = reach.closestTarget)?.let { prix ->
+            add(BookCopy.Pages.reachPrice(pages = reach.closestTarget, price = prix.euros))
+        }
         // Un changement qui ne compte pas — avant le premier souvenir — n'a
         // rien à annoncer : la phrase ne paraît que quand le décompte court.
         if (allowance.changesCount && allowance.changesLeft > 0) {
