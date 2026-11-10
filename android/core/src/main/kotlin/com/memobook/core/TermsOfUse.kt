@@ -1,6 +1,6 @@
 package com.memobook.core
 
-// Les Conditions Générales d'Utilisation, recopiées du site memobook.fr
+// Les Conditions Générales d'Utilisation, recopiées du site memo-book.com
 // (Hugo, 17/09/2026), en dix chapitres. Le jumeau de
 // `MemoBookCore/TermsOfUse.swift` ; la forme est dans [LegalDocument].
 //
@@ -13,14 +13,14 @@ package com.memobook.core
 // renouvellement automatique et la résiliation d'un abonnement figurent dans
 // les conditions liées au paywall.
 //
-// ⚠️ **C'est le site qui fait foi** : memobook.fr doit publier le même texte,
+// ⚠️ **C'est le site qui fait foi** : memo-book.com doit publier le même texte,
 // le même jour que l'app.
 //
 // **Un seul texte pour les deux stores** (Clara, 02/11/2026) : le chapitre 5
 // nomme Android et iPhone dans la même phrase, et ce fichier dit mot pour mot
 // ce que dit son jumeau `TermsOfUse.swift`. Un abonnement reste payé et géré
 // par le store qui l'a vendu ; le compte MemoBook, lui, passe d'un téléphone à
-// l'autre. ⚠️ memobook.fr publie ce texte-là, et lui seul.
+// l'autre. ⚠️ memo-book.com publie ce texte-là, et lui seul.
 
 object TermsOfUse {
     private const val contactLink = LegalContact.emailLink
@@ -66,7 +66,7 @@ object TermsOfUse {
         number = 2,
         title = "Acceptation des conditions",
         blocks = listOf(
-            LegalBlock.Paragraph("En accédant au site memobook.fr et en utilisant le service MemoBook, vous acceptez sans réserve les présentes Conditions Générales d’Utilisation (CGU). Si vous n’acceptez pas ces conditions, veuillez ne pas utiliser le service."),
+            LegalBlock.Paragraph("En accédant au site memo-book.com et en utilisant le service MemoBook, vous acceptez sans réserve les présentes Conditions Générales d’Utilisation (CGU). Si vous n’acceptez pas ces conditions, veuillez ne pas utiliser le service."),
         )
     )
 

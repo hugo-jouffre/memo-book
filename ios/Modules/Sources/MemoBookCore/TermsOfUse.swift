@@ -1,6 +1,6 @@
 import Foundation
 
-// Les Conditions Générales d'Utilisation, recopiées du site memobook.fr
+// Les Conditions Générales d'Utilisation, recopiées du site memo-book.com
 // (Hugo, 17/09/2026), en dix chapitres. La forme est dans ``LegalDocument``.
 //
 // **Revues le 03/10/2026 (Hugo) pour l'abonnement mensuel** : le chapitre 5
@@ -12,7 +12,7 @@ import Foundation
 // renouvellement automatique et la résiliation d'un abonnement figurent dans
 // les conditions liées au paywall.
 //
-// ⚠️ **C'est le site qui fait foi** : memobook.fr doit publier le même texte,
+// ⚠️ **C'est le site qui fait foi** : memo-book.com doit publier le même texte,
 // le même jour que l'app.
 //
 // **Un seul texte pour les deux stores** (Clara, 02/11/2026) : le chapitre 5
@@ -57,7 +57,7 @@ public enum TermsOfUse {
         number: 2,
         title: "Acceptation des conditions",
         blocks: [
-            .paragraph("En accédant au site memobook.fr et en utilisant le service MemoBook, vous acceptez sans réserve les présentes Conditions Générales d’Utilisation (CGU). Si vous n’acceptez pas ces conditions, veuillez ne pas utiliser le service."),
+            .paragraph("En accédant au site memo-book.com et en utilisant le service MemoBook, vous acceptez sans réserve les présentes Conditions Générales d’Utilisation (CGU). Si vous n’acceptez pas ces conditions, veuillez ne pas utiliser le service."),
         ]
     )
 

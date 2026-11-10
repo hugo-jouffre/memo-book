@@ -87,7 +87,7 @@ la FAQ parlaient de l'App Store et de l'iPhone. Elles nomment désormais les
 deux stores dans la même phrase — « sur Android… sur iPhone… » — et les
 fichiers Kotlin et Swift portent **mot pour mot** le même texte.
 `StoreNeutralTextsTest.kt` et `StoreNeutralTextsTests.swift` tiennent la règle
-des deux côtés. memobook.fr publie ce texte-là, et lui seul.
+des deux côtés. memo-book.com publie ce texte-là, et lui seul.
 
 `POST /v1/profile/subscription/cancel` ne coupe plus localement un abonnement
 Google Play (B4) : il note la raison, comme pour StoreKit, et la résiliation se

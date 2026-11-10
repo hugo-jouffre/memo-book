@@ -8,7 +8,7 @@ import XCTest
 ///
 /// Ce fichier est le jumeau de `StoreNeutralTextsTest.kt` : les mêmes
 /// assertions, sur les mêmes phrases. Tant que les deux passent, les deux apps
-/// disent mot pour mot la même chose, et memobook.fr n'a qu'un texte à
+/// disent mot pour mot la même chose, et memo-book.com n'a qu'un texte à
 /// publier.
 final class StoreNeutralTextsTests: XCTestCase {
     private func texts(_ block: LegalBlock) -> [String] {

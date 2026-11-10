@@ -1,7 +1,7 @@
 import Foundation
 
 // Les documents légaux de l'app — conditions d'utilisation, politique de
-// confidentialité — recopiés du site memobook.fr. Ce fichier porte la
+// confidentialité — recopiés du site memo-book.com. Ce fichier porte la
 // **forme** ; chaque document a le sien (``TermsOfUse``, ``PrivacyPolicy``).
 //
 // C'est du contenu **juridique**, et il se lit autrement que le reste de l'app :
