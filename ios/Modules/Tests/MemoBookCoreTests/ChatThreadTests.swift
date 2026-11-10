@@ -406,15 +406,15 @@ final class ChatThreadDecodingTests: XCTestCase {
     /// que `services/dailyCredit.ts` le sert.
     func testDecodesTheDailyCreditEverywhereItIsServed() throws {
         let credit = """
-            "dailyCredit": { "isUnlimited": false, "limitMs": 300000, "usedMs": 120000,
-              "remainingMs": 180000, "textMsPerCharacter": 75, "warningRemainingMs": 30000,
+            "dailyCredit": { "isUnlimited": false, "limitMs": 120000, "usedMs": 48000,
+              "remainingMs": 72000, "textMsPerCharacter": 75, "warningRemainingMs": 30000,
               "urgentRemainingMs": 5000, "day": "2026-10-03", "resetsAt": "2026-10-03T22:00:00.000Z" }
             """
         let thread = try JSONDecoder.memoBook.decode(
             ChatThread.self,
             from: Data((#"{ "id": "t", "title": "T", "context": { "tripId": "t" }, "# + credit + "}").utf8)
         )
-        XCTAssertEqual(thread.dailyCredit?.remainingMs, 180_000)
+        XCTAssertEqual(thread.dailyCredit?.remainingMs, 72_000)
         XCTAssertEqual(thread.dailyCredit?.day, "2026-10-03")
         XCTAssertNotNil(thread.dailyCredit?.resetsAt)
 
@@ -425,7 +425,7 @@ final class ChatThreadDecodingTests: XCTestCase {
                     + credit + "}").utf8
             )
         )
-        XCTAssertEqual(update.dailyCredit?.usedMs, 120_000)
+        XCTAssertEqual(update.dailyCredit?.usedMs, 48_000)
 
         let receipt = try JSONDecoder.memoBook.decode(
             ChatTurnReceipt.self,

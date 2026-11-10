@@ -49,7 +49,7 @@ import java.util.Locale
  *    sur iOS (`hasFallenBackToServer`).
  * 4. **En dessous d'Android 13**, cette classe-ci : la forme d'onde seule.
  * 5. Rebrancher [transcript] sous la frise de la feuille, et vérifier sur deux
- *    téléphones réels qu'un vocal de cinq minutes arrive entier au serveur.
+ *    téléphones réels qu'un vocal de deux minutes arrive entier au serveur.
  *
  * @param locale la langue attendue — le français, et non celle du téléphone :
  *   quelqu'un dont le téléphone est en anglais raconte quand même en français.

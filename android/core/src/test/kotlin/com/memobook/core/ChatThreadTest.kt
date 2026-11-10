@@ -469,14 +469,14 @@ class ChatThreadDecodingTest {
     fun decodesTheDailyCreditEverywhereItIsServed() {
         val credit =
             """
-            "dailyCredit": { "isUnlimited": false, "limitMs": 300000, "usedMs": 120000,
-              "remainingMs": 180000, "textMsPerCharacter": 75, "warningRemainingMs": 30000,
+            "dailyCredit": { "isUnlimited": false, "limitMs": 120000, "usedMs": 48000,
+              "remainingMs": 72000, "textMsPerCharacter": 75, "warningRemainingMs": 30000,
               "urgentRemainingMs": 5000, "day": "2026-10-03", "resetsAt": "2026-10-03T22:00:00.000Z" }
             """
         val thread = MemoBookJson.decodeFromString<ChatThread>(
             """{ "id": "t", "title": "T", "context": { "tripId": "t" }, """ + credit + "}",
         )
-        assertEquals(180_000, thread.dailyCredit?.remainingMs)
+        assertEquals(72_000, thread.dailyCredit?.remainingMs)
         assertEquals("2026-10-03", thread.dailyCredit?.day)
         assertNotNull(thread.dailyCredit?.resetsAt)
 
@@ -484,7 +484,7 @@ class ChatThreadDecodingTest {
             """{ "messages": [], "suggestions": [], "turn": { "status": "idle" }, "now": "2026-10-03T10:00:00.000Z", """ +
                 credit + "}",
         )
-        assertEquals(120_000, update.dailyCredit?.usedMs)
+        assertEquals(48_000, update.dailyCredit?.usedMs)
 
         val receipt = MemoBookJson.decodeFromString<ChatTurnReceipt>(
             """{ "messages": [], "turn": { "status": "idle" }, "now": "2026-10-03T10:00:00.000Z", """ + credit + "}",

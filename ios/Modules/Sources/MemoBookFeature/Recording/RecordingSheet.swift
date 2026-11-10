@@ -262,7 +262,7 @@ struct RecordingSheet: View {
 /// Les textes de la feuille qui dépendent du crédit du jour.
 enum RecordingCopy {
     /// Le sous-titre. « Enregistre tout ce que tu veux » ne se dit plus qu'à
-    /// un abonné : à un voyage qui a cinq minutes par jour, ce serait mentir
+    /// un abonné : à un voyage qui a deux minutes par jour, ce serait mentir
     /// (Hugo, 03/10/2026).
     ///
     /// **Pas de chiffre** pour qui a encore du crédit (03/10/2026) : lu à

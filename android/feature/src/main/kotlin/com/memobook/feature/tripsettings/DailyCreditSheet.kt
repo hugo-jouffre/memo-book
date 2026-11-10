@@ -55,7 +55,7 @@ import com.memobook.feature.profile.dayAndMonth
  * ▬▬▬▬▬▬▬▬▬▬▬▬▬▭▭▭▭▭▭▭                  ← ce qui reste : verte, le rail rouge à zéro
  * soit environ 2 650 caractères à l’écrit
  *
- * (co-voyageurs) 5 minutes par jour pour ce voyage, à partager entre co-voyageurs.
+ * (co-voyageurs) 2 minutes par jour pour ce voyage, à partager entre co-voyageurs.
  * (micro)        Un vocal consomme sa durée ; à l’écrit, 800 caractères valent une minute…
  * (calendrier)   Le crédit se recharge chaque nuit, à minuit.
  *

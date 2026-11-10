@@ -27,7 +27,7 @@ import { hasUnlimitedAccess } from "./subscriptions.js";
  * **Le crédit du jour d'un voyage** (Hugo, 03/10/2026) — ce qui remplace les
  * trois étapes offertes et les limites de souvenirs.
  *
- * Tout le monde raconte gratuitement, dans la limite de **5 minutes par jour et
+ * Tout le monde raconte gratuitement, dans la limite de **2 minutes par jour et
  * par voyage**, partagées entre ses co-voyageurs **non abonnés**. Un seul
  * crédit pour le vocal et l'écrit : un vocal consomme sa durée **mesurée**
  * (`lib/mp4Duration.ts`), un texte 75 ms par caractère (800 caractères = une
@@ -36,8 +36,8 @@ import { hasUnlimitedAccess } from "./subscriptions.js";
  * second à ses co-voyageurs.
  *
  * **Le serveur est la seule vérité.** Les constantes ci-dessous partent avec
- * chaque solde (`serializeDailyCredit`) : l'app prévient à 4:30, pulse à 4:55
- * et coupe à 5:00 avec ce qu'elle reçoit, jamais avec un chiffre à elle.
+ * chaque solde (`serializeDailyCredit`) : l'app prévient à 1:30, pulse à 1:55
+ * et coupe à 2:00 avec ce qu'elle reçoit, jamais avec un chiffre à elle.
  *
  * Trois règles tiennent le décompte honnête :
  *
@@ -61,20 +61,26 @@ import { hasUnlimitedAccess } from "./subscriptions.js";
 // Le barème
 // ---------------------------------------------------------------------------
 
-/** Ce qu'un voyage peut raconter par jour : 5 minutes. */
-export const DAILY_CREDIT_LIMIT_MS = 300_000;
+/**
+ * Ce qu'un voyage peut raconter par jour : 2 minutes.
+ *
+ * **Cinq étaient trop** (Hugo, 03/11/2026) : « je ne raconte jamais plus de
+ * 2 min ». Le pot servait de plafond théorique plus que de mesure ; à deux
+ * minutes, il décrit ce qu'une journée raconte vraiment.
+ */
+export const DAILY_CREDIT_LIMIT_MS = 120_000;
 
 /**
- * Ce qu'un caractère écrit consomme : 800 caractères valent une minute, 4 000
- * les cinq. C'est à peu près ce qu'on dit en une minute de vocal — on ne
+ * Ce qu'un caractère écrit consomme : 800 caractères valent une minute, 1 600
+ * les deux. C'est à peu près ce qu'on dit en une minute de vocal — on ne
  * pousse ni vers l'un ni vers l'autre.
  */
 export const TEXT_MS_PER_CHARACTER = 75;
 
-/** Le reste à partir duquel la barre d'enregistrement prévient (à 4:30). */
+/** Le reste à partir duquel la barre d'enregistrement prévient (à 1:30). */
 export const WARNING_REMAINING_MS = 30_000;
 
-/** Le reste à partir duquel l'avertissement pulse (à 4:55). */
+/** Le reste à partir duquel l'avertissement pulse (à 1:55). */
 export const URGENT_REMAINING_MS = 5_000;
 
 /**
@@ -137,8 +143,8 @@ export const DAILY_CREDIT_EXHAUSTED = "daily_credit_exhausted";
 
 /**
  * Le code du refus d'un tour **plus long qu'une journée entière** de crédit
- * (03/10/2026) : un vocal de plus de 5:03 (`DAILY_CREDIT_LIMIT_MS +
- * VOICE_TOLERANCE_MS`), un texte de plus de 4 000 caractères. Le même `429`
+ * (03/10/2026) : un vocal de plus de 2:03 (`DAILY_CREDIT_LIMIT_MS +
+ * VOICE_TOLERANCE_MS`), un texte de plus de 1 600 caractères. Le même `429`
  * aurait fait attendre la file de l'app jusqu'à minuit, puis encore, chaque
  * nuit, sans fin : un pot neuf ne le laisse pas passer non plus. Ce code dit
  * à l'app de ne plus attendre demain — le tour attend l'illimité
@@ -154,7 +160,7 @@ export const DAILY_CREDIT_REFUSAL_MESSAGE =
  * Le message du refus **quand il reste du crédit**, mais pas assez pour ce
  * tour (03/10/2026) : un vocal enregistré hors ligne plus long que le reste,
  * un texte qui ne tient pas. Dire « épuisé » à côté d'une jauge qui montre
- * encore deux minutes serait faux. « Il partira demain » ne vaut que pour un
+ * encore trente secondes serait faux. « Il partira demain » ne vaut que pour un
  * client qui garde le tour (`holdsRefusedTurns`) ; les autres lisent
  * `shortRefusalForLostTurn`.
  */
@@ -179,22 +185,22 @@ export const CORRECTION_BEYOND_FREE_MESSAGE =
 
 /** Un vocal plus long qu'une journée entière de crédit (`DAILY_CREDIT_TOO_LONG`). */
 export const VOICE_TOO_LONG_MESSAGE =
-  "Ce vocal dépasse les 5 minutes d’une journée : il partira dès que tu passes en illimité.";
+  "Ce vocal dépasse les 2 minutes d’une journée : il partira dès que tu passes en illimité.";
 
 /**
  * Le même, pour un client qui **perd** le tour refusé (`holdsRefusedTurns`) :
  * rien ne partira, il faut le redire.
  */
 export const VOICE_TOO_LONG_LOST_MESSAGE =
-  "Ce vocal dépasse les 5 minutes d’une journée : redis-le en plus court, ou passe en illimité.";
+  "Ce vocal dépasse les 2 minutes d’une journée : redis-le en plus court, ou passe en illimité.";
 
-/** Un texte de plus de 4 000 caractères — l'espace fine insécable, comme l'app. */
+/** Un texte de plus de 1 600 caractères — l'espace fine insécable, comme l'app. */
 export const TEXT_TOO_LONG_MESSAGE =
-  "Ce message dépasse les 4 000 caractères d’une journée : raccourcis-le, ou passe en illimité.";
+  "Ce message dépasse les 1 600 caractères d’une journée : raccourcis-le, ou passe en illimité.";
 
-/** Une correction qui ajoute à elle seule plus de 4 000 caractères. */
+/** Une correction qui ajoute à elle seule plus de 1 600 caractères. */
 export const CORRECTION_TOO_LONG_MESSAGE =
-  "Cette correction ajoute plus de 4 000 caractères, les 5 minutes d’une journée : raccourcis-la, ou passe en illimité.";
+  "Cette correction ajoute plus de 1 600 caractères, les 2 minutes d’une journée : raccourcis-la, ou passe en illimité.";
 
 /** L'appel à l'action posé sous la bulle « reviens demain » (`callsToAction.ts`). */
 export const DAILY_CREDIT_CALL_TO_ACTION: CallToActionId = "daily_credit_subscribe";
@@ -514,8 +520,8 @@ export function exceedsDailyCredit(credit: DailyCredit, charge: DailyCharge): bo
 /**
  * Ce tour dépasse-t-il **une journée entière** de crédit ? Alors aucun pot
  * neuf ne le laissera passer : son refus porte `DAILY_CREDIT_TOO_LONG`, pas
- * « demain ». Un vocal garde sa tolérance ; un texte de 4 000 caractères
- * tient encore, un de 4 001 non.
+ * « demain ». Un vocal garde sa tolérance ; un texte de 1 600 caractères
+ * tient encore, un de 1 601 non.
  */
 export function exceedsWholeDailyCredit(charge: DailyCharge): boolean {
   const cost = chargeCostMs(charge);
@@ -806,9 +812,9 @@ export async function postExhaustedNotice(
  * transaction (le tour, lui, n'a rien écrit), puis le `429` avec le solde.
  *
  * **La bulle seulement si le pot est vraiment vide.** Un vocal enregistré
- * hors ligne qui dépasse un reste de deux minutes est refusé aussi — il attend
+ * hors ligne qui dépasse un reste de trente secondes est refusé aussi — il attend
  * demain dans la file de l'app —, mais écrire alors « ce voyage a déjà raconté
- * ses 5 minutes du jour » serait faux, et poser la bulle du jour trop tôt
+ * ses 2 minutes du jour » serait faux, et poser la bulle du jour trop tôt
  * l'empêcherait de paraître au vrai moment. De même pour un tour plus long
  * qu'une journée entière : la bulle ne vient que si le pot est vide, et le
  * refus dit ce qui se passe (`dailyCreditRefusal`).

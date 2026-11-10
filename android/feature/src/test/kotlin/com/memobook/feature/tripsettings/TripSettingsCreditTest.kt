@@ -62,19 +62,19 @@ class TripSettingsCreditTest {
             waitingTurns = { emptyList() },
         )
         model.load()
-        assertEquals(240_000, model.dailyCredit?.remainingMs)
+        assertEquals(60_000, model.dailyCredit?.remainingMs)
     }
 
     /** Un vocal envoyé hors ligne compte, comme dans la conversation. */
     @Test fun aSentTurnWaitingForTheNetworkCounts() = runTest {
-        val turn = voice(seconds = 90.0)
+        val turn = voice(seconds = 30.0)
         val model = TripSettingsModel(
             tripId = "rome",
             source = { settings(usedMs = 60_000) },
             waitingTurns = { listOf(turn) },
         )
         model.load()
-        assertEquals(150_000, model.dailyCredit?.remainingMs)
+        assertEquals(30_000, model.dailyCredit?.remainingMs)
     }
 
     /** Un tour retenu pour demain prendra le crédit de demain. */
@@ -89,6 +89,6 @@ class TripSettingsCreditTest {
             waitingTurns = { listOf(held) },
         )
         model.load()
-        assertEquals(240_000, model.dailyCredit?.remainingMs)
+        assertEquals(60_000, model.dailyCredit?.remainingMs)
     }
 }

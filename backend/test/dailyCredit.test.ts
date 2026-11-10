@@ -49,7 +49,7 @@ import {
 /**
  * **Le crédit du jour** (Hugo, 03/10/2026) — `services/dailyCredit.ts`.
  *
- * 5 minutes par jour et par voyage, partagées entre les co-voyageurs non
+ * 2 minutes par jour et par voyage, partagées entre les co-voyageurs non
  * abonnés ; un vocal consomme sa durée mesurée, un texte 75 ms par caractère ;
  * un abonné ne consomme rien. Ce qui est vérifié ici, c'est ce qu'aucune app
  * ne peut contourner : la mesure, le décompte sous le verrou du voyage, le
@@ -198,7 +198,7 @@ async function sendPhoto(memoId: string) {
  * Un vocal de `seconds` secondes **pour le serveur** : le vocal de 7 s du
  * dépôt, dont `stts` et `stsz` annoncent autant de paquets AAC qu'il en faut.
  * Le serveur ne mesure que les tables ; le transcripteur simulé ne décode
- * rien. De quoi passer les 5:03 sans commiter cinq minutes d'audio.
+ * rien. De quoi passer les 2:03 sans commiter deux minutes d'audio.
  */
 function voiceLasting(seconds: number): { content: Buffer; durationMs: number } {
   const content = Buffer.from(VOICE_FIXTURES.long);
@@ -253,7 +253,7 @@ describe("le barème", () => {
     // unités UTF-16.
     expect(countCharacters("été 🇫🇷")).toBe(6);
     expect(800 * TEXT_MS_PER_CHARACTER).toBe(60_000);
-    expect(4_000 * TEXT_MS_PER_CHARACTER).toBe(DAILY_CREDIT_LIMIT_MS);
+    expect(1_600 * TEXT_MS_PER_CHARACTER).toBe(DAILY_CREDIT_LIMIT_MS);
   });
 
   it("ne laisse gratuite qu'une puce envoyée telle quelle", () => {
@@ -317,9 +317,9 @@ describe("un texte", () => {
     const day = today();
     expect(response.json<ReceiptJson>().dailyCredit).toEqual({
       isUnlimited: false,
-      limitMs: 300_000,
+      limitMs: 120_000,
       usedMs: 60_000,
-      remainingMs: 240_000,
+      remainingMs: 60_000,
       textMsPerCharacter: 75,
       warningRemainingMs: WARNING_REMAINING_MS,
       urgentRemainingMs: URGENT_REMAINING_MS,
@@ -355,7 +355,7 @@ describe("un texte", () => {
     // Il reste 750 ms : le refus ne dit pas « épuisé » (03/10/2026).
     expect(body.message).toBe(DAILY_CREDIT_SHORT_MESSAGE);
     expect(body.message).not.toContain("épuisé");
-    expect(body.dailyCredit).toMatchObject({ isUnlimited: false, remainingMs: 750, limitMs: 300_000 });
+    expect(body.dailyCredit).toMatchObject({ isUnlimited: false, remainingMs: 750, limitMs: 120_000 });
     expect(body.dailyCredit.resetsAt).toBe(localMidnightAfter(today(), PARIS).toISOString());
     // Rien d'écrit, rien de compté.
     expect(await harness.prisma.chatMessage.findUnique({ where: { id } })).toBeNull();
@@ -371,9 +371,9 @@ describe("un texte", () => {
     const memo = await tripOf(owner.accountId);
     await spend(memo.id, DAILY_CREDIT_LIMIT_MS - 90_000);
 
-    // 2 000 caractères : 2:30, quand il reste 1:30. Sans `X-Time-Zone`, la
+    // 1 400 caractères : 1:45, quand il reste 1:30. Sans `X-Time-Zone`, la
     // file du client efface le tour refusé — « il partira demain » serait faux.
-    const { response } = await say(memo.id, "l".repeat(2_000));
+    const { response } = await say(memo.id, "l".repeat(1_400));
 
     expect(response.statusCode).toBe(429);
     const body = response.json<RefusalJson>();
@@ -385,7 +385,7 @@ describe("un texte", () => {
     expect(body.dailyCredit.remainingMs).toBe(90_000);
 
     // Le même tour, envoyé par l'app de ce lot, partira demain.
-    const held = await say(memo.id, "l".repeat(2_000), NEW_APP);
+    const held = await say(memo.id, "l".repeat(1_400), NEW_APP);
     expect(held.response.json<RefusalJson>().message).toBe(DAILY_CREDIT_SHORT_MESSAGE);
   });
 });
@@ -458,7 +458,7 @@ describe("un vocal", () => {
     expect(response.json<RefusalJson>().dailyCredit.remainingMs).toBe(1_000);
     expect(await harness.prisma.chatMessage.findUnique({ where: { id } })).toBeNull();
     expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(0);
-    // Il reste une seconde : MEMO ne dit pas « tes 5 minutes sont racontées ».
+    // Il reste une seconde : MEMO ne dit pas « tes 2 minutes sont racontées ».
     expect(await noticeCount(memo.id)).toBe(0);
     expect((await usage(memo.id))?.limitNotifiedAt).toBeNull();
   });
@@ -789,7 +789,7 @@ describe("les écrans", () => {
     expect(settings.statusCode).toBe(200);
     const body = settings.json<{ dailyCredit: SerializedDailyCredit; memory?: unknown }>();
     expect(body).not.toHaveProperty("memory");
-    expect(body.dailyCredit).toMatchObject({ isUnlimited: false, usedMs: 90_000, remainingMs: 210_000 });
+    expect(body.dailyCredit).toMatchObject({ isUnlimited: false, usedMs: 90_000, remainingMs: 30_000 });
 
     const patched = await harness.app.inject({
       method: "PATCH",
@@ -878,12 +878,12 @@ describe("les écrans", () => {
 
 /**
  * **Un tour plus long qu'une journée entière** (03/10/2026) : un vocal de plus
- * de 5:03, un texte de plus de 4 000 caractères. Un pot neuf ne le laisserait
+ * de 2:03, un texte de plus de 1 600 caractères. Un pot neuf ne le laisserait
  * pas passer non plus : son refus porte un code à lui, que la file de l'app ne
  * renvoie pas chaque nuit.
  */
 describe("un tour plus long qu'une journée", () => {
-  it("un vocal de plus de 5:03 est refusé par `daily_credit_too_long`, même sur un pot neuf", async () => {
+  it("un vocal de plus de 2:03 est refusé par `daily_credit_too_long`, même sur un pot neuf", async () => {
     const memo = await tripOf(owner.accountId);
     const voice = voiceLasting(7 * 60);
     expect(voice.durationMs).toBeGreaterThan(DAILY_CREDIT_LIMIT_MS + VOICE_TOLERANCE_MS);
@@ -907,9 +907,9 @@ describe("un tour plus long qu'une journée", () => {
     });
   });
 
-  it("un vocal de 5:02 passe encore sur un pot neuf, et le vide", async () => {
+  it("un vocal de 2:02 passe encore sur un pot neuf, et le vide", async () => {
     const memo = await tripOf(owner.accountId);
-    const voice = voiceLasting(302);
+    const voice = voiceLasting(122);
     expect(voice.durationMs).toBeLessThanOrEqual(DAILY_CREDIT_LIMIT_MS + VOICE_TOLERANCE_MS);
 
     const { response } = await speak(memo.id, voice.content);
@@ -919,10 +919,10 @@ describe("un tour plus long qu'une journée", () => {
     expect(await usage(memo.id)).toMatchObject({ voiceMs: voice.durationMs });
   });
 
-  it("un texte de plus de 4 000 caractères aussi ; 4 000 tiennent", async () => {
+  it("un texte de plus de 1 600 caractères aussi ; 1 600 tiennent", async () => {
     const memo = await tripOf(owner.accountId);
 
-    const tooLong = await say(memo.id, "f".repeat(4_001));
+    const tooLong = await say(memo.id, "f".repeat(1_601));
     expect(tooLong.response.statusCode).toBe(429);
     expect(tooLong.response.json<RefusalJson>()).toMatchObject({
       error: "daily_credit_too_long",
@@ -930,7 +930,7 @@ describe("un tour plus long qu'une journée", () => {
     });
     expect(await usage(memo.id)).toBeNull();
 
-    const exact = await say(memo.id, "f".repeat(4_000));
+    const exact = await say(memo.id, "f".repeat(1_600));
     expect(exact.response.statusCode).toBe(201);
     expect(exact.response.json<ReceiptJson>().dailyCredit.remainingMs).toBe(0);
   });
@@ -996,17 +996,17 @@ describe("une correction à la main", () => {
   it("refusée faute de crédit dit ce qui reste, sans « épuisé » ni « partira demain »", async () => {
     const memo = await tripOf(owner.accountId);
     const entry = await entryOf(memo.id, "h".repeat(10));
-    await spend(memo.id, DAILY_CREDIT_LIMIT_MS - 120_000);
+    await spend(memo.id, DAILY_CREDIT_LIMIT_MS - 60_000);
 
-    // 2 000 caractères ajoutés : 200 offerts, 1 800 à payer — 2:15, quand il reste 2:00.
-    const response = await patch(entry.id, "h".repeat(2_010));
+    // 1 200 caractères ajoutés : 200 offerts, 1 000 à payer — 1:15, quand il reste 1:00.
+    const response = await patch(entry.id, "h".repeat(1_200));
 
     expect(response.statusCode).toBe(429);
     expect(response.json<RefusalJson>()).toMatchObject({
       error: "daily_credit_exhausted",
       message: CORRECTION_SHORT_MESSAGE,
     });
-    expect(response.json<RefusalJson>().dailyCredit.remainingMs).toBe(120_000);
+    expect(response.json<RefusalJson>().dailyCredit.remainingMs).toBe(60_000);
     expect((await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } })).editedText).toBeNull();
   });
 
@@ -1389,7 +1389,7 @@ describe("un vocal muet", () => {
     const thread = await readThread(memo.id);
     expect(thread.dailyCredit.usedMs).toBe(60_000);
     expect(thread.messages.map((message) => message.body.text)).toContain(
-      "Ce vocal était silencieux, sa durée n’est pas déduite de tes 5 min d’enregistrement gratuit par jour.",
+      "Ce vocal était silencieux, sa durée n’est pas déduite de tes 2 min d’enregistrement gratuit par jour.",
     );
 
     // Rejoué : rien de plus n'est rendu.

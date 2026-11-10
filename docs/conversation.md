@@ -306,13 +306,13 @@ de souvenirs hebdomadaires, abonnement à la semaine — est archivé sur la bra
 
 ### Le crédit du jour, par voyage
 
-**Chaque voyage peut raconter 5 minutes par jour**, partagées entre ses
+**Chaque voyage peut raconter 2 minutes par jour**, partagées entre ses
 co-voyageurs qui ne sont pas abonnés. **Un seul crédit** pour l'oral et l'écrit :
 
 | Ce qu'on envoie | Ce que ça consomme |
 |---|---|
 | Un vocal — chat, accueil, contexte du voyage compris | Sa durée, **mesurée par le serveur** dans le fichier (jamais celle que l'app déclare) |
-| Un texte libre — récit, précision, contexte du voyage | 75 ms par caractère : **800 caractères = 1 minute**, 4 000 = 5 minutes |
+| Un texte libre — récit, précision, contexte du voyage | 75 ms par caractère : **800 caractères = 1 minute**, 1 600 = 2 minutes |
 | Un texte corrigé à la main | Rien jusqu'à **200 caractères modifiés par fiche**, cumulés — pot vide compris ; au-delà, chaque caractère modifié paie comme un texte, et pot vide la correction passe par l'illimité (Hugo, 19/10/2026, QA D8) |
 | Un vocal muet (transcription vide) | Rien : sa durée revient au pot, et MEMO le dit (Hugo, 19/10/2026, QA D9) |
 | Une puce envoyée telle quelle, une commande silencieuse, des photos | Rien |
@@ -321,8 +321,8 @@ Le jour est celui de **qui raconte**, à son fuseau, et ne recule jamais ; le
 crédit **se recharge à minuit**. Un vocal peut dépasser le reste de 3 secondes
 au plus ; au-delà, ou crédit épuisé, le tour est refusé (`429
 daily_credit_exhausted`) et l'app le garde en file pour le lendemain. Un tour
-qui coûte plus que la journée entière — un vocal de plus de 5 min 03, un texte
-de plus de 4 000 caractères — ne passera jamais : il est refusé à part (`429
+qui coûte plus que la journée entière — un vocal de plus de 2 min 03, un texte
+de plus de 1 600 caractères — ne passera jamais : il est refusé à part (`429
 daily_credit_too_long`), et l'app le garde jusqu'à ce que le compte passe en
 illimité au lieu de le renvoyer chaque nuit ; sa bulle propose aussi de le
 supprimer, après confirmation. « Il partira demain » et « dès que
@@ -352,7 +352,7 @@ Quand un tour fait tomber le crédit du voyage à zéro, **ou** quand un tour es
 refusé faute de crédit, **le serveur** — pas le modèle — pose une bulle de MEMO
 (`model: "scripted"`), une fois par voyage et par jour (`limitNotifiedAt`) :
 
-> Quelle journée ! Ce voyage a déjà raconté ses 5 minutes du jour. Je garde tout
+> Quelle journée ! Ce voyage a déjà raconté ses 2 minutes du jour. Je garde tout
 > précieusement : reviens demain pour la suite, le crédit se recharge à minuit.
 
 Elle porte le bouton `daily_credit_subscribe` (« Raconter sans limite », sous
@@ -372,7 +372,7 @@ près (`DailyCreditCopy.exhaustedMessage`), en attendant celle du serveur.
 la limite. Il dit les faits ci-dessus, sans vendre — ni superlatif, ni urgence,
 ni culpabilité (« tu as beaucoup parlé » ne se dit pas). Il ne connaît pas le
 reste chiffré du jour : il renvoie aux réglages du voyage. À un abonné, il ne
-décrit pas les 5 minutes comme une règle qui le concerne. Le moteur de règles
+décrit pas les 2 minutes comme une règle qui le concerne. Le moteur de règles
 répond la même chose (`ANSWERS.subscription`, `ANSWERS.subscriptionUnlimited`).
 Le détail est dans `agents/agent-conversation.md` § 3 bis.
 
@@ -841,6 +841,7 @@ exactement ce que le modèle doit faire mieux.
 | 22/09/2026 | Effort de réflexion bas pour la conversation (quelqu'un attend), élevé pour la rédaction (personne ne la regarde écrire) | reco Claude |
 | 02/10/2026 | Un passage que l'écrivain n'a pas compris ne s'imprime pas : il se cite dans la bulle « Il te convient ? », jamais dans une question de plus | reco Claude |
 | 03/10/2026 | Crédit du jour par voyage (5 minutes, oral et écrit, photos gratuites, recharge à minuit) ; abonnement à 4,99 €/mois, illimité pour l'abonné seul ; plus d'étapes offertes, de limites de souvenirs ni d'abonnement à la semaine | Hugo |
+| 10/11/2026 | Le crédit du jour passe de 5 à **2 minutes** (« je ne raconte jamais plus de 2 min ») : l'écrit suit le même pot, donc 4 000 caractères deviennent 1 600. Textes, CGU, confidentialité, FAQ et prompt de MEMO repris ensemble | Hugo |
 | 03/10/2026 | La bulle « reviens demain » est posée par le serveur, une fois par voyage et par jour, avec le bouton `daily_credit_subscribe` ; un abonné ne la voit pas | Hugo |
 | 03/10/2026 | MEMO dit les faits du crédit et de l'abonnement quand on les lui demande, jamais de lui-même, sans culpabiliser | Hugo |
 | 03/10/2026 | Un bouton au plus sous une bulle, pris dans un catalogue fermé ; l'IA ne choisit que parmi ceux que le code autorise au tour, le code jette le reste | Hugo |

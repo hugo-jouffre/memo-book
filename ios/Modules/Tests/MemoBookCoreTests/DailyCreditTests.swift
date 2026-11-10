@@ -7,10 +7,10 @@ import XCTest
 /// d'enregistrement, le coût d'un texte, et les phrases qui le disent.
 ///
 /// Le serveur tranche (`services/dailyCredit.ts`) ; ici on ne teste que ce que
-/// l'app en déduit pour prévenir — à 4:30, à 4:55, à 5:00 — et ce qu'elle
+/// l'app en déduit pour prévenir — à 1:30, à 1:55, à 2:00 — et ce qu'elle
 /// affiche dans les réglages du voyage.
 final class DailyCreditTests: XCTestCase {
-    /// Un crédit du catalogue (5 min, 75 ms par caractère) dont il reste
+    /// Un crédit du catalogue (2 min, 75 ms par caractère) dont il reste
     /// `remaining` millisecondes.
     private func credit(remaining: Int, isUnlimited: Bool = false) -> DailyCredit {
         DailyCredit(isUnlimited: isUnlimited, usedMs: DailyCredit.Catalog.limitMs - remaining)
@@ -21,15 +21,15 @@ final class DailyCreditTests: XCTestCase {
     func testRemainingNeverGoesNegative() {
         // Un vocal accepté dans la tolérance (3 s) peut faire dépasser : la
         // ligne doit lire « Plus rien », pas « -2 s ».
-        let credit = DailyCredit(usedMs: 303_000)
+        let credit = DailyCredit(usedMs: 123_000)
         XCTAssertEqual(credit.remainingMs, 0)
         XCTAssertEqual(credit.fraction, 1)
         XCTAssertTrue(credit.isExhausted)
     }
 
     func testFractionIsWhatTheTripHasAlreadyTold() {
-        let credit = DailyCredit(usedMs: 100_000)
-        XCTAssertEqual(credit.remainingMs, 200_000)
+        let credit = DailyCredit(usedMs: 40_000)
+        XCTAssertEqual(credit.remainingMs, 80_000)
         XCTAssertEqual(credit.fraction, 1.0 / 3.0, accuracy: 0.0001)
         XCTAssertFalse(credit.isExhausted)
     }
@@ -61,7 +61,7 @@ final class DailyCreditTests: XCTestCase {
     }
 
     func testPhasesFollowTheServedThresholds() {
-        let full = credit(remaining: 300_000)
+        let full = credit(remaining: 120_000)
         XCTAssertEqual(full.phase(remainingMs: 30_001), .calm)
         XCTAssertEqual(full.phase(remainingMs: 30_000), .warning)
         XCTAssertEqual(full.phase(remainingMs: 5_001), .warning)
@@ -138,12 +138,12 @@ final class DailyCreditTests: XCTestCase {
     func testTheSlackTravelsWithTheBalance() throws {
         let served = try JSONDecoder.memoBook.decode(
             DailyCredit.self,
-            from: Data(#"{"usedMs":299400,"exhaustionSlackMs":500}"#.utf8)
+            from: Data(#"{"usedMs":119400,"exhaustionSlackMs":500}"#.utf8)
         )
         XCTAssertEqual(served.exhaustionSlackMs, 500)
         XCTAssertFalse(served.isExhausted, "600 ms, au-dessus du seuil servi.")
 
-        let older = try JSONDecoder.memoBook.decode(DailyCredit.self, from: Data(#"{"usedMs":299400}"#.utf8))
+        let older = try JSONDecoder.memoBook.decode(DailyCredit.self, from: Data(#"{"usedMs":119400}"#.utf8))
         XCTAssertEqual(older.exhaustionSlackMs, 1_000)
         XCTAssertTrue(older.isExhausted)
     }
@@ -164,18 +164,18 @@ final class DailyCreditTests: XCTestCase {
     /// Le jour le plus tardif l'emporte, dans un sens comme dans l'autre :
     /// le crédit épuisé d'hier ne passe pas devant celui de ce matin.
     func testTheLaterDayWins() {
-        let yesterday = DailyCredit(usedMs: 300_000, day: "2026-10-02", resetsAt: midnight(after: 2))
+        let yesterday = DailyCredit(usedMs: 120_000, day: "2026-10-02", resetsAt: midnight(after: 2))
         let today = DailyCredit(usedMs: 60_000, day: "2026-10-03", resetsAt: midnight(after: 3))
         XCTAssertEqual(yesterday.merged(with: today), today)
         XCTAssertEqual(today.merged(with: yesterday), today)
     }
 
     /// Le même jour, le plus consommé l'emporte : la consommation d'une
-    /// journée ne fait que croître. Le cache du matin (5:00) ne passe pas
-    /// devant celui de l'accueil relu après un vocal de 4 minutes.
+    /// journée ne fait que croître. Le cache du matin (2:00) ne passe pas
+    /// devant celui de l'accueil relu après un vocal d'une minute.
     func testOnTheSameDayTheMostSpentWins() {
         let morning = DailyCredit(usedMs: 0, day: "2026-10-03", resetsAt: midnight(after: 3))
-        let afternoon = DailyCredit(usedMs: 240_000, day: "2026-10-03", resetsAt: midnight(after: 3))
+        let afternoon = DailyCredit(usedMs: 60_000, day: "2026-10-03", resetsAt: midnight(after: 3))
         XCTAssertEqual(morning.merged(with: afternoon).remainingMs, 60_000)
         XCTAssertEqual(afternoon.merged(with: morning).remainingMs, 60_000)
     }
@@ -196,7 +196,7 @@ final class DailyCreditTests: XCTestCase {
     /// nouveau le plus consommé.
     func testARefreshedCreditIsRankedByItsRecharge() {
         let morning = paris.date(from: DateComponents(year: 2026, month: 10, day: 3, hour: 9))!
-        let yesterday = DailyCredit(usedMs: 300_000, day: "2026-10-02", resetsAt: midnight(after: 2))
+        let yesterday = DailyCredit(usedMs: 120_000, day: "2026-10-02", resetsAt: midnight(after: 2))
         let refreshed = yesterday.refreshed(now: morning, calendar: paris)
         XCTAssertNil(refreshed.day)
         XCTAssertEqual(yesterday.merged(with: refreshed).usedMs, 0)
@@ -226,8 +226,8 @@ final class DailyCreditTests: XCTestCase {
         let midnight = calendar.date(from: DateComponents(year: 2026, month: 10, day: 4))!
         let morning = calendar.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: 9))!
         let yesterday = DailyCredit(
-            limitMs: 300_000,
-            usedMs: 300_000,
+            limitMs: 120_000,
+            usedMs: 120_000,
             textMsPerCharacter: 60,
             day: "2026-10-03",
             resetsAt: midnight
@@ -267,8 +267,8 @@ final class DailyCreditTests: XCTestCase {
     /// tolérance du serveur pour un vocal.
     func testTheLongestTurnADayAllows() {
         let credit = DailyCredit()
-        XCTAssertEqual(credit.limitWithTolerance(forVoice: true), 303_000)
-        XCTAssertEqual(credit.limitWithTolerance(forVoice: false), 300_000)
+        XCTAssertEqual(credit.limitWithTolerance(forVoice: true), 123_000)
+        XCTAssertEqual(credit.limitWithTolerance(forVoice: false), 120_000)
     }
 
     // MARK: - L'écrit
@@ -276,9 +276,9 @@ final class DailyCreditTests: XCTestCase {
     func testATextCostsSeventyFiveMillisecondsPerCharacter() {
         let credit = DailyCredit()
         XCTAssertEqual(credit.cost(ofText: "abc"), 225)
-        // 800 caractères valent une minute ; 4 000, tout le crédit.
+        // 800 caractères valent une minute ; 1 600, tout le crédit.
         XCTAssertEqual(credit.cost(ofText: String(repeating: "a", count: 800)), 60_000)
-        XCTAssertEqual(credit.cost(ofText: String(repeating: "a", count: 4_000)), 300_000)
+        XCTAssertEqual(credit.cost(ofText: String(repeating: "a", count: 1_600)), 120_000)
     }
 
     func testCharactersAreCountedInUnicodeScalarsLikeTheServer() {
@@ -315,9 +315,9 @@ final class DailyCreditTests: XCTestCase {
             #"""
             {
               "isUnlimited": false,
-              "limitMs": 300000,
-              "usedMs": 120000,
-              "remainingMs": 180000,
+              "limitMs": 120000,
+              "usedMs": 48000,
+              "remainingMs": 72000,
               "textMsPerCharacter": 75,
               "warningRemainingMs": 30000,
               "urgentRemainingMs": 5000,
@@ -329,8 +329,8 @@ final class DailyCreditTests: XCTestCase {
         let credit = try JSONDecoder.memoBook.decode(DailyCredit.self, from: json)
 
         XCTAssertFalse(credit.isUnlimited)
-        XCTAssertEqual(credit.usedMs, 120_000)
-        XCTAssertEqual(credit.remainingMs, 180_000)
+        XCTAssertEqual(credit.usedMs, 48_000)
+        XCTAssertEqual(credit.remainingMs, 72_000)
         XCTAssertEqual(credit.day, "2026-10-03")
         XCTAssertEqual(credit.resetsAt, ISO8601DateFormatter.memoBookDate(from: "2026-10-03T22:00:00.000Z"))
     }
@@ -343,7 +343,7 @@ final class DailyCreditTests: XCTestCase {
 
         XCTAssertFalse(credit.isUnlimited)
         XCTAssertEqual(credit.usedMs, 42_000)
-        XCTAssertEqual(credit.limitMs, 300_000)
+        XCTAssertEqual(credit.limitMs, 120_000)
         XCTAssertEqual(credit.textMsPerCharacter, 75)
         XCTAssertEqual(credit.warningRemainingMs, 30_000)
         XCTAssertEqual(credit.urgentRemainingMs, 5_000)
@@ -386,7 +386,7 @@ final class DailyCreditTests: XCTestCase {
     // MARK: - Les textes
 
     func testDurations() {
-        XCTAssertEqual(DailyCreditCopy.duration(300_000), "5 min")
+        XCTAssertEqual(DailyCreditCopy.duration(120_000), "2 min")
         XCTAssertEqual(DailyCreditCopy.duration(200_000), "3 min 20")
         XCTAssertEqual(DailyCreditCopy.duration(185_000), "3 min 05")
         XCTAssertEqual(DailyCreditCopy.duration(45_000), "45 s")
@@ -412,8 +412,8 @@ final class DailyCreditTests: XCTestCase {
         XCTAssertEqual(DailyCreditCopy.rowValue(credit(remaining: 0)), "Épuisé")
         XCTAssertEqual(DailyCreditCopy.rowValue(credit(remaining: 0, isUnlimited: true)), "Illimité")
         XCTAssertEqual(
-            DailyCreditCopy.rowCaption(limitMs: 300_000),
-            "5 min par jour pour tout le voyage"
+            DailyCreditCopy.rowCaption(limitMs: 120_000),
+            "2 min par jour pour tout le voyage"
         )
     }
 
@@ -435,15 +435,15 @@ final class DailyCreditTests: XCTestCase {
 
     func testSheetReadsTheScaleFromTheBalance() {
         XCTAssertEqual(
-            DailyCreditCopy.Sheet.sharing(limitMs: 300_000),
-            "5 minutes par jour pour ce voyage, à partager entre les co-voyageurs qui ne sont pas abonnés."
+            DailyCreditCopy.Sheet.sharing(limitMs: 120_000),
+            "2 minutes par jour pour ce voyage, à partager entre les co-voyageurs qui ne sont pas abonnés."
         )
         XCTAssertTrue(
             DailyCreditCopy.Sheet.consumption(textMsPerCharacter: 75).contains("800 caractères valent une minute")
         )
         XCTAssertEqual(DailyCreditCopy.Sheet.spelledDuration(60_000), "1 minute")
         XCTAssertEqual(DailyCreditCopy.Sheet.spelledDuration(90_000), "1 min 30")
-        XCTAssertTrue(DailyCreditCopy.Sheet.unlimitedExplanation(limitMs: 300_000).contains("les 5 minutes du jour"))
+        XCTAssertTrue(DailyCreditCopy.Sheet.unlimitedExplanation(limitMs: 120_000).contains("les 2 minutes du jour"))
     }
 
     func testWarningCountsDown() {
@@ -467,7 +467,7 @@ final class DailyCreditTests: XCTestCase {
             DailyCreditCopy.Sheet.recharge,
             DailyCreditCopy.Sheet.remaining(DailyCredit()),
             DailyCreditCopy.Sheet.consumption(textMsPerCharacter: 75),
-            DailyCreditCopy.Sheet.unlimitedExplanation(limitMs: 300_000),
+            DailyCreditCopy.Sheet.unlimitedExplanation(limitMs: 120_000),
         ]
         for text in texts {
             XCTAssertFalse(text.contains("'"), "apostrophe droite dans « \(text) »")

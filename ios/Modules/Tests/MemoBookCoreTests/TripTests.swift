@@ -148,7 +148,7 @@ final class TripTests: XCTestCase {
           "id": "rome", "title": "Rome", "stage": "ongoing",
           "stats": { "dayCount": 3, "distanceKilometres": 0, "photoCount": 0 },
           "companions": [], "isPrintable": false,
-          "dailyCredit": { "isUnlimited": false, "limitMs": 300000, "usedMs": 270000, "remainingMs": 30000,
+          "dailyCredit": { "isUnlimited": false, "limitMs": 120000, "usedMs": 90000, "remainingMs": 30000,
                            "textMsPerCharacter": 75, "warningRemainingMs": 30000, "urgentRemainingMs": 5000,
                            "day": "2026-10-03", "resetsAt": "2026-10-03T22:00:00.000Z" }
         }

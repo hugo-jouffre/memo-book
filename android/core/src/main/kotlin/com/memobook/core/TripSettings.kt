@@ -150,7 +150,7 @@ data class TripSettings(
      * Le **crédit du jour** de ce voyage, lu par ce compte — voir
      * [DailyCredit].
      *
-     * Il appartient au voyage (5 minutes par jour, partagées entre les
+     * Il appartient au voyage (2 minutes par jour, partagées entre les
      * co-voyageurs non abonnés), et `isUnlimited` dit si **celui qui lit** est
      * abonné. Les réglages en portent la ligne « Crédit du jour » : c'est
      * désormais le levier de l'abonnement, toujours visible pour un

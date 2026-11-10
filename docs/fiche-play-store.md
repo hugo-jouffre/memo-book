@@ -86,7 +86,7 @@ formulaire ci-dessous, avec d'autres cases.
 > • Partage ton carnet en PDF, par lien ou sur WhatsApp.
 >
 > PRIX
-> • L’app est gratuite : chaque voyage dispose de 5 minutes de récit par jour, à partager entre ses co-voyageurs non abonnés. Les photos ne comptent pas.
+> • L’app est gratuite : chaque voyage dispose de 2 minutes de récit par jour, à partager entre ses co-voyageurs non abonnés. Les photos ne comptent pas.
 > • L’abonnement MemoBook, à 4,99 € par mois via Google Play, rend ton récit illimité. Il se résilie à tout moment dans le Play Store, et MemoBook te le rappelle quand ton voyage se termine.
 > • Le carnet imprimé est vendu séparément, au moment de la commande.
 >

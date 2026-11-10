@@ -182,7 +182,7 @@ public struct Connector: Codable, Sendable, Hashable, Identifiable {
 /// L'abonnement, tel que les feuilles le présentent.
 ///
 /// **4,99 € par mois, et l'illimité pour l'abonné seul** (Hugo, 03/10/2026) :
-/// sans abonnement, chaque voyage raconte cinq minutes par jour (voir
+/// sans abonnement, chaque voyage raconte deux minutes par jour (voir
 /// ``DailyCredit``) ; abonné, on raconte sans compter. Il ne se coupe pas tout
 /// seul — Apple le renouvelle —, alors l'app propose de le résilier à la fin du
 /// voyage, et c'est pour ça que ce modèle porte le voyage autant que le prix :

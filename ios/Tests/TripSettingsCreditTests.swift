@@ -38,19 +38,19 @@ final class TripSettingsCreditTests: XCTestCase {
             waitingTurns: { [] }
         )
         await model.load()
-        XCTAssertEqual(model.dailyCredit?.remainingMs, 240_000)
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 60_000)
     }
 
     /// Un vocal envoyé hors ligne compte, comme dans la conversation.
     func testASentTurnWaitingForTheNetworkCounts() async {
-        let turn = voice(seconds: 90)
+        let turn = voice(seconds: 30)
         let model = TripSettingsModel(
             tripId: "rome",
             source: { _ in self.settings(usedMs: 60_000) },
             waitingTurns: { [turn] }
         )
         await model.load()
-        XCTAssertEqual(model.dailyCredit?.remainingMs, 150_000)
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 30_000)
     }
 
     /// Un tour retenu pour demain prendra le crédit de demain.
@@ -62,6 +62,6 @@ final class TripSettingsCreditTests: XCTestCase {
             waitingTurns: { [held] }
         )
         await model.load()
-        XCTAssertEqual(model.dailyCredit?.remainingMs, 240_000)
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 60_000)
     }
 }

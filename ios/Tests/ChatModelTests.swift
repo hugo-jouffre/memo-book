@@ -1243,7 +1243,7 @@ final class ChatModelTests: XCTestCase {
 
         XCTAssertTrue(model.isOffline)
         XCTAssertNil(model.dailyCredit, "Rien de servi.")
-        XCTAssertEqual(model.credit?.remainingMs, 240_000, "Cinq minutes, moins la minute qui attend.")
+        XCTAssertEqual(model.credit?.remainingMs, 60_000, "Deux minutes, moins la minute qui attend.")
         XCTAssertEqual(model.credit?.isUnlimited, false)
         model.composer = .writing
         model.draft = String(repeating: "a", count: 3_201)

@@ -74,7 +74,7 @@ que lit l'équipe.
 >
 > **The app is in French only.**
 >
-> **Subscription**: free accounts get 5 minutes of storytelling per day per
+> **Subscription**: free accounts get 2 minutes of storytelling per day per
 > trip. The monthly subscription (4,99 €/month) removes this limit. To see the
 > offer: Profile ▸ "Découvrir l'abonnement", or Trip ▸ settings (gear) ▸
 > "Crédit du jour" ▸ "Passer en illimité". Purchases work with a Sandbox

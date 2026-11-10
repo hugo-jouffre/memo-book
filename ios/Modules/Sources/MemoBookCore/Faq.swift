@@ -10,7 +10,7 @@ import Foundation
 //
 // **Le paquet « Prix et paiement » a été réécrit le 03/10/2026** (Hugo), avec
 // le crédit du jour : plus d'étapes offertes ni d'abonnement à la semaine. Le
-// récit est gratuit dans la limite de cinq minutes par jour et par voyage,
+// récit est gratuit dans la limite de deux minutes par jour et par voyage,
 // l'abonnement mensuel le rend illimité. Une question de plus
 // (`faq.prix.credit-du-jour`), deux variables de plus, et les réponses de
 // « Découvrir » et « Raconter » qui promettaient de parler sans compter
@@ -83,7 +83,7 @@ public struct FaqVariables: Sendable, Hashable {
     /// paywall ; le prix qui fait foi à l'achat est celui que StoreKit affiche.
     public var monthlyPrice: String
 
-    /// « 5 minutes » — le crédit du jour d'un voyage, à partager entre ses
+    /// « 2 minutes » — le crédit du jour d'un voyage, à partager entre ses
     /// co-voyageurs non abonnés. Le même que `DAILY_CREDIT_LIMIT_MS` côté
     /// serveur (``DailyCredit/Catalog``).
     public var dailyCredit: String
@@ -105,7 +105,7 @@ public struct FaqVariables: Sendable, Hashable {
     public init(
         minimumPageCount: Int,
         monthlyPrice: String = "4,99 €",
-        dailyCredit: String = "5 minutes",
+        dailyCredit: String = "2 minutes",
         charactersPerMinute: String = "800 caractères",
         retention: String = "5 ans",
         developmentStatus: String = "encore en plein développement"

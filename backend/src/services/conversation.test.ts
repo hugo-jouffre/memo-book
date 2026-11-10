@@ -145,7 +145,7 @@ describe("le moteur de règles", () => {
         allows: { roseEpineGraine: false, callsToAction: ["subscribe", "open_trip_settings"] },
       }),
     );
-    expect(reply.beats[0]?.text).toContain("5 minutes de récit par jour");
+    expect(reply.beats[0]?.text).toContain("2 minutes de récit par jour");
     expect(reply.beats[0]?.text).toContain("4,99 €");
     expect(reply.beats[0]?.text).toContain("« Découvrir l’abonnement »");
     // Plus rien de l'ancien modèle.

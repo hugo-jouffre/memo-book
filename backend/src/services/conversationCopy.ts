@@ -258,7 +258,7 @@ export const ACKNOWLEDGED_EARLIER = "C’est enregistré : cette étape est vali
  * pose elle-même quand elle coupe le micro hors ligne.
  */
 export const DAILY_CREDIT_EXHAUSTED_MESSAGE =
-  "Quelle journée ! Ce voyage a déjà raconté ses 5 minutes du jour. Je garde tout précieusement : reviens demain pour la suite, le crédit se recharge à minuit.";
+  "Quelle journée ! Ce voyage a déjà raconté ses 2 minutes du jour. Je garde tout précieusement : reviens demain pour la suite, le crédit se recharge à minuit.";
 
 export const HANDING_OVER =
   "Je te laisse la main. Ta version fait autorité sur la mienne, je n’y retouche plus.";
@@ -285,13 +285,13 @@ export const ANSWERS = {
    * (`ChatCopy.Answer.subscription`).
    */
   subscription:
-    "Chaque voyage a 5 minutes de récit par jour, partagées entre les co-voyageurs qui ne " +
+    "Chaque voyage a 2 minutes de récit par jour, partagées entre les co-voyageurs qui ne " +
     "sont pas abonnés : l’écrit compte aussi, pas les photos, et le crédit se recharge à " +
     "minuit. L’abonnement, à 4,99 € par mois, rend ton récit illimité ; tu le trouves dans " +
     "ton profil, à « Découvrir l’abonnement ».",
   /**
    * La même question, posée par un abonné : lui raconte sans limite, et son
-   * profil porte la ligne « Mon abonnement ». Lui parler des 5 minutes serait
+   * profil porte la ligne « Mon abonnement ». Lui parler des 2 minutes serait
    * lui décrire une règle qui ne le concerne plus. Tournure sans genre, comme
    * `newPerson` : MEMO ne sait pas s'il parle à une abonnée ou à un abonné.
    */

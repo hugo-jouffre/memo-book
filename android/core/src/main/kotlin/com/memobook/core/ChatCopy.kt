@@ -247,7 +247,7 @@ object ChatCopy {
          * dans son profil — « Mon abonnement » n'existait que pour un abonné.
          */
         const val subscription =
-            "Chaque voyage a 5 minutes de récit par jour, partagées entre les " +
+            "Chaque voyage a 2 minutes de récit par jour, partagées entre les " +
                 "co-voyageurs qui ne sont pas abonnés : l’écrit compte aussi, pas les " +
                 "photos, et le crédit se recharge à minuit. L’abonnement, à 4,99 € par " +
                 "mois, rend ton récit illimité ; tu le trouves dans ton profil, à " +
@@ -593,7 +593,7 @@ object ChatCopy {
 
     /**
      * Sous une bulle qui coûte plus qu'une journée entière de crédit — un
-     * vocal de plus de 5 minutes, un texte de plus de 4 000 caractères :
+     * vocal de plus de 2 minutes, un texte de plus de 1 600 caractères :
      * demain n'y changerait rien. Tapable, suivi de
      * `DailyCreditCopy.unlimitedCallToAction` : elle ouvre l'offre, et la
      * bulle part dès que le compte raconte sans limite (03/10/2026).

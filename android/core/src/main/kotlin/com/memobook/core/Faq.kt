@@ -14,7 +14,7 @@ import java.util.Locale
 //
 // **Le paquet « Prix et paiement » a été réécrit le 03/10/2026** (Hugo), avec
 // le crédit du jour : plus d'étapes offertes ni d'abonnement à la semaine. Le
-// récit est gratuit dans la limite de cinq minutes par jour et par voyage,
+// récit est gratuit dans la limite de deux minutes par jour et par voyage,
 // l'abonnement mensuel le rend illimité. Une question de plus
 // (`faq.prix.credit-du-jour`), deux variables de plus, et les réponses de
 // « Découvrir » et « Raconter » qui promettaient de parler sans compter
@@ -82,7 +82,7 @@ import java.util.Locale
  *   `faq.prix.abonnement`, résolu à l'affichage et jamais écrit en dur. Le même
  *   que `SUBSCRIPTION_MONTHLY_CENTS` côté serveur et que le repli du paywall ;
  *   le prix qui fait foi à l'achat est celui que la boutique affiche.
- * @property dailyCredit « 5 minutes » — le crédit du jour d'un voyage, à
+ * @property dailyCredit « 2 minutes » — le crédit du jour d'un voyage, à
  *   partager entre ses co-voyageurs non abonnés. Le même que
  *   `DAILY_CREDIT_LIMIT_MS` côté serveur (`DailyCredit.Catalog`).
  * @property charactersPerMinute « 800 caractères » — ce qui, à l'écrit,
@@ -97,7 +97,7 @@ import java.util.Locale
 data class FaqVariables(
     val minimumPageCount: Int,
     val monthlyPrice: String = "4,99 €",
-    val dailyCredit: String = "5 minutes",
+    val dailyCredit: String = "2 minutes",
     val charactersPerMinute: String = "800 caractères",
     val retention: String = "5 ans",
     val developmentStatus: String = "encore en plein développement",

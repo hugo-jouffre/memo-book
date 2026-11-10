@@ -213,7 +213,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     return;
   }
 
-  // L'abonnement de celui qui parle : MEMO ne décrit pas les 5 minutes du jour
+  // L'abonnement de celui qui parle : MEMO ne décrit pas les 2 minutes du jour
   // à qui raconte sans limite, et ne lui tend pas l'offre. L'état du rendu ne
   // sert qu'au bouton de l'aperçu, qui ne se pose que sous un texte libre
   // (`callsToActionAllowed`) : on ne le lit que là.

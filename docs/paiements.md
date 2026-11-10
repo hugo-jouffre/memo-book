@@ -430,7 +430,7 @@ valeur dans les deux comptes sans variable d'environnement de plus.
 
 ### Le crédit du jour (sans abonnement)
 
-Chaque voyage peut raconter **5 minutes par jour**, partagées entre ses
+Chaque voyage peut raconter **2 minutes par jour**, partagées entre ses
 co-voyageurs **non abonnés**. Un seul crédit pour l'oral et l'écrit : un vocal
 consomme sa **durée mesurée par le serveur**, un texte **75 ms par caractère**
 (800 caractères = 1 min). Les photos ne consomment rien. Les constantes vivent
@@ -439,10 +439,10 @@ dans `src/services/dailyCredit.ts` et **voyagent avec le solde** jusqu'à l'app
 
 | Constante | Valeur | Ce qu'elle fait |
 |---|---|---|
-| `DAILY_CREDIT_LIMIT_MS` | 300 000 | 5 minutes par voyage et par jour |
+| `DAILY_CREDIT_LIMIT_MS` | 120 000 | 2 minutes par voyage et par jour (Hugo, 03/11/2026 — cinq étaient trop) |
 | `TEXT_MS_PER_CHARACTER` | 75 | Le coût d'un caractère écrit |
-| `WARNING_REMAINING_MS` | 30 000 | L'app prévient au-dessus de la barre d'enregistrement (4:30) |
-| `URGENT_REMAINING_MS` | 5 000 | L'avertissement pulse (4:55) |
+| `WARNING_REMAINING_MS` | 30 000 | L'app prévient au-dessus de la barre d'enregistrement (1:30) |
+| `URGENT_REMAINING_MS` | 5 000 | L'avertissement pulse (1:55) |
 | `VOICE_TOLERANCE_MS` | 3 000 | Un dernier vocal peut dépasser le reste de 3 s au plus |
 
 **Les garde-fous**, côté serveur — l'app prévient, elle ne décide jamais :
@@ -471,8 +471,8 @@ dans `src/services/dailyCredit.ts` et **voyagent avec le solde** jusqu'à l'app
   tour dépasse le crédit qui reste aujourd'hui ». L'app garde le vocal dans sa
   file hors ligne et le renvoie après `resetsAt` ; un texte trop long est
   empêché avant l'envoi.
-- **Plus long qu'une journée** (vocal de plus de 5 min 03, texte de plus de
-  4 000 caractères) : `429 daily_credit_too_long`. Il ne passera jamais sans
+- **Plus long qu'une journée** (vocal de plus de 2 min 03, texte de plus de
+  1 600 caractères) : `429 daily_credit_too_long`. Il ne passera jamais sans
   abonnement : l'app le garde en « attend l'illimité » et le libère à
   l'abonnement.
 - **Gratuit** : une puce envoyée telle quelle, une commande silencieuse, les

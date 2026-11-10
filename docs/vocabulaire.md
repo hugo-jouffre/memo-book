@@ -103,7 +103,7 @@ Les autres noms de la base, et leur mot dans l'app :
 | `member`, `guest` | un co-voyageur (invité tant qu'il n'a pas rejoint) |
 | `wallet` | la cagnotte |
 | `subscription` | l'abonnement — mensuel, il rend le récit **illimité** à l'abonné seul |
-| `dailyCredit`, `trip_daily_usage` | le **crédit du jour** — les 5 minutes de récit qu'un voyage peut raconter chaque jour, partagées entre ses co-voyageurs non abonnés. On ne dit ni « quota », ni « limite de souvenirs », ni « jeton » : dans l'app, il se compte en minutes et en secondes |
+| `dailyCredit`, `trip_daily_usage` | le **crédit du jour** — les 2 minutes de récit qu'un voyage peut raconter chaque jour, partagées entre ses co-voyageurs non abonnés. On ne dit ni « quota », ni « limite de souvenirs », ni « jeton » : dans l'app, il se compte en minutes et en secondes |
 | `order` | la commande du carnet imprimé |
 | `render` | le rendu — le PDF composé |
 | `showcase`, `gallery` | la galerie, l'écran « Exemples de carnets » |

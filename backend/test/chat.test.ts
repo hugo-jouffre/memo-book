@@ -208,7 +208,7 @@ async function say(
   return { id, response };
 }
 
-/** Le voyage a raconté ses 5 minutes du jour (au fuseau de Paris, celui d'un compte sans fuseau). */
+/** Le voyage a raconté ses 2 minutes du jour (au fuseau de Paris, celui d'un compte sans fuseau). */
 async function exhaustCredit(memoId: string) {
   await harness.prisma.tripDailyUsage.create({
     data: {

@@ -455,7 +455,9 @@ export const Lexicon = {
    */
   creditAnchors: new Set([
     "racont", "recit", "enregistr", "vocal", "vocaux", "abonn", "illimit", "aujourd",
-    "par jour", "du jour", "minuit", "se recharg", "5 minutes", "cinq minutes",
+    "par jour", "du jour", "minuit", "se recharg", "2 minutes", "deux minutes",
+    // Les builds d'avant le 10/11/2026 disaient cinq : on comprend encore la question.
+    "5 minutes", "cinq minutes",
   ]),
   /** Un trajet, une visite, un départ — en mots entiers : le temps qu'il faut, pas celui qui reste pour raconter. */
   travelMarkers: new Set([

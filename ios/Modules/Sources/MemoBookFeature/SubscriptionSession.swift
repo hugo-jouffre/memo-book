@@ -5,7 +5,7 @@ import SwiftUI
 /// Ce que la session sait de l'abonnement du compte, d'un écran à l'autre.
 ///
 /// **Depuis le crédit du jour (Hugo, 03/10/2026), l'abonnement n'ouvre plus
-/// qu'une chose : l'illimité.** Tout le monde raconte, cinq minutes par jour et
+/// qu'une chose : l'illimité.** Tout le monde raconte, deux minutes par jour et
 /// par voyage ; l'abonné raconte sans compter. Il n'y a donc plus de palier à
 /// porter, plus de verrou de micro : il reste deux faits, et cet objet les fait
 /// circuler entre des écrans qui ont chacun leur modèle et leur appel.
