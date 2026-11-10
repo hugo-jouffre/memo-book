@@ -59,8 +59,14 @@ premier 30 ont été archivés sans jamais être envoyés — l'Organizer les mo
 
 ## Notes pour l'équipe App Review
 
-À coller dans *App Review Information ▸ Notes*, en anglais : c'est la langue
-que lit l'équipe.
+À coller dans *App Review Information ▸ Notes* — en français, le bloc
+s'appelle **« Informations utiles à la vérification de l'app »** et le champ
+**« Remarques »**, tout en bas de la page d'une **version** (pas de l'app). En
+anglais : c'est la langue que lit l'équipe.
+
+⚠️ **Le champ ne rend pas le Markdown.** Les `**` du bloc ci-dessous sont là
+pour la lecture de ce document ; ce qui est dans App Store Connect est en texte
+brut, et doit le rester — collés tels quels, les astérisques s'affichent.
 
 > **Sign-in**: use the email option with the demo account below. It already has
 > ten trips with recorded memories, photos and a composed book, so every screen
@@ -88,6 +94,21 @@ que lit l'équipe.
 >
 > **Tracking**: the app does not track users and contains no advertising or
 > analytics SDK.
+>
+> **Legal (Guideline 3.1.2)**: the subscription screen shows the subscription
+> name, its length (1 month), its price from the App Store, a Restore Purchases
+> button, and links to the Terms of Use and the Privacy Policy. The Terms of Use
+> (Apple standard EULA) link is at the end of the App Description, and the
+> Privacy Policy URL is set in App Privacy. The subscription is submitted
+> together with this build.
+
+⚠️ **Le dernier paragraphe ne vient pas d'ici** : il a été écrit directement
+dans App Store Connect pendant les échanges avec App Review, et ce document
+l'ignorait jusqu'au 10/11/2026 — relevé en comparant le champ réel à ce
+fichier. C'est lui qui répond à la guideline 3.1.2 (ce qu'un écran
+d'abonnement doit montrer), et la 0.1.0 a été approuvée avec. **Ne jamais
+remplacer le champ par un copier-coller partiel** : on reprend le texte
+existant et on n'y change que ce qui doit changer.
 
 Le compte, dans *Sign-In Information* : **`demo@memo-book.com`**, avec le
 mot de passe des comptes de test (`TEST_PASSWORD`, `backend/prisma/seed.ts`).
