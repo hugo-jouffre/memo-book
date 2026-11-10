@@ -830,6 +830,21 @@ model Memo {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// **Le jour où le voyage a été jeté** — nul tant qu'il ne l'est pas.
+  ///
+  /// Supprimer un voyage ne l'efface plus : ça pose cette date (Hugo,
+  /// 10/11/2026 — « j'ai toujours peur qu'un voyage soit supprimé par
+  /// inadvertance »). Le voyage disparaît aussitôt de partout, parce que
+  /// `visibleToAccount` exige `deletedAt: null` ; il ne reste visible qu'à son
+  /// propriétaire, dans la corbeille de l'accueil, et il se restaure.
+  ///
+  /// **Trente jours plus tard, il s'efface pour de bon** (`purgeDeletedMemos`,
+  /// `services/trash.ts`) : c'est alors la suppression d'avant, souvenirs,
+  /// fichiers et traces chez les prestataires compris. Une corbeille qui ne se
+  /// vide jamais n'est pas une corbeille, c'est une archive — et elle garderait
+  /// des données personnelles sans raison.
+  deletedAt DateTime?
+
   entries                  Entry[]
   renders                  Render[]
   orders                   PrintOrder[]
@@ -852,6 +867,9 @@ model Memo {
   supportMessages          SupportMessage[]
 
   @@index([ownerAccountId, createdAt])
+  /// La corbeille lit les voyages jetés d'un propriétaire, et la purge balaie
+  /// ceux de plus de trente jours : les deux partent de cette colonne.
+  @@index([ownerAccountId, deletedAt])
   /// La galerie lit **tous** les carnets publics, quel qu'en soit le
   /// propriétaire : c'est la seule requête de l'app qui ne part pas d'un
   /// compte, et sans cet index elle balaierait la table entière.
