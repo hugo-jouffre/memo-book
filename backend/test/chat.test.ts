@@ -4,23 +4,21 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { FakeResponder } from "../src/services/conversation.js";
 import { refreshTripFacts } from "../src/services/tripFacts.js";
 import {
-  ACKNOWLEDGED_EARLIER,
   LISTENING_FOR_REVISION,
   OPENING_TEXT,
   PHOTOS_VALIDATED_BEFORE_RETURN,
   PRECISION_NOTED,
   REVISION_NOTED,
-  returnToValidate,
+  redactionKeptFor,
+  returnForPhotos,
   SPLIT_NOT_FOUND,
   SPLIT_REFUSED,
   splitAccepted,
   SUGGESTIONS,
-  VALIDATION_QUESTION,
   tooShort,
   PHOTOS_VALIDATED,
   photosKept,
   photosWanted,
-  validationQuestionFor,
 } from "../src/services/conversationCopy.js";
 import {
   FakeRedactor,
@@ -377,12 +375,13 @@ describe("parler à MEMO", () => {
     expect(mine?.disposition).toBe("memory");
     expect(thread.turn).toEqual({ status: "idle" });
 
-    // Une seule bulle après un souvenir : « Il te convient ? », posée quand le
-    // texte est rédigé — ni reformulation, ni question sur le lieu.
+    // Le texte rédigé est gardé d'office (03/11/2026) : MEMO le dit, puis
+    // demande ses photos — ni reformulation, ni question sur le lieu, ni
+    // « Il te convient ? ».
     const replies = memoBubbles(thread).filter((message) => message.seq > (mine?.seq ?? 0));
-    expect(replies.map((message) => message.body)).toEqual([{ kind: "text", text: VALIDATION_QUESTION }]);
+    expect(replies.map((message) => message.body)).toEqual(await keptBubbles(memo, mine!.entryId!));
     expect(replies.every((message) => (message.pauseMilliseconds ?? 0) >= 450)).toBe(true);
-    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos", "edit-hand", "edit-voice"]);
 
     // Le souvenir existe, rédigé, avec sa fiche dans le fil.
     const card = thread.messages.find((message) => message.body.kind === "transcript");
@@ -420,11 +419,9 @@ describe("parler à MEMO", () => {
     const thread = await readThread(memo.id);
     const mine = thread.messages.find((message) => message.id === id);
     const replies = memoBubbles(thread).filter((message) => message.seq > (mine?.seq ?? 0));
-    // Toujours une seule bulle : le doute s'y dit, il n'en ajoute pas une.
-    expect(replies.map((message) => message.body)).toEqual([
-      { kind: "text", text: validationQuestionFor(["je tarbé"]) },
-    ]);
-    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
+    // Le doute se dit dans la bulle du texte gardé, il n'en ajoute pas une.
+    expect(replies.map((message) => message.body)).toEqual(await keptBubbles(memo, mine!.entryId!, ["je tarbé"]));
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos", "edit-hand", "edit-voice"]);
   });
 
   it("dit à l'écrivain qui raconte, et ce que le carnet sait du voyage", async () => {
@@ -440,7 +437,17 @@ describe("parler à MEMO", () => {
   it("rattache une précision au souvenir en cours, et la rédaction la relit", async () => {
     const memo = await seedTrip(owner.accountId);
     await say(memo.id, "Ce matin on est partis tôt pour éviter la chaleur et on a marché longtemps.");
+    // Le texte est gardé d'office (03/11/2026) : quand la précision arrive, le
+    // souvenir est déjà validé. Le faux répondeur n'y voit donc plus de
+    // souvenir en cours ; le vrai modèle, lui, lit « Déjà validé » et peut
+    // encore la classer en précision. C'est ce cas qu'on rejoue.
+    const fakeReply = responder.reply.bind(responder);
+    const asPrecision = vi.spyOn(responder, "reply").mockImplementationOnce(async (input) => ({
+      ...(await fakeReply(input)),
+      disposition: "context",
+    }));
     const { id, response } = await say(memo.id, "C'était avec Clara.");
+    asPrecision.mockRestore();
     expect(response.statusCode).toBe(201);
 
     const thread = await readThread(memo.id);
@@ -451,13 +458,11 @@ describe("parler à MEMO", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.redactedText).toContain("C'était avec Clara.");
 
-    // Un accusé, puis la question revient avec le texte réécrit.
+    // Un accusé, et le texte se réécrit. Déjà gardé, il n'y a rien à
+    // redemander : ni question, ni photos une seconde fois.
     const after = await readThread(memo.id);
     const replies = memoBubbles(after).filter((message) => message.seq > (precision?.seq ?? 0));
-    expect(replies.map((message) => message.body)).toEqual([
-      { kind: "text", text: PRECISION_NOTED },
-      { kind: "text", text: VALIDATION_QUESTION },
-    ]);
+    expect(replies.map((message) => message.body)).toEqual([{ kind: "text", text: PRECISION_NOTED }]);
   });
 
   it("reçoit un vocal : la fiche tombe tout de suite, puis passe prête", async () => {
@@ -484,7 +489,8 @@ describe("parler à MEMO", () => {
     // Le transcripteur a reçu les noms que le carnet connaît : qui raconte, et où.
     expect(transcriber.hints.at(-1)).toBe("Récit de voyage de Hugo (Rome).");
     expect(card?.body.kind === "transcript" && card.body.transcript.heading).toBeTruthy();
-    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
+    // Gardée d'office : MEMO enchaîne sur les photos, retoucher reste à un appui.
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos", "edit-hand", "edit-voice"]);
   });
 
   it("reçoit des photos : un souvenir par image, une seule bulle", async () => {
@@ -561,6 +567,20 @@ async function sendPhotos(memoId: string, count: number) {
   return id;
 }
 
+/**
+ * Ce que MEMO dit quand la rédaction est **gardée d'office** (Hugo,
+ * 03/11/2026, `confirmRedaction`) : le texte est gardé, puis il demande les
+ * photos du récit, au nombre que le ratio du carnet appelle.
+ */
+async function keptBubbles(memo: { photoTextRatio?: number | null }, entryId: string, doubts: string[] = []) {
+  const entry = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entryId } });
+  const budget = photoBudgetFor((entry.editedText ?? entry.redactedText ?? "").trim(), memo);
+  return [
+    { kind: "text", text: redactionKeptFor(doubts) },
+    { kind: "text", text: photosWanted(budget.photos, budget.pages) },
+  ];
+}
+
 async function readSteps(memoId: string) {
   const response = await harness.app.inject({
     method: "GET",
@@ -630,7 +650,9 @@ describe("modifier à l'oral (Hugo, 12/10/2026)", () => {
     );
     expect(thread.messages.filter((message) => message.body.kind === "transcript")).toHaveLength(1);
 
-    // La rédaction a relu la correction comme telle, et la question revient.
+    // La rédaction a relu la correction comme telle. La correction a rouvert
+    // le souvenir (`validatedAt` remis à zéro) : le texte réécrit est gardé
+    // d'office à son tour, et MEMO redemande ses photos.
     const last = redactor.inputs.at(-1)!;
     const heard = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
     expect(heard.text).toBeTruthy();
@@ -638,9 +660,9 @@ describe("modifier à l'oral (Hugo, 12/10/2026)", () => {
     const replies = memoBubbles(thread).filter((message) => message.seq > (correction?.seq ?? 0));
     expect(replies.map((message) => message.body)).toEqual([
       { kind: "text", text: REVISION_NOTED },
-      { kind: "text", text: VALIDATION_QUESTION },
+      ...(await keptBubbles(memo, entry.id)),
     ]);
-    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos", "edit-hand", "edit-voice"]);
     const rewritten = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } });
     expect(rewritten.redactionStatus).toBe("ready");
   });
@@ -685,15 +707,15 @@ describe("une étape par récit (Hugo, 12/10/2026)", () => {
     // il dit combien il en manque (18/10/2026).
     const reply = memoBubbles(await readThread(memo.id)).at(-1)?.body as { kind: string; text: string };
     expect(reply.kind).toBe("text");
-    expect(reply.text).toMatch(/^J’ai bien reçu ta photo\. Il m’en faudrait encore .* avec celle-ci,/);
+    expect(reply.text).toMatch(/^J’ai bien reçu ta photo\. Il m’en faudrait encore .* avec celle-ci en attendant,/);
 
     const [step] = await readSteps(memo.id);
     const photo = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id, kind: "photo" } });
     expect(step?.entryIds).toEqual([story.id, photo.id]);
-    // La vignette et la photo du voyage, servies sans session.
-    expect(step?.photoUrl).toMatch(/\/v1\/trip-photos\/[0-9a-f-]{36}\.jpg$/);
-    const served = await harness.app.inject({ method: "GET", url: new URL(step!.photoUrl!).pathname });
-    expect(served.statusCode).toBe(200);
+    // La vignette de l'étape. L'arrivée des photos les garde d'office
+    // (03/11/2026) : elles sont publiées tout de suite, et la vignette est
+    // donc déjà celle du CDN, plus la route publique du chat.
+    expect(step?.photoUrl).toMatch(/^https:\/\/cdn\.example\.test\/.+\.jpg$/);
     const home = await harness.app.inject({ method: "GET", url: "/v1/home", headers: { authorization: owner.authorization } });
     expect(home.json<{ trips: { coverPhotoUrl: string | null }[] }>().trips[0]?.coverPhotoUrl).toBe(step?.photoUrl);
   });
@@ -881,46 +903,45 @@ describe("découper un récit en plusieurs étapes (Hugo, 28/10/2026)", () => {
 });
 
 describe("revenir à l'étape sautée (Hugo, 12/10/2026)", () => {
-  it("une fois la seconde close, MEMO revient à la première pour la valider", async () => {
+  /**
+   * Depuis que le texte est gardé d'office (03/11/2026), une étape sautée
+   * n'est plus une étape à valider : c'est une étape **gardée mais jamais
+   * illustrée**. MEMO y revient quand celle d'après est close, c'est-à-dire
+   * à l'arrivée de ses photos.
+   */
+  it("à l'arrivée des photos de la seconde, MEMO revient à la première pour les siennes", async () => {
     const memo = await seedTrip(owner.accountId);
     await say(memo.id, "On a passé la matinée au Colisée, il y avait un monde fou devant l'entrée.");
-    // Le second récit, dans la foulée : le premier n'a été ni validé ni illustré.
+    // Le second récit, dans la foulée : le premier est gardé, mais pas illustré.
     await say(memo.id, "L'après-midi on a filé à Trastevere manger des supplì sur une petite place.");
     const [first, second] = await harness.prisma.entry.findMany({
       where: { memoId: memo.id },
       orderBy: { createdAt: "asc" },
     });
+    expect(first?.validatedAt).not.toBeNull();
+    expect(second?.validatedAt).not.toBeNull();
 
-    // « Ça me convient » vise le second, ses photos aussi.
-    await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept" });
-    expect((await harness.prisma.entry.findUniqueOrThrow({ where: { id: second!.id } })).validatedAt).not.toBeNull();
+    // Les photos vont au second, le dernier dont MEMO les a demandées ; leur
+    // arrivée clôt son étape, et MEMO revient à la première.
     await sendPhotos(memo.id, 2);
-    await say(memo.id, SUGGESTIONS["photos-ok"].label, { suggestionId: "photos-ok" });
-
     const thread = await readThread(memo.id);
-    const firstTitle = (await harness.prisma.entry.findUniqueOrThrow({ where: { id: first!.id } })).suggestedTitle;
-    const tail = thread.messages.slice(-4);
-    expect(tail.map((message) => message.body.kind)).toEqual(["text", "text", "transcript", "text"]);
-    expect(tail[0]?.body).toEqual({ kind: "text", text: PHOTOS_VALIDATED_BEFORE_RETURN });
-    expect(tail[1]?.body).toEqual({ kind: "text", text: returnToValidate(1, firstTitle) });
-    // La fiche reposée garde son numéro, et la question vise la première.
-    expect(tail[2]?.body.kind === "transcript" && tail[2].body.transcript.title).toBe("Retranscription étape 1");
-    expect(tail[3]?.entryId).toBe(first!.id);
-    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
-
-    // Validée à son tour — elle était déjà comptée.
-    await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept" });
-    expect((await harness.prisma.entry.findUniqueOrThrow({ where: { id: first!.id } })).validatedAt).not.toBeNull();
-    const after = await readThread(memo.id);
-    expect(memoBubbles(after).at(-2)?.body).toEqual({ kind: "text", text: ACKNOWLEDGED_EARLIER });
-    expect(memoBubbles(after).at(-1)?.entryId).toBe(first!.id);
+    const budget = photoBudgetFor((first!.editedText ?? first!.redactedText ?? "").trim(), memo);
+    expect(memoBubbles(thread).slice(-2).map((message) => message.body)).toEqual([
+      { kind: "text", text: PHOTOS_VALIDATED_BEFORE_RETURN },
+      { kind: "text", text: returnForPhotos(1, first!.suggestedTitle, budget.photos, budget.pages) },
+    ]);
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(
+      expect.arrayContaining(["photos", "dictate"]),
+    );
 
     // Ses photos vont dans **son** étape, et MEMO n'y revient pas deux fois.
     await sendPhotos(memo.id, 1);
-    await say(memo.id, SUGGESTIONS["photos-ok"].label, { suggestionId: "photos-ok" });
     const steps = await readSteps(memo.id);
     expect(steps.map((step) => step.entryIds.length)).toEqual([2, 3]);
-    expect(memoBubbles(await readThread(memo.id)).at(-1)?.body).toEqual({ kind: "text", text: PHOTOS_VALIDATED });
+    const returns = memoBubbles(await readThread(memo.id)).filter(
+      (message) => message.body.kind === "text" && message.body.text.startsWith("Revenons à"),
+    );
+    expect(returns).toHaveLength(1);
   });
 });
 
@@ -1353,6 +1374,12 @@ describe("l'étape manquante", () => {
   /** Un voyage troué : raconté J-5, J-4 et J-2, rien le J-3. */
   async function seedHoledTrip() {
     const memo = await seedTrip(owner.accountId);
+    // **Un carnet sans photos** : chaque récit gardé d'office (03/11/2026)
+    // réclamerait les siennes, et à l'arrivée de la première photo MEMO
+    // reviendrait d'abord à l'étape J-4 restée sans images (`stepToClose`) —
+    // une relance qui passe avant la carte, jamais deux d'affilée. À 0 %,
+    // aucune photo n'est demandée : il ne reste que le trou.
+    await harness.prisma.memo.update({ where: { id: memo.id }, data: { photoTextRatio: 0 } });
     const day = (back: number) => {
       const date = new Date();
       date.setUTCDate(date.getUTCDate() - back);
@@ -1379,7 +1406,11 @@ describe("l'étape manquante", () => {
     return { memo, missing: localDate(day(3), "Europe/Paris") };
   }
 
-  /** « Je valide mes photos » — le seul moment où la carte peut tomber. */
+  /**
+   * **L'arrivée des photos** — le seul moment où la carte peut tomber. Elle
+   * vaut validation depuis le 03/11/2026 : plus de « Je valide mes photos »
+   * derrière, qui ferait un tour de plus et compterait la carte comme refusée.
+   */
   async function validatePhotos(memoId: string) {
     const { payload, contentType } = await multipartPhotos(randomUUID(), 1);
     await harness.app.inject({
@@ -1388,7 +1419,6 @@ describe("l'étape manquante", () => {
       headers: { authorization: owner.authorization, "content-type": contentType },
       payload,
     });
-    await say(memoId, SUGGESTIONS["photos-ok"].label, { suggestionId: "photos-ok" });
   }
 
   const stateOf = async (memoId: string) =>
@@ -1406,9 +1436,9 @@ describe("l'étape manquante", () => {
     expect(last?.body.kind === "text" && last.body.text).toContain(longDay(missing));
     // ⚠️ Le bouton **est** la question : la bulle n'en pose aucune.
     expect(last?.body.kind === "text" && last.body.text).not.toContain("?");
-    // La carte ne porte pas de puces : celles de « Je valide mes photos »
-    // restent en place, et c'est ce qui casserait en silence.
-    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["preview", "dictate", "write"]);
+    // La carte ne porte pas de puces : celles de la bulle des photos restent
+    // en place, et c'est ce qui casserait en silence.
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos-more", "preview", "dictate"]);
 
     const state = await stateOf(memo.id);
     expect(state.gapOffered?.days).toEqual([missing]);

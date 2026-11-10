@@ -166,39 +166,37 @@ async function writeStoreKitTransaction(
     where: { providerSubscriptionId: transaction.originalTransactionId },
   });
 
-  if (input.accountId !== undefined) {
-    // L'achat a été fait **depuis un autre compte MemoBook** sur le même
-    // téléphone : l'`appAccountToken` est celui du compte qui a payé. Ouvrir
-    // l'abonnement à celui-ci en ferait deux pour un seul paiement.
-    // Un compte **supprimé** depuis ne compte pas : Apple continue de prélever
-    // l'identifiant Apple, et le nouveau compte doit pouvoir le restaurer.
-    if (
-      transaction.appAccountToken !== null &&
-      transaction.appAccountToken !== input.accountId &&
-      (await prisma.account.findUnique({
-        where: { id: transaction.appAccountToken },
-        select: { id: true },
-      })) !== null
-    ) {
-      throw new HttpError(
-        403,
-        "Cet achat a été fait depuis un autre compte MemoBook.",
-        "transaction_account_mismatch",
-      );
-    }
-    if (existing && existing.accountId !== input.accountId) {
-      throw new HttpError(
-        409,
-        "Cet abonnement Apple est déjà rattaché à un autre compte MemoBook.",
-        "subscription_owned_elsewhere",
-      );
-    }
-  }
+  // **Transfert, comme RevenueCat** (Hugo, 08/11/2026) : l'abonnement suit
+  // l'identifiant Apple, et l'identifiant Apple est celui du téléphone. Quand
+  // l'app envoie une transaction (achat ou « Restaurer mes achats ») depuis un
+  // compte MemoBook qui n'est pas celui de la ligne, ou qui n'est pas celui de
+  // l'`appAccountToken`, **le compte connecté prend l'abonnement**. L'ancien
+  // compte le perd : un paiement n'ouvre toujours qu'un abonnement.
+  // Avant, on refusait (403 / 409), et un client qui recréait un compte, ou se
+  // connectait avec Apple après Google, restait bloqué devant le paywall.
+  // Les notifications d'Apple (sans `input.accountId`) ne transfèrent jamais :
+  // elles suivent la ligne là où elle est.
+  const transferFrom =
+    input.accountId !== undefined && existing && existing.accountId !== input.accountId
+      ? existing.accountId
+      : null;
 
-  const accountId = existing?.accountId ?? input.accountId ?? transaction.appAccountToken;
-  // (Quand c'est l'app qui envoie, `input.accountId` passe avant le jeton d'un
-  // compte supprimé.)
+  // L'app passe avant tout : la ligne existante, puis le jeton de l'achat, ne
+  // servent qu'aux notifications d'Apple.
+  const accountId = input.accountId ?? existing?.accountId ?? transaction.appAccountToken;
   if (!accountId) return null;
+
+  if (transferFrom) {
+    context.logger.info(
+      {
+        subscriptionId: existing!.id,
+        originalTransactionId: transaction.originalTransactionId,
+        fromAccountId: transferFrom,
+        toAccountId: accountId,
+      },
+      "Abonnement App Store transféré vers le compte connecté",
+    );
+  }
 
   const account = await prisma.account.findUnique({ where: { id: accountId }, select: { id: true } });
   if (!account) return null;
@@ -255,10 +253,17 @@ async function writeStoreKitTransaction(
       ...(memoId === null ? {} : { memoId }),
     };
 
+    // Un transfert change de propriétaire même quand l'événement est ancien :
+    // l'état Apple ne bouge pas, mais le compte connecté prend la ligne. Le
+    // voyage de l'ancien compte ne le suit pas (il n'est pas à lui).
+    const transfer = transferFrom ? { accountId, memoId } : null;
+
     const subscription = isStale && existing
-      ? existing
+      ? transfer
+        ? await tx.subscription.update({ where: { id: existing.id }, data: transfer })
+        : existing
       : existing
-        ? await tx.subscription.update({ where: { id: existing.id }, data: fields })
+        ? await tx.subscription.update({ where: { id: existing.id }, data: { ...fields, ...transfer } })
         : await tx.subscription.create({
             data: {
               ...fields,

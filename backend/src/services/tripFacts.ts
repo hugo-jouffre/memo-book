@@ -247,8 +247,14 @@ export function groupIntoSteps(
 function stepCovering(stories: StepGroup[], photo: FactEntry): StepGroup | undefined {
   if (stories.length === 0) return undefined;
   const taken = photo.capturedAt.getTime();
+  // Les dates d'une étape sont celles de **ses récits** (08/11/2026). Les
+  // photos déjà rangées n'en font pas partie : sinon une photo élargissait
+  // l'étape où elle venait de tomber, et la suivante s'y collait — le
+  // rangement dépendait de l'ordre de traitement, pas du jour de la prise.
+  // Un groupe sans récit (des photos seules) garde ses propres dates.
   const span = (group: StepGroup) => {
-    const times = group.entries.map((entry) => entry.capturedAt.getTime());
+    const stories = group.entries.filter((entry) => entry.kind !== "photo");
+    const times = (stories.length > 0 ? stories : group.entries).map((entry) => entry.capturedAt.getTime());
     return { from: Math.min(...times), to: Math.max(...times) };
   };
 
