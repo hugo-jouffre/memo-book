@@ -14,6 +14,7 @@ import { renderBook, type RenderJob } from "./render.js";
 import { rewriteTrip, type RewriteTripJob } from "./rewriteTrip.js";
 import { structureRender, type StructureJob } from "./structure.js";
 import { transcribeEntry, type TranscribeJob } from "./transcribe.js";
+import { purgeTrash, type PurgeTrashJob } from "./purgeTrash.js";
 
 /**
  * Le ménage des commandes jamais payées : à la 25e minute de chaque heure. Une
@@ -27,6 +28,13 @@ export const RELEASE_ABANDONED_ORDERS_CRON = "25 * * * *";
  * heure ronde**, où tout le monde programme ses tâches.
  */
 export const EXPORT_STATS_CRON = "20 4 * * *";
+
+/**
+ * Le vidage de la corbeille, chaque nuit à 4 h 50 — après les chiffres, avant
+ * le réveil. Rien ne presse à la minute près : un voyage jeté s'efface le
+ * trente-et-unième jour, pas à la seconde près du trentième.
+ */
+export const PURGE_TRASH_CRON = "50 4 * * *";
 
 /**
  * La passe des notifications : à la 35e minute de **chaque** heure. Chaque
@@ -66,6 +74,7 @@ export function registerJobs(context: AppContext): void {
     renderBook(context, payload),
   );
   context.queue.register<ExportStatsJob>(JOB_NAMES.exportStats, () => exportStats(context));
+  context.queue.register<PurgeTrashJob>(JOB_NAMES.purgeTrash, () => purgeTrash(context));
   context.queue.register<ReleaseAbandonedOrdersJob>(JOB_NAMES.releaseAbandonedOrders, () =>
     releaseAbandonedOrders(context),
   );
@@ -82,6 +91,7 @@ export function registerJobs(context: AppContext): void {
   // Les horaires sont demandés ici et posés au démarrage de la file.
   // Idempotents : relancer le serveur ne crée pas un second passage quotidien.
   void context.queue.schedule(JOB_NAMES.exportStats, EXPORT_STATS_CRON);
+  void context.queue.schedule(JOB_NAMES.purgeTrash, PURGE_TRASH_CRON);
   void context.queue.schedule(JOB_NAMES.releaseAbandonedOrders, RELEASE_ABANDONED_ORDERS_CRON);
   void context.queue.schedule(JOB_NAMES.sendNotifications, SEND_NOTIFICATIONS_CRON);
   void context.queue.schedule(JOB_NAMES.syncSchoolHolidays, SYNC_SCHOOL_HOLIDAYS_CRON);

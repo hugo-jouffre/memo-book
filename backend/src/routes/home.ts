@@ -6,7 +6,12 @@ import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { publicApiBaseUrl } from "../services/avatars.js";
 import { readDailyCredits, type DailyCredit } from "../services/dailyCredit.js";
-import { createMemoFor, isTakenId, visibleToAccount } from "../services/memoOwnership.js";
+import {
+  createMemoFor,
+  deletedForAccount,
+  isTakenId,
+  visibleToAccount,
+} from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { coverPhotoInclude } from "./tripPhotos.js";
@@ -15,6 +20,7 @@ import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import {
   serializeGalleryCategory,
   serializeGalleryTrip,
+  serializeDeletedTrip,
   serializeShowcase,
   serializeTraveller,
   serializeTrip,
@@ -190,7 +196,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     const accountId = accountIdOf(request);
     const now = new Date();
 
-    const [account, memos, showcase] = await Promise.all([
+    const [account, memos, deletedMemos, showcase] = await Promise.all([
       // Les abonnements viennent avec le compte : `serializeTraveller` en tire
       // l'accès illimité et la fin de la période payée, qui ouvre l'alerte
       // « ton abonnement s'est arrêté ». Un `include` et non un second appel —
@@ -204,6 +210,25 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
         where: visibleToAccount(accountId),
         orderBy: { createdAt: "desc" },
         include: tripInclude,
+      }),
+
+      // **La corbeille** — les voyages jetés, du plus récent au plus ancien.
+      // Une requête à part et volontairement maigre : la section du bas de
+      // l'accueil n'affiche qu'un titre et une date, et charger `tripInclude`
+      // pour des voyages qu'on ne lit pas serait payer le prix d'un accueil
+      // entier pour une ligne grise. Vide pour presque tout le monde, presque
+      // tout le temps.
+      context.prisma.memo.findMany({
+        where: deletedForAccount(accountId),
+        orderBy: { deletedAt: "desc" },
+        select: {
+          id: true,
+          title: true,
+          coverPhotoUrl: true,
+          startDate: true,
+          endDate: true,
+          deletedAt: true,
+        },
       }),
 
       // La carte de découverte : la première active dont la fenêtre est
@@ -242,6 +267,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
           publicBaseUrl: publicApiBaseUrl(context.env),
         }),
       ),
+      deletedTrips: deletedMemos.map(serializeDeletedTrip),
       showcase: showcase ? serializeShowcase(showcase) : null,
     };
   });

@@ -29,6 +29,8 @@ export const JOB_NAMES = {
   render: "memobook.render",
   /** L'envoi quotidien des chiffres de l'app à la feuille de bord (T72). */
   exportStats: "memobook.export-stats",
+  /** Le vidage nocturne de la corbeille — les voyages jetés il y a plus de trente jours. */
+  purgeTrash: "memobook.purge-trash",
   /** Le ménage horaire des commandes jamais payées — voir `orderPayments.ts`. */
   releaseAbandonedOrders: "memobook.release-abandoned-orders",
   /** La passe horaire des notifications — voir `services/notifications.ts`. */
