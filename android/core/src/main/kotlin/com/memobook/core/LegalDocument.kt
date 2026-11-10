@@ -1,7 +1,7 @@
 package com.memobook.core
 
 // Les documents légaux de l'app — conditions d'utilisation, politique de
-// confidentialité — recopiés du site memobook.fr. Le jumeau de
+// confidentialité — recopiés du site memo-book.com. Le jumeau de
 // `MemoBookCore/LegalDocument.swift`. Ce fichier porte la **forme** ; chaque
 // document a le sien ([TermsOfUse], [PrivacyPolicy]).
 //

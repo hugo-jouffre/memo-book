@@ -14,11 +14,11 @@ formulaire ci-dessous, avec d'autres cases.
 1. **La politique de confidentialité décrit l'app.** Réécrite dans les deux
    apps (`PrivacyPolicy.swift`, `PrivacyPolicy.kt`, un seul texte pour les
    deux stores) : comptes, récits, IA, commandes, abonnement, notifications,
-   assistance, avec chaque prestataire. Clara la relit ; **memobook.fr doit
+   assistance, avec chaque prestataire. Clara la relit ; **memo-book.com doit
    publier le même texte avant l'envoi de la fiche à l'examen**, puisque la
    Console demande l'URL du site.
 2. **L'adresse de la politique de confidentialité** : la page du site
-   memobook.fr, une fois le nouveau texte publié. URL exacte à reporter
+   memo-book.com, une fois le nouveau texte publié. URL exacte à reporter
    ci-dessous par Hugo.
 3. **Public cible : 16 ans et plus.** Cocher **16-17 ans** et **18 ans et
    plus**, rien en dessous : l'app reste hors du programme Familles. Les CGU
@@ -39,7 +39,7 @@ formulaire ci-dessous, avec d'autres cases.
 7. **Un seul texte pour les deux stores** (Clara, 02/11/2026) : les CGU, la
    politique de confidentialité et la FAQ nomment Android *et* iPhone dans la
    même phrase, et les deux apps les portent mot pour mot. Il n'y a donc
-   **qu'une version à publier sur memobook.fr**, et c'est elle que la Console
+   **qu'une version à publier sur memo-book.com**, et c'est elle que la Console
    pointera.
 
 ### Reste à vérifier avant de saisir
@@ -104,8 +104,8 @@ est pas, Google refuse une fiche qui promet ce que l'app ne fait pas.
 | Catégorie | Voyages et infos locales |
 | Tags | carnet de voyage, journal, souvenirs (au choix de la Console) |
 | Adresse e-mail | `contact@memo-book.com` (publique sur la fiche) |
-| Site web | https://memobook.fr |
-| Politique de confidentialité | la page de memobook.fr, une fois le nouveau texte publié (décision 2) |
+| Site web | https://memo-book.com |
+| Politique de confidentialité | la page de memo-book.com, une fois le nouveau texte publié (décision 2) |
 
 ### Notes de version 0.1.0
 

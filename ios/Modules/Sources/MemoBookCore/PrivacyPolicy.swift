@@ -12,12 +12,12 @@ import Foundation
 // comme dans les CGU. Ce que le texte décrit a été relevé dans le code du
 // 23/10/2026 (`backend/prisma/schema.prisma`, `backend/src/services`).
 //
-// Historique : recopiée du site memobook.fr le 17/09/2026 ; liste des
+// Historique : recopiée du site memo-book.com le 17/09/2026 ; liste des
 // destinataires (T152) et ponctuation (T153) corrigées sur retour de Clara le
 // 26/09 ; abonnement et crédit du jour ajoutés le 03/10 ; formulaire bêta
 // retiré et Stripe ajouté le 19/10 (D6).
 //
-// ⚠️ **C'est le site qui fait foi** : memobook.fr doit publier ce texte le
+// ⚠️ **C'est le site qui fait foi** : memo-book.com doit publier ce texte le
 // même jour que l'app, et c'est son adresse que demandent l'App Store et la
 // Play Console.
 
@@ -45,7 +45,7 @@ public enum PrivacyPolicy {
         number: 1,
         title: "Introduction",
         blocks: [
-            .paragraph("Hugo Jouffre, opérant sous le nom de MemoBook (micro-entrepreneur, SIRET : 815\u{00A0}246\u{00A0}442, 28 rue Tête d’Or, 69006 Lyon), édite l’application MemoBook, sur iPhone et sur Android, et le site memobook.fr. Il attache une grande importance à la protection de vos données personnelles."),
+            .paragraph("Hugo Jouffre, opérant sous le nom de MemoBook (micro-entrepreneur, SIRET : 815\u{00A0}246\u{00A0}442, 28 rue Tête d’Or, 69006 Lyon), édite l’application MemoBook, sur iPhone et sur Android, et le site memo-book.com. Il attache une grande importance à la protection de vos données personnelles."),
             .paragraph("La présente Politique de confidentialité décrit quelles données nous collectons, pourquoi nous les collectons, comment nous les utilisons, combien de temps nous les conservons, et quels sont vos droits conformément au Règlement Général sur la Protection des Données (RGPD — Règlement UE 2016/679) et à la loi française Informatique et Libertés."),
 
             .heading("Responsable du traitement :"),
@@ -60,7 +60,7 @@ public enum PrivacyPolicy {
         number: 2,
         title: "Données collectées et finalités",
         blocks: [
-            .paragraph("Les sections 2.1 à 2.9 concernent l’application MemoBook, les sections 2.10 à 2.12 le site memobook.fr."),
+            .paragraph("Les sections 2.1 à 2.9 concernent l’application MemoBook, les sections 2.10 à 2.12 le site memo-book.com."),
 
             .heading("2.1 Votre compte"),
             .lines([
@@ -138,7 +138,7 @@ public enum PrivacyPolicy {
                 "**Durée de conservation :** tant que votre compte existe",
             ]),
 
-            .heading("2.10 Site memobook.fr : navigation et mesure d’audience"),
+            .heading("2.10 Site memo-book.com : navigation et mesure d’audience"),
             .lines([
                 "**Données collectées :** adresse IP anonymisée, pages visitées, durée de visite, type d’appareil et de navigateur, provenance (via cookies Google Analytics et Hotjar)",
                 "**Finalité :** analyser l’utilisation du site pour améliorer l’expérience utilisateur",
@@ -146,7 +146,7 @@ public enum PrivacyPolicy {
                 "**Durée de conservation :** 13 mois maximum (Google Analytics) / 1 an (Hotjar)",
             ]),
 
-            .heading("2.11 Site memobook.fr : données publicitaires"),
+            .heading("2.11 Site memo-book.com : données publicitaires"),
             .lines([
                 "**Données collectées :** données comportementales de navigation transmises à Meta via le Meta Pixel (pages visitées, actions effectuées), permettant de mesurer l’efficacité de nos publicités Facebook et Instagram",
                 "**Finalité :** mesure des campagnes publicitaires et reciblage publicitaire",
@@ -154,7 +154,7 @@ public enum PrivacyPolicy {
                 "**Durée de conservation :** jusqu’à 90 jours chez Meta",
             ]),
 
-            .heading("2.12 Site memobook.fr : données techniques (Webflow)"),
+            .heading("2.12 Site memo-book.com : données techniques (Webflow)"),
             .lines([
                 "**Données collectées :** cookies techniques de session nécessaires au bon fonctionnement du site",
                 "**Finalité :** assurer le fonctionnement et la sécurité du site",

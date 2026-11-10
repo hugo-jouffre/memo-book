@@ -13,12 +13,12 @@ package com.memobook.core
 // comme dans les CGU. Ce que le texte décrit a été relevé dans le code du
 // 23/10/2026 (`backend/prisma/schema.prisma`, `backend/src/services`).
 //
-// Historique : recopiée du site memobook.fr le 17/09/2026 ; liste des
+// Historique : recopiée du site memo-book.com le 17/09/2026 ; liste des
 // destinataires (T152) et ponctuation (T153) corrigées sur retour de Clara le
 // 26/09 ; abonnement et crédit du jour ajoutés le 03/10 ; formulaire bêta
 // retiré et Stripe ajouté le 19/10 (D6).
 //
-// ⚠️ **C'est le site qui fait foi** : memobook.fr doit publier ce texte le
+// ⚠️ **C'est le site qui fait foi** : memo-book.com doit publier ce texte le
 // même jour que l'app, et c'est son adresse que demandent l'App Store et la
 // Play Console.
 
@@ -54,7 +54,7 @@ object PrivacyPolicy {
         number = 1,
         title = "Introduction",
         blocks = listOf(
-            LegalBlock.Paragraph("Hugo Jouffre, opérant sous le nom de MemoBook (micro-entrepreneur, SIRET : 815\u00A0246\u00A0442, 28 rue Tête d’Or, 69006 Lyon), édite l’application MemoBook, sur iPhone et sur Android, et le site memobook.fr. Il attache une grande importance à la protection de vos données personnelles."),
+            LegalBlock.Paragraph("Hugo Jouffre, opérant sous le nom de MemoBook (micro-entrepreneur, SIRET : 815\u00A0246\u00A0442, 28 rue Tête d’Or, 69006 Lyon), édite l’application MemoBook, sur iPhone et sur Android, et le site memo-book.com. Il attache une grande importance à la protection de vos données personnelles."),
             LegalBlock.Paragraph("La présente Politique de confidentialité décrit quelles données nous collectons, pourquoi nous les collectons, comment nous les utilisons, combien de temps nous les conservons, et quels sont vos droits conformément au Règlement Général sur la Protection des Données (RGPD — Règlement UE 2016/679) et à la loi française Informatique et Libertés."),
 
             LegalBlock.Heading("Responsable du traitement :"),
@@ -69,7 +69,7 @@ object PrivacyPolicy {
         number = 2,
         title = "Données collectées et finalités",
         blocks = listOf(
-            LegalBlock.Paragraph("Les sections 2.1 à 2.9 concernent l’application MemoBook, les sections 2.10 à 2.12 le site memobook.fr."),
+            LegalBlock.Paragraph("Les sections 2.1 à 2.9 concernent l’application MemoBook, les sections 2.10 à 2.12 le site memo-book.com."),
 
             LegalBlock.Heading("2.1 Votre compte"),
             LegalBlock.Lines(listOf(
@@ -147,7 +147,7 @@ object PrivacyPolicy {
                 "**Durée de conservation :** tant que votre compte existe",
             )),
 
-            LegalBlock.Heading("2.10 Site memobook.fr : navigation et mesure d’audience"),
+            LegalBlock.Heading("2.10 Site memo-book.com : navigation et mesure d’audience"),
             LegalBlock.Lines(listOf(
                 "**Données collectées :** adresse IP anonymisée, pages visitées, durée de visite, type d’appareil et de navigateur, provenance (via cookies Google Analytics et Hotjar)",
                 "**Finalité :** analyser l’utilisation du site pour améliorer l’expérience utilisateur",
@@ -155,7 +155,7 @@ object PrivacyPolicy {
                 "**Durée de conservation :** 13 mois maximum (Google Analytics) / 1 an (Hotjar)",
             )),
 
-            LegalBlock.Heading("2.11 Site memobook.fr : données publicitaires"),
+            LegalBlock.Heading("2.11 Site memo-book.com : données publicitaires"),
             LegalBlock.Lines(listOf(
                 "**Données collectées :** données comportementales de navigation transmises à Meta via le Meta Pixel (pages visitées, actions effectuées), permettant de mesurer l’efficacité de nos publicités Facebook et Instagram",
                 "**Finalité :** mesure des campagnes publicitaires et reciblage publicitaire",
@@ -163,7 +163,7 @@ object PrivacyPolicy {
                 "**Durée de conservation :** jusqu’à 90 jours chez Meta",
             )),
 
-            LegalBlock.Heading("2.12 Site memobook.fr : données techniques (Webflow)"),
+            LegalBlock.Heading("2.12 Site memo-book.com : données techniques (Webflow)"),
             LegalBlock.Lines(listOf(
                 "**Données collectées :** cookies techniques de session nécessaires au bon fonctionnement du site",
                 "**Finalité :** assurer le fonctionnement et la sécurité du site",
