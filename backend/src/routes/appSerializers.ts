@@ -41,6 +41,7 @@ import {
   serializeAccountNotificationPreferences,
   type TripNotificationPreferences,
 } from "../services/notificationPreferences.js";
+import { purgeDateOf } from "../services/trash.js";
 
 /**
  * Ce que les trois écrans « produit » reçoivent : l'accueil, un voyage, le
@@ -315,6 +316,39 @@ export function serializeShowcase(showcase: Showcase) {
     subtitle: showcase.subtitle ?? "",
     imageUrl: showcase.imageUrl,
     destinationUrl: showcase.destinationUrl,
+  };
+}
+
+/**
+ * **Un voyage dans la corbeille**, tel que la section du bas de l'accueil le
+ * montre : son titre, ses dates, sa photo s'il en a une, le jour où il a été
+ * jeté et celui où il s'effacera.
+ *
+ * Volontairement maigre, et ce n'est pas le même objet qu'un `trip` : un
+ * voyage jeté ne se lit pas, ne se raconte pas, n'a ni crédit du jour ni
+ * co-voyageurs à afficher. Lui servir la forme complète donnerait à l'app des
+ * champs qu'elle ne doit surtout pas employer — et la tenterait de l'ouvrir.
+ *
+ * `purgeAt` est calculé, pas stocké : une seconde vérité de moins à tenir
+ * d'accord avec `TRASH_RETENTION_DAYS`.
+ */
+export function serializeDeletedTrip(memo: {
+  id: string;
+  title: string;
+  coverPhotoUrl: string | null;
+  startDate: Date | null;
+  endDate: Date | null;
+  deletedAt: Date | null;
+}) {
+  const deletedAt = memo.deletedAt ?? new Date();
+  return {
+    id: memo.id,
+    title: memo.title,
+    coverPhotoUrl: memo.coverPhotoUrl,
+    startDate: memo.startDate?.toISOString() ?? null,
+    endDate: memo.endDate?.toISOString() ?? null,
+    deletedAt: deletedAt.toISOString(),
+    purgeAt: purgeDateOf(deletedAt).toISOString(),
   };
 }
 

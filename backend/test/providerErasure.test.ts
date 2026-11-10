@@ -7,6 +7,7 @@ import { ApiTemplateRenderer, FAKE_PDF_BASE_URL } from "../src/services/apitempl
 import { StripePaymentGateway } from "../src/services/payments.js";
 import type { InMemoryMediaStorage } from "../src/services/storage.js";
 import { WebflowAssetPublisher } from "../src/services/webflow.js";
+import { purgeDeletedMemos } from "../src/services/trash.js";
 
 /**
  * **Ce qui reste chez les prestataires quand on supprime** (23/10/2026) : le
@@ -181,7 +182,16 @@ describe("la suppression d'un compte, chez les prestataires", () => {
 });
 
 describe("la suppression d'un voyage ou d'un souvenir, chez les prestataires", () => {
-  it("efface les photos publiées et le PDF du voyage supprimé", async () => {
+  /**
+   * **Jeter n'efface plus rien chez les prestataires** (10/11/2026) : le
+   * voyage part à la corbeille, et il peut revenir entier — y compris les
+   * photos publiées de son carnet. C'est la **purge**, trente jours plus
+   * tard, qui efface pour de bon.
+   *
+   * ⚠️ Les copies Webflow et les PDF survivent donc trente jours à la
+   * suppression. C'est le prix du filet, et c'est borné.
+   */
+  it("ne touche à rien tant que le voyage est seulement jeté", async () => {
     const account = await registerAccount(harness.app);
     const memo = await seedTrip(account.accountId);
     await seedPublishedBook(memo.id, "voyage");
@@ -194,6 +204,31 @@ describe("la suppression d'un voyage ou d'un souvenir, chez les prestataires", (
     });
 
     expect(response.statusCode).toBe(204);
+    expect(spies.webflow).not.toHaveBeenCalled();
+    expect(spies.apitemplate).not.toHaveBeenCalled();
+    expect(spies.stripe).not.toHaveBeenCalled();
+  });
+
+  it("efface les photos publiées et le PDF quand la corbeille se vide", async () => {
+    const account = await registerAccount(harness.app);
+    const memo = await seedTrip(account.accountId);
+    await seedPublishedBook(memo.id, "voyage");
+
+    await harness.app.inject({
+      method: "DELETE",
+      url: `/v1/memos/${memo.id}`,
+      headers: { authorization: account.authorization },
+    });
+    // Trente et un jours plus tard.
+    await harness.prisma.memo.update({
+      where: { id: memo.id },
+      data: { deletedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000) },
+    });
+
+    const spies = spyOnProviders();
+    const report = await purgeDeletedMemos(harness.context);
+
+    expect(report.memos).toBe(1);
     expect(spies.webflow.mock.calls).toEqual([["wf_voyage"]]);
     expect(spies.apitemplate.mock.calls).toEqual([["tx_voyage"]]);
     // Le compte reste : son client Stripe aussi.

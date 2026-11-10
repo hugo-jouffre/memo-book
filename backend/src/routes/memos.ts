@@ -3,8 +3,13 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
-import { deleteMemoAndData } from "../services/deletion.js";
-import { createMemoFor, ownedByAccount, visibleToAccount } from "../services/memoOwnership.js";
+import { restoreMemo, softDeleteMemo } from "../services/trash.js";
+import {
+  createMemoFor,
+  deletedForAccount,
+  ownedByAccount,
+  visibleToAccount,
+} from "../services/memoOwnership.js";
 import { serializeEntry, serializeMemo, serializeRender } from "./serializers.js";
 
 const createBody = z.object({
@@ -110,15 +115,45 @@ export function registerMemoRoutes(app: FastifyInstance, context: AppContext): v
   });
 
   /**
-   * Supprime un carnet — **son propriétaire seul**, jamais un co-voyageur.
+   * Jette un carnet — **son propriétaire seul**, jamais un co-voyageur.
    *
-   * Emporte ses souvenirs, ses médias (lignes et fichiers) et ses commandes :
-   * voir `services/deletion.ts`.
+   * **Rien n'est effacé** (Hugo, 10/11/2026) : le carnet part à la corbeille,
+   * d'où son propriétaire peut le reprendre pendant trente jours. Il quitte
+   * pourtant toutes les vues aussitôt, y compris celles de ses co-voyageurs —
+   * `visibleToAccount` exige `deletedAt: null`. Passé les trente jours, la
+   * purge appelle la vraie suppression : souvenirs, médias, commandes et
+   * traces chez les prestataires (`services/deletion.ts`).
+   *
+   * `404` sur un carnet **déjà** dans la corbeille : il n'y est plus pour être
+   * jeté, et `ownedByAccount` exige `deletedAt: null` comme partout ailleurs.
+   * `softDeleteMemo` reste malgré tout idempotent — deux appels concurrents
+   * gardent la date du premier, sans quoi une course repousserait la purge de
+   * trente jours.
    */
   app.delete("/v1/memos/:id", async (request, reply) => {
     const { id } = idParams.parse(request.params);
     await loadOwnedMemo(context, request, id);
-    await deleteMemoAndData(context, id);
+    await softDeleteMemo(context, id);
+    return reply.code(204).send();
+  });
+
+  /**
+   * Sort un carnet de la corbeille. **Son propriétaire seul** : il n'y a que
+   * lui qui a pu l'y mettre.
+   *
+   * Le carnet revient exactement comme il était — rien n'a bougé pendant qu'il
+   * dormait. `404` s'il n'y est plus : restauré par un autre appui, ou purgé.
+   */
+  app.post("/v1/memos/:id/restore", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const accountId = accountIdOf(request);
+    const memo = await context.prisma.memo.findFirst({
+      where: { id, ...deletedForAccount(accountId) },
+      select: { id: true },
+    });
+    if (!memo) return reply.code(404).send({ error: "memo_not_found" });
+
+    await restoreMemo(context, id);
     return reply.code(204).send();
   });
 }

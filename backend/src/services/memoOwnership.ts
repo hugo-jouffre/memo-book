@@ -67,6 +67,13 @@ export function isTakenId(error: unknown): boolean {
  */
 export function visibleToAccount(accountId: string): Prisma.MemoWhereInput {
   return {
+    // **Un voyage dans la corbeille n'est visible nulle part** (10/11/2026).
+    // La clause est ici, et pas dans chaque route, parce que c'est ici que
+    // passent presque toutes : l'accueil, le fil, les réglages, les commandes,
+    // les notifications. Un voyage jeté cesse d'exister pour tout le monde,
+    // co-voyageurs compris, le temps qu'il est dans la corbeille — seul son
+    // propriétaire l'y retrouve (``deletedForAccount``).
+    deletedAt: null,
     OR: [
       { ownerAccountId: accountId },
       { members: { some: { accountId, status: "active" } } },
@@ -82,7 +89,19 @@ export function visibleToAccount(accountId: string): Prisma.MemoWhereInput {
  * qu'un propriétaire principal, et c'est précisément à ça qu'il sert.
  */
 export function ownedByAccount(accountId: string): Prisma.MemoWhereInput {
-  return { ownerAccountId: accountId };
+  return { ownerAccountId: accountId, deletedAt: null };
+}
+
+/**
+ * « Ce compte a jeté ce voyage » — la corbeille, et elle seule.
+ *
+ * Le miroir d'``ownedByAccount`` : un voyage déjà dans la corbeille ne se
+ * supprime pas deux fois, et il ne se restaure que par celui qui l'a jeté. Un
+ * co-voyageur ne voit pas la corbeille : il n'a pas pu y mettre le voyage, et
+ * il n'a pas à décider de l'en sortir.
+ */
+export function deletedForAccount(accountId: string): Prisma.MemoWhereInput {
+  return { ownerAccountId: accountId, deletedAt: { not: null } };
 }
 
 /**
