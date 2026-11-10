@@ -282,7 +282,7 @@ object PrivacyPolicy {
         title = "Modifications de la politique",
         blocks = listOf(
             LegalBlock.Paragraph("Cette politique peut être mise à jour à tout moment pour refléter des changements dans nos pratiques ou la réglementation applicable. La date de mise à jour est indiquée ci-dessous. Nous vous encourageons à la consulter régulièrement."),
-            LegalBlock.Paragraph("Dernière mise à jour : 24 octobre 2026."),
+            LegalBlock.Paragraph("Dernière mise à jour : 10 novembre 2026."),
         )
     )
 
