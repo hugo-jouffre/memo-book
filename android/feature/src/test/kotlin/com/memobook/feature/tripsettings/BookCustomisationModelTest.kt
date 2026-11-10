@@ -7,9 +7,11 @@ import com.memobook.core.BookFontRole
 import com.memobook.core.BookPageTarget
 import com.memobook.core.PageTargetAllowance
 import com.memobook.core.PageTargetTripStage
+import com.memobook.core.PrintPricing
 import com.memobook.core.TripSettings
 import com.memobook.feature.InMemoryAppSettings
 import com.memobook.networking.ApiError
+import java.math.BigDecimal
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -401,6 +403,32 @@ class BookCustomisationModelTest {
      * Le serveur, en mémoire : il applique chaque édition comme la route
      * `PATCH /v1/trips/:id/settings`, et rend ce qu'il a.
      */
+    // MARK: - La grille des prix (10/11/2026)
+
+    /**
+     * Le modèle ne tarife pas : il relaie ce que les réglages portent. C'est
+     * ce que l'écran « Nombre de pages » annonce sous chaque option.
+     */
+    @Test fun theGridComesFromTheServedSettings() = runTest {
+        val server = Server(rules = false)
+        server.settings = server.settings.copy(
+            printPricing = PrintPricing(
+                tiers = listOf(PrintPricing.Tier("compact", 16, 45, BigDecimal("55"))),
+                maxPages = 45,
+            ),
+        )
+        val model = open(server, BookRulesMemory.inMemory())
+
+        assertEquals("compact", model.printPricing?.tier(forPages = 40)?.id)
+        assertEquals(0, BigDecimal("55").compareTo(model.printPricing?.displayedPrice(forTarget = 30)))
+    }
+
+    /** Un serveur qui ne sert pas la grille : l'écran se tait, il n'invente pas. */
+    @Test fun withoutAGridThereIsNoPriceToShow() = runTest {
+        val model = open(Server(rules = false), BookRulesMemory.inMemory())
+        assertNull(model.printPricing)
+    }
+
     private class Server(rules: Boolean, combo: BookFontCombo = BookFontCombo.travelJournal) {
         var settings: TripSettings
         val received = mutableListOf<BookCustomisationEdit>()

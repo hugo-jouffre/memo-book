@@ -777,9 +777,6 @@ object BookCopy {
          * 04/11/2026). La feuille applique le changement d'un seul appui : le
          * prix doit donc se lire **avant**, pas après.
          *
-         * ⚠️ **Pas encore employé sur Android** : `PrintPricing` n'y est pas
-         * porté, et cet écran n'affiche aucun prix. La phrase existe pour que
-         * les deux copies restent jumelles le jour du portage.
          */
         fun reachPrice(pages: Int, price: String): String = "À $pages pages, ton carnet coûtera $price."
 

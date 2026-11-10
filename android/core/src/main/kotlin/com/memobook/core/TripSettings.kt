@@ -260,6 +260,16 @@ data class TripSettings(
      *  de production peut être en retard sur l'app : on lit alors
      *  [pageTargetAllowance], qui ne compte rien et ne bloque rien. */
     var pageTarget: PageTargetAllowance? = null,
+
+    /**
+     * **Le prix du carnet, par palier de pages** — voir [PrintPricing].
+     *
+     * C'est ce que l'onglet « Nombre de pages » annonce sous chaque option,
+     * et ce que la ligne « Zones libres » affiche en supplément. Optionnel :
+     * un serveur plus ancien ne le sert pas, et l'écran se tait alors plutôt
+     * que d'inventer un prix.
+     */
+    var printPricing: PrintPricing? = null,
 ) {
     val id: String get() = tripId
 

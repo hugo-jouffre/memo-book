@@ -12,6 +12,7 @@ import com.memobook.core.BookRulesLock
 import com.memobook.core.PageTargetAllowance
 import com.memobook.core.PageTargetReach
 import com.memobook.core.PageTargetTripStage
+import com.memobook.core.PrintPricing
 import com.memobook.core.TripSettings
 import com.memobook.networking.ApiError
 import kotlinx.coroutines.CancellationException
@@ -171,6 +172,14 @@ class BookCustomisationModel(
         val isPageTargetLocked: Boolean get() = pageTargetAllowance.isExhausted
 
         /**
+         * **La grille des prix du carnet**, servie avec les réglages — voir
+         * [PrintPricing]. Nulle tant que le serveur ne l'a pas dite : l'onglet
+         * « Nombre de pages » n'affiche alors aucun prix, et la ligne « Zones
+         * libres » aucun supplément.
+         */
+        val printPricing: PrintPricing? get() = settings?.printPricing
+
+        /**
          * On vient de toucher un palier alors que la cible ne bouge plus : le
          * panneau le dit à l'orange, sous les paliers pâlis. Comme la note du
          * verrou des pointillés, elle répond à un appui, pas à un état.
@@ -209,6 +218,7 @@ class BookCustomisationModel(
     val isRulesSwitchLocked: Boolean get() = _state.value.isRulesSwitchLocked
     val pageTargetAllowance: PageTargetAllowance get() = _state.value.pageTargetAllowance
     val isPageTargetLocked: Boolean get() = _state.value.isPageTargetLocked
+    val printPricing: PrintPricing? get() = _state.value.printPricing
     val offersRewrite: Boolean get() = _state.value.offersRewrite
 
     /** Les réglages qui attendent leur tour, envoyés **un par un**, dans l'ordre — voir [save]. */
@@ -344,8 +354,7 @@ class BookCustomisationModel(
 
     /**
      * Pose la cible **sans la faire confirmer**, quand l'écran l'a déjà
-     * annoncée — ce qu'elle consomme, et son prix le jour où `PrintPricing`
-     * sera porté ici.
+     * annoncée — ce qu'elle consomme, et son prix.
      *
      * Le décompte des deux changements est inchangé : un changement qui ne
      * compte pas part tout seul, le dernier épuisé pose la note orange.
