@@ -69,9 +69,16 @@ object ChatCopy {
      * le fil est commun — chaque bulle y porte le prénom de celui qui parle
      * (FAQ, `ChatContext.memberCount`) —, et un fil solo le devient dès
      * qu'on invite quelqu'un. La phrase reste vraie dans les deux cas.
+     *
+     * **Deux phrases, deux lignes** (Hugo, 28/10/2026). Elles tenaient dans
+     * une seule, séparées par un deux-points : la seconde — qui dit *qui*
+     * peut lire — se perdait au milieu de la première. Le cadenas se pose
+     * au-dessus des deux (`ChatPrivacyNote`).
      */
-    const val privacyNote =
-        "Ta conversation est privée : seuls toi et tes co-voyageurs pouvez la lire."
+    const val privacyNote = "Ta conversation est privée."
+
+    /** La seconde ligne, sous [privacyNote]. */
+    const val privacyNoteDetail = "Seuls toi et tes co-voyageurs pouvez la lire."
 
     // MARK: - L'accueil d'une conversation vide
 

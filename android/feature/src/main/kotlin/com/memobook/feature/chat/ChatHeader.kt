@@ -368,15 +368,39 @@ fun ChatGreetingView(greeting: ChatGreeting, modifier: Modifier = Modifier) {
  */
 @Composable
 fun ChatPrivacyNote(modifier: Modifier = Modifier) {
-    BrandText(
-        ChatCopy.privacyNote,
-        MemoBookFont.caption,
+    // Le cadenas suit le corps du texte : c'est une ponctuation de la mention,
+    // pas une icône d'interface.
+    val lockSide = scaled(14.dp)
+    Column(
         modifier
             .fillMaxWidth()
             .padding(horizontal = MemoBookSpacing.screenMargin, vertical = MemoBookSpacing.xs),
-        color = MemoBookColor.inkMuted,
-        textAlign = TextAlign.Center,
-    )
+        verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs / 2),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // **Un cadenas au-dessus** (Hugo, 28/10/2026) : la phrase se lit d'un
+        // coup d'œil, l'icône dit de quoi elle parle avant même qu'on la lise.
+        Image(
+            painter = painterResource(R.drawable.icon_locker),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(MemoBookColor.inkMuted),
+            modifier = Modifier.size(lockSide),
+        )
+        BrandText(
+            ChatCopy.privacyNote,
+            MemoBookFont.caption,
+            color = MemoBookColor.inkMuted,
+            textAlign = TextAlign.Center,
+        )
+        // La seconde phrase sur sa propre ligne, et non à la suite d'un
+        // deux-points : c'est elle qui dit qui peut lire.
+        BrandText(
+            ChatCopy.privacyNoteDetail,
+            MemoBookFont.caption,
+            color = MemoBookColor.inkMuted,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 // MARK: - Aperçus

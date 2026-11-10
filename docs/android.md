@@ -71,10 +71,10 @@ la main.
 |---|---|---|---|
 | **B1** Liens et Google — ✅ PR #143 ; `GOOGLE_WEB_CLIENT_ID` posé sur Railway et dans `gradle.properties` le 22/10 (client « MemoBook Backend ») ; le client Android (`com.memobook.app` + SHA-1 de debug) est créé, ceux des clés d'upload et de Play viennent avec la Play Console | `GOOGLE_WEB_CLIENT_ID` posé sur Railway (l'audience des jetons Android) ; `/.well-known/assetlinks.json` ; `/j/:code` et `/password/reset` savent mener au Play Store ou dans l'app, sans dire « iPhone » | `env.ts`, `invitePage.ts`, `passwordResetPage.ts` | non |
 | ~~B2~~ Apple par le web — **abandonné** (Hugo, 22/10/2026) : pas d'entrée Apple sur Android. Le travail est gardé sur la branche `android-serveur-b2` | — | — | non |
-| **B3** FCM — 🔶 branche `android-serveur-b3` (migration `20261022140000_jetons_fcm` dans son propre commit) ; reste le projet Firebase (A0) et ses variables | `push_tokens.provider` (apns ou fcm) ; `/v1/push-tokens` accepte un jeton FCM (`provider: "fcm"` ou `platform: "android"`) sans le passer en minuscules ; un expéditeur FCM HTTP v1 (compte de service, JWT RS256, sans SDK) derrière `PushSender`, qui choisit APNs ou FCM par jeton ; `UNREGISTERED` oublie le jeton ; `FCM_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID`, `npm run fcm:check`. Côté app : `FirebasePush.kt` et `MemoBookMessagingService`, sans `google-services` | `schema.prisma`, `routes/notifications.ts`, `services/apns.ts`, `services/fcm.ts` | oui |
-| **B4** Google Play Billing — 🔶 branche `android-serveur-b4` (migration `20261022150000_abonnement_google_play` dans son propre commit) : `POST /v1/subscriptions/google-play`, `POST /v1/webhooks/google-play`, `subscription.store` et `manageUrl` au profil ; reste le compte de service Play et Pub/Sub (A0) | le fournisseur `google_play` ; la route d'achat qui vérifie et **acquitte** le jeton ; le webhook des notifications temps réel ; résiliation, sérialiseurs et rappels selon le store | `schema.prisma`, `services/googlePlay.ts`, `routes/profile.ts`, `appSerializers.ts`, `subscriptionCatalog.ts` | oui |
-| **B5** Google Pay et plateforme — 🔶 branche `android-serveur-b5` : `X-App-Platform` retenu sur le tour (`payload.platform`), `GOOGLE_PAY_ENABLED` → `googlePayEnabled` du ticket ; le rappel d'abonnement parle du Play Store à un abonné Play (B4) | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
-| **B6** Page de suppression — 🔶 PR #143 : `/account/delete` | une page publique pour demander la suppression d'un compte par e-mail, que Google Play exige de toute app qui crée des comptes | à côté de `dataExportPage.ts` | non |
+| **B3** FCM — ✅ PR #146 (migration `20261022140000_jetons_fcm`, partie de la PR #145) ; reste le projet Firebase et ses variables Railway `FCM_SERVICE_ACCOUNT_JSON` et `FCM_PROJECT_ID`, sur `api` et `worker` (A0) | `push_tokens.provider` (apns ou fcm) ; `/v1/push-tokens` accepte un jeton FCM (`provider: "fcm"` ou `platform: "android"`) sans le passer en minuscules ; un expéditeur FCM HTTP v1 (compte de service, JWT RS256, sans SDK) derrière `PushSender`, qui choisit APNs ou FCM par jeton ; `UNREGISTERED` oublie le jeton ; `FCM_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID`, `npm run fcm:check`. Côté app : `FirebasePush.kt` et `MemoBookMessagingService`, sans `google-services` | `schema.prisma`, `routes/notifications.ts`, `services/apns.ts`, `services/fcm.ts` | oui |
+| **B4** Google Play Billing — ✅ PR #146 (migration `20261022150000_abonnement_google_play`, partie de la PR #145) : `POST /v1/subscriptions/google-play`, `POST /v1/webhooks/google-play`, `subscription.store` et `manageUrl` au profil ; reste le compte de service Play (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`) et l'abonnement Pub/Sub (`GOOGLE_PLAY_PUSH_AUDIENCE` + `GOOGLE_PLAY_PUSH_SERVICE_ACCOUNT`, ou `GOOGLE_PLAY_WEBHOOK_SECRET`) (A0) | le fournisseur `google_play` ; la route d'achat qui vérifie et **acquitte** le jeton ; le webhook des notifications temps réel ; résiliation, sérialiseurs et rappels selon le store | `schema.prisma`, `services/googlePlay.ts`, `routes/profile.ts`, `appSerializers.ts`, `subscriptionCatalog.ts` | oui |
+| **B5** Google Pay et plateforme — ✅ PR #146 ; reste `GOOGLE_PAY_ENABLED=true` quand Google Pay est accepté côté Stripe et Google (A0). `X-App-Platform` est retenu sur le tour (`payload.platform`), `GOOGLE_PAY_ENABLED` → `googlePayEnabled` du ticket ; le rappel d'abonnement parle du Play Store à un abonné Play (B4) | Google Pay dans le ticket de paiement Stripe ; un en-tête `X-App-Platform` lu comme `X-Time-Zone` ; « Réglages de l'iPhone » dans le prompt de MEMO et ses appels à l'action, le lien App Store de l'e-mail de rappel | `billing.ts`, `app.ts`, `callsToAction.ts`, `conversationAnthropic.ts`, `mailer.ts` | non |
+| **B6** Page de suppression — ✅ PR #143 : `/account/delete` ; reste à saisir l'URL dans la Play Console (A9) | une page publique pour demander la suppression d'un compte par e-mail, que Google Play exige de toute app qui crée des comptes | à côté de `dataExportPage.ts` | non |
 
 Côté app, B4 rend aussi indépendant du store ce qui ne connaît qu'Apple :
 `Subscription.managedByAppStore` (dire quel store tient l'abonnement), les états
@@ -95,7 +95,10 @@ fait dans le Play Store (`subscription.manageUrl`).
 
 ## La liste de parité
 
-Écran par écran, dans l'ordre des phases. ✅ fait · 🔄 en cours · ⏳ à faire.
+Écran par écran, dans l'ordre des phases. ✅ porté et testé sur la JVM, vu
+dans l'émulateur sur le jeu d'essai · 🔄 en cours · 🔶 porté, mais attend une
+clé ou un geste hors du dépôt · ⏳ à faire. **Rien n'est encore vérifié sur un
+vrai téléphone, ni contre le serveur.**
 Les noms sont ceux du code iOS (`ios/Modules/Sources/MemoBookFeature`) ; le
 fichier Kotlin porte le même.
 
@@ -146,7 +149,7 @@ son nom. 380 tests sur la JVM, portés cas pour cas des suites iOS.
 | iOS | Android | État |
 |---|---|---|
 | Modèles de `MemoBookCore` et leur décodage (états inconnus tolérés) | `kotlinx.serialization` ; un état inconnu devient `Unknown(raw)` (`RawValueSerializer`), les `decodeIfPresent ?? défaut` d'iOS des sérialiseurs dédiés | ✅ |
-| Textes : `ChatCopy`, `BookCopy`, `OrderCopy`, CGU, confidentialité, FAQ, aide | recopiés par script, comparés chaîne à chaîne avec le Swift | ✅ |
+| Textes : `ChatCopy`, `BookCopy`, `OrderCopy`, CGU, confidentialité, FAQ, aide | recopiés **à la main** depuis le Swift, qui fait foi. Comparés chaîne à chaîne par un test : `ChatCopy` par `ChatCopyParityTest` (110 constantes, qui lit les deux fichiers sur le disque ; les divergences voulues sont nommées dans `DELIBERATE_DIVERGENCES`), les textes légaux par `StoreNeutralTextsTest`. ⚠️ `BookCopy`, `OrderCopy`, la FAQ et l'aide **ne sont pas encore sous test** : une dérive y passe inaperçue, comme la mention de confidentialité pendant treize jours | 🔶 |
 | `MemoBookAPIClient` : les routes, `APIError` et ses messages en français | `MemoBookApiClient` (OkHttp, coroutines annulables), `ApiError` ; la bascule vers l'adresse de secours ; `platform: "android"` à l'enregistrement de l'appareil | ✅ |
 | `TokenStore`, `Connectivity`, `NetworkLog` | interfaces pures ; `KeystoreTokenStore` (AES-GCM, clé dans l'AndroidKeyStore), `AndroidConnectivity`, `AndroidLogSink` — **compilés par la CI seulement** | ✅ |
 | `ContentCache`, `CachedSource`, `SessionRestore` | les mêmes, dans `cacheDir` ; l'empreinte des voyages est celle d'iOS | ✅ |
@@ -159,10 +162,6 @@ son nom. 380 tests sur la JVM, portés cas pour cas des suites iOS.
 régénérer avec elle (deux tests le vérifient).
 
 ### Comptes et entrée (A4)
-
-✅ porté et testé sur la JVM, vu dans l'émulateur sur le jeu d'essai ·
-🔶 porté, mais attend une clé ou un lot serveur · ⏳ à faire.
-**Rien n'est encore vérifié sur un vrai téléphone, ni contre le serveur.**
 
 | iOS | État |
 |---|---|
@@ -205,7 +204,7 @@ régénérer avec elle (deux tests le vérifient).
 | iOS | État |
 |---|---|
 | `PaywallView` (premier passage, retour), `BookPreviewSheet` par-dessus | ✅ |
-| Achat de l'abonnement par Google Play Billing, restauration, achats non livrés — la remise au serveur (`POST /v1/subscriptions/google-play`) attend le lot B4 : le produit ne s'active pas dans la Play Console avant | 🔶 |
+| Achat de l'abonnement par Google Play Billing, restauration, achats non livrés — la remise au serveur (`POST /v1/subscriptions/google-play`) existe (B4) ; reste à activer le produit dans la Play Console, et le compte de service qui laisse le serveur lire l'achat | 🔶 |
 | `SubscriptionSheet` : actuel, continuer, raison, fin — et « Gérer » vers le store qui l'a vendu (Google Play, ou le renvoi vers l'iPhone pour l'App Store), lu sur `subscription.store` et `subscription.manageUrl` du serveur (B4), la lecture d'avant en repli | ✅ |
 | `OrderView` : sept étapes, feuille Stripe, reprise d'un paiement abandonné, `OrderWhatsAppSheet` | ✅ |
 | Google Pay dans la feuille Stripe — piloté par le serveur (`googlePayEnabled` du ticket, `GOOGLE_PAY_ENABLED`, B5) ; éteint tant que l'accès production Google Pay manque | 🔶 |
