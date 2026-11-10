@@ -493,6 +493,11 @@ public actor PreviewAPI: MemoBookAPI {
         memosById[id] = nil
     }
 
+    /// Le bac à sable ne tient pas de corbeille : un voyage jeté y disparaît,
+    /// et rien ne le rend. Les écrans qui comptent sont ceux qu'on regarde,
+    /// pas la mécanique des trente jours — elle se vérifie en test.
+    public func restoreMemo(id: String) async throws {}
+
     public func deleteEntry(id: String) async throws {
         try SandboxNetwork.failIfOffline()
         deletedEntryIds.insert(id)

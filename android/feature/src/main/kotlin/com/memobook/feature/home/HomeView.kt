@@ -68,6 +68,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import coil3.compose.AsyncImage
+import com.memobook.core.HomeCopy
 import com.memobook.core.HomeFeed
 import com.memobook.core.Subscription
 import com.memobook.core.Trip
@@ -789,18 +790,45 @@ private fun ColumnScope.HomeLoadedContent(
         }
     }
 
-    state.feed?.showcase?.let { showcase ->
-        Rising(showcaseOrder) { ShowcaseCard(showcase) { onIntent(HomeIntent.OpenGallery) } }
+    // **La corbeille**, tout en bas (Hugo, 10/11/2026). Elle ne paraît que
+    // s'il y a quelque chose dedans : une section « Supprimés » vide
+    // inquiéterait plus qu'elle ne rassure.
+    val trashScope = rememberCoroutineScope()
+    if (state.deletedTrips.isNotEmpty()) {
+        Rising(showcaseOrder) {
+            Column(
+                Modifier.fillMaxWidth().padding(top = MemoBookSpacing.m),
+                verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs),
+            ) {
+                BrandText(HomeCopy.Trash.title, MemoBookFont.label, color = MemoBookColor.inkMuted)
+                BrandText(
+                    HomeCopy.Trash.explanation,
+                    MemoBookFont.caption,
+                    color = MemoBookColor.inkMuted,
+                )
+                for (trip in state.deletedTrips) {
+                    DeletedTripRow(
+                        trip = trip,
+                        isRestoring = state.restoringTripId == trip.id,
+                        onRestore = { trashScope.launch { model.restoreTrip(trip.id) } },
+                    )
+                }
+            }
+        }
     }
 
-    Rising(showcaseOrder + 1) {
+    state.feed?.showcase?.let { showcase ->
+        Rising(showcaseOrder + 1) { ShowcaseCard(showcase) { onIntent(HomeIntent.OpenGallery) } }
+    }
+
+    Rising(showcaseOrder + 2) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             BrandButton("Besoin d’aide ?", style = BrandButton.Style.Link, isSubdued = true) { onIntent(HomeIntent.OpenHelp) }
         }
     }
 
     if (showsSandbox) {
-        Rising(showcaseOrder + 2) { HomeDebugPanel(model) }
+        Rising(showcaseOrder + 3) { HomeDebugPanel(model) }
     }
 }
 
