@@ -422,6 +422,34 @@ installées casseraient sur l'un et enverraient l'autre comme un texte. Elles
 ignorent la clé `callToAction` — **le texte de la bulle doit donc se suffire**
 et dire où trouver ce que le bouton ouvre.
 
+### Le thème, deviné
+
+**Le problème** : l'étape « Contexte » a quitté le parcours de création le
+17/09 (D27), et depuis presque aucun voyage n'a de thème — alors que c'est lui
+qui donne son ton au carnet. Remettre une question à l'inscription serait la
+poser au moment où l'on a le moins à dire.
+
+**Ce qu'on fait** : au bout de **trois souvenirs écrits**, un appel court et
+séparé range le voyage dans le catalogue de `trip_themes`
+(`services/tripTheme.ts`). Le modèle ne choisit pas librement : il rend un
+`slug` du catalogue, ou `null`. Ni thème inventé, ni « autre » — celui-là
+ouvre un champ libre, le deviner reviendrait à ne rien dire.
+
+- **Un thème** : il s'écrit, et personne n'est dérangé. C'est le cas qu'on
+  vise — la fonctionnalité réussie est celle qui ne se voit pas.
+- **Rien** : MEMO pose la question (`TRIP_THEME_QUESTION`), **une fois**, sans
+  bouton. `memos.themeAskedAt` l'en empêche la deuxième ; elle ne s'efface
+  jamais, parce que ce qu'on garde est qu'on a demandé, pas qu'on attend.
+
+**Trois règles** : on ne touche jamais à un thème déjà choisi — celui du
+voyageur fait autorité ; on ne compte que les souvenirs **écrits**, un vocal
+en cours de transcription ne dit rien ; et une panne du modèle n'écrit rien,
+pas même la date, pour que le souvenir suivant réessaie.
+
+⚠️ **Le prompt principal de MEMO n'est pas touché.** C'est un appel à part,
+comme la question de l'étape manquante : son système, son schéma, son
+validateur. Aucun banc de la conversation à rejouer.
+
 ### L'étape manquante
 
 **Le problème** : on raconte le 25, puis le 27, et le 26 n'existera jamais dans
@@ -841,6 +869,7 @@ exactement ce que le modèle doit faire mieux.
 | 22/09/2026 | Effort de réflexion bas pour la conversation (quelqu'un attend), élevé pour la rédaction (personne ne la regarde écrire) | reco Claude |
 | 02/10/2026 | Un passage que l'écrivain n'a pas compris ne s'imprime pas : il se cite dans la bulle « Il te convient ? », jamais dans une question de plus | reco Claude |
 | 03/10/2026 | Crédit du jour par voyage (5 minutes, oral et écrit, photos gratuites, recharge à minuit) ; abonnement à 4,99 €/mois, illimité pour l'abonné seul ; plus d'étapes offertes, de limites de souvenirs ni d'abonnement à la semaine | Hugo |
+| 11/11/2026 | Le thème d'un voyage se devine au bout de trois souvenirs écrits, par un appel court et séparé ; aucun thème ne va → MEMO demande une fois, sans bouton (`themeAskedAt`). Le prompt principal n'est pas touché | Hugo |
 | 10/11/2026 | Le crédit du jour passe de 5 à **2 minutes** (« je ne raconte jamais plus de 2 min ») : l'écrit suit le même pot, donc 4 000 caractères deviennent 1 600. Textes, CGU, confidentialité, FAQ et prompt de MEMO repris ensemble | Hugo |
 | 03/10/2026 | La bulle « reviens demain » est posée par le serveur, une fois par voyage et par jour, avec le bouton `daily_credit_subscribe` ; un abonné ne la voit pas | Hugo |
 | 03/10/2026 | MEMO dit les faits du crédit et de l'abonnement quand on les lui demande, jamais de lui-même, sans culpabiliser | Hugo |

@@ -791,6 +791,21 @@ export function missingDayNotice(days: readonly string[], before: string, after:
 /** Deux journées manquent : la seule question du tour, et elle a ses deux puces. */
 export const MISSING_DAY_WHICH = "Tu peux m’en raconter une des deux. Laquelle ?";
 
+/**
+ * **La question du thème** (Hugo, 10/11/2026) — quand aucun thème du
+ * catalogue ne va, et qu'il a bien fallu demander.
+ *
+ * Posée **une seule fois par voyage** (`memos.themeAskedAt`) et sans bouton :
+ * c'est une question de conversation, pas un formulaire. Le voyageur répond
+ * en toutes lettres, ou ne répond pas — et on ne la repose jamais.
+ *
+ * Elle ne dit pas « thème » : le mot est celui du code et des réglages, pas
+ * celui d'une conversation. Elle demande de quoi le voyage a l'air, et la
+ * réponse, quelle qu'elle soit, entre au contexte du voyage comme le reste.
+ */
+export const TRIP_THEME_QUESTION =
+  "Dis-moi, si tu devais résumer ce voyage en quelques mots — c'est plutôt l'aventure, la détente, la table, les retrouvailles ? Ça m'aide à lui donner le bon ton.";
+
 /** La journée est choisie : MEMO la nomme, et se tait. */
 export function missingDayListening(day: string): string {
   return `Je t’écoute : raconte-moi ta journée du ${longDay(day)}, à l’oral ou au clavier.`;

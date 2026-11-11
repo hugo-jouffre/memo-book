@@ -34,6 +34,7 @@ Voilà l'état des lieux, une fois OpenAI parti :
 | **Conversation** — MEMO | `services/conversationAnthropic.ts` | Claude Sonnet 5 | en place |
 | **Le contexte du voyage** — extraction | `conversationAnthropic.gatherContext` | Claude Sonnet 5 | en place |
 | **La journée qui manque** — la question | `conversationAnthropic.askMissingDay` | Claude Sonnet 5 | en place depuis le 21/10/2026 |
+| **Le thème du voyage** — deviné | `conversationAnthropic.suggestTheme` | Claude Sonnet 5 | en place depuis le 11/11/2026 |
 | **Mise en page** | `services/bookPdf.ts` + APITemplate | pas de modèle | en place |
 | **Photo** | `agents/agent-photo.md` | — | phase 2 |
 | **Modération** | `agents/agent-moderation.md` | — | jamais construit |
@@ -268,6 +269,7 @@ cd backend && npm run redaction:eval -- --compare opus-5 opus-5-5 --judge
 | 23/09/2026 | **Mistral en second fournisseur** — inférence européenne, modération gratuite, français natif — **sous réserve** de l'essai du § 7 | reco Claude |
 | 23/09/2026 | Google passe devant si l'agent Photo devient central : c'est le seul poste où il est franchement meilleur | reco Claude |
 | 23/09/2026 | La rédaction reste sur Opus 5 ; regarder Opus 5.5 (‑23 %, aucun portage) | reco Claude |
+| 11/11/2026 | Le thème se devine par un appel court et séparé, **une fois par voyage** : effort bas, 400 jetons de sortie, le système en cache. Il suit le modèle de la conversation plutôt que d'en avoir un à lui — un second modèle à surveiller coûterait plus cher que l'appel | Hugo |
 | 23/09/2026 | La conversation reste sur Sonnet 5 ; descendre à Haiku 4.5 avant d'envisager un autre fournisseur | reco Claude |
 | 24/09/2026 | `env.live` ne décide plus qui parle : MEMO répond dès qu'il a **sa** clé, même sans clé OpenAI. Seul `PIPELINE_MODE=fake` le coupe | fait |
 | 23/09/2026 | « Vos souvenirs ne quittent pas l'Europe » : argument commercial à trancher **avant** de rebrancher la transcription | à trancher — Hugo |

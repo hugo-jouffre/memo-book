@@ -13,6 +13,8 @@ import {
   type ConversationReply,
   type MemoResponder,
   type MissingDayTurnInput,
+  type TripThemeTurnInput,
+  type TripThemeTurnReply,
   type MissingDayTurnReply,
   type TripContextTurnInput,
   type TripContextTurnReply,
@@ -183,6 +185,27 @@ export class AnthropicResponder implements MemoResponder {
 
     const raw = JSON.parse(text) as { text?: string | null };
     return { text: acceptableMissingDay(raw.text ?? ""), model: this.model };
+  }
+
+  async suggestTheme(input: TripThemeTurnInput): Promise<TripThemeTurnReply> {
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 400,
+      output_config: {
+        effort: "low",
+        format: { type: "json_schema", schema: tripThemeSchema() },
+      },
+      system: [{ type: "text", text: TRIP_THEME_SYSTEM, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: buildTripThemePrompt(input) }],
+    });
+
+    if (response.stop_reason === "refusal") throw new Error("Le modèle a refusé le thème.");
+    if (response.stop_reason === "max_tokens") throw new Error("La réponse s'est arrêtée avant la fin.");
+    const text = response.content.find((block) => block.type === "text")?.text;
+    if (!text) throw new Error("Le modèle n'a produit aucun texte exploitable.");
+
+    const raw = JSON.parse(text) as { slug?: string | null };
+    return { slug: acceptableTripTheme(raw.slug ?? null, input.themes), model: this.model };
   }
 
   private buildSystemPrompt(): Anthropic.TextBlockParam[] {
@@ -794,6 +817,89 @@ export function buildMissingDayPrompt(input: MissingDayTurnInput): string {
   lines.push(`Son libellé, exactement : « ${input.buttonLabel} »`);
   lines.push("", `Écris ta bulle : ${MISSING_DAY_LIMIT} caractères au plus, une seule question.`);
   return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Le thème du voyage, deviné
+// ---------------------------------------------------------------------------
+
+/**
+ * **Deviner le thème** (Hugo, 10/11/2026). Un appel court, une seule fois par
+ * voyage, séparé de la conversation : MEMO n'a pas à porter cette question
+ * dans son prompt principal, qui est déjà long et dont chaque mot a été pesé.
+ *
+ * Le modèle ne choisit pas librement : il range le voyage dans **le catalogue
+ * que la base sert**, ou il dit qu'aucun ne va. Un thème inventé ne
+ * s'afficherait nulle part, et un thème faux s'imprimerait sur la couverture.
+ */
+const TRIP_THEME_SYSTEM = [
+  "Tu ranges un carnet de voyage dans l'un des thèmes proposés, et rien d'autre.",
+  "",
+  "Tu reçois le titre du voyage, sa destination, les prénoms de ceux qui le",
+  "racontent, et les premiers souvenirs écrits. Tu rends le `slug` du thème qui",
+  "décrit le mieux ce voyage **dans son ensemble** — pas la dernière journée.",
+  "",
+  "Rends `null` plutôt qu'un à-peu-près : il vaut mieux demander au voyageur",
+  "que de se tromper. En particulier quand deux thèmes se valent, quand les",
+  "souvenirs ne disent pas encore de quoi le voyage a l'air, ou quand le voyage",
+  "est trop composite pour tenir dans un seul.",
+  "",
+  "Ne rends jamais le thème « autre » : c'est celui qui ouvre un champ libre,",
+  "et le deviner reviendrait à ne rien dire.",
+  "",
+  "Tu réponds uniquement par l'objet JSON demandé.",
+].join("\n");
+
+/** Ce qu'on montre au modèle : le voyage, qui le raconte, et ce qu'il raconte. */
+export function buildTripThemePrompt(input: TripThemeTurnInput): string {
+  const lines: string[] = [];
+  lines.push(`Voyage : ${input.memo.title}`);
+  if (input.memo.destinationCity) lines.push(`Destination : ${input.memo.destinationCity}`);
+  lines.push(
+    input.companions.length > 0
+      ? `Raconté avec : ${input.companions.join(", ")}`
+      : "Raconté seul.",
+  );
+  lines.push("", "Thèmes possibles :");
+  for (const theme of input.themes) lines.push(`- ${theme.slug} : ${theme.name}`);
+  lines.push("", "Les premiers souvenirs :");
+  input.memories.forEach((memory, index) => lines.push(`${index + 1}. ${memory}`));
+  lines.push("", "Quel thème ? Son `slug`, ou `null` si aucun ne va.");
+  return lines.join("\n");
+}
+
+export function tripThemeSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      slug: {
+        type: ["string", "null"],
+        description:
+          "Le `slug` exact d'un thème de la liste, ou null si aucun ne décrit ce voyage.",
+      },
+    },
+    required: ["slug"],
+  };
+}
+
+/**
+ * Ce qui passe : un `slug` **du catalogue**, et pas « autre ». Tout le reste —
+ * un thème inventé, un nom au lieu d'un slug, une casse différente — rend
+ * `null`, et c'est MEMO qui demandera.
+ *
+ * On compare en minuscules et sans espaces : un modèle qui rend `Road-Trip`
+ * veut dire `road-trip`, et refuser là-dessus ferait poser une question pour
+ * rien.
+ */
+export function acceptableTripTheme(
+  raw: string | null,
+  themes: { slug: string }[],
+): string | null {
+  if (raw === null) return null;
+  const wanted = raw.trim().toLowerCase();
+  if (wanted.length === 0 || wanted === "autre" || wanted === "null") return null;
+  return themes.find((theme) => theme.slug.toLowerCase() === wanted)?.slug ?? null;
 }
 
 export function missingDaySchema(): Record<string, unknown> {
