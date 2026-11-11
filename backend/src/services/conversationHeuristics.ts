@@ -35,6 +35,8 @@ import {
   type TripContextTurnInput,
   type TripContextTurnReply,
   type MemoResponder,
+  type TripThemeTurnInput,
+  type TripThemeTurnReply,
   type MissingDayTurnInput,
   type MissingDayTurnReply,
 } from "./conversation.js";
@@ -758,6 +760,15 @@ export class HeuristicResponder implements MemoResponder {
    */
   async askMissingDay(_input: MissingDayTurnInput): Promise<MissingDayTurnReply> {
     return { text: null, model: "heuristic" };
+  }
+
+  /**
+   * Le moteur de règles ne devine pas un thème : il faudrait comprendre le
+   * récit, et des mots-clés trancheraient mal entre « City trips » et
+   * « Gastronomie ». `null` : MEMO demandera.
+   */
+  async suggestTheme(_input: TripThemeTurnInput): Promise<TripThemeTurnReply> {
+    return { slug: null, model: "heuristic" };
   }
 
   async reply(input: ConversationInput): Promise<ConversationReply> {

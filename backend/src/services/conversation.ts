@@ -312,6 +312,36 @@ export interface MissingDayTurnReply {
   model: string;
 }
 
+/**
+ * **Deviner le thème d'un voyage** (Hugo, 10/11/2026) — « le thème de
+ * l'aventure devrait être déterminé automatiquement au bout de quelques
+ * étapes ».
+ *
+ * Un appel court et séparé, sur le modèle de la question du trou : son propre
+ * prompt, son propre schéma, et une réponse qu'on refuse si elle sort du
+ * catalogue. Il ne part **qu'une fois par voyage**, quand assez de souvenirs
+ * sont écrits et qu'aucun thème n'est posé.
+ */
+export interface TripThemeTurnInput {
+  memo: { title: string; destinationCity: string | null };
+  /** Les souvenirs déjà écrits, du premier au dernier — le récit, pas les bulles. */
+  memories: string[];
+  /** Ceux qui racontent avec le voyageur, par leur prénom. Vide s'il est seul. */
+  companions: string[];
+  /** Le catalogue, tel que la base le sert : c'est le seul choix permis. */
+  themes: { slug: string; name: string }[];
+}
+
+export interface TripThemeTurnReply {
+  /**
+   * Le `slug` d'un thème du catalogue, ou `null` quand aucun ne va — et c'est
+   * alors MEMO qui demandera. « Autre » n'est pas une réponse : c'est le
+   * thème qui ouvre un champ libre, et le deviner reviendrait à ne rien dire.
+   */
+  slug: string | null;
+  model: string;
+}
+
 export interface MemoResponder {
   /** L'ouverture : une copie fixe, sans modèle. Sur l'interface pour refléter `MemoResponder.swift`. */
   opening(): { text: string; suggestionIds: SuggestionId[] };
@@ -326,6 +356,9 @@ export interface MemoResponder {
    * répondeur n'a qu'à l'énoncer et à demander si c'est voulu ou oublié.
    */
   askMissingDay(input: MissingDayTurnInput): Promise<MissingDayTurnReply>;
+
+  /** Devine le thème d'un voyage, ou rend `null` quand aucun ne va. */
+  suggestTheme(input: TripThemeTurnInput): Promise<TripThemeTurnReply>;
 }
 
 // ---------------------------------------------------------------------------
@@ -630,6 +663,11 @@ export class FakeResponder implements MemoResponder {
   /** Sans modèle, la carte fixe dit déjà tout : `null` la laisse parler. */
   async askMissingDay(_input: MissingDayTurnInput): Promise<MissingDayTurnReply> {
     return { text: null, model: "fake" };
+  }
+
+  /** Sans modèle, aucun thème ne se devine : MEMO demandera. */
+  async suggestTheme(_input: TripThemeTurnInput): Promise<TripThemeTurnReply> {
+    return { slug: null, model: "fake" };
   }
 
   /** Vocal et photo = souvenir ; puce = commande ; texte court sur un souvenir en cours = précision. */

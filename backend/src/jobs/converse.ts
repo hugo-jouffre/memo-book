@@ -99,6 +99,7 @@ import { splitEntryIntoMoments } from "../services/entrySplit.js";
 import { stepNumbersOf } from "../routes/chatSerializers.js";
 import { finalTextOf, parseCoherenceSheet, type RedactJob } from "./redact.js";
 import { JOB_NAMES } from "./queue.js";
+import { settleTripTheme } from "../services/tripTheme.js";
 
 export interface ConverseJob {
   messageId: string;
@@ -781,6 +782,19 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     },
     "MEMO a répondu",
   );
+
+  // **Le thème du voyage, une fois qu'il y a de quoi juger** (Hugo,
+  // 10/11/2026). Après la réponse et non avant : la question, si elle part,
+  // se pose derrière la bulle de MEMO, pas devant. Elle ne lève jamais — un
+  // thème est un agrément, et rater sa déduction ne doit pas faire échouer un
+  // souvenir déjà raconté.
+  if (disposition === "memory") {
+    try {
+      await settleTripTheme(context, responder, memo.id, input.now);
+    } catch (cause) {
+      logger.warn({ messageId, memoId: memo.id, err: cause }, "Le thème n'a pas pu être réglé.");
+    }
+  }
 }
 
 /** Le souvenir qu'un vocal corrige — `payload.revises`, posé par la route. */
