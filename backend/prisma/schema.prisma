@@ -845,6 +845,19 @@ model Memo {
   /// des données personnelles sans raison.
   deletedAt DateTime?
 
+  /// **Le jour où MEMO a demandé son thème au voyageur** — nul tant qu'il ne
+  /// l'a pas fait.
+  ///
+  /// Le thème se devine tout seul au bout de quelques souvenirs
+  /// (`services/tripTheme.ts`). Quand aucun du catalogue ne va, MEMO pose la
+  /// question — **une fois, et une seule** : c'est cette date qui l'en
+  /// empêche la deuxième. Une question qui revient à chaque souvenir ferait
+  /// fuir plus vite qu'un thème absent.
+  ///
+  /// Elle ne s'efface pas quand le thème finit par être posé : ce qu'on garde
+  /// ici, c'est qu'on a déjà demandé, pas qu'on attend encore.
+  themeAskedAt DateTime?
+
   entries                  Entry[]
   renders                  Render[]
   orders                   PrintOrder[]
