@@ -1,4 +1,3 @@
-import type { Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import { pauseBeforeSaying, type MemoResponder } from "./conversation.js";
 import { TRIP_THEME_QUESTION } from "./conversationCopy.js";
@@ -160,7 +159,7 @@ export async function settleTripTheme(
         text: TRIP_THEME_QUESTION,
         pauseMilliseconds: pauseBeforeSaying(TRIP_THEME_QUESTION),
         model: "scripted",
-        payload: {} as Prisma.InputJsonObject,
+        payload: {},
       },
     });
     await tx.memo.update({ where: { id: memoId }, data: { themeAskedAt: now } });
