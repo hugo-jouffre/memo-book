@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Jimp } from "jimp";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeResponder } from "../src/services/conversation.js";
@@ -252,15 +254,17 @@ async function sendVoice(memoId: string, id = randomUUID()) {
  * brin de ficelle, pas sur le code. Petites (120 × 90) pour rester rapides, et
  * **paysage**, qui est le cas dont ces tests parlent.
  */
-async function multipartPhotos(id: string, count: number) {
+async function multipartPhotos(id: string, count: number, content?: Buffer) {
   const boundary = `----memobookphotos${Date.now()}`;
   const parts: Buffer[] = [
     Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="id"\r\n\r\n${id}\r\n`),
   ];
   for (let index = 0; index < count; index += 1) {
-    const image = Buffer.from(
-      await new Jimp({ width: 120, height: 90, color: 0x3fa7d6ff + index }).getBuffer("image/jpeg"),
-    );
+    const image =
+      content ??
+      Buffer.from(
+        await new Jimp({ width: 120, height: 90, color: 0x3fa7d6ff + index }).getBuffer("image/jpeg"),
+      );
     parts.push(
       Buffer.from(
         `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="photo-${index}.jpg"\r\n` +
@@ -554,9 +558,9 @@ describe("parler à MEMO", () => {
   });
 });
 
-async function sendPhotos(memoId: string, count: number) {
+async function sendPhotos(memoId: string, count: number, content?: Buffer) {
   const id = randomUUID();
-  const { payload, contentType } = await multipartPhotos(id, count);
+  const { payload, contentType } = await multipartPhotos(id, count, content);
   const response = await harness.app.inject({
     method: "POST",
     url: `/v1/trips/${memoId}/chat`,
@@ -712,12 +716,49 @@ describe("une étape par récit (Hugo, 12/10/2026)", () => {
     const [step] = await readSteps(memo.id);
     const photo = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id, kind: "photo" } });
     expect(step?.entryIds).toEqual([story.id, photo.id]);
-    // La vignette de l'étape. L'arrivée des photos les garde d'office
-    // (03/11/2026) : elles sont publiées tout de suite, et la vignette est
-    // donc déjà celle du CDN, plus la route publique du chat.
-    expect(step?.photoUrl).toMatch(/^https:\/\/cdn\.example\.test\/.+\.jpg$/);
+    // La vignette de l'étape. Sans CDN configuré — le cas du développement
+    // comme celui d'un déploiement sans `WEBFLOW_API_TOKEN` —, la photo se
+    // sert par l'API elle-même (11/11/2026, `services/renderPhotos.ts`) : plus
+    // aucune adresse `cdn.example.test`, que rien n'aurait servie, ni dans la
+    // vignette ni dans le payload du carnet.
+    expect(step?.photoUrl).toMatch(/^http:\/\/localhost:3000\/v1\/trip-photos\/.+\.jpg$/);
     const home = await harness.app.inject({ method: "GET", url: "/v1/home", headers: { authorization: owner.authorization } });
     expect(home.json<{ trips: { coverPhotoUrl: string | null }[] }>().trips[0]?.coverPhotoUrl).toBe(step?.photoUrl);
+  });
+
+  /**
+   * **Une photo de photothèque d'iPhone arrive en HEIC**, sous un nom en
+   * `.jpg` et un type `image/jpeg` (Hugo, 11/11/2026). Elle était écrite
+   * telle quelle : le carnet se composait sans elle, et `measurePhoto` ne
+   * sachant pas lire le HEIC, elle ne pouvait pas non plus devenir la
+   * couverture du voyage.
+   */
+  it("convertit une photo HEIC à l'arrivée, qui devient couverture du voyage", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const heic = readFileSync(
+      resolve(new URL("./fixtures/photos/heic-iphone.heic", import.meta.url).pathname),
+    );
+
+    await sendPhotos(memo.id, 1, heic);
+
+    const photo = await harness.prisma.entry.findFirstOrThrow({
+      where: { memoId: memo.id, kind: "photo" },
+      include: { media: true },
+    });
+    expect(photo.media?.mimeType).toBe("image/jpeg");
+    expect(photo.media?.storageKey).toMatch(/\.jpg$/);
+    // 40 × 30 : mesurée, donc candidate à la couverture — ce qu'un HEIC
+    // n'était jamais.
+    expect(photo.photoIsLandscape).toBe(true);
+
+    const home = await harness.app.inject({
+      method: "GET",
+      url: "/v1/home",
+      headers: { authorization: owner.authorization },
+    });
+    expect(home.json<{ trips: { coverPhotoUrl: string | null }[] }>().trips[0]?.coverPhotoUrl).toMatch(
+      /^http:\/\/localhost:3000\/v1\/trip-photos\/.+\.jpg$/,
+    );
   });
 });
 

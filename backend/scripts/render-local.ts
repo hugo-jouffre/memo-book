@@ -156,7 +156,7 @@ async function renderOnce(browser?: Browser): Promise<void> {
   }
 
   const options = { payload, profile: profile as RenderProfile, offline: values.offline };
-  const { pdf, html, pageCount, print } = await renderBookPdf(
+  const { pdf, html, pageCount, print, unpaintedImages } = await renderBookPdf(
     browser ? { ...options, browser } : options,
   );
 
@@ -171,6 +171,14 @@ async function renderOnce(browser?: Browser): Promise<void> {
       `${values.offline ? ", hors ligne" : ""}, ${Date.now() - started} ms`,
   );
   console.log(`  ${pdfPath}`);
+
+  // **Une photo que Chromium n'a pas peinte ne se voit pas sur une page** : ni
+  // trou, ni erreur, juste un cadre vide. Un HEIC servi sous un nom en `.jpg`
+  // en est le cas typique (11/11/2026). Autant le lire ici.
+  if (unpaintedImages.length > 0) {
+    console.warn(`⚠︎ ${unpaintedImages.length} image(s) non peinte(s) par Chromium :`);
+    for (const src of unpaintedImages) console.warn(`  · ${src}`);
+  }
 
   await checkGeometry(pdfPath, expectedPageSizePt(print), pageCount);
   if (values.png) await rasterize(pdfPath);

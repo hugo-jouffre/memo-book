@@ -21,6 +21,7 @@ import { finalTextOf, strandedBefore } from "../jobs/redact.js";
 import { deleteEntryAndMedia } from "../services/deletion.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
+import { isRenderableImage, toRenderablePhoto } from "../services/photoFormat.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeEntry } from "./serializers.js";
 
@@ -176,11 +177,22 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
       }
     }
 
+    // Une photo entre dans un format que le moteur de PDF sait peindre — le
+    // HEIC de la photothèque d'un iPhone n'en est pas un, et il arrive sous un
+    // nom en `.jpg` (`services/photoFormat.ts`).
+    const photo = isImage ? await toRenderablePhoto(buffer, file.filename, mimeType) : null;
+    if (photo && !photo.converted && !isRenderableImage(photo.buffer)) {
+      request.log.warn(
+        { memoId, mimeType },
+        "Photo dans un format que le moteur de PDF ne peint pas, et non convertible",
+      );
+    }
+
     const stored = await context.storage.put(
       isAudio ? "audio" : "photo",
-      file.filename,
-      buffer,
-      mimeType,
+      photo?.filename ?? file.filename,
+      photo?.buffer ?? buffer,
+      photo?.mimeType ?? mimeType,
     );
 
     const entry = await withDailyCredit(context.prisma, memoId, refusal, () =>

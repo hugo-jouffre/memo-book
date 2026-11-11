@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { sniffImageFormat } from "../src/services/photoFormat.js";
 import { FakeTranscriber } from "../src/services/transcription.js";
 import { validatePayload } from "../src/services/payloadValidator.js";
 import {
@@ -126,7 +129,7 @@ describe("parcours complet : raconter → transcrire → générer", () => {
     expect(payload.days[0]?.body_html).toContain("Bogotá");
   });
 
-  it("intègre une photo au bon jour et la publie sur le CDN", async () => {
+  it("intègre une photo au bon jour, à une adresse que le moteur de PDF peut lire", async () => {
     const memoId = await createMemo();
     await postAudio(memoId, "2026-01-03T09:00:00.000Z", "Bogotá, Colombie");
 
@@ -161,13 +164,69 @@ describe("parcours complet : raconter → transcrire → générer", () => {
       where: { id: render.json<{ id: string }>().id },
     });
 
-    // Une seule étape, sur un nombre de pages pair, et la photo publiée y est
-    // une fois — habillée par le composeur (scotch, contour).
+    // Une seule étape, sur un nombre de pages pair, et la photo y est une
+    // fois — habillée par le composeur (scotch, contour).
     const payload = stored.payload as { days: { photos?: (string | { url: string })[] }[] };
     expect(payload.days.length % 2).toBe(0);
     const photos = payload.days.flatMap((day) => day.photos ?? []).map((p) => (typeof p === "string" ? p : p.url));
     expect(photos).toHaveLength(1);
-    expect(photos[0]).toMatch(/^https:\/\//);
+    // **L'adresse doit être servie pour de vrai** : sans CDN configuré, c'est
+    // l'API qui sert la photo, et non plus l'adresse `cdn.example.test` du
+    // publicateur simulé, que le moteur de PDF ne pouvait pas télécharger
+    // (11/11/2026, `services/renderPhotos.ts`).
+    expect(photos[0]).toMatch(/^http:\/\/localhost:3000\/v1\/trip-photos\/.+\.jpg$/);
+  });
+
+  /**
+   * **Le HEIC de la photothèque n'arrive jamais au carnet** (Hugo,
+   * 11/11/2026). L'app envoie les octets du fichier sous un nom en `.jpg` et
+   * un type `image/jpeg` ; iOS les décode, le Chromium qui compose le PDF non,
+   * et la photo manquait au livre sans que rien ne le dise.
+   */
+  it("convertit en JPEG une photo HEIC avant de composer le carnet", async () => {
+    const memoId = await createMemo();
+    await postAudio(memoId, "2026-01-03T09:00:00.000Z", "Bogotá, Colombie");
+
+    const heic = readFileSync(
+      resolve(new URL("./fixtures/photos/heic-iphone.heic", import.meta.url).pathname),
+    );
+    const photo = multipartBody(
+      { capturedAt: "2026-01-03T12:00:00.000Z" },
+      { field: "file", filename: "IMG_4242.jpg", contentType: "image/jpeg", content: heic },
+    );
+
+    const uploaded = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memoId}/entries`,
+      headers: { authorization, "content-type": photo.contentType },
+      payload: photo.payload,
+    });
+    expect(uploaded.statusCode).toBe(201);
+
+    // Converti **à l'arrivée** : le stockage ne garde pas d'octets que le
+    // moteur de PDF ne saura pas peindre.
+    const media = await harness.prisma.mediaAsset.findFirstOrThrow({
+      where: { entries: { some: { memoId, kind: "photo" } } },
+    });
+    expect(media.mimeType).toBe("image/jpeg");
+    const stored = await harness.context.storage.get(media.storageKey);
+    expect(sniffImageFormat(stored)).toBe("image/jpeg");
+
+    const render = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memoId}/renders`,
+      headers: { authorization },
+    });
+
+    const row = await harness.prisma.render.findUniqueOrThrow({
+      where: { id: render.json<{ id: string }>().id },
+    });
+    const payload = row.payload as { days: { photos?: (string | { url: string })[] }[] };
+    const photos = payload.days
+      .flatMap((day) => day.photos ?? [])
+      .map((entry) => (typeof entry === "string" ? entry : entry.url));
+    expect(photos).toHaveLength(1);
+    expect(photos[0]).toMatch(/^http:\/\/localhost:3000\/v1\/trip-photos\/.+\.jpg$/);
   });
 
   it("accepte une note écrite sans passer par la transcription", async () => {

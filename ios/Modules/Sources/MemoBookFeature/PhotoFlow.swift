@@ -220,7 +220,10 @@ private struct PhotoFlowModifier: ViewModifier {
                         }
                     }
                     selection = []
-                    onPicked(images)
+                    // `loadTransferable` rend le fichier de la photothèque tel
+                    // quel — en HEIC sur un iPhone, que le moteur du carnet ne
+                    // sait pas peindre. Voir `PhotoEncoding`.
+                    onPicked(PhotoEncoding.jpegs(from: images))
                 }
             }
     }
