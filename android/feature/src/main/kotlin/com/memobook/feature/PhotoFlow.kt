@@ -36,6 +36,7 @@ import com.memobook.feature.chat.ChatMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -214,6 +215,53 @@ class PhotoFlow {
         internal fun read(context: Context, uri: Uri): ByteArray? =
             runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
 
+        /**
+         * **Une photo choisie part en JPEG** — le `PhotoEncoding.jpeg(from:)`
+         * d'iOS (Hugo, 11/11/2026).
+         *
+         * Le sélecteur rend le fichier de la galerie tel quel, et un téléphone
+         * réglé sur « HEIF » en garde en HEIC. L'app l'envoyait sous un nom en
+         * `.jpg` et un `image/jpeg` : Android l'affiche, mais le Chromium qui
+         * compose le carnet ne décode pas le HEIC, et la photo manquait au
+         * livre sans que rien ne le dise.
+         *
+         * Un JPEG revient **inchangé** : le réencoder perdrait de la matière
+         * pour rien. Un format que ce téléphone ne sait pas décoder — le HEIF
+         * avant Android 9 — revient tel quel aussi : le serveur convertit de
+         * son côté (`services/photoFormat.ts`), mieux vaut une photo envoyée
+         * qu'une photo perdue ici.
+         */
+        internal fun galleryJpeg(data: ByteArray): ByteArray {
+            if (isJpeg(data)) return data
+            return runCatching { reencodedAsJpeg(data) }.getOrNull() ?: data
+        }
+
+        private fun reencodedAsJpeg(data: ByteArray): ByteArray? {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / sample > MAX_DECODED_SIDE) sample *= 2
+            val decoded = BitmapFactory.decodeByteArray(
+                data,
+                0,
+                data.size,
+                BitmapFactory.Options().apply { inSampleSize = sample },
+            ) ?: return null
+
+            val exif = runCatching { ExifInterface(ByteArrayInputStream(data)) }.getOrNull()
+            val upright = decoded.applyingOrientation(exif)
+            return ByteArrayOutputStream().use { out ->
+                upright.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+                out.toByteArray()
+            }
+        }
+
+        private fun isJpeg(data: ByteArray): Boolean =
+            data.size > 3 &&
+                data[0] == 0xFF.toByte() &&
+                data[1] == 0xD8.toByte() &&
+                data[2] == 0xFF.toByte()
+
         /** Une bibliothèque a déclaré la caméra : Android exige alors qu'elle soit accordée pour `TakePicture`. */
         internal fun declaresCameraPermission(context: Context): Boolean = runCatching {
             @Suppress("DEPRECATION")
@@ -261,7 +309,10 @@ fun PhotoFlowHost(
     val deliver: (List<Uri>) -> Unit = { uris ->
         if (uris.isNotEmpty()) {
             scope.launch {
-                val images = withContext(Dispatchers.IO) { uris.mapNotNull { PhotoFlow.read(context, it) } }
+                val images = withContext(Dispatchers.IO) {
+                    // Lues, puis réécrites en JPEG : voir `PhotoFlow.galleryJpeg`.
+                    uris.mapNotNull { PhotoFlow.read(context, it) }.map { PhotoFlow.galleryJpeg(it) }
+                }
                 picked(images)
             }
         }

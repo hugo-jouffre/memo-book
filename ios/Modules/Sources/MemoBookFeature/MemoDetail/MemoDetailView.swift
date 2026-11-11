@@ -51,9 +51,12 @@ public struct MemoDetailView: View {
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task {
-                if let data = try? await item.loadTransferable(type: Data.self) {
+                // Le fichier de la photothèque part en JPEG, jamais en HEIC :
+                // le moteur du carnet ne peint pas le HEIC (`PhotoEncoding`).
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let jpeg = PhotoEncoding.jpeg(from: data) {
                     await model.addPhoto(
-                        data: data,
+                        data: jpeg,
                         filename: "photo-\(UUID().uuidString).jpg",
                         mimeType: "image/jpeg"
                     )

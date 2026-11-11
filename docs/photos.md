@@ -2,7 +2,7 @@
 
 Ce que le pipeline doit garantir avant qu'une photo arrive dans un carnet.
 Les sections 1 à 4 sont une **spécification** : rien n'en est encore
-implémenté. La section 0, elle, tourne.
+implémenté. Les sections 0 et 0 bis, elles, tournent.
 
 ## 0. La photo de couverture d'un voyage — *implémentée*
 
@@ -38,6 +38,64 @@ main.
 `tripInclude` de `routes/home.ts`, et non une fonction — l'accueil lit la
 couverture de chaque voyage à chaque ouverture. Les photos d'avant la mesure se
 rattrapent avec `npm run photos:mesurer`.
+
+## 0 bis. Le format, et l'adresse — *implémentées* (11/11/2026)
+
+**Deux pannes muettes suffisaient à sortir un carnet sans une seule photo.**
+Hugo : « lors de la confection des PDF, les photos n'apparaissent pas. » Les
+deux sont invisibles côté app : la photo s'y affiche partout, et ne manque
+qu'au livre.
+
+### Le HEIC ne se peint pas
+
+Le carnet est composé par un **Chromium** — le nôtre en rendu local, celui
+d'APITemplate en production —, et Chromium **ne décode pas le HEIC**. Pire, il
+ne le dit pas : l'`<img>` se déclare `complete`, n'émet **aucun** évènement
+`error`, et reste à `naturalWidth: 0`. La page se compose sans la photo, le
+rendu se déclare prêt.
+
+Or le HEIC arrivait : la photothèque d'un iPhone garde ses photos en « haute
+efficacité », et l'app envoyait les octets du fichier **tels quels**, sous un
+nom en `.jpg` et un `content-type: image/jpeg`. Le mensonge ne se voyait nulle
+part, iOS décodant le HEIC sans broncher.
+
+Trois endroits le corrigent, et il faut les trois :
+
+| Où | Quoi |
+|---|---|
+| `ios/.../PhotoEncoding.swift`, `android/.../PhotoFlow.galleryJpeg` | la photo choisie part en JPEG, jamais dans le format de la photothèque. ⚠️ Par ImageIO côté iOS (`CGImageDestinationAddImageFromSource`) et non `UIImage.jpegData`, qui perd le drapeau EXIF et couche les photos verticales |
+| `backend/src/services/photoFormat.ts` | **on ne croit pas le type déclaré, on lit les octets** : tout ce que Chromium ne peint pas est converti en JPEG à l'arrivée (conversation, souvenirs, couverture imprimée). Le décodeur est `heic-decode` (libheif en WebAssembly) : les binaires précompilés de `sharp` lisent l'AVIF mais **pas** le HEIC d'un iPhone, faute de `libde265`, et `jimp` ne connaît pas le conteneur |
+| `backend/src/services/renderPhotos.ts` | les photos **déjà en stock** sont converties au premier carnet qui les demande, une fois. Le format se reconnaît sur seize octets (`storage.firstBytes`), pas en rapatriant le fichier. L'original est gardé (`originalStorageKey`) |
+
+Une photo convertie redevient au passage candidate à la couverture du voyage :
+`measurePhoto` ne sait pas lire un HEIC, et laissait `photoIsLandscape` à
+`null`.
+
+`settle()` rend désormais **les images que Chromium n'a pas peintes**, et
+`npm run render:local` les affiche. `test/photosDuCarnet.test.ts` tient le
+diagnostic : un vrai carnet composé, où le HEIC déguisé ne se peint pas et la
+même photo convertie se peint.
+
+### Une photo doit être joignable
+
+Le payload portait l'URL rendue par `publisher.publish` — le CDN Webflow.
+Sans `WEBFLOW_API_TOKEN`, c'est-à-dire sur **toute machine de développement**
+et sur un déploiement où la variable manque, le publicateur est *simulé* : il
+rendait une adresse `https://cdn.example.test/…` que rien ne sert. Le PDF se
+composait, se déclarait prêt, et n'avait pas une photo.
+
+Désormais, faute de CDN, la photo se sert **par l'API elle-même** —
+`GET /v1/trip-photos/:file`, déjà publique, déjà utilisée par l'app
+(`AssetPublisher.servesPublicUrls`). Un échec de publication retombe sur la
+même adresse au lieu de faire échouer la composition.
+
+⚠️ **Le service qui compose doit donc connaître son adresse publique.** Le
+worker n'a pas de domaine, donc pas de `RAILWAY_PUBLIC_DOMAIN` ; il se rabat
+alors sur `APP_LINK_BASE_URL`, qui vaut l'adresse de l'API aujourd'hui — mais
+qui est faite pour les liens des e-mails et peut changer sans que personne ne
+pense au carnet. Poser `API_PUBLIC_BASE_URL` sur le worker ferme la question
+(voir `docs/deploiement.md`). Une adresse en boucle locale en production est
+journalisée en `error`.
 
 ## 1. Contrôle de qualité
 

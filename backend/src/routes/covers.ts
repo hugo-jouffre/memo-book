@@ -18,6 +18,7 @@ import {
   type StoredCover,
 } from "../services/coverCatalogue.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { toRenderablePhoto } from "../services/photoFormat.js";
 
 /**
  * Les deux plats du carnet : ce qu'on a choisi pour chacun, et de quoi choisir.
@@ -204,18 +205,37 @@ export function registerCoverRoutes(app: FastifyInstance, context: AppContext): 
     const buffer = await file.toBuffer();
     if (buffer.byteLength === 0) throw HttpError.badRequest("Le fichier reçu est vide.");
 
-    const mimeType = file.mimetype;
-    if (mimeType !== "image/jpeg" && mimeType !== "image/png") {
+    const declared = file.mimetype;
+    if (declared !== "image/jpeg" && declared !== "image/png") {
       throw HttpError.badRequest(
-        `Type d'image non supporté : ${mimeType}. Attendu : image/jpeg ou image/png.`,
+        `Type d'image non supporté : ${declared}. Attendu : image/jpeg ou image/png.`,
       );
     }
 
-    const filename = mimeType === "image/png" ? "cover.png" : "cover.jpg";
-    const stored = await context.storage.put(COVER_PHOTO_PREFIX, filename, buffer, mimeType);
+    // **Le type déclaré ne suffit pas** : l'app envoie les octets de la
+    // photothèque sous `image/jpeg`, et sur un iPhone ce sont souvent ceux
+    // d'un HEIC — que le moteur de PDF ne peint pas. On regarde les octets, et
+    // on convertit (`services/photoFormat.ts`). La couverture imprimée est la
+    // première page du livre : une couverture blanche se verrait de loin.
+    const normalized = await toRenderablePhoto(buffer, `cover.${declared === "image/png" ? "png" : "jpg"}`, declared);
+    // Seuls le JPEG et le PNG se servent ici (`COVER_PHOTO_FILENAME`) : un
+    // WebP qui se serait fait passer pour un JPEG s'écrirait sous une clé que
+    // la route de lecture refuserait ensuite.
+    if (normalized.mimeType !== "image/jpeg" && normalized.mimeType !== "image/png") {
+      throw HttpError.badRequest(
+        "Cette image n'a pas pu être lue. Enregistre-la en JPEG ou en PNG, puis réessaie.",
+      );
+    }
+
+    const stored = await context.storage.put(
+      COVER_PHOTO_PREFIX,
+      normalized.filename,
+      normalized.buffer,
+      normalized.mimeType,
+    );
 
     const photo = await context.prisma.coverPhoto.create({
-      data: { memoId: id, storageKey: stored.storageKey, mimeType, bytes: stored.bytes },
+      data: { memoId: id, storageKey: stored.storageKey, mimeType: stored.mimeType, bytes: stored.bytes },
     });
 
     return { photo: { id: photo.id, url: coverPhotoUrl(context.env, photo.storageKey) } };

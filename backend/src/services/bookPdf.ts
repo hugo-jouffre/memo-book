@@ -231,8 +231,15 @@ export function expectedPageSizePt(print: PrintSettings): { width: number; heigh
  *   peut ne jamais les charger ;
  * - les polices sont en `font-display: swap`, donc le premier paint utilise la
  *   police de repli si on n'attend pas.
+ *
+ * Rend **les photos qui ne se sont pas peintes**. Une image que Chromium ne
+ * sait pas décoder — un HEIC, le premier de tous — se déclare `complete` sans
+ * émettre d'erreur et reste à `naturalWidth: 0` : la page se composait sans
+ * elle, et le carnet sortait sans photos sans que rien ne le dise (Hugo,
+ * 11/11/2026). C'est la seule façon de le savoir, et elle ne coûte qu'une
+ * lecture de plus.
  */
-export async function settle(page: Page): Promise<void> {
+export async function settle(page: Page): Promise<string[]> {
   await page.evaluate(() => {
     document.querySelectorAll<HTMLImageElement>('img[loading="lazy"]').forEach((img) => {
       img.loading = "eager";
@@ -257,6 +264,12 @@ export async function settle(page: Page): Promise<void> {
       requestAnimationFrame(() => requestAnimationFrame(() => done()));
     });
   });
+
+  return page.evaluate(() =>
+    Array.from(document.images)
+      .filter((img) => img.naturalWidth === 0)
+      .map((img) => img.currentSrc || img.src),
+  );
 }
 
 export interface RenderPdfOptions extends RenderHtmlOptions {
@@ -270,6 +283,8 @@ export interface RenderedBookPdf {
   html: string;
   pageCount: number;
   print: PrintSettings;
+  /** Les adresses des images que Chromium n'a pas peintes. Vide, en principe. */
+  unpaintedImages: string[];
 }
 
 export async function renderBookPdf({
@@ -319,7 +334,7 @@ export async function renderBookPdf({
     // Avant `setContent` : on veut le layout d'impression dès le premier calcul.
     await page.emulateMedia({ media: "print" });
     await page.setContent(html, { waitUntil: "load" });
-    await settle(page);
+    const unpaintedImages = await settle(page);
 
     const pageCount = await page.locator(".page").count();
 
@@ -341,7 +356,7 @@ export async function renderBookPdf({
       outline: false,
     });
 
-    return { pdf, html, pageCount, print };
+    return { pdf, html, pageCount, print, unpaintedImages };
   } finally {
     await context.close();
     if (!existingBrowser) await browser.close();

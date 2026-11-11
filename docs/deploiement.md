@@ -174,6 +174,7 @@ Sur les deux services, API et worker. La liste commentée est dans
 | `APPLE_BUNDLE_ID` | `com.memobook.app` | Sans elle, « Continuer avec Apple » échoue. |
 | `GOOGLE_IOS_CLIENT_ID` | le client iOS, voir `ios/Config/Base.xcconfig` | Sans elle, « Continuer avec Google » échoue. |
 | `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY` | la clé `.p8` d'Apple Developer ▸ Keys | Sans elles, aucune notification ne part — la passe horaire le dit dans les logs. Ces trois noms exactement, sur `api` **et** `worker` ; `npm run apns:check` (via `railway run`) dit si Apple accepte la clé. Voir `docs/notifications.md` § 5. |
+| `API_PUBLIC_BASE_URL` | l'adresse publique de l'API (aujourd'hui `https://api-production-9f35a.up.railway.app`) | **Sur le worker surtout.** C'est l'adresse à laquelle le moteur de PDF ira chercher les photos du carnet (`GET /v1/trip-photos/:file`). Non posée, `publicApiBaseUrl` se rabat sur `RAILWAY_PUBLIC_DOMAIN` — que Railway ne donne qu'à un service qui a un domaine, donc pas au worker — puis sur `APP_LINK_BASE_URL`. Ça tient aujourd'hui **par chance** : cette variable-là vaut l'adresse de l'API, mais elle est faite pour les liens des e-mails. Le jour où elle pointe sur le site ou sur `memobook://`, le worker écrit une adresse que personne ne sert et les carnets sortent **sans photos**. Une boucle locale est journalisée en `error` (11/11/2026, `docs/photos.md` § 0 bis). |
 
 Aujourd'hui la valeur est
 `1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h.apps.googleusercontent.com`.
@@ -188,6 +189,11 @@ connexion, les comptes et les voyages fonctionnent ; seuls la transcription
 réelle et le PDF sont simulés. Les deux axes sont indépendants :
 `OPENAI_API_KEY` seule rend la transcription réelle (le PDF reste simulé) ;
 `APITEMPLATE_API_KEY` en plus donne le vrai PDF.
+
+Les `WEBFLOW_*` ne servent plus qu'à **soulager l'API** : sans elles, les
+photos du carnet sont servies par l'API au lieu d'un CDN, et le PDF est le
+même. Avant le 11/11/2026, leur absence donnait des adresses
+`cdn.example.test` et un carnet sans aucune photo.
 
 **Et le repli sur le PDF simulé ne se dit nulle part.** Aucun log n'annonce
 quel moteur de rendu a répondu : un carnet composé sans

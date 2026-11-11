@@ -5,6 +5,7 @@ import { validatePayload } from "../services/payloadValidator.js";
 import { premiereEtapeAGauche, quizForBook, type StructuringEntry } from "../services/structuring.js";
 import { parseTripContext } from "../services/tripContext.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
+import { renderablePhotoUrl } from "../services/renderPhotos.js";
 import { JOB_NAMES } from "./queue.js";
 import { finalTextOf } from "./redact.js";
 import type { RenderJob } from "./render.js";
@@ -59,7 +60,7 @@ export async function structureRender(
   context: AppContext,
   { renderId }: StructureJob,
 ): Promise<void> {
-  const { prisma, structurer, publisher, queue, logger } = context;
+  const { prisma, structurer, queue, logger } = context;
 
   const found = await prisma.render.findUnique({ where: { id: renderId }, select: { memoId: true } });
 
@@ -92,8 +93,11 @@ export async function structureRender(
       },
     });
 
-    // Les photos doivent être publiques avant le rendu : APITemplate les
-    // télécharge lui-même au moment de composer la page.
+    // **Chaque photo doit être lisible, et joignable, avant le rendu** : le
+    // moteur de PDF la télécharge lui-même au moment de composer la page, et
+    // il ne sait peindre ni un HEIC ni une adresse inventée — voir
+    // `services/renderPhotos.ts`, qui porte les deux pannes muettes d'où
+    // sortaient des carnets sans photos.
     const structuringEntries: StructuringEntry[] = [];
     for (const entry of memo.entries) {
       // Ratio photo / texte à 0 % : « aucune photo dans tout le carnet ». Elles
@@ -103,18 +107,7 @@ export async function structureRender(
       let photoUrl: string | null = null;
 
       if (entry.kind === "photo" && entry.media) {
-        if (entry.media.cdnUrl) {
-          photoUrl = entry.media.cdnUrl;
-        } else {
-          const filename = entry.media.storageKey.split("/").pop() ?? "photo.jpg";
-          const sourceUrl = await context.storage.signedReadUrl(entry.media.storageKey);
-          const published = await publisher.publish(filename, sourceUrl);
-          await prisma.mediaAsset.update({
-            where: { id: entry.media.id },
-            data: { cdnUrl: published.cdnUrl, cdnAssetId: published.assetId },
-          });
-          photoUrl = published.cdnUrl;
-        }
+        photoUrl = await renderablePhotoUrl(context, entry.media);
       }
 
       structuringEntries.push({

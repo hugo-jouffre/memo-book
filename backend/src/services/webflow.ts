@@ -12,6 +12,16 @@ export interface PublishedAsset {
  * décrit dans le README à la racine du dépôt.
  */
 export interface AssetPublisher {
+  /**
+   * Vrai quand `publish` rend une adresse que le monde peut lire.
+   *
+   * Faux pour la publication simulée, et c'est tout l'intérêt : son adresse
+   * `cdn.example.test` partait dans le payload du carnet, qui se composait
+   * alors sans une seule photo, sans que rien ne le dise (Hugo, 11/11/2026).
+   * `services/renderPhotos.ts` sert la photo par l'API quand c'est faux.
+   */
+  readonly servesPublicUrls: boolean;
+
   publish(filename: string, sourceUrl: string): Promise<PublishedAsset>;
   /**
    * Retire la copie publique d'une photo — son souvenir, son voyage ou son
@@ -22,6 +32,8 @@ export interface AssetPublisher {
 }
 
 export class WebflowAssetPublisher implements AssetPublisher {
+  readonly servesPublicUrls = true;
+
   constructor(
     private readonly token: string,
     private readonly siteId: string,
@@ -84,6 +96,8 @@ export class WebflowAssetPublisher implements AssetPublisher {
 
 /** Publication simulée : renvoie une URL stable et déterministe. */
 export class FakeAssetPublisher implements AssetPublisher {
+  readonly servesPublicUrls = false;
+
   async publish(filename: string, sourceUrl: string): Promise<PublishedAsset> {
     const assetId = createHash("sha256").update(sourceUrl).digest("hex").slice(0, 24);
     return {

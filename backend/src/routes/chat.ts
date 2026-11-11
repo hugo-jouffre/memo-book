@@ -46,6 +46,7 @@ import { visibleToAccount } from "../services/memoOwnership.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { MAX_PHOTOS_PER_STEP } from "../services/photoBudget.js";
 import { measurePhoto } from "../services/photoOrientation.js";
+import { isRenderableImage, toRenderablePhoto } from "../services/photoFormat.js";
 import { coverPhotoInclude } from "./tripPhotos.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { contextVoiceOf, isGathering, parseTripContext } from "../services/tripContext.js";
@@ -714,8 +715,34 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     // Des photos : le récit qu'elles illustrent, quand MEMO les a demandées.
     const illustratedEntryId = isImages ? await photosTargetEntryId(context.prisma, memoId) : null;
 
+    // **Une photo entre dans un format que le PDF sait peindre** (Hugo,
+    // 11/11/2026) : la photothèque d'un iPhone donne du HEIC, que l'app
+    // envoie sous un nom en `.jpg` et un type `image/jpeg`. iOS le décode, le
+    // Chromium qui compose le carnet non — la photo s'affichait dans l'app et
+    // manquait au livre. On regarde donc les octets, et on convertit avant
+    // d'écrire (`services/photoFormat.ts`).
+    const photos = isImages
+      ? await Promise.all(files.map((file) => toRenderablePhoto(file.buffer, file.filename, file.mimeType)))
+      : [];
+    for (const [index, photo] of photos.entries()) {
+      if (photo.converted) continue;
+      if (isRenderableImage(photo.buffer)) continue;
+      // Le souvenir part quand même : le récit est irremplaçable, la photo
+      // non. Mais ça se lit dans les journaux, au lieu de se découvrir sur un
+      // carnet imprimé.
+      request.log.warn(
+        { memoId, mimeType: files[index]!.mimeType },
+        "Photo dans un format que le moteur de PDF ne peint pas, et non convertible",
+      );
+    }
+
     const stored = await Promise.all(
-      files.map((file) => context.storage.put(isAudio ? "audio" : "photo", file.filename, file.buffer, file.mimeType)),
+      files.map((file, index) => {
+        const photo = photos[index];
+        return photo
+          ? context.storage.put("photo", photo.filename, photo.buffer, photo.mimeType)
+          : context.storage.put(isAudio ? "audio" : "photo", file.filename, file.buffer, file.mimeType);
+      }),
     );
 
     // **Le sens de chaque photo, mesuré à l'arrivée** (Hugo, 15/10/2026) : la
@@ -724,7 +751,9 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     // est déjà en mémoire, le relire depuis S3 coûterait un aller-retour par
     // photo. Une mesure impossible (HEIC) laisse les champs à `null` : la
     // photo ne sera pas couverture, et c'est tout.
-    const measures = isImages ? await Promise.all(files.map((file) => measurePhoto(file.buffer))) : [];
+    // Sur les octets **convertis** : `measurePhoto` ne sait pas lire un HEIC,
+    // et une photo de photothèque n'était donc jamais couverture de voyage.
+    const measures = await Promise.all(photos.map((photo) => measurePhoto(photo.buffer)));
 
     if (contextVoice || revisedEntryId) {
       const [object] = stored;

@@ -65,6 +65,26 @@ export class MediaStorage {
     return Buffer.from(await response.Body.transformToByteArray());
   }
 
+  /**
+   * Les `bytes` premiers octets d'un objet.
+   *
+   * De quoi **reconnaître le format réel** d'une photo sans la télécharger
+   * (`services/photoFormat.ts`, `jobs/structure.ts`) : une signature tient en
+   * douze octets, et une composition qui vérifie trente photos ne doit pas
+   * rapatrier trente fichiers de trois mégaoctets pour ça.
+   */
+  async firstBytes(storageKey: string, bytes = 16): Promise<Buffer> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: storageKey, Range: `bytes=0-${bytes - 1}` }),
+    );
+
+    if (!response.Body) {
+      throw new Error(`Objet introuvable dans le stockage : ${storageKey}`);
+    }
+
+    return Buffer.from(await response.Body.transformToByteArray());
+  }
+
   /** URL temporaire de lecture, pour l'app (relecture d'un vocal). */
   async signedReadUrl(storageKey: string, expiresInSeconds = 3600): Promise<string> {
     return getSignedUrl(
@@ -124,6 +144,10 @@ export class InMemoryMediaStorage extends MediaStorage {
     return object;
   }
 
+  override async firstBytes(storageKey: string, bytes = 16): Promise<Buffer> {
+    return (await this.get(storageKey)).subarray(0, bytes);
+  }
+
   override async signedReadUrl(storageKey: string): Promise<string> {
     return `memory://${storageKey}`;
   }
@@ -175,6 +199,10 @@ export class DiskMediaStorage extends MediaStorage {
     } catch {
       throw new Error(`Objet introuvable dans le stockage : ${storageKey}`);
     }
+  }
+
+  override async firstBytes(storageKey: string, bytes = 16): Promise<Buffer> {
+    return (await this.get(storageKey)).subarray(0, bytes);
   }
 
   override async signedReadUrl(storageKey: string): Promise<string> {
