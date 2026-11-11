@@ -107,11 +107,11 @@ object BookCopy {
             fun body(trip: String?): String {
                 val trimmed = trip?.trim() ?: ""
                 val subject = if (trimmed.isEmpty()) "Ce voyage" else "« $trimmed »"
-                return "$subject sera effacé pour toi comme pour tes co-voyageurs : ses souvenirs, ses photos, son carnet et les commandes passées pour lui. C’est immédiat et sans retour."
+                return "$subject disparaîtra pour toi comme pour tes co-voyageurs : ses souvenirs, ses photos, son carnet et les commandes passées pour lui. Tu pourras le récupérer pendant 30 jours, en bas de l’accueil ; après quoi il sera effacé pour de bon."
             }
 
             const val keep = "Garder ce voyage"
-            const val confirm = "Supprimer définitivement ce voyage"
+            const val confirm = "Mettre ce voyage à la corbeille"
         }
 
         // MARK: Personnalisations du carnet

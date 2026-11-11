@@ -888,7 +888,9 @@ class RecordingOutbox(
             withFreshCredit(it.trip, isUnlimited = feed.traveller.isUnlimited)
         }
         if (waiting.isEmpty()) return feed
-        return HomeFeed(traveller = feed.traveller, trips = waiting + feed.trips, showcase = feed.showcase)
+        // `deletedTrips` recopié comme le reste : chaque reconstruction de
+        // `HomeFeed` qui l'oublie fait disparaître la corbeille en silence.
+        return feed.copy(trips = waiting + feed.trips)
     }
 
     /**

@@ -303,6 +303,7 @@ internal class PreviewApi(
         val feed = HomeFeed(
             traveller = fixture.traveller.replacing(isUnlimited = isUnlimited),
             trips = synchronized(lock) { createdTrips.map { it.copy() } } + fixture.trips,
+            deletedTrips = fixture.deletedTrips,
             showcase = fixture.showcase,
         )
         return SandboxCredit.applied(feed, profileIsUnlimited = profileIsUnlimited)
@@ -557,6 +558,13 @@ internal class PreviewApi(
     override suspend fun deleteMemo(id: String) {
         synchronized(lock) { memosById.remove(id) }
     }
+
+    /**
+     * Le bac à sable ne tient pas de corbeille : un voyage jeté y disparaît,
+     * et rien ne le rend. Les écrans qui comptent sont ceux qu'on regarde,
+     * pas la mécanique des trente jours — elle se vérifie en test.
+     */
+    override suspend fun restoreMemo(id: String) {}
 
     override suspend fun deleteEntry(id: String) {
         SandboxNetwork.failIfOffline()
@@ -1375,7 +1383,7 @@ internal object SandboxCredit {
             if (!trip.stage.isOngoing) return@map trip
             trip.copy(dailyCredit = credit(tripId = trip.id, profileIsUnlimited = profileIsUnlimited))
         }
-        return HomeFeed(traveller = feed.traveller, trips = trips, showcase = feed.showcase)
+        return feed.copy(trips = trips)
     }
 
     // endregion

@@ -99,6 +99,26 @@ extension HomeFeed {
                 isPrintable: false
             ),
         ],
+        // **Deux voyages dans la corbeille**, pour que la section du bas se
+        // regarde sans serveur. Deux échéances différentes : une lointaine,
+        // et une à demain — c'est celle-là qui dit si le compte à rebours
+        // sait se taire sur les chiffres quand il n'en faut plus.
+        deletedTrips: [
+            DeletedTrip(
+                id: "deleted-lisbonne",
+                title: "Lisbonne au printemps",
+                startDate: .fixture(3, 4, 2026),
+                endDate: .fixture(11, 4, 2026),
+                deletedAt: Date().addingTimeInterval(-4 * 86_400),
+                purgeAt: Date().addingTimeInterval(26 * 86_400)
+            ),
+            DeletedTrip(
+                id: "deleted-annecy",
+                title: "Week-end à Annecy",
+                deletedAt: Date().addingTimeInterval(-29 * 86_400),
+                purgeAt: Date().addingTimeInterval(86_400)
+            ),
+        ],
         showcase: Showcase(
             title: "Voir des exemples de carnet",
             subtitle: "Découvre à quoi ressemble un carnet MemoBook terminé"

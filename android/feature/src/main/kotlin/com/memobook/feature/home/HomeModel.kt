@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.memobook.core.CreatedTrip
 import com.memobook.core.DailyCredit
+import com.memobook.core.DeletedTrip
 import com.memobook.core.HomeFeed
 import com.memobook.core.Traveller
 import com.memobook.core.Trip
@@ -74,6 +75,11 @@ class HomeModel(
     private val cached: CachedValue<HomeFeed>? = null,
     outbox: RecordingOutbox? = null,
     private val remove: (suspend (String) -> Unit)? = null,
+    /**
+     * Sort un voyage de la corbeille — `POST /v1/memos/:id/restore`. `null` en
+     * aperçu, où la ligne disparaît comme si c'était fait.
+     */
+    private val restore: (suspend (String) -> Unit)? = null,
     join: (suspend (String) -> CreatedTrip)? = null,
     private val subscriptionIsManagedByAppStore: (suspend () -> Boolean?)? = null,
 ) : ViewModel() {
@@ -125,6 +131,14 @@ class HomeModel(
         val ongoingTrips: List<Trip> = emptyList(),
         val upcomingTrips: List<Trip> = emptyList(),
         val pastTrips: List<Trip> = emptyList(),
+        /**
+         * **La corbeille** : les voyages jetés, du plus récent au plus
+         * ancien. Vide presque toujours — la section ne paraît que s'il y a
+         * quelque chose dedans.
+         */
+        val deletedTrips: List<DeletedTrip> = emptyList(),
+        /** Le voyage dont la restauration est partie, le temps qu'elle aboutisse. */
+        val restoringTripId: String? = null,
         val isLoading: Boolean = false,
         val loadFailure: String? = null,
         val deletingTripId: String? = null,
@@ -272,6 +286,8 @@ class HomeModel(
     val upcomingTrips: List<Trip> get() = content.value.upcomingTrips
     val pastTrips: List<Trip> get() = content.value.pastTrips
     val deletingTripId: String? get() = content.value.deletingTripId
+    val deletedTrips: List<DeletedTrip> get() = content.value.deletedTrips
+    val restoringTripId: String? get() = content.value.restoringTripId
     val deletionError: String? get() = content.value.deletionError
     val freshness: ContentFreshness get() = content.value.freshness
 
@@ -313,6 +329,7 @@ class HomeModel(
                 ongoingTrips = loaded.ongoingTrips,
                 upcomingTrips = loaded.upcomingTrips,
                 pastTrips = loaded.pastTrips,
+                deletedTrips = loaded.deletedTrips,
             )
         }
     }
@@ -433,7 +450,14 @@ class HomeModel(
                 remove(id)
                 load()
             } else if (feed != null) {
-                apply(HomeFeed(traveller = feed.traveller, trips = feed.trips.filter { it.id != id }, showcase = feed.showcase))
+                apply(
+                    HomeFeed(
+                        traveller = feed.traveller,
+                        trips = feed.trips.filter { it.id != id },
+                        deletedTrips = feed.deletedTrips,
+                        showcase = feed.showcase,
+                    ),
+                )
             }
             true
         } catch (error: CancellationException) {
@@ -443,6 +467,43 @@ class HomeModel(
             false
         } finally {
             content.update { it.copy(deletingTripId = null) }
+        }
+    }
+
+    /**
+     * **Sort un voyage de la corbeille** (Hugo, 10/11/2026).
+     *
+     * La ligne disparaît **sur la réponse du serveur**, comme la suppression :
+     * un voyage purgé entre-temps rend `404`, et il ne faut pas l'avoir déjà
+     * remis dans la liste. L'accueil se recharge ensuite — le voyage revient
+     * dans sa section, avec ses compteurs.
+     */
+    suspend fun restoreTrip(id: String): Boolean {
+        content.update { it.copy(restoringTripId = id, deletionError = null) }
+        return try {
+            val restore = restore
+            val feed = content.value.feed
+            if (restore != null) {
+                restore(id)
+                load()
+            } else if (feed != null) {
+                apply(
+                    HomeFeed(
+                        traveller = feed.traveller,
+                        trips = feed.trips,
+                        deletedTrips = feed.deletedTrips.filter { it.id != id },
+                        showcase = feed.showcase,
+                    ),
+                )
+            }
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            content.update { it.copy(deletionError = describe(error)) }
+            false
+        } finally {
+            content.update { it.copy(restoringTripId = null) }
         }
     }
 

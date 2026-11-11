@@ -91,11 +91,11 @@ public enum BookCopy {
             public static func body(trip: String?) -> String {
                 let trimmed = trip?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 let subject = trimmed.isEmpty ? "Ce voyage" : "« \(trimmed) »"
-                return "\(subject) sera effacé pour toi comme pour tes co-voyageurs : ses souvenirs, ses photos, son carnet et les commandes passées pour lui. C’est immédiat et sans retour."
+                return "\(subject) disparaîtra pour toi comme pour tes co-voyageurs : ses souvenirs, ses photos, son carnet et les commandes passées pour lui. Tu pourras le récupérer pendant 30 jours, en bas de l’accueil ; après quoi il sera effacé pour de bon."
             }
 
             public static let keep = "Garder ce voyage"
-            public static let confirm = "Supprimer définitivement ce voyage"
+            public static let confirm = "Mettre ce voyage à la corbeille"
         }
 
         // MARK: Personnalisations du carnet

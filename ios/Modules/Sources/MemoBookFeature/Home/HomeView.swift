@@ -387,6 +387,8 @@ public struct HomeView: View {
             upcomingSection
             pastSection
 
+            deletedSection
+
             showcaseSection.rising(showcaseOrder)
             helpLink.rising(showcaseOrder + 1)
 
@@ -661,6 +663,46 @@ public struct HomeView: View {
             onIntent(.openHelp)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// **La corbeille** — « Supprimés récemment », tout en bas (Hugo,
+    /// 10/11/2026).
+    ///
+    /// Elle ne paraît **que s'il y a quelque chose dedans** : une section
+    /// vide intitulée « Supprimés » inquiéterait plus qu'elle ne rassure, et
+    /// la promesse ne se lit qu'au moment où on en a besoin. Pas de titre à
+    /// compteur, pas de photo, pas de tiroir : une ligne grise par voyage, et
+    /// le jour où il s'effacera.
+    @ViewBuilder
+    private var deletedSection: some View {
+        let trips = model.deletedTrips
+
+        if !trips.isEmpty {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                Text(HomeCopy.Trash.title)
+                    .font(MemoBookFont.label)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+
+                Text(HomeCopy.Trash.explanation)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LazyVStack(spacing: 0) {
+                    ForEach(trips) { trip in
+                        DeletedTripRow(
+                            trip: trip,
+                            isRestoring: model.restoringTripId == trip.id,
+                            onRestore: { Task { await model.restoreTrip(id: trip.id) } }
+                        )
+                    }
+                }
+                .padding(.top, MemoBookSpacing.xs)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, MemoBookSpacing.m)
+            .rising(showcaseOrder)
+        }
     }
 
     @ViewBuilder

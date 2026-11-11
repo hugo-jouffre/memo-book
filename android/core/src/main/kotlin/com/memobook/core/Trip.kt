@@ -368,10 +368,40 @@ data class Showcase(
  * Les voyages arrivent dans **une** liste : c'est [TripStage] qui les range,
  * pas deux tableaux que le serveur devrait tenir cohérents.
  */
+/**
+ * **Un voyage dans la corbeille** — jeté, pas effacé (Hugo, 10/11/2026).
+ *
+ * Il n'a presque rien : un titre, ses dates, sa photo s'il en avait une, le
+ * jour où il a été jeté et celui où il s'effacera. C'est **voulu** : un
+ * voyage jeté ne se lit pas, ne se raconte pas, n'a ni crédit du jour ni
+ * co-voyageurs à montrer. Lui donner la forme d'un [Trip] tenterait de
+ * l'ouvrir, et le serveur le refuserait.
+ *
+ * Le seul geste qu'il accepte est de revenir.
+ */
+@Serializable
+data class DeletedTrip(
+    val id: String,
+    val title: String,
+    val coverPhotoUrl: String? = null,
+    @Serializable(with = InstantSerializer::class) val startDate: Instant? = null,
+    @Serializable(with = InstantSerializer::class) val endDate: Instant? = null,
+    /** Le jour où il a été jeté. */
+    @Serializable(with = InstantSerializer::class) val deletedAt: Instant,
+    /** Le jour où il s'effacera pour de bon — trente jours après. */
+    @Serializable(with = InstantSerializer::class) val purgeAt: Instant,
+)
+
 @Serializable
 data class HomeFeed(
     val traveller: Traveller,
     val trips: List<Trip>,
+    /**
+     * **La corbeille** : les voyages jetés, du plus récent au plus ancien.
+     * Vide pour presque tout le monde, presque tout le temps — et absente
+     * d'un serveur plus ancien, d'où le défaut.
+     */
+    val deletedTrips: List<DeletedTrip> = emptyList(),
     val showcase: Showcase? = null,
 ) {
     /** Les voyages en cours, les plus récemment commencés d'abord. */

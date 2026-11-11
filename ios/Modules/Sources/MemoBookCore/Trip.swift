@@ -447,15 +447,72 @@ public struct Showcase: Codable, Sendable, Hashable {
 ///
 /// Les voyages arrivent dans **une** liste : c'est ``TripStage`` qui les range,
 /// pas deux tableaux que le serveur devrait tenir cohérents.
+/// **Un voyage dans la corbeille** — jeté, pas effacé (Hugo, 10/11/2026).
+///
+/// Il n'a presque rien : un titre, ses dates, sa photo s'il en avait une, le
+/// jour où il a été jeté et celui où il s'effacera. C'est **voulu** : un
+/// voyage jeté ne se lit pas, ne se raconte pas, n'a ni crédit du jour ni
+/// co-voyageurs à montrer. Lui donner la forme d'un ``Trip`` tenterait de
+/// l'ouvrir, et le serveur le refuserait.
+///
+/// Le seul geste qu'il accepte est de revenir.
+public struct DeletedTrip: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let title: String
+    public let coverPhotoUrl: URL?
+    public let startDate: Date?
+    public let endDate: Date?
+    /// Le jour où il a été jeté.
+    public let deletedAt: Date
+    /// Le jour où il s'effacera pour de bon — trente jours après.
+    public let purgeAt: Date
+
+    public init(
+        id: String,
+        title: String,
+        coverPhotoUrl: URL? = nil,
+        startDate: Date? = nil,
+        endDate: Date? = nil,
+        deletedAt: Date,
+        purgeAt: Date
+    ) {
+        self.id = id
+        self.title = title
+        self.coverPhotoUrl = coverPhotoUrl
+        self.startDate = startDate
+        self.endDate = endDate
+        self.deletedAt = deletedAt
+        self.purgeAt = purgeAt
+    }
+}
+
 public struct HomeFeed: Codable, Sendable, Hashable {
     public let traveller: Traveller
     public let trips: [Trip]
+    /// **La corbeille** : les voyages jetés, du plus récent au plus ancien.
+    /// Vide pour presque tout le monde, presque tout le temps — et absente
+    /// d'un serveur plus ancien, d'où le défaut.
+    public var deletedTrips: [DeletedTrip] = []
     public let showcase: Showcase?
 
-    public init(traveller: Traveller, trips: [Trip], showcase: Showcase? = nil) {
+    public init(
+        traveller: Traveller,
+        trips: [Trip],
+        deletedTrips: [DeletedTrip] = [],
+        showcase: Showcase? = nil
+    ) {
         self.traveller = traveller
         self.trips = trips
+        self.deletedTrips = deletedTrips
         self.showcase = showcase
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        traveller = try container.decode(Traveller.self, forKey: .traveller)
+        trips = try container.decode([Trip].self, forKey: .trips)
+        deletedTrips = try container.decodeIfPresent([DeletedTrip].self, forKey: .deletedTrips) ?? []
+        showcase = try container.decodeIfPresent(Showcase.self, forKey: .showcase)
     }
 
     /// Les voyages en cours, les plus récemment commencés d'abord.

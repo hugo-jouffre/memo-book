@@ -219,7 +219,14 @@ public protocol MemoBookAPI: Sendable {
     func memos() async throws -> [MemoSummary]
     func createMemo(_ memo: NewMemo) async throws -> Memo
     func memo(id: String) async throws -> MemoDetail
+    /// `DELETE /v1/memos/:id` — **jette** un carnet : il part à la corbeille,
+    /// d'où son propriétaire peut le reprendre pendant trente jours. Il quitte
+    /// toutes les vues aussitôt, celles de ses co-voyageurs comprises.
     func deleteMemo(id: String) async throws
+
+    /// `POST /v1/memos/:id/restore` — le sort de la corbeille, entier. `404`
+    /// s'il n'y est plus : repris ailleurs, ou effacé au bout de trente jours.
+    func restoreMemo(id: String) async throws
 
     /// `DELETE /v1/entries/:id` — efface un souvenir, pour tous les
     /// co-voyageurs (T235). `204` sans corps ; `404` s'il n'existe plus.

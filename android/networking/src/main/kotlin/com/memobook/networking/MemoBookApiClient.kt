@@ -420,6 +420,10 @@ class MemoBookApiClient(
         sendIgnoringResponse("DELETE", "/v1/memos/$id")
     }
 
+    override suspend fun restoreMemo(id: String) {
+        sendIgnoringResponse("POST", "/v1/memos/$id/restore")
+    }
+
     override suspend fun deleteEntry(id: String) {
         sendIgnoringResponse("DELETE", "/v1/entries/$id")
     }

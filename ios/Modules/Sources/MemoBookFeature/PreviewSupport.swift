@@ -224,6 +224,7 @@ public actor PreviewAPI: MemoBookAPI {
         let feed = HomeFeed(
             traveller: fixture.traveller.replacing(isUnlimited: isUnlimited),
             trips: createdTrips + fixture.trips,
+            deletedTrips: fixture.deletedTrips,
             showcase: fixture.showcase
         )
         return SandboxCredit.applied(to: feed, profileIsUnlimited: sandboxProfileIsUnlimited)
@@ -492,6 +493,11 @@ public actor PreviewAPI: MemoBookAPI {
     public func deleteMemo(id: String) async throws {
         memosById[id] = nil
     }
+
+    /// Le bac à sable ne tient pas de corbeille : un voyage jeté y disparaît,
+    /// et rien ne le rend. Les écrans qui comptent sont ceux qu'on regarde,
+    /// pas la mécanique des trente jours — elle se vérifie en test.
+    public func restoreMemo(id: String) async throws {}
 
     public func deleteEntry(id: String) async throws {
         try SandboxNetwork.failIfOffline()
@@ -1262,7 +1268,7 @@ public enum SandboxCredit {
             trip.dailyCredit = credit(for: trip.id, profileIsUnlimited: profileIsUnlimited)
             return trip
         }
-        return HomeFeed(traveller: feed.traveller, trips: trips, showcase: feed.showcase)
+        return HomeFeed(traveller: feed.traveller, trips: trips, deletedTrips: feed.deletedTrips, showcase: feed.showcase)
     }
 
     // MARK: -
