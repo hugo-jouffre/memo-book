@@ -25,40 +25,30 @@ const HEIC = readFileSync(
   resolve(new URL("./fixtures/photos/heic-iphone.heic", import.meta.url).pathname),
 );
 
+/**
+ * Le test demande le navigateur, que le job de tests de la CI n'installe pas.
+ * Sans lui il se saute, comme `pdfVector.test.ts` et la suite visuelle : mieux
+ * vaut une vérification absente qu'une vérification qui ment.
+ *
+ * ⚠️ On **lance** le navigateur pour le savoir, au lieu de regarder
+ * `chromium.executablePath()` comme le font les deux autres : ce chemin est
+ * celui du Chromium complet, que `npx playwright install` ne pose pas quand
+ * seul le *headless shell* est demandé — celui-là même que `launch()` emploie.
+ * Le test se sautait donc aussi sur une machine parfaitement équipée.
+ */
+async function chromiumAvailable(): Promise<boolean> {
+  try {
+    const { chromium } = await import("playwright-core");
+    const browser = await chromium.launch();
+    await browser.close();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 let server: Server;
 let base: string;
-
-beforeAll(async () => {
-  const jpeg = Buffer.from(
-    await new Jimp({ width: 1200, height: 900, color: 0x3fa7d6ff }).getBuffer("image/jpeg"),
-  );
-  const converted = await toRenderablePhoto(HEIC, "photo.heic", "image/heic");
-
-  const files: Record<string, Buffer> = {
-    // Un vrai JPEG, et le HEIC tel que le stockage le servait : sous une
-    // extension `.jpg` et un `content-type: image/jpeg`, parce que c'est ce
-    // que l'app déclarait.
-    "/vrai.jpg": jpeg,
-    "/heic-deguise.jpg": HEIC,
-    "/heic-converti.jpg": converted.buffer,
-  };
-
-  server = createServer((request, response) => {
-    const body = files[(request.url ?? "/").split("?")[0] ?? "/"];
-    if (!body) {
-      response.writeHead(404).end();
-      return;
-    }
-    response.writeHead(200, { "content-type": "image/jpeg", "cache-control": "no-store" }).end(body);
-  });
-
-  await new Promise<void>((ready) => server.listen(0, "127.0.0.1", ready));
-  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-});
-
-afterAll(async () => {
-  await new Promise<void>((closed) => server.close(() => closed()));
-});
 
 /** Un carnet d'une page, dont la seule page est une planche de photos. */
 function payloadWith(urls: readonly string[]): Record<string, unknown> {
@@ -77,7 +67,39 @@ function payloadWith(urls: readonly string[]): Record<string, unknown> {
   };
 }
 
-describe("les photos du carnet", () => {
+describe.runIf(await chromiumAvailable())("les photos du carnet", () => {
+  beforeAll(async () => {
+    const jpeg = Buffer.from(
+      await new Jimp({ width: 1200, height: 900, color: 0x3fa7d6ff }).getBuffer("image/jpeg"),
+    );
+    const converted = await toRenderablePhoto(HEIC, "photo.heic", "image/heic");
+
+    const files: Record<string, Buffer> = {
+      // Un vrai JPEG, et le HEIC tel que le stockage le servait : sous une
+      // extension `.jpg` et un `content-type: image/jpeg`, parce que c'est ce
+      // que l'app déclarait.
+      "/vrai.jpg": jpeg,
+      "/heic-deguise.jpg": HEIC,
+      "/heic-converti.jpg": converted.buffer,
+    };
+
+    server = createServer((request, response) => {
+      const body = files[(request.url ?? "/").split("?")[0] ?? "/"];
+      if (!body) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(200, { "content-type": "image/jpeg", "cache-control": "no-store" }).end(body);
+    });
+
+    await new Promise<void>((ready) => server.listen(0, "127.0.0.1", ready));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((closed) => server.close(() => closed()));
+  });
+
   it("peint un JPEG, et ne peint pas un HEIC déguisé en JPEG", async () => {
     const { unpaintedImages } = await renderBookPdf({
       payload: payloadWith([`${base}/vrai.jpg`, `${base}/heic-deguise.jpg`]),
