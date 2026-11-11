@@ -224,6 +224,7 @@ public actor PreviewAPI: MemoBookAPI {
         let feed = HomeFeed(
             traveller: fixture.traveller.replacing(isUnlimited: isUnlimited),
             trips: createdTrips + fixture.trips,
+            deletedTrips: fixture.deletedTrips,
             showcase: fixture.showcase
         )
         return SandboxCredit.applied(to: feed, profileIsUnlimited: sandboxProfileIsUnlimited)
@@ -1267,7 +1268,7 @@ public enum SandboxCredit {
             trip.dailyCredit = credit(for: trip.id, profileIsUnlimited: profileIsUnlimited)
             return trip
         }
-        return HomeFeed(traveller: feed.traveller, trips: trips, showcase: feed.showcase)
+        return HomeFeed(traveller: feed.traveller, trips: trips, deletedTrips: feed.deletedTrips, showcase: feed.showcase)
     }
 
     // MARK: -

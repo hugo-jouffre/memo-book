@@ -761,7 +761,14 @@ public final class RecordingOutbox {
             Self.withFreshCredit($0.trip, isUnlimited: feed.traveller.isUnlimited)
         }
         guard !waiting.isEmpty else { return feed }
-        return HomeFeed(traveller: feed.traveller, trips: waiting + feed.trips, showcase: feed.showcase)
+        // `deletedTrips` recopié comme le reste : chaque reconstruction de
+        // `HomeFeed` qui l'oublie fait disparaître la corbeille en silence.
+        return HomeFeed(
+            traveller: feed.traveller,
+            trips: waiting + feed.trips,
+            deletedTrips: feed.deletedTrips,
+            showcase: feed.showcase
+        )
     }
 
     /// Un voyage que le serveur n'a jamais vu, avec **son crédit du jour**

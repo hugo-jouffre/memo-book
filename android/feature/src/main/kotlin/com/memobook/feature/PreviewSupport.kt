@@ -303,6 +303,7 @@ internal class PreviewApi(
         val feed = HomeFeed(
             traveller = fixture.traveller.replacing(isUnlimited = isUnlimited),
             trips = synchronized(lock) { createdTrips.map { it.copy() } } + fixture.trips,
+            deletedTrips = fixture.deletedTrips,
             showcase = fixture.showcase,
         )
         return SandboxCredit.applied(feed, profileIsUnlimited = profileIsUnlimited)
@@ -1382,7 +1383,7 @@ internal object SandboxCredit {
             if (!trip.stage.isOngoing) return@map trip
             trip.copy(dailyCredit = credit(tripId = trip.id, profileIsUnlimited = profileIsUnlimited))
         }
-        return HomeFeed(traveller = feed.traveller, trips = trips, showcase = feed.showcase)
+        return feed.copy(trips = trips)
     }
 
     // endregion

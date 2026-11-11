@@ -70,11 +70,7 @@ internal enum class SandboxPersona {
             val credit = trip.dailyCredit ?: return@map trip
             trip.copy(dailyCredit = credit.copy(isUnlimited = isUnlimited))
         }
-        return HomeFeed(
-            traveller = applied(feed.traveller),
-            trips = trips,
-            showcase = feed.showcase,
-        )
+        return feed.copy(traveller = applied(feed.traveller), trips = trips)
     }
 
     /**

@@ -387,7 +387,16 @@ struct DeletedTripRow: View {
             if isRestoring {
                 ProgressView().controlSize(.mini)
             } else {
-                BrandButton(HomeCopy.Trash.restore, style: .link, size: .small, action: onRestore)
+                // `isSubdued` : la section est un filet, pas un appel. Un
+                // « Récupérer » plus sombre que le titre du voyage qu'il
+                // concerne inverserait la hiérarchie de la ligne.
+                BrandButton(
+                    HomeCopy.Trash.restore,
+                    style: .link,
+                    size: .small,
+                    isSubdued: true,
+                    action: onRestore
+                )
                     .accessibilityLabel(HomeCopy.Trash.restoreVoice(title: trip.title))
             }
         }

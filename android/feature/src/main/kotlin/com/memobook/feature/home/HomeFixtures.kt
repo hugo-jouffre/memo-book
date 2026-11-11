@@ -1,6 +1,7 @@
 package com.memobook.feature.home
 
 import com.memobook.core.DailyCredit
+import com.memobook.core.DeletedTrip
 import com.memobook.core.Destination
 import com.memobook.core.HomeFeed
 import com.memobook.core.Showcase
@@ -137,6 +138,26 @@ private val homeFeedFixture = HomeFeed(
     showcase = Showcase(
         title = "Voir des exemples de carnet",
         subtitle = "Découvre à quoi ressemble un carnet MemoBook terminé",
+    ),
+    // **Deux voyages dans la corbeille**, pour que la section du bas se
+    // regarde sans serveur. Deux échéances différentes : une lointaine, et
+    // une à demain — c'est celle-là qui dit si le compte à rebours sait se
+    // taire sur les chiffres quand il n'en faut plus.
+    deletedTrips = listOf(
+        DeletedTrip(
+            id = "deleted-lisbonne",
+            title = "Lisbonne au printemps",
+            startDate = fixtureDate(3, 4, 2026),
+            endDate = fixtureDate(11, 4, 2026),
+            deletedAt = Instant.now().minusSeconds(4 * 86_400),
+            purgeAt = Instant.now().plusSeconds(26 * 86_400),
+        ),
+        DeletedTrip(
+            id = "deleted-annecy",
+            title = "Week-end à Annecy",
+            deletedAt = Instant.now().minusSeconds(29 * 86_400),
+            purgeAt = Instant.now().plusSeconds(86_400),
+        ),
     ),
 )
 

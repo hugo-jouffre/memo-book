@@ -538,10 +538,14 @@ fun DeletedTripRow(
         if (isRestoring) {
             ActivitySpinner(MemoBookColor.inkMuted)
         } else {
+            // `isSubdued` : la section est un filet, pas un appel. Un
+            // « Récupérer » plus sombre que le titre du voyage qu'il concerne
+            // inverserait la hiérarchie de la ligne.
             BrandButton(
                 HomeCopy.Trash.restore,
                 style = BrandButton.Style.Link,
                 size = BrandButton.Size.Small,
+                isSubdued = true,
                 contentDescription = HomeCopy.Trash.restoreVoice(trip.title),
                 action = onRestore,
             )

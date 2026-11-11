@@ -63,6 +63,7 @@
             return HomeFeed(
                 traveller: applied(to: feed.traveller),
                 trips: trips,
+                deletedTrips: feed.deletedTrips,
                 showcase: feed.showcase
             )
         }
