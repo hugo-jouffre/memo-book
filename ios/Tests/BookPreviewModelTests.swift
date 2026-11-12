@@ -38,14 +38,19 @@ final class BookPreviewModelTests: XCTestCase {
         await model.run()
 
         XCTAssertEqual(model.stage, .preview)
-        // Le plancher de la cascade est de 4,2 s : rester bien en dessous
-        // prouve qu'il n'a pas été traversé pour rien.
+        // Le plancher de la cascade est d'une dizaine de secondes
+        // (`BookCompositionPiece.timeline`) : rester bien en dessous prouve
+        // qu'il n'a pas été traversé pour rien.
         XCTAssertLessThan(ContinuousClock.now - started, .seconds(1))
     }
 
     func testFirstCompositionStillPlaysTheCascade() async throws {
         let source = QueuedSource([preview(status: .composing), preview(status: .ready)])
         let model = BookPreviewModel(memoId: "memo-1", source: { _ in try source.next() })
+        // En accéléré : ce cas prouve que la cascade est **jouée**, pas qu'elle
+        // dure dix secondes — ce dont `BookCompositionCadenceTests` répond.
+        // Au rythme de l'app, il tiendrait la suite dix secondes à lui seul.
+        model.pacing = .fast
 
         await model.run()
 
