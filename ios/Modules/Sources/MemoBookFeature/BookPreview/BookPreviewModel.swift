@@ -118,6 +118,11 @@ public final class BookPreviewModel {
         /// **4,2 s et non plus 2,6** (Hugo, 08/10/2026) : la cascade était
         /// courte pour l'attente qui suit, et le rythme est désormais celui de
         /// chaque page de la boucle — voir ``BookCompositionLoop``.
+        ///
+        /// **Puis une dizaine de secondes** (Hugo, 10/11/2026 : « plus longue,
+        /// plus lente, plus logique — ligne par ligne »). La valeur n'est plus
+        /// écrite : c'est la longueur de la chorégraphie elle-même, et le
+        /// plancher suit tout seul quand on la règle.
         var compositionDuration: Duration
 
         /// Le pas entre deux relevés de l'avancement. La cascade se joue dans
@@ -835,9 +840,12 @@ private func withAnimationCompat(duration: Duration, _ changes: () -> Void) {
     let seconds = Double(duration.components.seconds)
         + Double(duration.components.attoseconds) / 1e18
 
-    // `easeOut` et non un ressort : les morceaux doivent **se poser**, et un
-    // ressort les ferait rebondir tous ensemble à la fin de la cascade.
-    withAnimation(.easeOut(duration: seconds), changes)
+    // **Linéaire**, depuis le 10/11/2026 : l'avancement n'est pas un effet, il
+    // est l'**horloge** de la chorégraphie — `BookCompositionPiece` y lit la
+    // seconde où l'on en est, et chaque morceau porte sa propre courbe
+    // d'arrivée. Un `easeOut` global écrasait la fin de la minuterie : le texte
+    // s'écrivait vite et les pièces collées tombaient ensemble.
+    withAnimation(.linear(duration: seconds), changes)
 }
 
 /// Le chemin vers les couvertures, posé sur une page de l'aperçu.

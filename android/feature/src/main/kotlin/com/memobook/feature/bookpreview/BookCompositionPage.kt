@@ -3,6 +3,7 @@ package com.memobook.feature.bookpreview
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleOut
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -59,8 +61,8 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Une page de carnet **en train de se monter** : ses morceaux arrivent chacun
- * de son côté et se posent à leur place. Jumeau de
+ * Une page de carnet **en train de se monter** : l'en-tête, puis le texte qui
+ * s'écrit ligne par ligne, puis ce qu'on colle par-dessus. Jumeau de
  * `BookPreview/BookCompositionPage.swift`.
  *
  * C'est le cœur de l'écran « On compose ton Carnet », et son seul travail est
@@ -80,9 +82,15 @@ import kotlin.time.Duration.Companion.seconds
  *   une capture, et à 0 pour un aperçu. **La valeur elle-même est animée**, et
  *   non le dessin qui en sort comme le fait SwiftUI : c'est ce qui fait partir
  *   chaque morceau à son tour, la cascade que décrit [BookCompositionPiece].
+ * @param isMirrored la page est dessinée **en miroir** (une sur deux, voir
+ *   [BookCompositionLoop]). Elle a besoin de le savoir : retourner une mise en
+ *   page est un bon moyen de ne pas rejouer deux fois la même page, mais
+ *   retourner le **geste d'écrire** en serait un mauvais — les lignes se
+ *   traceraient de droite à gauche. Elles s'ancrent donc du côté qui est
+ *   visuellement la marge de gauche.
  */
 @Composable
-internal fun BookCompositionPage(progress: Float, modifier: Modifier = Modifier) {
+internal fun BookCompositionPage(progress: Float, modifier: Modifier = Modifier, isMirrored: Boolean = false) {
     val reduceMotion = isReduceMotionEnabled()
     val shape = RoundedCornerShape(MemoBookSpacing.pageCornerRadius)
 
@@ -107,29 +115,64 @@ internal fun BookCompositionPage(progress: Float, modifier: Modifier = Modifier)
 
         for (piece in BookCompositionPiece.all) {
             val settled = BookCompositionPiece.settled(piece, progress)
-            // Sous « Supprimer les animations », les morceaux ne voyagent plus :
-            // ils se révèlent sur place. La promesse de l'écran — « ça
-            // travaille » — tient toujours, sans mouvement.
-            val remaining = if (reduceMotion) 0f else 1f - settled
-            val (dx, dy) = piece.entry.direction
+            val arrival = piece.arrival
 
             Box(
                 Modifier
                     .offset(x = width * piece.x, y = height * piece.y)
                     .size(width * piece.width, height * piece.height)
                     .graphicsLayer {
-                        translationX = dx * travelX * remaining
-                        translationY = dy * travelY * remaining
+                        // Sous « Supprimer les animations », rien ne voyage et
+                        // rien ne s'écrit : les morceaux se révèlent sur place,
+                        // en fondu. La promesse de l'écran — « ça travaille » —
+                        // tient toujours, sans mouvement.
+                        if (reduceMotion) {
+                            alpha = min(settled * 2.2f, 1f)
+                            return@graphicsLayer
+                        }
+
+                        // L'arrivée est adoucie pour **ce morceau-là**, et non
+                        // par l'animation globale : celle-ci est désormais
+                        // linéaire, parce qu'elle sert d'horloge à la
+                        // chorégraphie (voir `BookCompositionPiece.timeline`).
+                        val eased = 1f - (1f - settled) * (1f - settled) * (1f - settled)
                         rotationZ = piece.rotation * settled
-                        // Le morceau grandit d'un cheveu en arrivant : il **se
-                        // pose** au lieu de glisser jusqu'à sa place.
-                        val scale = if (reduceMotion) 1f else 0.88f + 0.12f * settled
-                        scaleX = scale
-                        scaleY = scale
-                        // L'opacité se remplit plus vite que la course : la
-                        // pièce est déjà franche à mi-chemin, ce qui évite
-                        // l'impression de brouillard.
-                        alpha = min(settled * 2.2f, 1f)
+
+                        when (arrival) {
+                            // La ligne **s'écrit** : sa largeur pousse depuis la
+                            // marge de gauche, dans le sens de la lecture.
+                            BookCompositionPiece.Arrival.Written -> {
+                                // Sur une page retournée, la marge de gauche
+                                // est à droite : l'ancre suit.
+                                transformOrigin = TransformOrigin(if (isMirrored) 1f else 0f, 0.5f)
+                                scaleX = max(eased, 0.001f)
+                                // Franche tout de suite : un trait de deux
+                                // pixels de large en fondu ne se voit pas.
+                                alpha = min(settled * 8f, 1f)
+                            }
+                            // Imprimé : ça apparaît sur place, en se posant d'un
+                            // cheveu. Rien ne traverse la page.
+                            BookCompositionPiece.Arrival.Printed -> {
+                                val scale = 0.92f + 0.08f * eased
+                                scaleX = scale
+                                scaleY = scale
+                                alpha = min(settled * 2.2f, 1f)
+                            }
+                            // Collé : il arrive du hors-cadre, et grandit d'un
+                            // cheveu en arrivant — il **se pose** au lieu de
+                            // glisser jusqu'à sa place. L'opacité se remplit
+                            // plus vite que la course, ce qui évite
+                            // l'impression de brouillard.
+                            is BookCompositionPiece.Arrival.Glued -> {
+                                val (dx, dy) = arrival.from.direction
+                                translationX = dx * travelX * (1f - eased)
+                                translationY = dy * travelY * (1f - eased)
+                                val scale = 0.88f + 0.12f * eased
+                                scaleX = scale
+                                scaleY = scale
+                                alpha = min(settled * 2.2f, 1f)
+                            }
+                        }
                     },
             ) {
                 PieceShape(piece.kind)
@@ -187,7 +230,14 @@ private fun PieceShape(kind: BookCompositionPiece.Kind) {
  *   gauche, comme [y], [width] et [height].
  * @property rotation l'inclinaison finale, en degrés. Zéro pour tout ce qui est
  *   imprimé ; seuls les éléments *collés* penchent.
- * @property delay quand ce morceau part, de 0 à 1 de l'avancement global.
+ * @property start à quelle **seconde** de la chorégraphie ce morceau part. En
+ *   secondes et non plus en fraction de l'avancement (Hugo, 10/11/2026) : une
+ *   page se monte à un rythme, et un rythme se règle en temps. Une fraction
+ *   obligeait à recalculer treize nombres dès qu'on allongeait la cascade —
+ *   c'est ce qui l'avait laissée trop rapide.
+ * @property span combien de secondes il met à arriver. Courte pour une ligne de
+ *   texte, qui doit être **finie avant que la suivante commence** : c'est là
+ *   tout le « ligne par ligne ».
  */
 internal data class BookCompositionPiece(
     val id: Int,
@@ -196,13 +246,38 @@ internal data class BookCompositionPiece(
     val y: Float,
     val width: Float,
     val height: Float,
-    val entry: Entry,
+    val arrival: Arrival,
     val rotation: Float,
-    val delay: Float,
+    val start: Float,
+    val span: Float,
 ) {
     /**
-     * D'où arrive le morceau. Six directions, et pas quatre : deux pièces qui
-     * entrent par le même bord au même instant se lisent comme un seul bloc.
+     * Comment un morceau arrive. Trois façons seulement, et chacune dit ce que
+     * le morceau **est**.
+     *
+     * Avant, les treize morceaux volaient depuis le hors-cadre, en-tête et
+     * lignes de texte comprises : ça bougeait beaucoup et ça ne racontait rien.
+     * Une page ne s'assemble pas en vol — **ce qui est imprimé s'imprime, ce
+     * qui est écrit s'écrit, et seul ce qu'on colle arrive de l'extérieur.**
+     */
+    sealed interface Arrival {
+        /**
+         * Il s'écrit, de la marge vers la droite : les lignes de texte et les
+         * bandeaux d'en-tête.
+         */
+        data object Written : Arrival
+
+        /** Il s'imprime sur place : les pictogrammes de la frise. */
+        data object Printed : Arrival
+
+        /** Il est collé, et arrive donc du hors-cadre, de travers. */
+        data class Glued(val from: Entry) : Arrival
+    }
+
+    /**
+     * D'où arrive un morceau collé. Six directions, et pas quatre : deux pièces
+     * qui entrent par le même bord au même instant se lisent comme un seul
+     * bloc.
      *
      * @property direction le vecteur de départ, en **fractions de la page**.
      *   Au-delà de 1, le morceau part de hors-cadre — ce qui est le but.
@@ -240,13 +315,19 @@ internal data class BookCompositionPiece(
     companion object {
         /**
          * La chorégraphie, relevée sur le nœud `Skeleton - Prévisualisation
-         * PDF` (3335:10208).
+         * PDF` (3335:10208), **en secondes**.
          *
          * Les positions sont des **fractions** de la page de 252 × 357 de la
          * maquette. L'ordre des départs raconte quelque chose : la page se
-         * monte comme on monte une page — la structure d'abord (signet,
-         * bandeaux), le texte ensuite, et les éléments collés en dernier, parce
-         * que c'est bien ainsi qu'on colle une photo dans un carnet.
+         * monte comme on monte une page — le signet et l'en-tête d'abord, la
+         * frise, puis le texte qui s'écrit ligne par ligne, et les éléments
+         * collés en dernier, parce que c'est bien ainsi qu'on colle une photo
+         * dans un carnet.
+         *
+         * **Les secondes ne sont pas des réglages de confort.** Une ligne met
+         * 0,5 s à s'écrire et la suivante part 0,6 s après la précédente :
+         * c'est cet écart — un peu plus long que le geste — qui fait *lire* une
+         * ligne après l'autre au lieu d'un bloc qui se remplit.
          */
         val all: List<BookCompositionPiece> = buildList {
             fun add(
@@ -255,20 +336,24 @@ internal data class BookCompositionPiece(
                 y: Float,
                 width: Float,
                 height: Float,
-                from: Entry,
-                delay: Float,
+                arrival: Arrival,
+                start: Float,
+                span: Float,
                 rotation: Float = 0f,
             ) {
-                add(BookCompositionPiece(size, kind, x, y, width, height, from, rotation, delay))
+                add(BookCompositionPiece(size, kind, x, y, width, height, arrival, rotation, start, span))
             }
 
-            // 1. La structure de l'en-tête.
-            add(Kind.Bookmark, 0.06f, 0.0f, 0.12f, 0.13f, from = Entry.Top, delay = 0.0f)
-            add(Kind.Bar, 0.28f, 0.045f, 0.31f, 0.035f, from = Entry.Trailing, delay = 0.04f)
-            add(Kind.Bar, 0.63f, 0.045f, 0.31f, 0.035f, from = Entry.Trailing, delay = 0.07f)
+            // 1. Le signet pend du bord haut : il descend à sa place. C'est un
+            //    ruban, la seule pièce de l'en-tête qui arrive d'ailleurs.
+            add(Kind.Bookmark, 0.06f, 0.0f, 0.12f, 0.13f, Arrival.Glued(Entry.Top), start = 0.0f, span = 0.8f)
 
-            // 2. La frise de pictogrammes, un par un et de la gauche : c'est
-            //    une ligne, elle s'écrit dans le sens de la lecture.
+            // 2. Les deux bandeaux d'en-tête s'écrivent, l'un après l'autre.
+            add(Kind.Bar, 0.28f, 0.045f, 0.31f, 0.035f, Arrival.Written, start = 0.5f, span = 0.6f)
+            add(Kind.Bar, 0.63f, 0.045f, 0.31f, 0.035f, Arrival.Written, start = 0.9f, span = 0.6f)
+
+            // 3. La frise de pictogrammes, un par un et dans le sens de la
+            //    lecture : chacun s'imprime sur place, comme un tampon.
             for (index in 0 until 6) {
                 add(
                     Kind.Glyph,
@@ -276,13 +361,15 @@ internal data class BookCompositionPiece(
                     0.125f,
                     0.038f,
                     0.027f,
-                    from = Entry.Leading,
-                    delay = 0.10f + index * 0.018f,
+                    Arrival.Printed,
+                    start = 1.7f + index * 0.18f,
+                    span = 0.45f,
                 )
             }
 
-            // 3. Le texte. Huit lignes, du haut, décalées : la page « s'écrit ».
-            //    La dernière est plus courte, comme une fin de paragraphe.
+            // 4. Le texte. Huit lignes qui s'écrivent, du haut et dans l'ordre :
+            //    c'est le cœur de la demande. La dernière est plus courte,
+            //    comme une fin de paragraphe.
             val lineWidths = listOf(0.80f, 0.80f, 0.80f, 0.80f, 0.80f, 0.80f, 0.80f, 0.52f)
             lineWidths.forEachIndexed { index, width ->
                 add(
@@ -291,34 +378,40 @@ internal data class BookCompositionPiece(
                     0.225f + index * 0.027f,
                     width,
                     0.012f,
-                    from = if (index % 2 == 0) Entry.Leading else Entry.Trailing,
-                    delay = 0.24f + index * 0.022f,
+                    Arrival.Written,
+                    start = 3.0f + index * 0.6f,
+                    span = 0.5f,
                 )
             }
 
-            // 4. Ce qu'on colle par-dessus, en dernier et de travers.
-            add(Kind.Card, 0.36f, 0.50f, 0.56f, 0.17f, from = Entry.Trailing, delay = 0.46f, rotation = -4f)
-            add(Kind.Photo, 0.06f, 0.61f, 0.39f, 0.23f, from = Entry.BottomTrailing, delay = 0.56f, rotation = 2f)
-            add(Kind.Stamp, 0.62f, 0.72f, 0.26f, 0.18f, from = Entry.Bottom, delay = 0.66f)
+            // 5. Ce qu'on colle par-dessus, en dernier et de travers — un geste
+            //    plus ample, parce qu'on prend le temps de coller droit.
+            add(Kind.Card, 0.36f, 0.50f, 0.56f, 0.17f, Arrival.Glued(Entry.Trailing), start = 8.0f, span = 1.0f, rotation = -4f)
+            add(Kind.Photo, 0.06f, 0.61f, 0.39f, 0.23f, Arrival.Glued(Entry.BottomTrailing), start = 8.9f, span = 1.0f, rotation = 2f)
+            add(Kind.Stamp, 0.62f, 0.72f, 0.26f, 0.18f, Arrival.Glued(Entry.Bottom), start = 9.8f, span = 0.9f)
         }
 
         /**
-         * Le départ du dernier morceau. Les fenêtres se calculent dessus pour
-         * que la page soit **exactement** finie à `progress == 1` : une pièce
-         * encore en vol à la fin ferait sauter le passage à l'aperçu.
+         * Combien de secondes la page entière met à se monter : la fin du
+         * dernier morceau.
+         *
+         * C'est elle qui fixe la durée de l'animation ([BookCompositionLoop])
+         * et donc le plancher de l'attente. Allonger la cascade, c'est déplacer
+         * un `start` ici — rien d'autre ne suit à la main.
          */
-        private val lastDelay: Float = all.maxOf { it.delay }
+        val timeline: Float = all.maxOf { it.start + it.span }
 
         /**
-         * De 0 à 1 pour **ce morceau-là** : sa part de l'avancement global.
+         * De 0 à 1 pour **ce morceau-là**, à cet avancement global.
          *
-         * Chaque pièce occupe une fenêtre de l'avancement, décalée par son
-         * rang. C'est ce décalage qui fait la cascade : sans lui, les morceaux
-         * arriveraient ensemble et la page apparaîtrait d'un bloc.
+         * L'avancement sert d'**horloge** : multiplié par [timeline], il donne
+         * la seconde où l'on en est, et chaque pièce y lit sa part. C'est ce qui
+         * rend la cascade juste à `progress == 1` quoi qu'on change au-dessus —
+         * une pièce encore en vol à la fin ferait sauter le passage à l'aperçu.
          */
         fun settled(piece: BookCompositionPiece, progress: Float): Float {
-            val window = 1f - lastDelay
-            val local = (progress - piece.delay) / max(window, 0.001f)
+            val clock = progress * timeline
+            val local = (clock - piece.start) / max(piece.span, 0.001f)
             return local.coerceIn(0f, 1f)
         }
     }
@@ -329,15 +422,24 @@ internal data class BookCompositionPiece(
  * `BrandButton.Style` : une fonction `@Composable` n'a pas de membres.
  */
 internal object BookCompositionLoop {
-    /** Combien de temps une page posée reste sous les yeux avant de tourner. */
-    val hold: Duration = 1.6.seconds
+    /**
+     * Combien de temps une page posée reste sous les yeux avant de tourner. Un
+     * peu plus qu'avant : une page qu'on a vue s'écrire mérite d'être regardée
+     * finie.
+     */
+    val hold: Duration = 2.2.seconds
 
     /**
      * Combien de temps une page met à se monter — la première comme les
      * suivantes, pour garder le même rythme. C'est aussi le plancher de
      * l'attente du modèle (`BookPreviewModel.Pacing.compositionDuration`).
+     *
+     * **Ce n'est plus un réglage** : c'est la longueur de la chorégraphie
+     * elle-même ([BookCompositionPiece.timeline]), pour qu'une seconde déplacée
+     * là-bas soit une seconde de plus à l'écran. Elle est passée de 4,2 s à une
+     * dizaine (Hugo, 10/11/2026 : « plus longue, plus lente »).
      */
-    val assembly: Duration = 4.2.seconds
+    val assembly: Duration = (BookCompositionPiece.timeline.toDouble()).seconds
 
     /** Le temps de tourner la page. */
     val turn: Duration = 0.6.seconds
@@ -368,10 +470,12 @@ internal object BookCompositionLoop {
  * travaille.
  *
  * @param firstPass l'avancement de la première page, tenu par le modèle : la
- *   **cible** (0 ou 1), que la vue anime en `easeOut` sur
- *   [BookCompositionLoop.assembly]. `easeOut` et non un ressort : les morceaux
- *   doivent **se poser**, et un ressort les ferait rebondir tous ensemble à la
- *   fin de la cascade.
+ *   **cible** (0 ou 1), que la vue anime **linéairement** sur
+ *   [BookCompositionLoop.assembly]. Linéaire et non `easeOut` : l'avancement
+ *   n'est pas un effet, il est l'**horloge** de la chorégraphie — chaque
+ *   morceau porte sa propre courbe d'arrivée, et un `easeOut` global écrasait
+ *   la fin de la minuterie (le texte s'écrivait vite, les pièces collées
+ *   tombaient ensemble).
  */
 @Composable
 internal fun BookCompositionLoop(firstPass: Double, modifier: Modifier = Modifier) {
@@ -386,7 +490,7 @@ internal fun BookCompositionLoop(firstPass: Double, modifier: Modifier = Modifie
         if (target <= first.value) {
             first.snapTo(target)
         } else {
-            first.animateTo(target, tween(BookCompositionLoop.assembly.inWholeMilliseconds.toInt(), easing = SwiftMotion.easeOut))
+            first.animateTo(target, tween(BookCompositionLoop.assembly.inWholeMilliseconds.toInt(), easing = LinearEasing))
         }
     }
 
@@ -400,7 +504,7 @@ internal fun BookCompositionLoop(firstPass: Double, modifier: Modifier = Modifie
             next.snapTo(0f)
             page += 1
             delay(BookCompositionLoop.turn / 2)
-            next.animateTo(1f, tween(BookCompositionLoop.assembly.inWholeMilliseconds.toInt(), easing = SwiftMotion.easeOut))
+            next.animateTo(1f, tween(BookCompositionLoop.assembly.inWholeMilliseconds.toInt(), easing = LinearEasing))
         }
     }
 
@@ -427,6 +531,7 @@ internal fun BookCompositionLoop(firstPass: Double, modifier: Modifier = Modifie
         }
         BookCompositionPage(
             progress = progress,
+            isMirrored = shown % 2 != 0,
             modifier = Modifier
                 .fillMaxSize()
                 // Une page sur deux en miroir : ses morceaux arrivent de l'autre
@@ -484,8 +589,10 @@ private fun BookCompositionPagePreview() {
     LaunchedEffect(Unit) {
         while (true) {
             progress.snapTo(0f)
-            progress.animateTo(1f, tween(2400, easing = SwiftMotion.easeOut))
-            delay(1000)
+            // Le rythme de l'app, à la seconde près : l'aperçu ne sert à
+            // rien s'il joue plus vite que l'écran.
+            progress.animateTo(1f, tween(BookCompositionLoop.assembly.inWholeMilliseconds.toInt(), easing = LinearEasing))
+            delay(1200)
         }
     }
     Box(
