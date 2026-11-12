@@ -115,13 +115,22 @@ Trois pièces, une responsabilité chacune :
 | Pièce | Ce qu'elle fait |
 |---|---|
 | `services/stickerVision.ts` | **l'œil** — un modèle de vision regarde les photos réduites à 512 px et rend, pour celles qui portent un souvenir plat, ses **quatre coins** et un libellé. Il refuse les visages, les papiers d'identité et les captures d'écran |
-| `services/stickerEdges.ts` | **le mètre** — reprend l'indication du modèle et la resserre sur l'objet lui-même, par les pixels : couleur du fond aux quatre coins, masque, plus grande tache, rectangle le plus serré, de travers s'il le faut |
+| `services/stickerEdges.ts` | **le mètre** — reprend l'indication du modèle et la resserre sur l'objet lui-même, par les pixels : fond interpolé entre les quatre coins, masque, érosion, plus grande tache, enveloppe convexe, silhouette simplifiée |
 | `services/stickerCut.ts` | **les ciseaux** — `sharp` découpe le quadrilatère dans l'originale, pose une bordure blanche régulière et une ombre douce, et rend un PNG transparent. Aucun réseau, entièrement testé |
 | `services/photoStickers.ts` | **la chaîne** — va chercher, montre, découpe, range le PNG et écrit la ligne |
 
 Quatre coins et non une boîte : un billet posé sur une table est de travers,
 et un rectangle droit autour de lui emporterait la nappe. On ne le redresse
 pas pour autant — un sticker penché est un sticker collé.
+
+**Et une silhouette, pas même un rectangle serré** (Hugo, 12/11/2026 : « le
+liseré est un défaut »). Un rectangle, fût-il incliné au plus juste, laisse de
+la table dans ses coins dès que l'objet est un peu trapézoïdal — un billet vu
+de biais l'est toujours un peu. Les ciseaux découpent donc une forme fermée de
+`n` points (``StickerShape``), et c'est la forme qui décide de `n` : on
+enlève les sommets dont le retrait ne coûte presque rien, si bien qu'un billet
+droit se réduit à ses quatre vrais coins et qu'un tampon rond en garde une
+quinzaine.
 
 **Le modèle reconnaît, les pixels cadrent** (12/11/2026). À la première vraie
 photo essayée — une carte d'embarquement AirAsia sur une table grise — le
@@ -132,6 +141,14 @@ bouts du billet coupés. Placer un bord au pixel près n'est pas un travail de
 modèle de langue ; c'est une mesure, et `stickerEdges.ts` la fait. Chacune de
 ses étapes peut renoncer : on garde alors les coins du modèle, approximatifs
 valant mieux qu'absents.
+
+⚠️ **Le fond d'une photo n'a pas une couleur, il en a quatre.** Une table
+prise près d'une fenêtre s'assombrit d'un bout à l'autre de l'image : avec une
+couleur de fond unique, le coin le plus sombre s'écarte assez pour passer pour
+l'objet, et le sticker garde une bande de table collée dessous. Le fond
+attendu en un point est donc interpolé entre les quatre coins de la photo — et
+les quatre coins doivent se ressembler, sans quoi il y a deux surfaces et la
+mesure renonce.
 
 ⚠️ **`sharp` ne décode pas le HEIC**, le format par défaut d'un iPhone : il en
 lit les métadonnées et échoue au décodage, faute de HEVC dans ses binaires. La

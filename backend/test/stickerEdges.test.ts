@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { refineCorners } from "../src/services/stickerEdges.js";
-import { stickerArea, type StickerCorners } from "../src/services/stickerCut.js";
+import { stickerArea, type StickerCorners, type StickerShape } from "../src/services/stickerCut.js";
 
 /**
  * **Où est vraiment le billet** (Hugo, 12/11/2026).
@@ -28,6 +28,7 @@ async function objetSurTable({
   hauteur = 150,
   fond = { r: 90, g: 92, b: 96 },
   bicolore = false,
+  degrade = false,
 }): Promise<Buffer> {
   const objet = await sharp({
     create: { width: largeur, height: hauteur, channels: 4, background: { r: 245, g: 244, b: 238, alpha: 1 } },
@@ -45,6 +46,19 @@ async function objetSurTable({
   // ⚠️ Un seul `composite` : un second appel **remplace** le premier dans
   // sharp, il ne s'y ajoute pas.
   const couches = [
+    // Une table qui s'assombrit vers le bas : la lumière d'une fenêtre, ou un
+    // flash. C'est ce qui laissait une bande de table collée sous le billet.
+    ...(degrade
+      ? [
+          {
+            input: Buffer.from(
+              `<svg width="600" height="450"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">` +
+                `<stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.45"/>` +
+                `</linearGradient></defs><rect width="600" height="450" fill="url(#g)"/></svg>`,
+            ),
+          },
+        ]
+      : []),
     ...(bicolore
       ? [
           {
@@ -63,8 +77,8 @@ async function objetSurTable({
     .toBuffer();
 }
 
-/** La boîte englobante des coins, en fractions. */
-function boite(corners: StickerCorners) {
+/** La boîte englobante d'une forme, en fractions. */
+function boite(corners: StickerShape) {
   const xs = corners.map((point) => point.x);
   const ys = corners.map((point) => point.y);
   return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
@@ -103,10 +117,13 @@ describe("resserrer les coins sur l'objet", () => {
     const aireDroite = (droite.x1 - droite.x0) * (droite.y1 - droite.y0);
     expect(stickerArea(coins!)).toBeLessThan(aireDroite * 0.85);
 
-    // Et il penche vraiment : son premier côté n'est pas horizontal.
-    const [a, b] = coins!;
-    const pente = Math.abs(Math.atan2(b.y - a.y, b.x - a.x) * (180 / Math.PI));
-    expect(pente).toBeGreaterThan(5);
+    // Et il penche vraiment : aucun de ses côtés n'est horizontal.
+    const horizontaux = coins!.filter((point, i) => {
+      const suivant = coins![(i + 1) % coins!.length]!;
+      const pente = Math.abs(Math.atan2(suivant.y - point.y, suivant.x - point.x) * (180 / Math.PI)) % 180;
+      return pente < 5 || pente > 175;
+    });
+    expect(horizontaux).toHaveLength(0);
   });
 
   /**
@@ -117,6 +134,51 @@ describe("resserrer les coins sur l'objet", () => {
   it("renonce quand le fond n'est pas uni — les coins du modèle valent mieux", async () => {
     const photo = await objetSurTable({ bicolore: true });
     expect(await refineCorners(photo, BOITE_MOLLE)).toBeNull();
+  });
+
+  /**
+   * Le défaut que Hugo a vu sur sa carte d'embarquement (12/11/2026) : la
+   * table s'assombrissait vers le bas, le coin sombre passait pour l'objet, et
+   * le sticker gardait une bande de table collée dessous. Le fond est
+   * désormais interpolé entre les quatre coins.
+   */
+  it("traverse un fond qui s'assombrit, sans emporter la table avec", async () => {
+    const photo = await objetSurTable({ degrade: true });
+    const coins = await refineCorners(photo, BOITE_MOLLE);
+    expect(coins).not.toBeNull();
+
+    const trouve = boite(coins!);
+    // L'objet, et rien que lui : pas de bande jusqu'au bas de la photo.
+    expect(trouve.y1).toBeLessThan(0.72);
+    expect(trouve.x0).toBeCloseTo(0.3, 1);
+    expect(trouve.x1).toBeCloseTo(0.7, 1);
+  });
+
+  /**
+   * **Une silhouette, et non un rectangle englobant.** Un objet trapézoïdal —
+   * un billet vu de biais — laisse de la table dans les coins d'un rectangle ;
+   * la forme, elle, n'en contient pas.
+   */
+  it("suit un objet trapézoïdal au lieu de l'encadrer", async () => {
+    const trapeze = Buffer.from(
+      `<svg width="600" height="450"><polygon points="180,140 430,120 460,330 150,310" fill="#f5f4ee"/></svg>`,
+    );
+    const photo = await sharp({
+      create: { width: 600, height: 450, channels: 3, background: { r: 90, g: 92, b: 96 } },
+    })
+      .composite([{ input: trapeze }])
+      .jpeg({ quality: 95 })
+      .toBuffer();
+
+    const coins = await refineCorners(photo, BOITE_MOLLE);
+    expect(coins).not.toBeNull();
+    // Peu de points — la forme décide, et un trapèze en demande quatre ou
+    // cinq —, et une aire franchement plus petite que la boîte droite qui les
+    // contient : c'est la signature d'un trapèze suivi de près.
+    expect(coins!.length).toBeLessThanOrEqual(6);
+    const droite = boite(coins!);
+    const aireDroite = (droite.x1 - droite.x0) * (droite.y1 - droite.y0);
+    expect(stickerArea(coins!)).toBeLessThan(aireDroite * 0.95);
   });
 
   it("renonce sur une photo sans objet : il n'y a rien à resserrer", async () => {

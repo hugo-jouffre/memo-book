@@ -31,8 +31,19 @@ export interface StickerPoint {
   y: number;
 }
 
-/** Les quatre coins de l'objet à découper, dans le sens des aiguilles. */
+/** Les quatre coins que le modèle rend, dans le sens des aiguilles. */
 export type StickerCorners = [StickerPoint, StickerPoint, StickerPoint, StickerPoint];
+
+/**
+ * **Ce que les ciseaux découpent** : une forme fermée, trois points au moins.
+ *
+ * Quatre coins au départ, puis la silhouette mesurée (`stickerEdges.ts`), qui
+ * en compte ce qu'il faut. Un rectangle autour d'un objet le laisse entouré
+ * d'un liseré de table dès qu'il est un peu de travers ou trapézoïdal : c'est
+ * le défaut que Hugo a vu sur sa carte d'embarquement (12/11/2026). Découper
+ * la forme elle-même le fait disparaître par construction.
+ */
+export type StickerShape = StickerPoint[];
 
 /**
  * Le plus grand côté d'un sticker fini, en pixels. 900 : à la largeur
@@ -67,15 +78,15 @@ const borne = (valeur: number, min: number, max: number): number =>
   Math.min(Math.max(valeur, min), max);
 
 /**
- * L'aire d'un quadrilatère, en part de la photo — la formule du lacet. Elle
+ * L'aire d'une forme fermée, en part de la photo — la formule du lacet. Elle
  * vaut pour un quadrilatère croisé aussi, et c'est voulu : un modèle qui rend
  * des coins dans le désordre produit une aire plus petite, donc un refus.
  */
-export function stickerArea(corners: StickerCorners): number {
+export function stickerArea(corners: StickerShape): number {
   let somme = 0;
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < corners.length; i += 1) {
     const a = corners[i]!;
-    const b = corners[(i + 1) % 4]!;
+    const b = corners[(i + 1) % corners.length]!;
     somme += a.x * b.y - b.x * a.y;
   }
   return Math.abs(somme) / 2;
@@ -131,7 +142,8 @@ function svg(width: number, height: number, contenu: string): Buffer {
  * trop petit — jamais autre chose : l'appelant range l'échec et continue, un
  * sticker manquant n'a jamais empêché un carnet de sortir.
  */
-export async function cutSticker(photo: Buffer, corners: StickerCorners): Promise<CutSticker> {
+export async function cutSticker(photo: Buffer, corners: StickerShape): Promise<CutSticker> {
+  if (corners.length < 3) throw new StickerCutError("Une forme a trois points au moins.");
   // `rotate()` sans argument applique l'orientation EXIF. Sans elle, une photo
   // d'iPhone prise à l'horizontale est lue couchée, et les coins tombent à
   // côté — l'erreur silencieuse par excellence.

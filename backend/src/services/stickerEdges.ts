@@ -1,5 +1,11 @@
 import sharp from "sharp";
-import { acceptableCorners, stickerArea, type StickerCorners, type StickerPoint } from "./stickerCut.js";
+import {
+  stickerArea,
+  STICKER_MIN_AREA,
+  type StickerCorners,
+  type StickerPoint,
+  type StickerShape,
+} from "./stickerCut.js";
 
 /**
  * **Où est vraiment le billet** (Hugo, 12/11/2026).
@@ -125,25 +131,51 @@ function couleurDuFond(pixels: Buffer, width: number, height: number, canaux: nu
     g: mediane(moyennes.map((c) => c.g)),
     b: mediane(moyennes.map((c) => c.b)),
   };
-  // Un coin qui s'écarte franchement de la médiane des quatre : ce n'est pas
-  // une surface unie, et tout le reste du raisonnement s'écroulerait.
+  // Un coin qui s'écarte **franchement** de la médiane des quatre : ce n'est
+  // pas une surface, ce sont deux. Large, parce qu'un simple dégradé de
+  // lumière est déjà rattrapé par l'interpolation ci-dessous.
   const dissident = moyennes.some(
-    (c) => Math.hypot(c.r - fond.r, c.g - fond.g, c.b - fond.b) > ECART_FOND * 2,
+    (c) => Math.hypot(c.r - fond.r, c.g - fond.g, c.b - fond.b) > ECART_FOND * 4,
   );
-  return dissident ? null : fond;
+  return dissident ? null : moyennes;
 }
 
-/** Ce qui ne ressemble pas au fond. */
+/**
+ * Ce qui ne ressemble pas au fond — **un fond qui varie**.
+ *
+ * Une couleur unique ne suffit pas : une table prise au flash ou près d'une
+ * fenêtre s'assombrit d'un bout à l'autre de la photo, et le coin le plus
+ * sombre s'écarte alors assez de la médiane pour passer pour l'objet. Sur la
+ * carte d'embarquement d'essai, c'est ce qui laissait une bande de table
+ * collée sous le billet (Hugo, 12/11/2026 : « le liseré est un défaut »).
+ *
+ * Le fond attendu en un point est donc l'interpolation des **quatre coins**,
+ * chacun pesant d'autant plus qu'on en est proche. Le dégradé s'annule, et il
+ * ne reste que ce qui n'est pas la table.
+ */
 function masqueDuSujet(pixels: Buffer, width: number, height: number, canaux: number): Masque | null {
-  const fond = couleurDuFond(pixels, width, height, canaux);
-  if (!fond) return null;
+  const coins = couleurDuFond(pixels, width, height, canaux);
+  if (!coins) return null;
+  const [hg, hd, bg, bd] = coins as [
+    { r: number; g: number; b: number },
+    { r: number; g: number; b: number },
+    { r: number; g: number; b: number },
+    { r: number; g: number; b: number },
+  ];
+
   const data = new Uint8Array(width * height);
-  for (let p = 0; p < width * height; p += 1) {
-    const i = p * canaux;
-    const dr = pixels[i]! - fond.r;
-    const dg = pixels[i + 1]! - fond.g;
-    const db = pixels[i + 2]! - fond.b;
-    data[p] = Math.sqrt(dr * dr + dg * dg + db * db) > ECART_FOND ? 1 : 0;
+  for (let y = 0; y < height; y += 1) {
+    const fy = height > 1 ? y / (height - 1) : 0;
+    for (let x = 0; x < width; x += 1) {
+      const fx = width > 1 ? x / (width - 1) : 0;
+      const melange = (c: "r" | "g" | "b") =>
+        hg[c] * (1 - fx) * (1 - fy) + hd[c] * fx * (1 - fy) + bg[c] * (1 - fx) * fy + bd[c] * fx * fy;
+      const i = (y * width + x) * canaux;
+      const dr = pixels[i]! - melange("r");
+      const dg = pixels[i + 1]! - melange("g");
+      const db = pixels[i + 2]! - melange("b");
+      data[y * width + x] = Math.sqrt(dr * dr + dg * dg + db * db) > ECART_FOND ? 1 : 0;
+    }
   }
   return { data, width, height };
 }
@@ -216,66 +248,43 @@ function enveloppe(points: StickerPoint[]): StickerPoint[] {
 }
 
 /**
- * Le rectangle le plus serré autour d'une enveloppe, **de travers s'il le
- * faut** : un rectangle d'aire minimale a toujours un côté le long d'une arête
- * de l'enveloppe (compas tournant). C'est ce qui suit un billet posé en
- * biais, là où une boîte droite emporterait la table de chaque côté.
+ * **La silhouette, débarrassée de son escalier de pixels.**
+ *
+ * On enlève, un par un, le sommet dont le retrait coûte le moins d'aire, tant
+ * que ça reste négligeable devant la tache. L'enveloppe d'un billet droit a
+ * une vingtaine de sommets — l'escalier du masque — et se réduit à ses quatre
+ * vrais coins ; celle d'un tampon rond en garde une quinzaine, parce que
+ * chaque retrait lui coûterait cher. C'est la forme qui décide du nombre de
+ * points, pas nous.
+ *
+ * ⚠️ **Et surtout pas un rectangle englobant.** C'était la première version,
+ * et c'est le défaut que Hugo a vu : un rectangle autour d'un objet un peu
+ * trapézoïdal laisse un liseré de table sur un ou deux côtés. La silhouette,
+ * elle, ne contient que l'objet.
  */
-function rectangleLePlusServre(hull: StickerPoint[]): StickerCorners | null {
-  if (hull.length < 3) return null;
-  let meilleur: { aire: number; coins: StickerCorners } | null = null;
+function simplifier(hull: StickerPoint[], aireTotale: number): StickerPoint[] {
+  const points = [...hull];
+  // 0,4 % de la tache : assez pour avaler l'escalier des pixels, trop peu
+  // pour raboter un coin.
+  const tolerance = aireTotale * 0.004;
 
-  for (let i = 0; i < hull.length; i += 1) {
-    const a = hull[i]!;
-    const b = hull[(i + 1) % hull.length]!;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const longueur = Math.hypot(dx, dy);
-    if (longueur < 1e-9) continue;
-    const ux = dx / longueur;
-    const uy = dy / longueur;
-
-    let uMin = Infinity;
-    let uMax = -Infinity;
-    let vMin = Infinity;
-    let vMax = -Infinity;
-    for (const point of hull) {
-      const u = point.x * ux + point.y * uy;
-      const v = -point.x * uy + point.y * ux;
-      uMin = Math.min(uMin, u);
-      uMax = Math.max(uMax, u);
-      vMin = Math.min(vMin, v);
-      vMax = Math.max(vMax, v);
+  while (points.length > 4) {
+    let plusPlat = -1;
+    let coutMin = Infinity;
+    for (let i = 0; i < points.length; i += 1) {
+      const a = points[(i - 1 + points.length) % points.length]!;
+      const b = points[i]!;
+      const c = points[(i + 1) % points.length]!;
+      const cout = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2;
+      if (cout < coutMin) {
+        coutMin = cout;
+        plusPlat = i;
+      }
     }
-    const aire = (uMax - uMin) * (vMax - vMin);
-    if (meilleur && aire >= meilleur.aire) continue;
-
-    const point = (u: number, v: number): StickerPoint => ({ x: u * ux - v * uy, y: u * uy + v * ux });
-    meilleur = {
-      aire,
-      coins: [
-        point(uMin, vMin),
-        point(uMax, vMin),
-        point(uMax, vMax),
-        point(uMin, vMax),
-      ] as StickerCorners,
-    };
+    if (plusPlat < 0 || coutMin > tolerance) break;
+    points.splice(plusPlat, 1);
   }
-  return meilleur?.coins ?? null;
-}
-
-/** Les coins remis dans le sens des aiguilles, en partant du plus haut à gauche. */
-function dansLeSens(coins: StickerCorners): StickerCorners {
-  const cx = coins.reduce((somme, point) => somme + point.x, 0) / 4;
-  const cy = coins.reduce((somme, point) => somme + point.y, 0) / 4;
-  const tries = [...coins].sort(
-    (a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx),
-  );
-  // `atan2` part de l'est et tourne dans le sens des aiguilles (y vers le
-  // bas) : le premier point au-dessus et à gauche du centre ouvre la marche.
-  const depart = tries.findIndex((point) => point.x <= cx && point.y <= cy);
-  const rang = depart >= 0 ? depart : 0;
-  return [...tries.slice(rang), ...tries.slice(0, rang)] as StickerCorners;
+  return points;
 }
 
 /**
@@ -284,7 +293,7 @@ function dansLeSens(coins: StickerCorners): StickerCorners {
  *
  * Ne lève jamais : c'est une amélioration, pas une étape nécessaire.
  */
-export async function refineCorners(photo: Buffer, hint: StickerCorners): Promise<StickerCorners | null> {
+export async function refineCorners(photo: Buffer, hint: StickerCorners): Promise<StickerShape | null> {
   try {
     const { data, info } = await sharp(photo)
       .rotate()
@@ -307,18 +316,22 @@ export async function refineCorners(photo: Buffer, hint: StickerCorners): Promis
     if (part < PART_MIN || part > PART_MAX) return null;
 
     const points = trouvee.map((p) => ({ x: p % info.width, y: Math.floor(p / info.width) }));
-    const coins = rectangleLePlusServre(enveloppe(points));
-    if (!coins) return null;
+    const hull = enveloppe(points);
+    if (hull.length < 3) return null;
 
-    const fractions = dansLeSens(
-      coins.map((point) => ({ x: point.x / info.width, y: point.y / info.height })) as StickerCorners,
-    );
-    const propres = acceptableCorners(fractions);
-    if (!propres) return null;
+    const forme = simplifier(hull, trouvee.length).map((point) => ({
+      x: point.x / info.width,
+      y: point.y / info.height,
+    }));
+    if (forme.some((point) => point.x < -0.01 || point.x > 1.01 || point.y < -0.01 || point.y > 1.01)) {
+      return null;
+    }
 
-    // Un rectangle qui couvre presque toute la photo n'a rien resserré : le
-    // fond n'était pas uni, et les coins du modèle valent mieux.
-    return stickerArea(propres) > PART_MAX ? null : propres;
+    const aire = stickerArea(forme);
+    // Trop petite, on a trouvé une miette ; presque toute la photo, le fond
+    // n'était pas celui qu'on croyait. Dans les deux cas le modèle vaut mieux.
+    if (aire < STICKER_MIN_AREA || aire > PART_MAX) return null;
+    return forme;
   } catch {
     return null;
   }
