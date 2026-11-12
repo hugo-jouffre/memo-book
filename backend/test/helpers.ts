@@ -102,6 +102,7 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
           "renders",
           "trip_daily_usage",
           "chat_messages",
+          "photo_stickers",
           "entries",
           "media_assets",
           "expenses",

@@ -72,6 +72,14 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().default(""),
   OPENAI_TRANSCRIPTION_MODEL: z.string().default("gpt-4o-transcribe"),
   OPENAI_STRUCTURING_MODEL: z.string().default("gpt-4o"),
+  /**
+   * L'œil qui repère les souvenirs plats à découper en stickers — billets,
+   * tampons, étiquettes (`services/stickerVision.ts`). Un modèle de vision
+   * **mini** : il ne rend que quatre coins et un libellé, pas de la prose, et
+   * les photos lui sont montrées réduites à 512 px, en `detail: low`. Un appel
+   * coûte une fraction de centime par carnet.
+   */
+  OPENAI_STICKER_MODEL: z.string().default("gpt-4o-mini"),
 
   /**
    * Rédaction du texte de carnet. Séparée d'OpenAI, qui reste sur la

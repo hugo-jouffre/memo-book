@@ -97,6 +97,85 @@ pense au carnet. Poser `API_PUBLIC_BASE_URL` sur le worker ferme la question
 (voir `docs/deploiement.md`). Une adresse en boucle locale en production est
 journalisée en `error`.
 
+## 0 ter. Le sticker découpé dans la photo — *implémenté* (12/11/2026)
+
+Hugo, 10/11/2026 : « stickers découpés depuis tes vraies photos de billets et
+tampons ».
+
+Un billet de train, un tampon de passeport, une étiquette de bagage : ce sont
+des souvenirs **plats**. Ils font de mauvaises photos pleine page — on imprime
+un bout de table — et d'excellents stickers. Le carnet y gagne deux fois.
+
+**On découpe, on ne fait pas redessiner.** Un modèle d'images réinventerait le
+texte du billet ; la décision et son prix sont dans
+`docs/modeles-ia.md` § « Les stickers : le modèle choisit, il ne dessine pas ».
+
+Trois pièces, une responsabilité chacune :
+
+| Pièce | Ce qu'elle fait |
+|---|---|
+| `services/stickerVision.ts` | **l'œil** — un modèle de vision regarde les photos réduites à 512 px et rend, pour celles qui portent un souvenir plat, ses **quatre coins** et un libellé. Il refuse les visages, les papiers d'identité et les captures d'écran |
+| `services/stickerEdges.ts` | **le mètre** — reprend l'indication du modèle et la resserre sur l'objet lui-même, par les pixels : fond interpolé entre les quatre coins, masque, érosion, plus grande tache, enveloppe convexe, silhouette simplifiée |
+| `services/stickerCut.ts` | **les ciseaux** — `sharp` découpe le quadrilatère dans l'originale, pose une bordure blanche régulière et une ombre douce, et rend un PNG transparent. Aucun réseau, entièrement testé |
+| `services/photoStickers.ts` | **la chaîne** — va chercher, montre, découpe, range le PNG et écrit la ligne |
+
+Quatre coins et non une boîte : un billet posé sur une table est de travers,
+et un rectangle droit autour de lui emporterait la nappe. On ne le redresse
+pas pour autant — un sticker penché est un sticker collé.
+
+**Et une silhouette, pas même un rectangle serré** (Hugo, 12/11/2026 : « le
+liseré est un défaut »). Un rectangle, fût-il incliné au plus juste, laisse de
+la table dans ses coins dès que l'objet est un peu trapézoïdal — un billet vu
+de biais l'est toujours un peu. Les ciseaux découpent donc une forme fermée de
+`n` points (``StickerShape``), et c'est la forme qui décide de `n` : on
+enlève les sommets dont le retrait ne coûte presque rien, si bien qu'un billet
+droit se réduit à ses quatre vrais coins et qu'un tampon rond en garde une
+quinzaine.
+
+**Le modèle reconnaît, les pixels cadrent** (12/11/2026). À la première vraie
+photo essayée — une carte d'embarquement AirAsia sur une table grise — le
+modèle a répondu « billet d'avion, score 90 », ce qui est juste, puis a rendu
+`0,10 → 0,90` en x et `0,15 → 0,85` en y : une boîte ronde, centrée,
+générique. Le sticker en est sorti avec de la table des deux côtés et les deux
+bouts du billet coupés. Placer un bord au pixel près n'est pas un travail de
+modèle de langue ; c'est une mesure, et `stickerEdges.ts` la fait. Chacune de
+ses étapes peut renoncer : on garde alors les coins du modèle, approximatifs
+valant mieux qu'absents.
+
+⚠️ **Le fond d'une photo n'a pas une couleur, il en a quatre.** Une table
+prise près d'une fenêtre s'assombrit d'un bout à l'autre de l'image : avec une
+couleur de fond unique, le coin le plus sombre s'écarte assez pour passer pour
+l'objet, et le sticker garde une bande de table collée dessous. Le fond
+attendu en un point est donc interpolé entre les quatre coins de la photo — et
+les quatre coins doivent se ressembler, sans quoi il y a deux surfaces et la
+mesure renonce.
+
+⚠️ **`sharp` ne décode pas le HEIC**, le format par défaut d'un iPhone : il en
+lit les métadonnées et échoue au décodage, faute de HEVC dans ses binaires. La
+chaîne passe donc par `toRenderablePhoto` (§ 0 bis) avant les ciseaux, et le
+découpage a lieu **après** la boucle de conversion de `jobs/structure.ts`.
+Sans ça, la fonctionnalité ne marchait sur presque aucune vraie photo, en
+silence — trouvé à la première photo essayée, pas en suite de tests.
+
+Pour essayer la chaîne entière sur une photo, sans monter le back-end :
+
+```bash
+npx tsx scripts/essayer-un-sticker.ts <photo> [dossier de sortie]
+```
+
+**Une fois, et pas à chaque carnet.** La photo porte la date où on l'a
+regardée (`entries.stickerCheckedAt`), le sticker reste (`photo_stickers`). Un
+carnet en porte **quatre au plus**, et chacun se pose sur l'étape de sa photo,
+jamais sur la page qui la montre déjà (`mise-en-page.js`, `famillesDe`).
+
+**Rien de tout ça n'a le droit de faire échouer un carnet** : c'est de la
+décoration. Modèle en panne, photo illisible, stockage qui refuse — on
+journalise et la composition continue avec les stickers de la bibliothèque.
+
+Le PNG se sert par `GET /v1/trip-stickers/:file`, comme les photos de la
+conversation (§ 0 bis), et s'efface avec le voyage, le compte ou la photo
+(`services/deletion.ts`).
+
 ## 1. Contrôle de qualité
 
 Une photo de carnet est imprimée en A5. Une image de 800 px de large étalée sur

@@ -54,15 +54,27 @@ async function mediaOf(prisma: PrismaClient, memoIds: readonly string[]) {
     select: { storageKey: true, originalStorageKey: true, cdnAssetId: true },
   });
 
+  // **Les stickers découpés dans ces photos sont des fichiers à part.** La
+  // ligne s'en va en cascade avec le carnet, mais le PNG, lui, resterait sur
+  // S3 — et c'est un morceau de la photo de quelqu'un qui a demandé à
+  // disparaître.
+  const stickers = await prisma.photoSticker.findMany({
+    where: { memoId: { in: [...memoIds] } },
+    select: { storageKey: true },
+  });
+
   return {
     entryCount: entries.length,
     mediaIds,
     // L'original d'une photo agrandie est un fichier de plus, et il est à elle.
-    storageKeys: assets.flatMap((asset) =>
-      asset.originalStorageKey
-        ? [asset.storageKey, asset.originalStorageKey]
-        : [asset.storageKey],
-    ),
+    storageKeys: [
+      ...assets.flatMap((asset) =>
+        asset.originalStorageKey
+          ? [asset.storageKey, asset.originalStorageKey]
+          : [asset.storageKey],
+      ),
+      ...stickers.map((sticker) => sticker.storageKey),
+    ],
     // Les copies publiques sur le CDN Webflow (§ 4).
     webflowTraces: assets.flatMap((asset): EraseTraceJob[] =>
       asset.cdnAssetId ? [{ provider: "webflow", assetId: asset.cdnAssetId }] : [],
@@ -296,16 +308,21 @@ export async function deleteEntryAndMedia(
       select: {
         mediaId: true,
         media: { select: { storageKey: true, originalStorageKey: true, cdnAssetId: true } },
+        // Le sticker découpé dans cette photo : sa ligne part en cascade, son
+        // PNG non — il faut le nommer ici pour qu'il s'efface aussi.
+        sticker: { select: { storageKey: true } },
       },
     });
     if (!entry) return null;
 
+    const duSticker = entry.sticker ? [entry.sticker.storageKey] : [];
+
     await tx.entry.delete({ where: { id: entryId } });
-    if (!entry.mediaId || !entry.media) return { storageKeys: [], cdnAssetId: null };
+    if (!entry.mediaId || !entry.media) return { storageKeys: duSticker, cdnAssetId: null };
 
     // Un autre souvenir sur le même média le garde, ligne et fichier.
     const sharers = await tx.entry.count({ where: { mediaId: entry.mediaId } });
-    if (sharers > 0) return { storageKeys: [], cdnAssetId: null };
+    if (sharers > 0) return { storageKeys: duSticker, cdnAssetId: null };
     await tx.mediaAsset.delete({ where: { id: entry.mediaId } });
 
     const keys = [entry.media.storageKey, entry.media.originalStorageKey].filter(
@@ -318,7 +335,7 @@ export async function deleteEntryAndMedia(
     });
     const named = new Set(stillNamed.flatMap((asset) => [asset.storageKey, asset.originalStorageKey]));
     return {
-      storageKeys: [...new Set(keys)].filter((key) => !named.has(key)),
+      storageKeys: [...duSticker, ...new Set(keys)].filter((key) => !named.has(key)),
       cdnAssetId: entry.media.cdnAssetId,
     };
   });

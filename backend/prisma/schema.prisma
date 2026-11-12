@@ -860,6 +860,7 @@ model Memo {
 
   entries                  Entry[]
   renders                  Render[]
+  photoStickers            PhotoSticker[]
   orders                   PrintOrder[]
   members                  MemoMember[]
   steps                    MemoStep[]
@@ -1279,6 +1280,15 @@ model Entry {
   /// Posé par le job `memobook.enhance` après un agrandissement réussi.
   enhancedAt DateTime?
 
+  /// **On a regardé cette photo pour en tirer un sticker**, et on ne la
+  /// regardera plus — qu'on en ait tiré un ou non (Hugo, 10/11/2026). Sans
+  /// cette date, chaque composition rappellerait le modèle sur les mêmes
+  /// paysages pour s'entendre répondre « rien à découper ».
+  stickerCheckedAt DateTime?
+
+  /// Le sticker découpé dans cette photo, s'il y en a un.
+  sticker PhotoSticker?
+
   /// Ce que l'agent de rédaction a **relevé** dans ce souvenir pour les
   /// statistiques du profil : pays, régions et villes cités, personnes
   /// rencontrées, kilomètres parcourus, moyens de transport, et l'endroit où
@@ -1439,6 +1449,48 @@ model ChatMessage {
 /// Un fichier stocké. `storageKey` pointe vers S3 (audio brut, photo originale),
 /// `cdnUrl` vers Webflow une fois la photo publiée — c'est cette URL publique
 /// qu'APITemplate consomme.
+/// **Un sticker découpé dans une vraie photo du voyageur** (Hugo, 10/11/2026 —
+/// « stickers découpés depuis tes vraies photos de billets et tampons »).
+///
+/// Un billet de train, un tampon de passeport, une étiquette de bagage : des
+/// souvenirs **plats**, qui font de mauvaises photos pleine page et
+/// d'excellents stickers. On les découpe dans la photo elle-même — le billet
+/// reste le billet, avec ses vraies dates — au lieu de les faire redessiner
+/// par un modèle d'images, qui en réinventerait le texte.
+///
+/// La ligne existe parce que le découpage coûte un appel au modèle et du
+/// calcul, et qu'un carnet se recompose souvent : découpé une fois, reposé à
+/// chaque composition.
+model PhotoSticker {
+  id String @id @default(uuid())
+
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  /// Le souvenir photo d'où il sort. **Un seul sticker par photo** : la
+  /// redécouper donnerait le même dessin, et le poserait deux fois.
+  entryId String @unique
+  entry   Entry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  /// La clé du PNG détouré dans le stockage, `sticker/<uuid>.png`.
+  storageKey String @unique
+
+  /// Ce que le modèle a reconnu : « billet de train », « tampon de passeport ».
+  /// Lisible, et c'est ce qui s'écrit au journal de composition.
+  label String
+
+  /// De 0 à 100 : à quel point ça fait un bon sticker.
+  score Int
+
+  widthPx  Int
+  heightPx Int
+
+  createdAt DateTime @default(now())
+
+  @@index([memoId])
+  @@map("photo_stickers")
+}
+
 model MediaAsset {
   id              String  @id @default(uuid())
   storageKey      String  @unique

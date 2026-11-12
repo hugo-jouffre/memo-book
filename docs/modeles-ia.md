@@ -35,9 +35,30 @@ Voilà l'état des lieux, une fois OpenAI parti :
 | **Le contexte du voyage** — extraction | `conversationAnthropic.gatherContext` | Claude Sonnet 5 | en place |
 | **La journée qui manque** — la question | `conversationAnthropic.askMissingDay` | Claude Sonnet 5 | en place depuis le 21/10/2026 |
 | **Le thème du voyage** — deviné | `conversationAnthropic.suggestTheme` | Claude Sonnet 5 | en place depuis le 11/11/2026 |
+| **Les stickers découpés** — repérage | `services/stickerVision.ts` | `gpt-4o-mini` (vision) | en place depuis le 12/11/2026 |
 | **Mise en page** | `services/bookPdf.ts` + APITemplate | pas de modèle | en place |
 | **Photo** | `agents/agent-photo.md` | — | phase 2 |
 | **Modération** | `agents/agent-moderation.md` | — | jamais construit |
+
+### Les stickers : le modèle choisit, il ne dessine pas (12/11/2026)
+
+La demande — « stickers découpés depuis tes vraies photos de billets et
+tampons » — venait avec une spec (`docs/sticker-generation.yaml`) qui faisait
+**générer** le sticker par `gpt-image-1`. On ne l'a pas suivie, et Hugo a
+tranché dans ce sens le 12/11/2026.
+
+Un modèle d'images **repeint**. Un billet de train lui revient avec de fausses
+dates et un nom de gare approchant : on imprimerait un faux souvenir dans un
+carnet dont toute la promesse est qu'il est vrai. Le modèle ne rend donc que
+des **coordonnées** — quatre coins et un libellé —, et la matière reste la
+photo du voyageur, au pixel près (`services/stickerCut.ts`, qui ne fait que du
+`sharp`).
+
+Ce que ça change, en plus de la fidélité : la dépense. Une génération d'image
+coûte de 4 à 17 ¢ **par sticker et par carnet** ; un repérage en `detail: low`
+sur des photos réduites à 512 px coûte une fraction de centime pour tout un
+voyage, et ne se paie **qu'une fois** — le découpage est gardé
+(`photo_stickers`), la recomposition le repose sans rien rappeler.
 
 Le second fournisseur hérite donc de **quatre** postes : transcription,
 structuration, modération le jour où elle existe, et — s'il est bon — le

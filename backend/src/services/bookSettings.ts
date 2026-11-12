@@ -28,7 +28,7 @@
  * d'une page à la suivante, ou le couper sur une fin de phrase, mais aucun mot
  * n'est ajouté, retiré ni changé (`test/bookSettings.test.ts`).
  */
-import { composerCarnet } from "./bookComposer.js";
+import { composerCarnet, type BookPhotoSticker } from "./bookComposer.js";
 import { getPhotoRatio } from "./photoRatio.js";
 import type { BookPayload } from "./structuring.js";
 
@@ -72,6 +72,13 @@ export function applyBookSettings(
   payload: BookPayload,
   settings: BookSettings,
   journal?: (texte: string) => void,
+  /**
+   * Les stickers découpés dans les vraies photos du voyage, s'il y en a. Ils
+   * ne sont pas un réglage — c'est pourquoi ils ne sont pas dans
+   * ``BookSettings`` —, mais ils entrent au carnet par le même chemin, et le
+   * réglage « Décorations » à 0 les coupe comme les autres.
+   */
+  photoStickers: readonly BookPhotoSticker[] = [],
 ): BookPayload {
   const ratio = getPhotoRatio(null, { photo_ratio: settings.photoTextRatio });
   const regle: BookPayload = {
@@ -97,6 +104,7 @@ export function applyBookSettings(
     decorations: Math.max(0, Math.min(4, Math.round(settings.decorationQuota))),
     ...(settings.targetPageCount ? { pagesCible: settings.targetPageCount } : {}),
     ...(journal ? { journal } : {}),
+    photoStickers,
   });
   return regle;
 }

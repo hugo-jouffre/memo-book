@@ -14,6 +14,7 @@ import { createMailer, type Mailer } from "./services/mailer.js";
 import { createPaymentGateway, type PaymentGateway } from "./services/payments.js";
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
+import { createStickerSpotter, type StickerSpotter } from "./services/stickerVision.js";
 import { createTranscriber, type Transcriber } from "./services/transcription.js";
 import { createAssetPublisher, type AssetPublisher } from "./services/webflow.js";
 import { createPushSender, type PushSender } from "./services/apns.js";
@@ -41,6 +42,8 @@ export interface AppContext {
   /** MEMO, dans la conversation — voir `services/conversation.ts`. */
   responder: MemoResponder;
   structurer: Structurer;
+  /** L'œil qui repère billets et tampons à découper — voir `services/stickerVision.ts`. */
+  stickerSpotter: StickerSpotter;
   publisher: AssetPublisher;
   renderer: BookRenderer;
   /** Encaissement Stripe : carnets imprimés (la cagnotte est retirée). Jamais l'abonnement. */
@@ -89,6 +92,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     redactor: createRedactor(env),
     responder: createResponder(env),
     structurer: createStructurer(env),
+    stickerSpotter: createStickerSpotter(env),
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),
     payments: createPaymentGateway(env),
