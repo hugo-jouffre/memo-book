@@ -115,12 +115,36 @@ Trois pièces, une responsabilité chacune :
 | Pièce | Ce qu'elle fait |
 |---|---|
 | `services/stickerVision.ts` | **l'œil** — un modèle de vision regarde les photos réduites à 512 px et rend, pour celles qui portent un souvenir plat, ses **quatre coins** et un libellé. Il refuse les visages, les papiers d'identité et les captures d'écran |
+| `services/stickerEdges.ts` | **le mètre** — reprend l'indication du modèle et la resserre sur l'objet lui-même, par les pixels : couleur du fond aux quatre coins, masque, plus grande tache, rectangle le plus serré, de travers s'il le faut |
 | `services/stickerCut.ts` | **les ciseaux** — `sharp` découpe le quadrilatère dans l'originale, pose une bordure blanche régulière et une ombre douce, et rend un PNG transparent. Aucun réseau, entièrement testé |
 | `services/photoStickers.ts` | **la chaîne** — va chercher, montre, découpe, range le PNG et écrit la ligne |
 
 Quatre coins et non une boîte : un billet posé sur une table est de travers,
 et un rectangle droit autour de lui emporterait la nappe. On ne le redresse
 pas pour autant — un sticker penché est un sticker collé.
+
+**Le modèle reconnaît, les pixels cadrent** (12/11/2026). À la première vraie
+photo essayée — une carte d'embarquement AirAsia sur une table grise — le
+modèle a répondu « billet d'avion, score 90 », ce qui est juste, puis a rendu
+`0,10 → 0,90` en x et `0,15 → 0,85` en y : une boîte ronde, centrée,
+générique. Le sticker en est sorti avec de la table des deux côtés et les deux
+bouts du billet coupés. Placer un bord au pixel près n'est pas un travail de
+modèle de langue ; c'est une mesure, et `stickerEdges.ts` la fait. Chacune de
+ses étapes peut renoncer : on garde alors les coins du modèle, approximatifs
+valant mieux qu'absents.
+
+⚠️ **`sharp` ne décode pas le HEIC**, le format par défaut d'un iPhone : il en
+lit les métadonnées et échoue au décodage, faute de HEVC dans ses binaires. La
+chaîne passe donc par `toRenderablePhoto` (§ 0 bis) avant les ciseaux, et le
+découpage a lieu **après** la boucle de conversion de `jobs/structure.ts`.
+Sans ça, la fonctionnalité ne marchait sur presque aucune vraie photo, en
+silence — trouvé à la première photo essayée, pas en suite de tests.
+
+Pour essayer la chaîne entière sur une photo, sans monter le back-end :
+
+```bash
+npx tsx scripts/essayer-un-sticker.ts <photo> [dossier de sortie]
+```
 
 **Une fois, et pas à chaque carnet.** La photo porte la date où on l'a
 regardée (`entries.stickerCheckedAt`), le sticker reste (`photo_stickers`). Un

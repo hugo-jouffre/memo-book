@@ -99,12 +99,6 @@ export async function structureRender(
     // il ne sait peindre ni un HEIC ni une adresse inventée — voir
     // `services/renderPhotos.ts`, qui porte les deux pannes muettes d'où
     // sortaient des carnets sans photos.
-    // **Les stickers découpés dans les vraies photos** (Hugo, 10/11/2026) :
-    // billets, tampons, étiquettes. Avant la composition, parce que c'est
-    // elle qui les pose ; et sans jamais l'empêcher d'aboutir — un sticker
-    // est une décoration, voir `services/photoStickers.ts`.
-    await settlePhotoStickers(context, memo.id);
-
     // L'adresse de chaque photo, par souvenir : un sticker se pose sur
     // l'étape de la photo dont il sort, et c'est par cette adresse que
     // l'atelier la reconnaît.
@@ -144,6 +138,15 @@ export async function structureRender(
         photoUrl,
       });
     }
+
+    // **Les stickers découpés dans les vraies photos** (Hugo, 10/11/2026) :
+    // billets, tampons, étiquettes. **Après** la boucle ci-dessus, et c'est
+    // voulu : c'est elle qui convertit en JPEG les photos que le moteur de PDF
+    // ne sait pas peindre, HEIC d'iPhone en tête, et elle garde la conversion
+    // en stockage. Les ciseaux travaillent donc sur des photos déjà lisibles,
+    // sans les redécoder. Jamais bloquant : un sticker est une décoration,
+    // voir `services/photoStickers.ts`.
+    await settlePhotoStickers(context, memo.id);
 
     if (structuringEntries.length === 0) {
       throw new Error(

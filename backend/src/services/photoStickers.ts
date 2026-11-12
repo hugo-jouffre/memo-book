@@ -1,7 +1,9 @@
 import sharp from "sharp";
 import type { AppContext } from "../context.js";
 import { publicApiBaseUrl } from "./avatars.js";
+import { toRenderablePhoto } from "./photoFormat.js";
 import { cutSticker, StickerCutError } from "./stickerCut.js";
+import { refineCorners } from "./stickerEdges.js";
 import { STICKER_BATCH, STICKER_VISION_SIDE, type StickerCandidatePhoto } from "./stickerVision.js";
 
 /**
@@ -73,6 +75,25 @@ export function photoStickerUrl(publicBaseUrl: string, storageKey: string): stri
 type Deps = Pick<AppContext, "prisma" | "storage" | "env" | "logger" | "stickerSpotter">;
 
 /**
+ * Les octets d'une photo, **dans un format que `sharp` sait lire**.
+ *
+ * ⚠️ `sharp` lit les *métadonnées* d'un HEIC mais ne le **décode pas** : ses
+ * binaires précompilés n'ont pas HEVC (`libde265`). Or le HEIC est le format
+ * par défaut d'un iPhone — sans cette conversion, les stickers ne marchaient
+ * tout simplement pas sur la plupart des vraies photos, en silence, et chaque
+ * photo était marquée « regardée, rien à découper » (trouvé le 12/11/2026 sur
+ * une carte d'embarquement de Hugo, à la première vraie photo essayée).
+ *
+ * `toRenderablePhoto` rend un JPEG déjà décodé et laisse passer tel quel ce
+ * qui est déjà lisible : la conversion ne coûte rien quand elle est inutile.
+ */
+async function lisible(deps: Deps, storageKey: string): Promise<Buffer> {
+  const brut = await deps.storage.get(storageKey);
+  const { buffer } = await toRenderablePhoto(brut, "photo.jpg", "image/jpeg");
+  return buffer;
+}
+
+/**
  * **Découpe ce qui peut l'être dans les photos qu'on n'a pas encore
  * regardées.** Rend le nombre de stickers nouvellement découpés.
  *
@@ -102,7 +123,7 @@ export async function settlePhotoStickers(deps: Deps, memoId: string): Promise<n
       const cle = photo.media?.storageKey;
       if (!cle) continue;
       try {
-        const original = await deps.storage.get(cle);
+        const original = await lisible(deps, cle);
         const jpeg = await sharp(original)
           .rotate()
           .resize({ width: STICKER_VISION_SIDE, height: STICKER_VISION_SIDE, fit: "inside" })
@@ -137,8 +158,14 @@ export async function settlePhotoStickers(deps: Deps, memoId: string): Promise<n
       const cle = parEntree.get(repere.photoId)?.media?.storageKey;
       if (!cle) continue;
       try {
-        const original = await deps.storage.get(cle);
-        const sticker = await cutSticker(original, repere.corners);
+        const original = await lisible(deps, cle);
+        // **Le modèle reconnaît, les pixels cadrent.** Ses coins sont une
+        // indication — à la première vraie photo essayée il a rendu une boîte
+        // ronde et centrée, qui laissait la table autour. Voir
+        // `services/stickerEdges.ts`. Faute de mesure concluante, on garde ce
+        // qu'il a dit.
+        const corners = (await refineCorners(original, repere.corners)) ?? repere.corners;
+        const sticker = await cutSticker(original, corners);
         // `put` tire lui-même l'UUID du fichier : `sticker/<uuid>.png`.
         const { storageKey } = await deps.storage.put(
           STICKER_PREFIX,
