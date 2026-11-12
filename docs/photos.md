@@ -97,6 +97,44 @@ pense au carnet. Poser `API_PUBLIC_BASE_URL` sur le worker ferme la question
 (voir `docs/deploiement.md`). Une adresse en boucle locale en production est
 journalisée en `error`.
 
+## 0 ter. Le sticker découpé dans la photo — *implémenté* (12/11/2026)
+
+Hugo, 10/11/2026 : « stickers découpés depuis tes vraies photos de billets et
+tampons ».
+
+Un billet de train, un tampon de passeport, une étiquette de bagage : ce sont
+des souvenirs **plats**. Ils font de mauvaises photos pleine page — on imprime
+un bout de table — et d'excellents stickers. Le carnet y gagne deux fois.
+
+**On découpe, on ne fait pas redessiner.** Un modèle d'images réinventerait le
+texte du billet ; la décision et son prix sont dans
+`docs/modeles-ia.md` § « Les stickers : le modèle choisit, il ne dessine pas ».
+
+Trois pièces, une responsabilité chacune :
+
+| Pièce | Ce qu'elle fait |
+|---|---|
+| `services/stickerVision.ts` | **l'œil** — un modèle de vision regarde les photos réduites à 512 px et rend, pour celles qui portent un souvenir plat, ses **quatre coins** et un libellé. Il refuse les visages, les papiers d'identité et les captures d'écran |
+| `services/stickerCut.ts` | **les ciseaux** — `sharp` découpe le quadrilatère dans l'originale, pose une bordure blanche régulière et une ombre douce, et rend un PNG transparent. Aucun réseau, entièrement testé |
+| `services/photoStickers.ts` | **la chaîne** — va chercher, montre, découpe, range le PNG et écrit la ligne |
+
+Quatre coins et non une boîte : un billet posé sur une table est de travers,
+et un rectangle droit autour de lui emporterait la nappe. On ne le redresse
+pas pour autant — un sticker penché est un sticker collé.
+
+**Une fois, et pas à chaque carnet.** La photo porte la date où on l'a
+regardée (`entries.stickerCheckedAt`), le sticker reste (`photo_stickers`). Un
+carnet en porte **quatre au plus**, et chacun se pose sur l'étape de sa photo,
+jamais sur la page qui la montre déjà (`mise-en-page.js`, `famillesDe`).
+
+**Rien de tout ça n'a le droit de faire échouer un carnet** : c'est de la
+décoration. Modèle en panne, photo illisible, stockage qui refuse — on
+journalise et la composition continue avec les stickers de la bibliothèque.
+
+Le PNG se sert par `GET /v1/trip-stickers/:file`, comme les photos de la
+conversation (§ 0 bis), et s'efface avec le voyage, le compte ou la photo
+(`services/deletion.ts`).
+
 ## 1. Contrôle de qualité
 
 Une photo de carnet est imprimée en A5. Une image de 800 px de large étalée sur

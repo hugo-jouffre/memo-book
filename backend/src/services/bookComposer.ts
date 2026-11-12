@@ -155,6 +155,51 @@ function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean, quiz: bo
   };
 }
 
+/**
+ * **Un sticker découpé dans une vraie photo du voyageur**, tel que le
+ * composeur le reçoit (Hugo, 10/11/2026 — voir `services/photoStickers.ts`).
+ *
+ * Il ne se place pas comme ceux de la bibliothèque. Ceux-là se cherchent par
+ * mots déclencheurs — « train » dans le récit appelle le sticker du train ;
+ * celui-ci n'a qu'un seul endroit juste : **l'étape de la photo dont il
+ * sort**, que `source` désigne. L'atelier le pose là, et nulle part ailleurs.
+ */
+export interface BookPhotoSticker {
+  /** L'adresse du PNG découpé. */
+  url: string;
+  /** L'adresse de la photo d'où il sort : c'est elle qui dit où le poser. */
+  source: string;
+  /** « billet de train », « tampon de passeport » — pour le journal. */
+  label: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * La définition minimale d'un sticker découpé à l'impression. 150 dpi, comme
+ * la bibliothèque (`scripts/preparer-stickers.ts`) : au-delà, le dessin se
+ * pixellise.
+ */
+const DPI_STICKER = 150;
+
+/** Les stickers découpés, dans la forme que l'atelier lit. */
+export function stickersDesPhotos(photos: readonly BookPhotoSticker[]): Sticker[] {
+  return photos.map((photo, rang) => ({
+    fichier: photo.url,
+    nom: photo.label,
+    // Une famille par sticker : deux billets ne se remplacent pas l'un
+    // l'autre, chacun appartient à son étape.
+    famille: `photo-${rang + 1}`,
+    style: "sticker" as const,
+    mots: [],
+    largeur: photo.width,
+    hauteur: photo.height,
+    maxPt: Math.round((photo.width / DPI_STICKER) * 72),
+    url: photo.url,
+    source: photo.source,
+  }));
+}
+
 export interface ComposerOptions {
   ratio: PhotoRatio;
   funFacts: boolean;
@@ -171,6 +216,11 @@ export interface ComposerOptions {
   pagesCible?: number;
   /** Ce que le composeur note en chemin : photos écartées, cible hors d'atteinte. */
   journal?: (texte: string) => void;
+  /**
+   * Les stickers découpés dans les photos du voyageur. Ils s'ajoutent à la
+   * bibliothèque, et se posent chacun sur l'étape de sa photo.
+   */
+  photoStickers?: readonly BookPhotoSticker[];
 }
 
 /**
@@ -191,7 +241,10 @@ export function composerCarnet(payload: Record<string, unknown>, options: Compos
       pagesAvant: pagesAvant(payload),
       funFacts: options.funFacts,
       quiz,
-      stickers: options.decorations > 0 ? stickersDuCarnet() : [],
+      stickers:
+        options.decorations > 0
+          ? [...stickersDesPhotos(options.photoStickers ?? []), ...stickersDuCarnet()]
+          : [],
       decorations: options.decorations,
       ratio: options.ratio,
       ...(options.pagesCible ? { pagesCible: options.pagesCible, pagesFixes: pagesFixes(payload) } : {}),

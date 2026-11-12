@@ -6,6 +6,7 @@ import { premiereEtapeAGauche, quizForBook, type StructuringEntry } from "../ser
 import { parseTripContext } from "../services/tripContext.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { renderablePhotoUrl } from "../services/renderPhotos.js";
+import { photoStickersOf, settlePhotoStickers } from "../services/photoStickers.js";
 import { JOB_NAMES } from "./queue.js";
 import { finalTextOf } from "./redact.js";
 import type { RenderJob } from "./render.js";
@@ -98,6 +99,17 @@ export async function structureRender(
     // il ne sait peindre ni un HEIC ni une adresse inventée — voir
     // `services/renderPhotos.ts`, qui porte les deux pannes muettes d'où
     // sortaient des carnets sans photos.
+    // **Les stickers découpés dans les vraies photos** (Hugo, 10/11/2026) :
+    // billets, tampons, étiquettes. Avant la composition, parce que c'est
+    // elle qui les pose ; et sans jamais l'empêcher d'aboutir — un sticker
+    // est une décoration, voir `services/photoStickers.ts`.
+    await settlePhotoStickers(context, memo.id);
+
+    // L'adresse de chaque photo, par souvenir : un sticker se pose sur
+    // l'étape de la photo dont il sort, et c'est par cette adresse que
+    // l'atelier la reconnaît.
+    const adresseDeLaPhoto = new Map<string, string>();
+
     const structuringEntries: StructuringEntry[] = [];
     for (const entry of memo.entries) {
       // Ratio photo / texte à 0 % : « aucune photo dans tout le carnet ». Elles
@@ -108,6 +120,7 @@ export async function structureRender(
 
       if (entry.kind === "photo" && entry.media) {
         photoUrl = await renderablePhotoUrl(context, entry.media);
+        if (photoUrl) adresseDeLaPhoto.set(entry.id, photoUrl);
       }
 
       structuringEntries.push({
@@ -168,12 +181,31 @@ export async function structureRender(
     // Et la première étape s'ouvre sur une page de gauche.
     // Et le carnet tient dans sa cible de pages, à ± 5 pages, quand ses photos
     // le permettent : hors d'atteinte, le composeur ne force rien et le dit.
+    // Les stickers découpés qui ont une photo **dans ce carnet-ci** : à 0 %
+    // de photos, ou pour une photo écartée, le sticker n'a pas d'étape où se
+    // poser et il reste au placard.
+    const photoStickers = (await photoStickersOf(context, memo.id)).flatMap((sticker) => {
+      const source = adresseDeLaPhoto.get(sticker.entryId);
+      return source ? [{ ...sticker, source }] : [];
+    });
+    if (photoStickers.length > 0) {
+      logger.info(
+        { renderId, memoId: memo.id, stickers: photoStickers.map((s) => s.label) },
+        "Stickers découpés dans les photos du voyage.",
+      );
+    }
+
     const payload = premiereEtapeAGauche(
-      applyBookSettings(compose, memo, (texte) => {
-        if (!texte.startsWith("pages cible")) return;
-        if (texte.includes("hors d'atteinte")) logger.warn({ renderId, memoId: memo.id }, texte);
-        else logger.info({ renderId, memoId: memo.id }, texte);
-      }),
+      applyBookSettings(
+        compose,
+        memo,
+        (texte) => {
+          if (!texte.startsWith("pages cible")) return;
+          if (texte.includes("hors d'atteinte")) logger.warn({ renderId, memoId: memo.id }, texte);
+          else logger.info({ renderId, memoId: memo.id }, texte);
+        },
+        photoStickers,
+      ),
     );
 
     const validation = validatePayload(payload);

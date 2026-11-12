@@ -1,3 +1,23 @@
+# ⚠️ CETTE SPEC N'EST PAS CELLE QUI A ÉTÉ CONSTRUITE (12/11/2026).
+#
+# Elle faisait générer le sticker par un modèle d'images (`gpt-image-1`). Un
+# modèle d'images repeint : un billet de train en revient avec de fausses
+# dates et un nom de gare inventé — l'inverse du but, dans un carnet dont
+# toute la promesse est qu'il est vrai. Hugo a tranché pour la découpe.
+#
+# Ce qui tourne aujourd'hui, et qui garde de ce fichier l'idée de la sélection
+# et le style visé (détourage, bordure blanche, ombre portée, PNG transparent) :
+#
+#   - `backend/src/services/stickerVision.ts` — l'œil : un modèle de vision
+#     rend les **quatre coins** d'un souvenir plat, et rien d'autre ;
+#   - `backend/src/services/stickerCut.ts`    — les ciseaux : `sharp` découpe
+#     la vraie photo, borde de blanc et pose l'ombre ;
+#   - `backend/src/services/photoStickers.ts` — la chaîne, et la mémoire de ce
+#     qui a déjà été découpé.
+#
+# Ce fichier reste pour la trace de l'intention d'origine. Voir
+# `docs/modeles-ia.md` § « Les stickers : le modèle choisit, il ne dessine pas ».
+
 version: "1.0"
 title: Sticker builder orchestration
 description: |

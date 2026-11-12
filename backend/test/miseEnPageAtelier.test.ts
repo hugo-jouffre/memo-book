@@ -529,6 +529,74 @@ describe("mise en page de l'atelier", () => {
         }
       });
 
+      /**
+       * **Les stickers découpés dans les vraies photos** (Hugo, 10/11/2026).
+       * Ils ne se cherchent pas par mots déclencheurs : chacun n'a qu'une
+       * place juste, l'étape de la photo dont il sort.
+       */
+      describe("stickers découpés dans les photos (10/11/2026)", () => {
+        const billet = (source: string) => ({
+          fichier: "https://exemple.test/billet.png",
+          url: "https://exemple.test/billet.png",
+          nom: "billet de train",
+          famille: "photo-1",
+          style: "sticker",
+          mots: [],
+          largeur: 600,
+          hauteur: 300,
+          maxPt: 288,
+          source,
+        });
+
+        /** Quatre étapes, deux photos chacune, et le billet vient de la troisième. */
+        const voyageAvecBillet = (source: string, decorations = 2) =>
+          M.composerJours(
+            [0, 1, 2, 3].map((n) =>
+              etape(paragrapheDe(`la plage de sable ${n}`, 2), [photo(`e${n}-a`), photo(`e${n}-b`)], null, `Lieu ${n}`),
+            ),
+            { stickers: [billet(source), ...bibliotheque], decorations },
+          );
+
+        const etapeDuSticker = (jours: Jour[], url: string) => {
+          let etapeCourante = -1;
+          const etapes: number[] = [];
+          for (const jour of jours) {
+            if (jour["day_intro"]) etapeCourante += 1;
+            if (((jour["stickers"] as { url: string }[] | undefined) ?? []).some((s) => s.url === url)) {
+              etapes.push(etapeCourante);
+            }
+          }
+          return etapes;
+        };
+
+        it("se pose sur l'étape de sa photo, et sur aucune autre", () => {
+          const jours = voyageAvecBillet("https://exemple.test/e2-a.jpg");
+          // Une seule pose, sur la troisième étape : son billet de Rome n'a
+          // rien à faire sur la page de Naples.
+          expect(etapeDuSticker(jours, "https://exemple.test/billet.png")).toEqual([2]);
+        });
+
+        it("ne se pose jamais sur la page qui montre déjà sa photo", () => {
+          const jours = voyageAvecBillet("https://exemple.test/e2-a.jpg");
+          for (const jour of jours) {
+            const poses = ((jour["stickers"] as { url: string }[] | undefined) ?? []).map((s) => s.url);
+            if (!poses.includes("https://exemple.test/billet.png")) continue;
+            const sources = ((jour["photos"] ?? []) as unknown as { src: string }[]).map((p) => p.src);
+            expect(sources).not.toContain("https://exemple.test/e2-a.jpg");
+          }
+        });
+
+        it("reste au placard si sa photo n'est dans aucune étape", () => {
+          const jours = voyageAvecBillet("https://exemple.test/photo-ecartee.jpg");
+          expect(etapeDuSticker(jours, "https://exemple.test/billet.png")).toEqual([]);
+        });
+
+        it("disparaît comme les autres quand les décorations sont coupées", () => {
+          const jours = voyageAvecBillet("https://exemple.test/e2-a.jpg", 0);
+          expect(posesDe(jours)).toEqual([]);
+        });
+      });
+
       it("lit tout le récit, pas seulement sa première proposition", () => {
         // Le scooter n'arrive qu'après une virgule : on ne lisait que le début.
         const jours = voyage([paragrapheDe("la ville, puis le port en scooter", 2)]);

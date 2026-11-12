@@ -1854,7 +1854,18 @@
     const fort = enMots([etape.titre, etape.lieu].join(" "));
     const faible = enMots([etape.recit, ...(etape.analyse?.photos || []).map((p) => p.scene)].join(" "));
     const familles = new Map();
+    // **Un sticker découpé dans une photo du voyageur ne va qu'à l'étape de
+    // sa photo** (Hugo, 10/11/2026). Son billet de Rome n'a rien à faire sur
+    // la page de Naples : il ne se place pas par mots déclencheurs comme ceux
+    // de la bibliothèque, mais par la photo dont il sort (`source`). Force 3,
+    // au-dessus du lien le plus fort : quand il est là, il passe devant.
     for (const s of bibliotheque) {
+      if (s.source) {
+        if (!(etape.photos || []).some((p) => (p && p.src) === s.source)) continue;
+        const sienne = s.famille || s.fichier;
+        familles.set(sienne, { famille: sienne, variantes: [s], force: 3, source: s.source });
+        continue;
+      }
       if (s.reserve) continue;
       const famille = s.famille || s.fichier;
       if (!familles.has(famille)) familles.set(famille, { famille, variantes: [], force: 0 });
@@ -1926,6 +1937,10 @@
     let meilleur = null;
     for (const famille of f.values()) {
       if (exclues.has(famille.famille)) continue;
+      // Jamais le sticker d'une photo sur la page qui montre déjà cette
+      // photo : on y verrait deux fois le même billet, l'un collé sur
+      // l'autre.
+      if (famille.source && (plan.photos || []).some((p) => (p && p.src) === famille.source)) continue;
       const force = famille.force || (duVoyage.has(famille.famille) ? 0.5 : STICKERS_DE_VOYAGE.includes(famille.famille) ? 0.25 : 0);
       if (!force) continue;
       const libres = famille.variantes.filter((v) => !(derniereDouble.get(v.fichier) >= rangDouble - 1));
