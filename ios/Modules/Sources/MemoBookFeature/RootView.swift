@@ -87,6 +87,12 @@ public struct RootView: View {
 
     @State private var routingProblem: String?
 
+    /// **Le message fugitif de l'app** (``BrandToast``) : trois secondes en
+    /// haut de l'écran, puis plus rien. Posé ici, à la racine, parce qu'il
+    /// doit survivre au changement d'écran qui le provoque — on rejoint un
+    /// voyage *et* on arrive dessus.
+    @State private var toast: String?
+
     /// **Le code d'un lien d'invitation** (``InviteLink``), en attendant une
     /// session : un lien ouvert app fermée, ou par quelqu'un qui n'est pas
     /// encore entré, rejoint le voyage dès l'entrée. Gardé ici et non dans
@@ -347,6 +353,7 @@ public struct RootView: View {
         // cette information, sa cascade se jouait entièrement sous le voile et
         // l'écran apparaissait déjà en place.
         .environment(\.launchOverlayIsVisible, isLaunching)
+        .brandToast($toast)
         .alert(
             "Impossible d’ouvrir ce voyage",
             isPresented: .init(
@@ -669,6 +676,14 @@ public struct RootView: View {
                 let joined = try await dependencies.api.joinTrip(code: code)
                 homeReloadRequest += 1
                 path = [.trip(id: joined.trip.id)]
+                // Le message fugitif, une fois le voyage ouvert : il dit ce
+                // qui vient de se passer, puis s'en va (Hugo, 10/11/2026).
+                // **Pas sur son propre voyage** : rouvrir son propre lien
+                // n'est pas « rejoindre », et l'annoncer serait absurde.
+                let owner = joined.trip.companions.first { $0.isOwner }
+                if owner?.isViewer != true {
+                    toast = BookCopy.Invite.joined(owner: owner?.name ?? "")
+                }
             } catch let error as APIError {
                 if case .server(let status, let reason, _) = error, status == 404 || reason == "trip_not_found" {
                     routingProblem = BookCopy.Invite.linkNotFound

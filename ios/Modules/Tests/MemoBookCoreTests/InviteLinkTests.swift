@@ -16,6 +16,24 @@ final class InviteLinkTests: XCTestCase {
         XCTAssertEqual(NotificationLink(url: URL(string: "memobook://j/JHKFDA")!), .join(code: "JHKFDA"))
     }
 
+    /// **Le beau lien** (Hugo, 10/11/2026) : le code à la racine du domaine
+    /// des invitations, sans `/j/`.
+    func testTheCodeAtTheRootOfTheInviteDomainIsRead() {
+        let url = URL(string: "https://join.memo-book.com/JHKFDA")!
+        XCTAssertEqual(InviteLink.code(from: url), "JHKFDA")
+        XCTAssertEqual(NotificationLink(url: url), .join(code: "JHKFDA"))
+        // Recopié d'une dictée, avec un tiret et en minuscules.
+        XCTAssertEqual(InviteLink.code(from: URL(string: "https://join.memo-book.com/jhk-fda")!), "JHKFDA")
+    }
+
+    /// ⚠️ À la racine d'un domaine, **toute page est un segment unique** :
+    /// seule la forme d'un code en fait une invitation.
+    func testAPageIsNotAnInvitation() {
+        XCTAssertNil(InviteLink.code(from: URL(string: "https://memo-book.com/cgu")!))
+        XCTAssertNil(InviteLink.code(from: URL(string: "https://memo-book.com/conditions")!))
+        XCTAssertNil(InviteLink.code(from: URL(string: "https://join.memo-book.com/")!))
+    }
+
     func testOtherLinksAreNotInvitations() {
         XCTAssertNil(InviteLink.code(from: URL(string: "https://api-production-9f35a.up.railway.app/password/reset")!))
         XCTAssertNil(InviteLink.code(from: URL(string: "memobook://join")!))
@@ -28,6 +46,8 @@ final class InviteLinkTests: XCTestCase {
             InviteLink.url(code: "JHKFDA", base: base)?.absoluteString,
             "https://api-production-9f35a.up.railway.app/j/JHKFDA"
         )
-        XCTAssertNil(InviteLink.url(code: "JHKFDA", base: nil))
+        // Sans aucune adresse — ni domaine d'invitations, ni production —, le
+        // message se contente du code en clair.
+        XCTAssertNil(InviteLink.url(code: "", base: base))
     }
 }

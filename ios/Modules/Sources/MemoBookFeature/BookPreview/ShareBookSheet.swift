@@ -229,7 +229,11 @@ struct BookSharePayload: Identifiable {
     /// Le message pré-rempli. C'est lui qui apparaît dans WhatsApp, iMessage ou
     /// Snapchat dès que l'app de destination est choisie.
     var message: String? {
-        guard let link else { return nil }
+        // Sans lien, c'est le **fichier seul** qu'on envoie : le message le
+        // dit, et ne donne aucune adresse à suivre (Hugo, 10/11/2026).
+        guard let link else {
+            return file == nil ? nil : BookCopy.Share.file(title: title, pages: pages)
+        }
         return BookCopy.Share.invitation(title: title, pages: pages, link: link)
     }
 }

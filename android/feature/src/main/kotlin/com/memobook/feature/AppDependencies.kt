@@ -1,5 +1,6 @@
 package com.memobook.feature
 
+import com.memobook.core.InviteBase
 import com.memobook.core.Account
 import com.memobook.feature.chat.ChatTransport
 import com.memobook.networking.ApiConfiguration
@@ -100,12 +101,28 @@ class AppDependencies(
      */
     val productionApiBaseUrl: URI? = null,
     /**
+     * **Le domaine des invitations** — `join.memo-book.com` (Hugo,
+     * 10/11/2026). Le code s'y pose à la racine, et c'est ce lien-là qu'on
+     * colle dans un message. `null` tant que le domaine n'est pas en place :
+     * le lien retombe alors sur l'API, sous `/j/`.
+     */
+    val inviteBaseUrl: URI? = null,
+    /**
      * Les notifications de l'app — le jeton, l'autorisation, le toucher.
      * **Jamais dans le bac à sable** : il n'a pas de session à qui remettre un
      * jeton. `null` dans un test ou un aperçu.
      */
     val push: PushNotifications? = null,
 ) {
+    /**
+     * **D'où part le lien d'invitation** : le domaine dédié s'il est posé,
+     * l'API sinon. C'est ce que les écrans reçoivent — ils n'ont pas à
+     * choisir.
+     */
+    val inviteBase: InviteBase? =
+        inviteBaseUrl?.let { InviteBase(it, atRoot = true) }
+            ?: productionApiBaseUrl?.let { InviteBase(it, atRoot = false) }
+
     /**
      * Ce que l'app garde du serveur sur l'appareil — voir [ContentCache].
      * **Deux usages pour une seule pièce** : relire hors ligne, et ouvrir vite.

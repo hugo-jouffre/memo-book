@@ -66,6 +66,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.memobook.core.InviteBase
 import com.memobook.core.BookCopy
 import com.memobook.core.InviteLink
 import com.memobook.core.NarrationPace
@@ -117,7 +118,7 @@ enum class TripCreationField { FreeTheme, Title }
  * même largeur, la même colonne et le même modèle, et les mettre côte à côte
  * est la seule façon de voir qu'elles se ressemblent autant.
  *
- * @param inviteBase l'adresse de production, d'où part le lien d'invitation
+ * @param inviteBase d'où part le lien d'invitation
  *   (`InviteLink.url`) — `dependencies.productionApiBaseUrl`. `null` en aperçu :
  *   le message part avec le code seul.
  * @param onAdvance valider l'étape depuis son contenu — le rythme des relances
@@ -131,7 +132,7 @@ internal fun TripCreationStepContent(
     step: TripCreationStep,
     focus: TripCreationField?,
     onFocusChange: (TripCreationField?) -> Unit,
-    inviteBase: URI?,
+    inviteBase: InviteBase?,
     modifier: Modifier = Modifier,
     onAdvance: () -> Unit = {},
 ) {
@@ -374,7 +375,7 @@ private fun RatioStep(model: TripCreationModel, state: TripCreationModel.State) 
  * « Commencer ! », lui, ouvre le voyage tout de suite.
  */
 @Composable
-private fun CompanionsStep(state: TripCreationModel.State, inviteBase: URI?) {
+private fun CompanionsStep(state: TripCreationModel.State, inviteBase: InviteBase?) {
     TripAccessCode(
         code = state.accessCode,
         tripTitle = state.trip?.title ?: state.draft.title,
@@ -807,7 +808,7 @@ private fun DateSlot(
  * @param code le code, ou `null` tant que le voyage n'est pas revenu du
  *   serveur : la ligne porte alors une barre d'attente et « Partager » reste
  *   gris.
- * @param inviteBase l'adresse de production, d'où part le lien d'invitation —
+ * @param inviteBase d'où part le lien d'invitation —
  *   `dependencies.productionApiBaseUrl`. `null` : le message part avec le code
  *   seul.
  * @param waitingNote ce qu'on dit sous la barre d'attente, quand on sait
@@ -818,7 +819,7 @@ private fun DateSlot(
 internal fun TripAccessCode(
     code: String?,
     tripTitle: String,
-    inviteBase: URI?,
+    inviteBase: InviteBase?,
     waitingNote: String? = null,
     modifier: Modifier = Modifier,
 ) {

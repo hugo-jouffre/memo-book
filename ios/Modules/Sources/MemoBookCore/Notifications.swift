@@ -141,13 +141,31 @@ public struct PushTokenRegistration: Equatable, Sendable {
 /// depuis un build de développement : un lien vers `localhost` ne mènerait
 /// nulle part sur le téléphone de l'invité.
 public enum InviteLink {
-    /// Le chemin que l'app revendique sur ce domaine (`INVITE_PATH`).
+    /// Le chemin que l'app revendique sur l'API (`INVITE_PATH`).
     static let path = "j"
 
-    /// Le lien à partager, ou `nil` si l'app ne connaît pas l'adresse de production.
-    public static func url(code: String, base: URL? = productionBaseURL) -> URL? {
-        guard let base, !code.isEmpty else { return nil }
-        return base.appending(path: path).appending(path: code)
+    /// **Le lien à partager.**
+    ///
+    /// Sur le domaine des invitations, le code est **à la racine** —
+    /// `join.memo-book.com/JHKFDA` (Hugo, 10/11/2026 : « on devrait maintenant
+    /// avoir un beau lien »). Sans ce domaine, l'ancienne forme sur l'API,
+    /// `…/j/JHKFDA`, qui marche toujours : les deux se lisent, et les liens
+    /// déjà partis dans des conversations ne cessent pas d'ouvrir l'app.
+    ///
+    /// `nil` quand l'app ne connaît aucune adresse — le message se contente
+    /// alors du code d'accès en clair.
+    public static func url(code: String, base: URL? = nil) -> URL? {
+        guard !code.isEmpty else { return nil }
+        if let base { return base.appending(path: path).appending(path: code) }
+        if let invitations = inviteBaseURL { return invitations.appending(path: code) }
+        guard let production = productionBaseURL else { return nil }
+        return production.appending(path: path).appending(path: code)
+    }
+
+    /// Six caractères, une fois les tirets et les espaces retirés : la forme
+    /// d'un code d'accès (`lib/accessCode.ts`, côté serveur).
+    static func estUnCode(_ segment: String) -> Bool {
+        segment.uppercased().filter { $0.isLetter || $0.isNumber }.count == 6
     }
 
     /// Le code d'un lien d'invitation, quelle que soit sa forme ; `nil` pour tout autre lien.
@@ -157,7 +175,18 @@ public enum InviteLink {
         let raw: String?
         switch scheme {
         case "https":
-            raw = segments.count == 2 && segments[0] == path ? segments[1] : nil
+            // Deux formes : `…/j/<code>` sur l'API, et `<code>` seul à la
+            // racine du domaine des invitations.
+            if segments.count == 2, segments[0] == path {
+                raw = segments[1]
+            } else if segments.count == 1, estUnCode(segments[0]) {
+                // ⚠️ **Seulement ce qui a la forme d'un code.** À la racine
+                // d'un domaine, n'importe quelle page est un segment unique :
+                // sans ce garde, `…/cgu` passerait pour une invitation.
+                raw = segments[0]
+            } else {
+                raw = nil
+            }
         case "memobook":
             if url.host == "join" {
                 raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?
@@ -179,5 +208,13 @@ public enum InviteLink {
     public static var productionBaseURL: URL? {
         (Bundle.main.object(forInfoDictionaryKey: "MemoBookProductionAPIBaseURL") as? String)
             .flatMap { URL(string: $0.trimmingCharacters(in: .whitespaces)) }
+    }
+
+    /// Le domaine des invitations (`MemoBookInviteBaseURL`, `Base.xcconfig`),
+    /// `nil` tant qu'il n'est pas posé.
+    public static var inviteBaseURL: URL? {
+        (Bundle.main.object(forInfoDictionaryKey: "MemoBookInviteBaseURL") as? String)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .flatMap { $0.isEmpty ? nil : URL(string: $0) }
     }
 }

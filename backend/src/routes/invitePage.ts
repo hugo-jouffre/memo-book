@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { normalizeAccessCode } from "../lib/accessCode.js";
+import type { Env } from "../env.js";
+import { publicApiBaseUrl } from "../services/avatars.js";
 
 /**
  * **Le lien d'invitation d'un co-voyageur** (Hugo, 18/10/2026) :
@@ -29,8 +31,43 @@ const APP_ID = "HP2A94889S.com.memobook.app";
 /** L'app Android — `applicationId` de `android/app/build.gradle.kts`. */
 export const ANDROID_PACKAGE = "com.memobook.app";
 
-/** Le chemin des invitations, le seul que l'app revendique sur ce domaine. */
+/** Le chemin des invitations sur l'API : `https://<api>/j/<code>`. */
 export const INVITE_PATH = "/j";
+
+/**
+ * La forme d'un code d'accès dans une adresse : six caractères de l'alphabet
+ * de `lib/accessCode.ts` (ni O ni 0, ni I ni 1), tirets et espaces acceptés
+ * puisqu'on recopie parfois « JHK-FDA ». C'est ce qui permet de servir le code
+ * **à la racine** du domaine des invitations sans avaler les autres pages.
+ */
+const CODE_DANS_UNE_URL = /^[A-HJ-NP-Za-hj-np-z2-9][A-HJ-NP-Za-hj-np-z2-9 -]{5,9}$/;
+
+/**
+ * L'hôte du domaine des invitations (`INVITE_PUBLIC_BASE_URL`), en
+ * minuscules et sans port — ou `null` quand aucun domaine n'est posé.
+ */
+export function inviteHost(env: Pick<Env, "INVITE_PUBLIC_BASE_URL">): string | null {
+  const brut = env.INVITE_PUBLIC_BASE_URL.trim();
+  if (!brut) return null;
+  try {
+    return new URL(brut.includes("//") ? brut : `https://${brut}`).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * **Le lien qu'on colle dans un message.** Sur le domaine des invitations, le
+ * code est à la racine ; sans domaine, c'est l'ancienne adresse de l'API.
+ */
+export function inviteUrlOf(
+  env: Pick<Env, "INVITE_PUBLIC_BASE_URL" | "API_PUBLIC_BASE_URL" | "RAILWAY_PUBLIC_DOMAIN" | "APP_LINK_BASE_URL">,
+  code: string,
+): string {
+  const domaine = env.INVITE_PUBLIC_BASE_URL.trim().replace(/\/+$/, "");
+  if (domaine) return `${domaine.includes("//") ? domaine : `https://${domaine}`}/${code}`;
+  return `${publicApiBaseUrl(env)}${INVITE_PATH}/${code}`;
+}
 
 const COLORS = {
   background: "#FCF2E9",
@@ -69,10 +106,16 @@ export function appInviteUrl(code: string): string {
  * Le fichier qu'Apple vient lire pour savoir que l'app peut ouvrir les liens
  * `/j/…` de ce domaine. Servi en JSON, sans redirection, sans extension.
  */
-export function appSiteAssociation() {
+export function appSiteAssociation(surLeDomaineDesInvitations = false) {
+  // ⚠️ **Le motif dépend de l'hôte**, et il le faut. Sur le domaine des
+  // invitations, tout chemin est un code : `/*`. Sur l'API, non — elle sert
+  // aussi `/c/<jeton>` (l'aperçu d'un carnet), `/password/reset` et
+  // `/data-export`, que l'app n'a aucune raison d'intercepter. Un `/*` posé là
+  // ferait ouvrir l'app sur la page d'un carnet partagé.
+  const motif = surLeDomaineDesInvitations ? "/*" : `${INVITE_PATH}/*`;
   return {
     applinks: {
-      details: [{ appIDs: [APP_ID], components: [{ "/": `${INVITE_PATH}/*`, comment: "Invitation d'un co-voyageur" }] }],
+      details: [{ appIDs: [APP_ID], components: [{ "/": motif, comment: "Invitation d'un co-voyageur" }] }],
     },
   };
 }
@@ -173,8 +216,22 @@ export function androidIntentUrl(path: string): string {
 }
 
 export function registerInvitePageRoutes(app: FastifyInstance, context: AppContext): void {
-  const association = async (_request: unknown, reply: import("fastify").FastifyReply) =>
-    reply.header("Cache-Control", "public, max-age=3600").type("application/json").send(appSiteAssociation());
+  const domaine = inviteHost(context.env);
+  const surLeDomaine = (request: { hostname?: string; headers: Record<string, unknown> }): boolean => {
+    if (!domaine) return false;
+    const entete = request.headers["host"];
+    const hote = (request.hostname ?? (typeof entete === "string" ? entete : "")).toLowerCase();
+    return hote.split(":")[0] === domaine;
+  };
+
+  const association = async (
+    request: import("fastify").FastifyRequest,
+    reply: import("fastify").FastifyReply,
+  ) =>
+    reply
+      .header("Cache-Control", "public, max-age=3600")
+      .type("application/json")
+      .send(appSiteAssociation(surLeDomaine(request)));
   app.get("/.well-known/apple-app-site-association", association);
   app.get("/apple-app-site-association", association);
   app.get("/.well-known/assetlinks.json", async (_request, reply) =>
@@ -184,7 +241,10 @@ export function registerInvitePageRoutes(app: FastifyInstance, context: AppConte
       .send(androidAssetLinks(context.env.ANDROID_APP_CERT_SHA256)),
   );
 
-  app.get<{ Params: { code: string } }>(`${INVITE_PATH}/:code`, { logLevel: "warn" }, async (request, reply) => {
+  const page = async (
+    request: import("fastify").FastifyRequest<{ Params: { code: string } }>,
+    reply: import("fastify").FastifyReply,
+  ) => {
     const code = normalizeAccessCode(request.params.code ?? "");
     reply.header("Cache-Control", "no-store").type("text/html; charset=utf-8");
     return reply.send(
@@ -193,5 +253,24 @@ export function registerInvitePageRoutes(app: FastifyInstance, context: AppConte
         playStore: context.env.ANDROID_PLAY_STORE_LISTED ? playStoreUrl() : null,
       }),
     );
+  };
+
+  app.get<{ Params: { code: string } }>(`${INVITE_PATH}/:code`, { logLevel: "warn" }, page);
+
+  /**
+   * **Le code à la racine** : `join.memo-book.com/ABCDEF`.
+   *
+   * Enregistrée en dernier et **la plus vague de toutes**, elle ne reçoit que
+   * les chemins d'un seul segment qu'aucune route n'a réclamés — Fastify sert
+   * `/health` et `/c/:slug` avant elle. Deux gardes en plus : l'hôte doit être
+   * celui des invitations, et le segment doit avoir la forme d'un code. Tout
+   * le reste part en 404 comme avant.
+   */
+  app.get<{ Params: { code: string } }>("/:code", { logLevel: "warn" }, async (request, reply) => {
+    const brut = request.params.code ?? "";
+    if (!surLeDomaine(request) || !CODE_DANS_UNE_URL.test(brut) || normalizeAccessCode(brut).length !== 6) {
+      return reply.callNotFound();
+    }
+    return page(request, reply);
   });
 }

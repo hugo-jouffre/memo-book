@@ -70,6 +70,29 @@ class NotificationLinkTest {
         assertEquals(NotificationLink.Join("JHKFDA"), link("memobook://j/JHKFDA"))
     }
 
+    /**
+     * **Le beau lien** (Hugo, 10/11/2026) : le code à la racine du domaine des
+     * invitations, sans `/j/`. Jumeau de `testTheCodeAtTheRootOfTheInviteDomainIsRead`.
+     */
+    @Test
+    fun theCodeAtTheRootOfTheInviteDomainIsRead() {
+        assertEquals("JHKFDA", InviteLink.code(URI("https://join.memo-book.com/JHKFDA")))
+        assertEquals(NotificationLink.Join("JHKFDA"), link("https://join.memo-book.com/JHKFDA"))
+        // Recopié d'une dictée, avec un tiret et en minuscules.
+        assertEquals("JHKFDA", InviteLink.code(URI("https://join.memo-book.com/jhk-fda")))
+    }
+
+    /**
+     * ⚠️ À la racine d'un domaine, **toute page est un segment unique** :
+     * seule la forme d'un code en fait une invitation.
+     */
+    @Test
+    fun aPageIsNotAnInvitation() {
+        assertNull(InviteLink.code(URI("https://memo-book.com/cgu")))
+        assertNull(InviteLink.code(URI("https://memo-book.com/conditions")))
+        assertNull(InviteLink.code(URI("https://join.memo-book.com/")))
+    }
+
     @Test
     fun otherLinksAreNotInvitations() {
         assertNull(InviteLink.code(URI("https://api-production-9f35a.up.railway.app/password/reset")))
@@ -80,9 +103,23 @@ class NotificationLinkTest {
     fun theSharedLinkPointsAtTheInvitePath() {
         assertEquals(
             "https://api-production-9f35a.up.railway.app/j/JHKFDA",
-            InviteLink.url("JHKFDA", production).toString(),
+            InviteLink.url("JHKFDA", InviteBase(production, atRoot = false)).toString(),
         )
         assertNull(InviteLink.url("JHKFDA", null))
+    }
+
+    /** Sur le domaine des invitations, le code se pose à la racine. */
+    @Test
+    fun theSharedLinkDropsThePathOnTheInviteDomain() {
+        assertEquals(
+            "https://join.memo-book.com/JHKFDA",
+            InviteLink.url("JHKFDA", InviteBase(URI("https://join.memo-book.com"), atRoot = true)).toString(),
+        )
+        // Une barre finale ne donne pas deux barres.
+        assertEquals(
+            "https://join.memo-book.com/JHKFDA",
+            InviteLink.url("JHKFDA", InviteBase(URI("https://join.memo-book.com/"), atRoot = true)).toString(),
+        )
     }
 
     @Test

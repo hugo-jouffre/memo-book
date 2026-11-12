@@ -335,6 +335,57 @@ certificat émis, remettre `https://api.memo-book.com` dans `Release.xcconfig` e
 refaire un build. Faire ce changement **avant** d'avoir des utilisateurs évite
 d'avoir à le faire après.
 
+## `join.memo-book.com`, le domaine des invitations
+
+Le lien qu'on colle dans un message pour convier un co-voyageur :
+`join.memo-book.com/JHKFDA`, le code **à la racine** (Hugo, 10/11/2026 — « on
+devrait maintenant avoir un beau lien »). Il partait jusque-là sur l'adresse
+brute de l'API, `https://api-production-9f35a.up.railway.app/j/JHKFDA`, ce qui
+est juste et illisible.
+
+**C'est le même serveur.** Un second domaine personnalisé sur le service `api`,
+rien de plus : l'API sert déjà la page d'invitation, le
+`apple-app-site-association` et l'`assetlinks.json`. Il n'y a ni site à
+déployer, ni redirection à écrire.
+
+Dans l'ordre :
+
+1. **Railway** ▸ service `api` ▸ Settings ▸ Networking ▸ Custom Domain ▸
+   `join.memo-book.com`. Railway affiche un `CNAME` à recopier.
+2. **Chez le registrar de `memo-book.com`** : un enregistrement `CNAME` pour le
+   sous-domaine `join`, vers la valeur donnée par Railway. Rien d'autre — pas
+   d'enregistrement `A`, pas de redirection.
+3. **Attendre le certificat.** Railway l'émet seul (quelques minutes). Vérifier :
+
+   ```bash
+   curl -s https://join.memo-book.com/.well-known/apple-app-site-association
+   ```
+
+   La réponse doit porter `"/": "/*"` — et **`"/j/*"`** sur l'API, qui sert le
+   même fichier avec un motif différent selon l'hôte. C'est voulu : un `/*`
+   servi par l'API ferait ouvrir l'app sur `/c/<jeton>`, l'aperçu public d'un
+   carnet partagé.
+4. **Poser la variable** `INVITE_PUBLIC_BASE_URL=https://join.memo-book.com` sur
+   le service `api` (et sur le worker, qui n'en a pas besoin aujourd'hui mais
+   la lira le jour où il composera un message d'invitation).
+5. **Refaire un build des apps.** Les deux embarquent l'adresse au moment de la
+   compilation — `MEMOBOOK_INVITE_BASE_URL` dans `ios/Config/Base.xcconfig`,
+   `memobook.inviteBaseUrl` dans `android/gradle.properties`. Elles y sont déjà
+   écrites : **un build suffit**, il n'y a rien à modifier.
+
+Tant que le `CNAME` n'est pas posé, **tout marche** : l'ancien lien `/j/<code>`
+reste servi, les apps le lisent toujours, et les liens déjà partis dans des
+conversations continuent d'ouvrir l'app. Le nouveau domaine ne remplace rien,
+il s'ajoute.
+
+⚠️ **Le domaine doit être déclaré dans les apps avant d'être utilisé** : iOS
+n'ouvre un lien universel que pour un domaine listé dans ses *Associated
+Domains* (`ios/project.yml`), Android que pour un hôte de son `intent-filter`
+(`android/app/src/main/AndroidManifest.xml`). Les deux sont déjà faits ; un
+build posté sur TestFlight **avant** que le certificat soit émis ouvrira
+Safari au lieu de l'app, jusqu'à ce qu'iOS relise le fichier (quelques jours,
+ou une réinstallation).
+
 ## Tester sur son propre iPhone sans rien déployer
 
 Utile pour vérifier une correction tout de suite. Ça ne concerne qu'un build

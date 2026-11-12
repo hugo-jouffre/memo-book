@@ -16,5 +16,5 @@ import com.memobook.feature.HomeIntent
 @Composable
 fun TripCreationEntry(dependencies: AppDependencies, onIntent: (HomeIntent) -> Unit, onBack: () -> Unit) {
     val model = viewModel { dependencies.tripCreationModel() }
-    TripCreationView(model, inviteBase = dependencies.productionApiBaseUrl, onIntent = onIntent, onBack = onBack)
+    TripCreationView(model, inviteBase = dependencies.inviteBase, onIntent = onIntent, onBack = onBack)
 }

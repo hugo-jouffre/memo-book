@@ -37,7 +37,7 @@ fun TripSettingsEntry(dependencies: AppDependencies, tripId: String, opening: Tr
             onIntent = onIntent,
             onBack = onBack,
             opening = opening,
-            inviteBase = dependencies.productionApiBaseUrl,
+            inviteBase = dependencies.inviteBase,
             showsDebugPanel = isDebuggable,
         )
     }

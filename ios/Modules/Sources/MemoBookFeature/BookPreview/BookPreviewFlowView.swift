@@ -173,11 +173,14 @@ public struct BookPreviewFlowView: View {
         switch kind {
         case .pdf:
             guard let file = model.exportPdf() else { return }
-            // Le lien accompagne **aussi** le PDF : c'est le message qui dit
-            // où suivre le carnet, pas la pièce jointe.
-            let link = await model.prepareShareLink()
+            // **Le fichier seul** (Hugo, 10/11/2026) : « c'est soit on partage
+            // direct le fichier PDF, soit on partage le lien de
+            // prévisualisation ». Le lien l'accompagnait, si bien que les deux
+            // boutons de la feuille envoyaient à peu près la même chose — et
+            // que le carnet partait avec une adresse à suivre que personne
+            // n'avait demandé à donner.
             showsShareChoice = false
-            systemShare = payload(title: title, pages: pages, file: file, link: link)
+            systemShare = payload(title: title, pages: pages, file: file, link: nil)
 
         case .link:
             guard let link = await model.prepareShareLink() else { return }

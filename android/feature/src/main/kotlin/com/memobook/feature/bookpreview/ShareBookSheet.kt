@@ -271,6 +271,9 @@ internal data class BookSharePayload(
      */
     val message: String?
         get() = link?.let { BookCopy.Share.invitation(title = title, pages = pages, link = it) }
+            // Sans lien, c'est le **fichier seul** qu'on envoie : le message
+            // le dit, et ne donne aucune adresse à suivre (Hugo, 10/11/2026).
+            ?: file?.let { BookCopy.Share.file(title = title, pages = pages) }
 }
 
 /**

@@ -160,6 +160,29 @@ const schema = z.object({
    * sur Railway.
    */
   API_PUBLIC_BASE_URL: z.string().default(""),
+
+  /**
+   * **Le domaine des invitations** : `https://join.memo-book.com` (Hugo,
+   * 10/11/2026 — « on devrait maintenant avoir un beau lien comme
+   * join.memo-book.com »).
+   *
+   * Le lien d'invitation partait sur l'adresse brute de l'API
+   * (`https://api-production-9f35a.up.railway.app/j/ABCDEF`), ce qui est juste
+   * et illisible. Sur ce domaine-ci, le code se pose **à la racine** —
+   * `join.memo-book.com/ABCDEF` —, et c'est ce qui se colle dans un message.
+   *
+   * Un domaine personnalisé de plus sur le **même service** Railway : la page,
+   * l'`apple-app-site-association` et l'`assetlinks.json` sont déjà servis par
+   * l'API, et un second nom ne demande qu'un `CNAME`. Vide — le défaut —,
+   * l'ancien lien `/j/<code>` reste la seule forme, et tout continue de
+   * marcher.
+   *
+   * ⚠️ Le domaine qui sert le `apple-app-site-association` doit être celui du
+   * lien : l'app déclare `applinks:join.memo-book.com` dans ses *Associated
+   * Domains* (`ios/project.yml`), et le fichier se sert donc avec un motif
+   * différent selon l'hôte — voir `routes/invitePage.ts`.
+   */
+  INVITE_PUBLIC_BASE_URL: z.string().default(""),
   RAILWAY_PUBLIC_DOMAIN: z.string().default(""),
 
   WEBFLOW_API_TOKEN: z.string().default(""),

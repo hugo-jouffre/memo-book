@@ -36,6 +36,20 @@ GOOGLE_IOS_URL_SCHEME = com.googleusercontent.apps.1022603657545-ehn9lik23bgu7m9
 // installé ne se répare jamais. Voir `docs/deploiement.md`.
 MEMOBOOK_PRODUCTION_API_URL = https:/$()/api-production-9f35a.up.railway.app
 
+// **Le domaine des invitations** (Hugo, 10/11/2026 — « on devrait maintenant
+// avoir un beau lien comme join.memo-book.com »).
+//
+// Le lien qu'on colle dans un message : `join.memo-book.com/JHKFDA`, le code
+// posé à la racine. C'est un second domaine personnalisé sur le même service
+// Railway — l'API sert la page, le `apple-app-site-association` et
+// l'`assetlinks.json` — et il doit être déclaré en *Associated Domain*
+// (`project.yml`) pour qu'iOS ouvre l'app au lieu de Safari.
+//
+// ⚠️ Tant que le `CNAME` n'est pas posé et le certificat émis, laisser cette
+// ligne **vide** : l'app retombe alors sur l'ancien lien
+// `<l'API>/j/<code>`, qui marche. Voir `docs/deploiement.md`.
+MEMOBOOK_INVITE_BASE_URL = https:/$()/join.memo-book.com
+
 // Un fichier de secrets local, s'il existe un jour. `#include?` — avec le point
 // d'interrogation — n'échoue pas quand le fichier est absent, ce qui est le cas
 // sur une machine fraîchement clonée et en CI.
