@@ -66,6 +66,19 @@
                 <data android:pathPrefix="/j/" />
                 <data android:path="/password/reset" />
             </intent-filter>
+            <!-- Le beau lien d'invitation (Hugo, 10/11/2026) :
+                 `join.memo-book.com/<code>`, le code à la racine. Un
+                 intent-filter à lui, parce qu'Android croise *tous* les
+                 attributs d'un même filtre : mêlé au précédent, il aurait
+                 aussi revendiqué `api…/<code>` et `join…/password/reset`. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="join.memo-book.com" />
+                <data android:pathPattern="/..*" />
+            </intent-filter>
         </activity>
 
         <!-- Les messages de Firebase Cloud Messaging : le jeton qui change,

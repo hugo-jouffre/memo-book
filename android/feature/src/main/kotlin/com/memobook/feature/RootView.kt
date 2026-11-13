@@ -39,6 +39,7 @@ import androidx.navigation3.ui.NavDisplay
 import com.memobook.core.Account
 import com.memobook.core.BookCopy
 import com.memobook.core.TermsOfUse
+import com.memobook.design.BrandToastHost
 import com.memobook.design.BrandAlert
 import com.memobook.design.BrandBackdrop
 import com.memobook.design.BrandSheetPresentation
@@ -218,6 +219,8 @@ fun RootView(dependencies: AppDependencies, showsDeveloperDetails: Boolean, inco
             token = state.signedInResetToken,
             onDismiss = { state.signedInResetToken = null },
         )
+
+        BrandToastHost(message = state.toast, onDismiss = { state.toast = null })
 
         BrandAlert(
             isPresented = state.routingProblem != null,
@@ -451,6 +454,14 @@ internal class RootState(val dependencies: AppDependencies) {
     /** Ce qui empêche d'aller là où on vient de demander à aller — une alerte **sur l'accueil**. */
     var routingProblem: String? by mutableStateOf(null)
 
+    /**
+     * **Le message fugitif de l'app** (`BrandToast`) : trois secondes en haut
+     * de l'écran, puis plus rien. Posé ici, à la racine, parce qu'il doit
+     * survivre au changement d'écran qui le provoque — on rejoint un voyage
+     * *et* on arrive dessus.
+     */
+    var toast: String? by mutableStateOf(null)
+
     /** Le code d'un lien d'invitation, en attendant une session. */
     private var pendingInviteCode: String? = null
 
@@ -672,6 +683,14 @@ internal class RootState(val dependencies: AppDependencies) {
                 val joined = dependencies.api.joinTrip(code)
                 homeReloadRequest += 1
                 path.apply { clear(); add(HomeRoute.Trip(joined.trip.id)) }
+                // Le message fugitif, une fois le voyage ouvert : il dit ce
+                // qui vient de se passer, puis s'en va (Hugo, 10/11/2026).
+                // **Pas sur son propre voyage** : rouvrir son propre lien
+                // n'est pas « rejoindre », et l'annoncer serait absurde.
+                val owner = joined.trip.companions.firstOrNull { it.isOwner }
+                if (owner?.isViewer != true) {
+                    toast = BookCopy.Invite.joined(owner?.name.orEmpty())
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: ApiError) {

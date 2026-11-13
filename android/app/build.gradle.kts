@@ -16,6 +16,12 @@ val secrets = Properties().apply {
 }
 val productionApiBaseUrl: String = providers.gradleProperty("memobook.productionApiBaseUrl").get()
 
+/**
+ * Le domaine des invitations — `join.memo-book.com`, où le code se pose à la
+ * racine. Vide tant que le `CNAME` n'est pas posé : le lien retombe sur l'API.
+ */
+val inviteBaseUrl: String = providers.gradleProperty("memobook.inviteBaseUrl").orNull.orEmpty()
+
 // La clé d'importation du Play Store, **jamais dans le dépôt** : la CI la pose
 // depuis ses secrets (`.github/workflows/play-internal.yml`), un poste depuis
 // son environnement. Sans elle, le Release se compile non signé — c'est ce que
@@ -47,6 +53,7 @@ android {
         versionCode = versionCodeOverride ?: 1
         versionName = "0.1.0"
         buildConfigField("String", "PRODUCTION_API_BASE_URL", "\"$productionApiBaseUrl\"")
+        buildConfigField("String", "INVITE_BASE_URL", "\"$inviteBaseUrl\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "FIREBASE_APPLICATION_ID", "\"${firebaseProperties.getValue("applicationId")}\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseProperties.getValue("apiKey")}\"")

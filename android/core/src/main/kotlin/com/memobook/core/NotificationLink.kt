@@ -77,21 +77,51 @@ sealed interface NotificationLink {
  * **production**, même depuis un build de développement : un lien vers
  * l'émulateur ne mènerait nulle part sur le téléphone de l'invité.
  */
+/**
+ * **D'où part un lien d'invitation**, et sous quelle forme (Hugo, 10/11/2026).
+ *
+ * Deux adresses possibles : le domaine dédié — `join.memo-book.com`, où le
+ * code est **à la racine** — et, à défaut, l'API, où il reste sous `/j/`. La
+ * forme ne se devine pas du nom de domaine : elle est dite ici.
+ *
+ * Sur iOS, `InviteLink` lit les deux adresses dans l'`Info.plist` et n'a donc
+ * pas ce type : une app Android n'a pas d'`Info.plist`, ses valeurs de build
+ * descendent par `AppDependencies`.
+ */
+data class InviteBase(val url: URI, val atRoot: Boolean)
+
 object InviteLink {
-    /** Le chemin que l'app revendique sur ce domaine (`INVITE_PATH`). */
+    /** Le chemin que l'app revendique sur l'API (`INVITE_PATH`). */
     internal const val PATH = "j"
 
-    /** Le lien à partager, ou `null` si l'app ne connaît pas l'adresse de production. */
-    fun url(code: String, base: URI?): URI? {
+    /** Le lien à partager, ou `null` si l'app ne connaît aucune adresse. */
+    fun url(code: String, base: InviteBase?): URI? {
         if (base == null || code.isEmpty()) return null
-        return URI(base.toString().trimEnd('/') + "/$PATH/$code")
+        val racine = base.url.toString().trimEnd('/')
+        return URI(if (base.atRoot) "$racine/$code" else "$racine/$PATH/$code")
     }
+
+    /**
+     * Six caractères, une fois les tirets et les espaces retirés : la forme
+     * d'un code d'accès (`lib/accessCode.ts`, côté serveur).
+     */
+    internal fun isCode(segment: String): Boolean =
+        segment.uppercase().count { it.isLetterOrDigit() } == 6
 
     /** Le code d'un lien d'invitation, quelle que soit sa forme ; `null` pour tout autre lien. */
     fun code(uri: URI): String? {
         val segments = uri.pathSegments()
         val raw = when (uri.scheme?.lowercase()) {
-            "https" -> if (segments.size == 2 && segments[0] == PATH) segments[1] else null
+            // Deux formes : `…/j/<code>` sur l'API, et `<code>` seul à la
+            // racine du domaine des invitations. ⚠️ Seulement ce qui a la
+            // forme d'un code : à la racine d'un domaine, n'importe quelle
+            // page est un segment unique, et `…/cgu` passerait pour une
+            // invitation.
+            "https" -> when {
+                segments.size == 2 && segments[0] == PATH -> segments[1]
+                segments.size == 1 && isCode(segments[0]) -> segments[0]
+                else -> null
+            }
             "memobook" -> when {
                 uri.host == "join" -> uri.queryParameter("code")
                 uri.host == PATH && segments.size == 1 -> segments[0]

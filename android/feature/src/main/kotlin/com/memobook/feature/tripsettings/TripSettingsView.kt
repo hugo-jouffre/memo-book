@@ -54,6 +54,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.memobook.core.InviteBase
 import com.memobook.core.BookCopy
 import com.memobook.core.DailyCredit
 import com.memobook.core.DailyCreditCopy
@@ -115,7 +116,7 @@ import com.memobook.feature.profile.SubscriptionCopy
  *   quand on vient du « + » de l'accueil du voyage. `null` depuis la roue
  *   crantée.
  * @param onBack la flèche de l'en-tête — le `dismiss()` d'iOS.
- * @param inviteBase l'adresse de production, d'où le lien d'invitation est
+ * @param inviteBase d'où part le lien d'invitation — domaine dédié ou API —, qui est
  *   tiré (`InviteLink.url`) — voir la feuille « Inviter un proche ».
  * @param showsDebugPanel le bac à sable sous l'écran — le `#if DEBUG` d'iOS,
  *   que `:feature` ne peut pas lire : c'est la porte qui le dit.
@@ -127,7 +128,7 @@ fun TripSettingsView(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     opening: TripSettingsSheet? = null,
-    inviteBase: URI? = null,
+    inviteBase: InviteBase? = null,
     showsDebugPanel: Boolean = false,
 ) {
     // L'immédiat du fil principal : le nom se corrige sur place, et sa ligne

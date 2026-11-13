@@ -1,5 +1,6 @@
 package com.memobook.feature.tripcreation
 
+import com.memobook.core.InviteBase
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateDpAsState
@@ -102,12 +103,12 @@ import kotlin.math.abs
  * l'accueil et la galerie : `RootView` décide que « Commencer ! » ouvre le
  * voyage qu'on vient de créer.
  *
- * @param inviteBase l'adresse de production, pour le lien d'invitation de la
+ * @param inviteBase d'où part le lien d'invitation de la
  *   dernière étape — voir [TripAccessCode].
  * @param onBack refermer l'écran — le `dismiss()` d'iOS.
  */
 @Composable
-fun TripCreationView(model: TripCreationModel, inviteBase: URI?, onIntent: (HomeIntent) -> Unit, onBack: () -> Unit) {
+fun TripCreationView(model: TripCreationModel, inviteBase: InviteBase?, onIntent: (HomeIntent) -> Unit, onBack: () -> Unit) {
     val state by model.state.collectAsStateWithLifecycle(context = Dispatchers.Main.immediate)
     val scope = rememberCoroutineScope()
     val reduceMotion = isReduceMotionEnabled()

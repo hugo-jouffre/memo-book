@@ -486,6 +486,17 @@ public enum BookCopy {
             return "\(opening) Il compte déjà \(count) ! \(follow)"
         }
 
+        /// **Le message qui accompagne le PDF seul** (Hugo, 10/11/2026) :
+        /// « c'est soit on partage direct le fichier PDF, soit on partage le
+        /// lien de prévisualisation ». Le fichier part donc sans adresse à
+        /// suivre — mais pas sans un mot, sans quoi WhatsApp n'affiche qu'une
+        /// pièce jointe anonyme.
+        public static func file(title: String, pages: Int) -> String {
+            let opening = "Voici le carnet de mon voyage « \(title) »."
+            guard pages > 0 else { return opening }
+            return "\(opening) Il compte \(pages == 1 ? "1 page" : "\(pages) pages")."
+        }
+
         /// Le sujet, quand l'app de destination en demande un — le courrier
         /// électronique, essentiellement.
         public static func subject(title: String) -> String {
@@ -605,6 +616,21 @@ public enum BookCopy {
             let intro = "Rejoins-moi sur MemoBook pour raconter « \(tripTitle) »."
             guard let link else { return "\(intro) Code d’accès : \(code)" }
             return "\(intro) \(link.absoluteString)\nCode d’accès : \(code)"
+        }
+
+        /// **Ce que le message fugitif dit en arrivant sur le voyage** (Hugo,
+        /// 10/11/2026) : « un popup temporaire de 3 sec devrait indiquer "Tu
+        /// as rejoins le voyage de [nom_proprietaire] et il est ajouté à tes
+        /// voyages" ».
+        ///
+        /// « rejoint » et non « rejoins » : la spécification porte une
+        /// glissade de clavier, signalée. Et un point-virgule plutôt qu'un
+        /// « et » : la phrase dit deux choses — ce qui vient de se passer, et
+        /// où le retrouver.
+        public static func joined(owner: String) -> String {
+            owner.isEmpty
+                ? "Tu as rejoint ce voyage ; il est ajouté à tes voyages."
+                : "Tu as rejoint le voyage de \(owner) ; il est ajouté à tes voyages."
         }
 
         /// Un lien d'invitation dont le code ne mène à aucun voyage.

@@ -202,11 +202,14 @@ fun BookPreviewFlowView(
             when (kind) {
                 BookShareKind.Pdf -> {
                     val file = model.exportPdf() ?: return@launch
-                    // Le lien accompagne **aussi** le PDF : c'est le message qui
-                    // dit où suivre le carnet, pas la pièce jointe.
-                    val link = model.prepareShareLink()
+                    // **Le fichier seul** (Hugo, 10/11/2026) : « c'est soit on
+                    // partage direct le fichier PDF, soit on partage le lien de
+                    // prévisualisation ». Le lien l'accompagnait, si bien que
+                    // les deux boutons de la feuille envoyaient à peu près la
+                    // même chose — et que le carnet partait avec une adresse à
+                    // suivre que personne n'avait demandé à donner.
                     showsShareChoice = false
-                    systemShare = payload(title, pages, file, link)
+                    systemShare = payload(title, pages, file, null)
                 }
                 BookShareKind.Link -> {
                     val link = model.prepareShareLink() ?: return@launch

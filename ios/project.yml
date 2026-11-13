@@ -158,6 +158,9 @@ targets:
         # appareil prend si l'adresse ci-dessus désigne une boucle locale —
         # voir `APIConfiguration.effective(...)`.
         MemoBookProductionAPIBaseURL: $(MEMOBOOK_PRODUCTION_API_URL)
+        # Le domaine des invitations : `join.memo-book.com/<code>`. Vide,
+        # l'app retombe sur `<l'API>/j/<code>` — voir `InviteLink`.
+        MemoBookInviteBaseURL: $(MEMOBOOK_INVITE_BASE_URL)
     # Sign in with Apple. La capability cochée dans Xcode ne survit pas au
     # prochain `make project` : le .xcodeproj est régénéré depuis ce fichier,
     # c'est donc ici qu'elle doit être déclarée pour de bon. XcodeGen écrit le
@@ -202,6 +205,11 @@ targets:
         # automatique la coche d'elle-même quand le compte en a le droit.
         com.apple.developer.associated-domains:
           - applinks:api-production-9f35a.up.railway.app
+          # Le beau lien (Hugo, 10/11/2026) : `join.memo-book.com/<code>`. Le
+          # même serveur, un second domaine personnalisé — il sert donc le
+          # même `apple-app-site-association`, avec un motif à lui : tout le
+          # domaine, puisque tout y est une invitation.
+          - applinks:join.memo-book.com
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app

@@ -5,6 +5,8 @@ import {
   appInviteUrl,
   appSiteAssociation,
   appStoreUrl,
+  inviteHost,
+  inviteUrlOf,
   playStoreUrl,
   renderInvitePage,
 } from "./invitePage.js";
@@ -51,6 +53,48 @@ describe("le lien d'invitation d'un co-voyageur", () => {
     expect(androidIntentUrl("join?code=JHKFDA")).toBe(
       "intent://join?code=JHKFDA#Intent;scheme=memobook;package=com.memobook.app;end",
     );
+  });
+});
+
+/**
+ * **Le beau lien** (Hugo, 10/11/2026) — « on devrait maintenant avoir un beau
+ * lien comme join.memo-book.com ».
+ */
+describe("le domaine des invitations", () => {
+  const sans = { INVITE_PUBLIC_BASE_URL: "", API_PUBLIC_BASE_URL: "https://api.test", RAILWAY_PUBLIC_DOMAIN: "", APP_LINK_BASE_URL: "" };
+  const avec = { ...sans, INVITE_PUBLIC_BASE_URL: "https://join.memo-book.com" };
+
+  it("pose le code à la racine du domaine", () => {
+    expect(inviteUrlOf(avec, "JHKFDA")).toBe("https://join.memo-book.com/JHKFDA");
+  });
+
+  it("garde l'ancienne adresse tant qu'aucun domaine n'est posé", () => {
+    expect(inviteUrlOf(sans, "JHKFDA")).toBe("https://api.test/j/JHKFDA");
+  });
+
+  it("supporte un domaine écrit sans protocole, ou avec une barre finale", () => {
+    expect(inviteUrlOf({ ...sans, INVITE_PUBLIC_BASE_URL: "join.memo-book.com" }, "JHKFDA")).toBe(
+      "https://join.memo-book.com/JHKFDA",
+    );
+    expect(inviteUrlOf({ ...sans, INVITE_PUBLIC_BASE_URL: "https://join.memo-book.com/" }, "JHKFDA")).toBe(
+      "https://join.memo-book.com/JHKFDA",
+    );
+  });
+
+  it("lit l'hôte, et se tait sur une valeur illisible", () => {
+    expect(inviteHost(avec)).toBe("join.memo-book.com");
+    expect(inviteHost({ INVITE_PUBLIC_BASE_URL: "" })).toBeNull();
+    expect(inviteHost({ INVITE_PUBLIC_BASE_URL: "pas une adresse du tout" })).toBeNull();
+  });
+
+  /**
+   * ⚠️ Le motif **dépend de l'hôte**. Un `/*` servi par l'API ferait ouvrir
+   * l'app sur `/c/<jeton>`, l'aperçu public d'un carnet, et sur la page du mot
+   * de passe oublié.
+   */
+  it("ne revendique tout le domaine que sur celui des invitations", () => {
+    expect(appSiteAssociation(true).applinks.details[0]!.components[0]!["/"]).toBe("/*");
+    expect(appSiteAssociation(false).applinks.details[0]!.components[0]!["/"]).toBe("/j/*");
   });
 });
 

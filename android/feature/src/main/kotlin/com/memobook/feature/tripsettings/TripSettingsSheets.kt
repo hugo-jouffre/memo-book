@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
+import com.memobook.core.InviteBase
 import com.memobook.core.BookCopy
 import com.memobook.core.NarrationPace
 import com.memobook.core.TripNotificationPreferences
@@ -430,12 +431,12 @@ private enum class ThemeField { Theme }
 /**
  * « Inviter un proche » — qui raconte déjà, et de quoi faire venir les autres.
  *
- * @param inviteBase l'adresse de production, d'où `InviteLink.url` tire le lien
+ * @param inviteBase d'où part le lien d'invitation — le domaine dédié ou l'API
  *   qu'on partage : un lien vers l'émulateur ne mènerait nulle part sur le
  *   téléphone de l'invité.
  */
 @Composable
-internal fun TripInviteSheet(model: TripSettingsModel, inviteBase: URI?) {
+internal fun TripInviteSheet(model: TripSettingsModel, inviteBase: InviteBase?) {
     val state by model.state.collectAsStateWithLifecycle()
     val settings = state.settings
 
@@ -727,7 +728,7 @@ private fun TripInviteSheetPreview() {
     val model = remember { TripSettingsModel(tripId = "preview") }
     LaunchedEffect(model) { model.load() }
     Box(Modifier.fillMaxSize().background(MemoBookColor.background), contentAlignment = Alignment.BottomCenter) {
-        TripInviteSheet(model, inviteBase = URI("https://api.memo-book.com"))
+        TripInviteSheet(model, inviteBase = InviteBase(URI("https://join.memo-book.com"), atRoot = true))
     }
 }
 

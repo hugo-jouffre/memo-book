@@ -136,6 +136,11 @@ class MemoBookApplication : Application(), SingletonImageLoader.Factory, AppDepe
             subscriptions = if (switches.previewSignedIn) StubSubscriptionStore() else PlayBillingSubscriptionStore(this, scope),
             paymentMethods = if (switches.previewSignedIn) StubPaymentMethodsPresenter() else StripeCustomerSheetPresenter(),
             productionApiBaseUrl = runCatching { URI(BuildConfig.PRODUCTION_API_BASE_URL) }.getOrNull(),
+            // Le domaine des invitations, quand il est posé : `null` sinon, et
+            // le lien retombe sur l'API — voir `AppDependencies.inviteBase`.
+            inviteBaseUrl = BuildConfig.INVITE_BASE_URL
+                .takeIf { it.isNotBlank() }
+                ?.let { runCatching { URI(it) }.getOrNull() },
             push = if (switches.previewSignedIn) null else push,
         )
     }
