@@ -136,10 +136,36 @@ function apiTemplateRenderer(env: Env): ApiTemplateRenderer {
   );
 }
 
-export function createBookRenderer(env: Env): BookRenderer {
+/** Le moteur qu'on obtiendra, sans le construire. */
+export type RendererKind = "apitemplate" | "local" | "fake";
+
+/**
+ * Lequel des trois moteurs `createBookRenderer` rendra.
+ *
+ * Séparé de la construction parce qu'on a besoin de **le dire** sans rien
+ * monter : au démarrage du worker et dans `/health`. Le cas `auto` est le
+ * piège — sans `APITEMPLATE_API_KEY`, le pipeline se déclare `live` et sort
+ * pourtant un PDF simulé, sans mise en page ni photos.
+ */
+export function selectedRenderer(
+  env: Pick<Env, "RENDERER" | "APITEMPLATE_API_KEY" | "live">,
+): RendererKind {
   switch (env.RENDERER) {
     case "fake":
-      return new FakeBookRenderer();
+      return "fake";
+    case "apitemplate":
+      return "apitemplate";
+    case "local":
+      return "local";
+    default:
+      // `auto` : APITemplate quand le pipeline est réel et que sa clé est là,
+      // sinon un rendu simulé — le reste du pipeline n'en dépend pas.
+      return env.live && env.APITEMPLATE_API_KEY !== "" ? "apitemplate" : "fake";
+  }
+}
+
+export function createBookRenderer(env: Env): BookRenderer {
+  switch (selectedRenderer(env)) {
     case "apitemplate":
       return apiTemplateRenderer(env);
     case "local":
@@ -149,11 +175,7 @@ export function createBookRenderer(env: Env): BookRenderer {
         env.RENDER_PROFILE,
         createCityStreetSource(env),
       );
-    default:
-      // `auto` : APITemplate quand le pipeline est réel et que sa clé est là,
-      // sinon un rendu simulé — le reste du pipeline n'en dépend pas.
-      return env.live && env.APITEMPLATE_API_KEY !== ""
-        ? apiTemplateRenderer(env)
-        : new FakeBookRenderer();
+    case "fake":
+      return new FakeBookRenderer();
   }
 }

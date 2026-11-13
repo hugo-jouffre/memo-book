@@ -97,6 +97,34 @@ pense au carnet. Poser `API_PUBLIC_BASE_URL` sur le worker ferme la question
 (voir `docs/deploiement.md`). Une adresse en boucle locale en production est
 journalisée en `error`.
 
+### Le diagnostic, pour ne plus deviner (13/11/2026)
+
+Le correctif posé, un carnet est ressorti **sans photos** en conditions
+réelles. Le code était bon et déployé ; la configuration, elle, ne se voyait
+de nulle part. On a passé un échange entier à supposer.
+
+`services/renderDiagnostics.ts` répond désormais à la question « pourquoi ce
+carnet n'aurait pas de photos » sans ouvrir Railway. Il nomme le **moteur
+retenu**, l'**adresse** à laquelle il ira chercher les photos, le **maillon**
+qui a donné cette adresse, et la liste des reproches :
+
+| Le reproche | Ce qui l'a causé |
+|---|---|
+| moteur simulé | `RENDERER=auto` sans `APITEMPLATE_API_KEY` : un PDF se produit, sans mise en page ni photos |
+| boucle locale | aucune variable d'adresse ne tient sur ce service : le moteur, qui télécharge depuis ses serveurs, ne joindra jamais `localhost` |
+| adresse par repli | l'adresse vient d'`APP_LINK_BASE_URL` : juste aujourd'hui, fausse le jour où cette variable changera |
+
+Deux endroits le disent, parce qu'il y a **deux services** et qu'ils n'ont pas
+les mêmes variables :
+
+- l'**API** le sert dans `GET /health`, champ `photos` — un `curl` suffit ;
+- le **worker**, qui compose vraiment et n'a ni domaine ni contrôle de santé,
+  l'**annonce au démarrage** dans ses logs : en `error` s'il a un reproche, en
+  `info` sinon.
+
+Le moteur `local` échappe aux deux derniers reproches : il compose sur place,
+avec son propre Chromium, et une boucle locale lui va très bien.
+
 ## 0 ter. Le sticker découpé dans la photo — *implémenté* (12/11/2026)
 
 Hugo, 10/11/2026 : « stickers découpés depuis tes vraies photos de billets et
