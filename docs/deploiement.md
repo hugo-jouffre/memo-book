@@ -150,6 +150,34 @@ photos (`services/renderDiagnostics.ts`, `docs/photos.md` § 0 bis). Côté API,
 le même diagnostic se lit dans `GET /health`, champ `photos` — mais il parle
 des variables de l'API, pas de celles du worker.
 
+## 3 bis. Ce que l'image emporte, et ce qu'elle laisse
+
+L'image d'exécution fait `npm ci --omit=dev` : **les `devDependencies` n'y
+sont pas**. Un paquet importé par `src/` mais déclaré du mauvais côté compile,
+passe les tests, se construit, se déploie — et le process meurt au démarrage
+sur `ERR_MODULE_NOT_FOUND`.
+
+C'est arrivé le **13/11/2026** avec `sharp`, employé par les ciseaux à
+stickers (`services/stickerCut.ts`) et resté en `devDependencies`. La panne
+est à double fond :
+
+- le **worker** n'a pas de contrôle de santé : il plante, et reste par terre.
+  Plus un seul carnet ne se compose ;
+- l'**API** en a un : son déploiement échoue, Railway **garde l'ancienne
+  version en ligne**, et elle répond `status: ok`. De l'extérieur, tout va
+  bien. On a cherché la panne pendant deux jours dans le code des photos,
+  qui était juste et déjà fusionné — mais pas en ligne.
+
+`test/dependancesDExecution.test.ts` refuse désormais qu'un paquet importé par
+du code de production manque de `dependencies`. Deux importations y échappent,
+et c'est voulu : `import type`, effacé à la compilation, et l'`import()`
+dynamique enveloppé d'un message clair — c'est ce que fait `services/bookPdf.ts`
+pour `playwright-core`.
+
+**Signe à reconnaître** : une version déployée qui ne porte pas ce qu'on vient
+de fusionner, alors que `/health` répond `ok`. Ce n'est pas un répit, c'est
+l'ancienne version qui parle.
+
 ## 4. Supabase Storage
 
 Storage ▸ New bucket ▸ `memobook-media`, **privé**. Puis Project Settings ▸
