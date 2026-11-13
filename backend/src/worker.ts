@@ -1,6 +1,7 @@
 import { createContext, type AppContext } from "./context.js";
 import { loadEnv } from "./env.js";
 import { registerJobs } from "./jobs/index.js";
+import { photosDiagnostic } from "./services/renderDiagnostics.js";
 
 /**
  * Process worker : consomme la file sans exposer d'API. À déployer séparément
@@ -19,6 +20,17 @@ async function main(): Promise<void> {
     { pipelineMode: env.live ? "live" : "fake" },
     "Worker MemoBook démarré",
   );
+
+  // C'est **ce** service qui compose les carnets, et il n'a ni domaine ni
+  // contrôle de santé : son diagnostic ne peut s'annoncer que là, une fois,
+  // au démarrage. Un carnet sans photos se lit alors dans les logs avant de
+  // se lire sur le carnet. Voir `services/renderDiagnostics.ts`.
+  const photos = photosDiagnostic(env);
+  if (photos.problems.length > 0) {
+    context.logger.error(photos, "Les carnets composés par ce worker sortiront sans photos");
+  } else {
+    context.logger.info(photos, "Rendu des carnets : moteur et adresse des photos");
+  }
 
   const shutdown = async (signal: string): Promise<void> => {
     context.logger.info({ signal }, "Arrêt du worker");

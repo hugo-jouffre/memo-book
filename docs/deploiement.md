@@ -141,6 +141,15 @@ second service, la même image, une autre commande :
 4. Settings ▸ Networking : aucun domaine, il n'écoute rien.
 5. Les mêmes variables d'environnement que l'API.
 
+**N'ayant pas de domaine, le worker n'a pas de contrôle de santé** — et c'est
+pourtant lui qui compose les carnets. Il annonce donc à chaque démarrage, dans
+ses logs, le moteur de PDF retenu et l'adresse à laquelle celui-ci ira
+chercher les photos : en `info` quand tout tient, en `error` sinon, avec la
+phrase à appliquer. C'est la première chose à lire quand un carnet sort sans
+photos (`services/renderDiagnostics.ts`, `docs/photos.md` § 0 bis). Côté API,
+le même diagnostic se lit dans `GET /health`, champ `photos` — mais il parle
+des variables de l'API, pas de celles du worker.
+
 ## 4. Supabase Storage
 
 Storage ▸ New bucket ▸ `memobook-media`, **privé**. Puis Project Settings ▸

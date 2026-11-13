@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
+import { photosDiagnostic } from "../services/renderDiagnostics.js";
 
 /**
  * Readiness réelle : on interroge la base et la file, on ne se contente pas de
@@ -43,6 +44,12 @@ export function registerHealthRoutes(app: FastifyInstance, context: AppContext):
       // sur les implémentations simulées — première question qu'on se pose en
       // débuggant un carnet vide.
       pipelineMode: context.env.live ? "live" : "fake",
+      // Pourquoi un carnet sortirait sans photos, lisible d'un `curl` : moteur
+      // retenu et adresse à laquelle il ira les chercher. Voir
+      // `services/renderDiagnostics.ts`. Attention, c'est le diagnostic de
+      // **ce service** : le worker, qui compose vraiment, annonce le sien au
+      // démarrage dans ses logs — ses variables peuvent différer.
+      photos: photosDiagnostic(context.env),
     });
   });
 }

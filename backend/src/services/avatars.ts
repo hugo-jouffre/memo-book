@@ -41,14 +41,45 @@ export type PublicBaseEnv = Pick<
  * développement — celle que le simulateur vise.
  */
 export function publicApiBaseUrl(env: PublicBaseEnv): string {
+  return resolvePublicApiBaseUrl(env).url;
+}
+
+/** Le maillon de la chaîne qui a donné l'adresse. */
+export type PublicBaseSource =
+  | "API_PUBLIC_BASE_URL"
+  | "RAILWAY_PUBLIC_DOMAIN"
+  | "APP_LINK_BASE_URL"
+  | "defaut-local";
+
+/**
+ * L'adresse **et son origine**, parce qu'en production les deux se lisent
+ * ensemble : une adresse juste obtenue par un repli est juste aujourd'hui et
+ * fausse le jour où ce repli change de valeur. C'est exactement ce qui guette
+ * `APP_LINK_BASE_URL`, faite pour les liens des e-mails — voir le diagnostic
+ * de `services/renderDiagnostics.ts` et `docs/deploiement.md`.
+ */
+export function resolvePublicApiBaseUrl(env: PublicBaseEnv): {
+  url: string;
+  from: PublicBaseSource;
+} {
   const configured = env.API_PUBLIC_BASE_URL.trim();
-  if (configured) return configured.replace(/\/+$/, "");
-  const railway = env.RAILWAY_PUBLIC_DOMAIN.trim();
-  if (railway) return `https://${railway.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
-  if (/^https?:\/\//.test(env.APP_LINK_BASE_URL)) {
-    return env.APP_LINK_BASE_URL.replace(/\/+$/, "");
+  if (configured) {
+    return { url: configured.replace(/\/+$/, ""), from: "API_PUBLIC_BASE_URL" };
   }
-  return "http://localhost:3000";
+
+  const railway = env.RAILWAY_PUBLIC_DOMAIN.trim();
+  if (railway) {
+    return {
+      url: `https://${railway.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`,
+      from: "RAILWAY_PUBLIC_DOMAIN",
+    };
+  }
+
+  if (/^https?:\/\//.test(env.APP_LINK_BASE_URL)) {
+    return { url: env.APP_LINK_BASE_URL.replace(/\/+$/, ""), from: "APP_LINK_BASE_URL" };
+  }
+
+  return { url: "http://localhost:3000", from: "defaut-local" };
 }
 
 /**
