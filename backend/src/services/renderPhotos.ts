@@ -1,6 +1,8 @@
 import type { AppContext } from "../context.js";
 import { publicApiBaseUrl } from "./avatars.js";
 import { isRenderableImage, sniffImageFormat, toRenderablePhoto } from "./photoFormat.js";
+import { downscaleForRender, RENDER_MAX_BYTES } from "./photoDownscale.js";
+import { isSimulatedCdnUrl } from "./webflow.js";
 import { tripPhotoUrl } from "../routes/tripPhotos.js";
 
 /**
@@ -25,6 +27,19 @@ import { tripPhotoUrl } from "../routes/tripPhotos.js";
  *    la photo se sert par l'API elle-même (`GET /v1/trip-photos/:file`, déjà
  *    publique et déjà utilisée par l'app), et un échec de publication retombe
  *    sur la même adresse au lieu de faire échouer la composition.
+ *
+ *    **Et on ne croit plus une adresse écrite en base sur parole** (Hugo,
+ *    14/11/2026). Arrêter d'en fabriquer ne défaisait pas celles déjà posées :
+ *    68 photos de production portaient encore l'adresse simulée, dont 59 des
+ *    71 d'un même voyage. On l'efface en passant, et le carnet se sert chez
+ *    nous.
+ *
+ * 3. **Le poids** (Hugo, 14/11/2026 — « ça a galéré à créer le PDF »). Le jour
+ *    où les adresses sont devenues bonnes, APITemplate s'est mis à télécharger
+ *    pour de vrai : 306 Mo pour un carnet de 71 photos d'iPhone, et trois
+ *    HTTP 504 de suite. Il part donc une **copie allégée**
+ *    (`services/photoDownscale.ts`), fabriquée une fois et retenue sur
+ *    `renderStorageKey`. L'original ne bouge pas.
  */
 
 /** Ce qu'on lit d'un média pour en faire une photo de carnet. */
@@ -32,10 +47,14 @@ export interface RenderablePhotoMedia {
   id: string;
   storageKey: string;
   mimeType: string;
+  /** Le poids des octets stockés : de quoi savoir s'il faut les alléger. */
+  bytes: number;
   cdnUrl: string | null;
   cdnAssetId: string | null;
   /** La clé de l'original, quand cette photo a déjà été réécrite une fois. */
   originalStorageKey?: string | null;
+  /** La clé de la copie allégée, quand une composition l'a déjà fabriquée. */
+  renderStorageKey?: string | null;
 }
 
 type Deps = Pick<AppContext, "prisma" | "storage" | "publisher" | "env" | "logger">;
@@ -50,10 +69,15 @@ export async function renderablePhotoUrl(
   deps: Deps,
   media: RenderablePhotoMedia,
 ): Promise<string | null> {
-  const ready = await ensureRenderableFormat(deps, media);
+  const ready = await forgetSimulatedCdnUrl(deps, await ensureRenderableFormat(deps, media));
   if (!ready) return null;
 
   if (ready.cdnUrl) return ready.cdnUrl;
+
+  // La copie allégée **avant** l'adresse : c'est elle qu'on publie, et c'est
+  // elle qu'on sert. Donner l'original à l'un et la copie à l'autre ferait
+  // deux carnets différents selon la configuration du jour.
+  const served = await ensureRenderCopy(deps, ready);
 
   const base = publicApiBaseUrl(deps.env);
   // **Une adresse en boucle locale ne vaut rien pour APITemplate**, qui
@@ -68,12 +92,12 @@ export async function renderablePhotoUrl(
     );
   }
 
-  const ourUrl = tripPhotoUrl(base, ready.storageKey);
+  const ourUrl = tripPhotoUrl(base, served);
 
   if (!deps.publisher.servesPublicUrls) {
     if (!ourUrl) {
       deps.logger.warn(
-        { mediaId: media.id, storageKey: ready.storageKey },
+        { mediaId: media.id, storageKey: served },
         "Photo hors du préfixe servi par l'API : aucune adresse publique à donner au carnet",
       );
     }
@@ -81,10 +105,10 @@ export async function renderablePhotoUrl(
   }
 
   try {
-    const filename = ready.storageKey.split("/").pop() ?? "photo.jpg";
+    const filename = served.split("/").pop() ?? "photo.jpg";
     const published = await deps.publisher.publish(
       filename,
-      await deps.storage.signedReadUrl(ready.storageKey),
+      await deps.storage.signedReadUrl(served),
     );
     await deps.prisma.mediaAsset.update({
       where: { id: media.id },
@@ -100,6 +124,84 @@ export async function renderablePhotoUrl(
     );
     return ourUrl;
   }
+}
+
+/**
+ * **Oublie une adresse de CDN qui ne mène nulle part**, et la retire de la
+ * base au passage.
+ *
+ * On pourrait se contenter de l'ignorer ici. L'effacer vaut mieux : la même
+ * adresse est donnée à l'app pour les vignettes d'étapes et la photo du voyage
+ * (`routes/tripPhotos.ts`), et une ligne nettoyée répare les deux d'un coup —
+ * sans attendre la composition suivante.
+ */
+async function forgetSimulatedCdnUrl(
+  deps: Deps,
+  media: RenderablePhotoMedia | null,
+): Promise<RenderablePhotoMedia | null> {
+  if (!media || !isSimulatedCdnUrl(media.cdnUrl)) return media;
+
+  await deps.prisma.mediaAsset.update({
+    where: { id: media.id },
+    data: { cdnUrl: null, cdnAssetId: null },
+  });
+  deps.logger.warn(
+    { mediaId: media.id },
+    "Adresse de CDN simulée effacée : la photo se sert par l'API",
+  );
+
+  return { ...media, cdnUrl: null, cdnAssetId: null };
+}
+
+/**
+ * **La clé à servir au moteur de PDF** : celle de la copie allégée, ou celle
+ * de la photo elle-même quand l'alléger n'apporterait rien.
+ *
+ * La copie se fabrique **une fois** et se retient sur `renderStorageKey` : une
+ * composition qui recommence ne repaie ni le téléchargement ni l'encodage. Et
+ * une photo déjà légère ne se télécharge même pas — `bytes` le dit, la base le
+ * sait.
+ *
+ * Rien ici ne fait échouer une composition : stockage muet, octets illisibles,
+ * copie plus grosse que l'original — on sert l'original, et la ligne de
+ * journal dit ce qui s'est passé.
+ */
+async function ensureRenderCopy(deps: Deps, media: RenderablePhotoMedia): Promise<string> {
+  if (media.renderStorageKey) return media.renderStorageKey;
+  if (media.bytes <= RENDER_MAX_BYTES) return media.storageKey;
+
+  let original: Buffer;
+  try {
+    original = await deps.storage.get(media.storageKey);
+  } catch (cause) {
+    deps.logger.warn(
+      { err: cause, mediaId: media.id },
+      "Photo illisible au moment de l'alléger : le carnet lira l'originale",
+    );
+    return media.storageKey;
+  }
+
+  const light = await downscaleForRender(original);
+  if (!light) return media.storageKey;
+
+  const stored = await deps.storage.put("photo", light.filename, light.buffer, light.mimeType);
+  await deps.prisma.mediaAsset.update({
+    where: { id: media.id },
+    data: { renderStorageKey: stored.storageKey },
+  });
+
+  deps.logger.info(
+    {
+      mediaId: media.id,
+      avant: media.bytes,
+      apres: stored.bytes,
+      largeur: light.widthPx,
+      hauteur: light.heightPx,
+    },
+    "Copie allégée de la photo fabriquée pour le carnet",
+  );
+
+  return stored.storageKey;
 }
 
 /**
@@ -174,6 +276,9 @@ async function ensureRenderableFormat(
       originalStorageKey: media.originalStorageKey ?? media.storageKey,
       cdnUrl: null,
       cdnAssetId: null,
+      // La copie allégée montrait les octets d'avant la conversion : elle ne
+      // vaut plus rien, et la prochaine composition en refera une.
+      renderStorageKey: null,
     },
   });
 
@@ -182,5 +287,13 @@ async function ensureRenderableFormat(
     "Photo convertie en JPEG pour le carnet",
   );
 
-  return { ...media, storageKey: stored.storageKey, mimeType: stored.mimeType, cdnUrl: null, cdnAssetId: null };
+  return {
+    ...media,
+    storageKey: stored.storageKey,
+    mimeType: stored.mimeType,
+    bytes: stored.bytes,
+    cdnUrl: null,
+    cdnAssetId: null,
+    renderStorageKey: null,
+  };
 }

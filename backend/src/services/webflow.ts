@@ -94,6 +94,28 @@ export class WebflowAssetPublisher implements AssetPublisher {
   }
 }
 
+/**
+ * L'hôte des adresses simulées. `.test` est réservé à ça par la RFC 2606 : il
+ * ne résout nulle part, et c'est bien le but — une adresse simulée doit rater
+ * franchement, jamais atterrir chez quelqu'un.
+ */
+export const SIMULATED_CDN_HOST = "cdn.example.test";
+
+/**
+ * **Cette adresse de CDN ne sert personne.**
+ *
+ * À vérifier avant de la donner à qui que ce soit, parce qu'une adresse
+ * simulée **écrite en base** y reste : jusqu'au 11/11/2026, chaque photo qui
+ * passait dans un carnet se voyait poser celle-ci, et 68 photos de production
+ * la portaient encore le 14/11. Le moteur de PDF allait les chercher sur un
+ * domaine qui ne résout pas et composait des cadres vides ; l'app affichait
+ * des vignettes grises. Deux symptômes, une seule cause, et rien dans les
+ * journaux — d'où ce garde-fou plutôt qu'un simple nettoyage de la base.
+ */
+export function isSimulatedCdnUrl(url: string | null | undefined): boolean {
+  return typeof url === "string" && url.includes(`://${SIMULATED_CDN_HOST}/`);
+}
+
 /** Publication simulée : renvoie une URL stable et déterministe. */
 export class FakeAssetPublisher implements AssetPublisher {
   readonly servesPublicUrls = false;
@@ -102,7 +124,7 @@ export class FakeAssetPublisher implements AssetPublisher {
     const assetId = createHash("sha256").update(sourceUrl).digest("hex").slice(0, 24);
     return {
       assetId,
-      cdnUrl: `https://cdn.example.test/memobook/${assetId}/${encodeURIComponent(filename)}`,
+      cdnUrl: `https://${SIMULATED_CDN_HOST}/memobook/${assetId}/${encodeURIComponent(filename)}`,
     };
   }
 

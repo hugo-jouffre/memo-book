@@ -1514,6 +1514,21 @@ model MediaAsset {
   /// sur `entries`.
   originalStorageKey String?
 
+  /// **La copie allégée que le moteur de PDF ira chercher** — 2400 px de grand
+  /// côté, quelques centaines de kilo-octets au lieu de quelques mégaoctets
+  /// (`services/photoDownscale.ts`).
+  ///
+  /// Elle existe parce qu'APITemplate **télécharge** chaque photo depuis ses
+  /// serveurs avant de composer : un carnet de soixante-dix photos d'iPhone,
+  /// c'est trois cents mégaoctets à tirer dans sa fenêtre de rendu, et il
+  /// abandonne en HTTP 504 (Hugo, 14/11/2026 — « ça a galéré à créer le PDF,
+  /// j'ai dû fermer l'app 4-5 fois »).
+  ///
+  /// Nulle tant qu'aucune composition ne l'a demandée, et **remise à nul dès
+  /// que `storageKey` change** : une copie allégée d'une photo qui n'est plus
+  /// là ne montrerait pas la bonne image.
+  renderStorageKey String?
+
   createdAt DateTime @default(now())
 
   entries Entry[]

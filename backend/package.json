@@ -28,6 +28,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:themes": "tsx prisma/seed-trip-themes.ts",
     "photos:mesurer": "tsx --env-file=.env scripts/mesurer-les-photos.ts",
+    "photos:alleger": "tsx --env-file=.env scripts/alleger-les-photos.ts",
     "db:sessions": "tsx --env-file=.env scripts/db-sessions.ts",
     "stats:push": "tsx --env-file=.env scripts/push-stats.ts",
     "stats:show": "tsx --env-file=.env scripts/push-stats.ts --dry-run",

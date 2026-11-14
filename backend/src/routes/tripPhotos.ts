@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
+import { isSimulatedCdnUrl } from "../services/webflow.js";
 
 /**
  * **Les photos envoyées dans la conversation, en HTTP simple** (Hugo,
@@ -87,13 +88,23 @@ export function tripPhotoUrl(publicBaseUrl: string, storageKey: string): string 
   return TRIP_PHOTO_FILENAME.test(file) ? `${publicBaseUrl}/v1/trip-photos/${file}` : null;
 }
 
-/** La photo à montrer pour un média : celle du CDN si elle est publiée, sinon la nôtre. */
+/**
+ * La photo à montrer pour un média : celle du CDN si elle est publiée, sinon
+ * la nôtre.
+ *
+ * ⚠️ **Publiée ne veut pas dire servie.** Une adresse simulée écrite en base
+ * avant le 11/11/2026 y est restée, et l'app la donnait telle quelle à
+ * `AsyncImage` : vignette grise, sans un mot (Hugo, 14/11/2026). Une adresse
+ * qui ne mène nulle part ne vaut pas mieux que pas d'adresse du tout — on
+ * retombe sur la nôtre, qui sert les mêmes octets.
+ */
 export function displayablePhotoUrl(
   publicBaseUrl: string,
   media: { storageKey: string; cdnUrl: string | null } | null | undefined,
 ): string | null {
   if (!media) return null;
-  return media.cdnUrl ?? tripPhotoUrl(publicBaseUrl, media.storageKey);
+  const cdnUrl = isSimulatedCdnUrl(media.cdnUrl) ? null : media.cdnUrl;
+  return cdnUrl ?? tripPhotoUrl(publicBaseUrl, media.storageKey);
 }
 
 export function registerTripPhotoRoutes(app: FastifyInstance, context: AppContext): void {
