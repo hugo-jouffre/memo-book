@@ -51,7 +51,12 @@ async function mediaOf(prisma: PrismaClient, memoIds: readonly string[]) {
 
   const assets = await prisma.mediaAsset.findMany({
     where: { id: { in: mediaIds } },
-    select: { storageKey: true, originalStorageKey: true, cdnAssetId: true },
+    select: {
+      storageKey: true,
+      originalStorageKey: true,
+      renderStorageKey: true,
+      cdnAssetId: true,
+    },
   });
 
   // **Les stickers découpés dans ces photos sont des fichiers à part.** La
@@ -66,12 +71,14 @@ async function mediaOf(prisma: PrismaClient, memoIds: readonly string[]) {
   return {
     entryCount: entries.length,
     mediaIds,
-    // L'original d'une photo agrandie est un fichier de plus, et il est à elle.
+    // L'original d'une photo agrandie est un fichier de plus, et il est à
+    // elle. Sa copie allégée pour le carnet aussi : c'est la même photo, en
+    // plus petit, et elle resterait sur S3 après le départ de son souvenir.
     storageKeys: [
       ...assets.flatMap((asset) =>
-        asset.originalStorageKey
-          ? [asset.storageKey, asset.originalStorageKey]
-          : [asset.storageKey],
+        [asset.storageKey, asset.originalStorageKey, asset.renderStorageKey].filter(
+          (key): key is string => Boolean(key),
+        ),
       ),
       ...stickers.map((sticker) => sticker.storageKey),
     ],
@@ -307,7 +314,14 @@ export async function deleteEntryAndMedia(
       where: { id: entryId },
       select: {
         mediaId: true,
-        media: { select: { storageKey: true, originalStorageKey: true, cdnAssetId: true } },
+        media: {
+          select: {
+            storageKey: true,
+            originalStorageKey: true,
+            renderStorageKey: true,
+            cdnAssetId: true,
+          },
+        },
         // Le sticker découpé dans cette photo : sa ligne part en cascade, son
         // PNG non — il faut le nommer ici pour qu'il s'efface aussi.
         sticker: { select: { storageKey: true } },
@@ -325,15 +339,29 @@ export async function deleteEntryAndMedia(
     if (sharers > 0) return { storageKeys: duSticker, cdnAssetId: null };
     await tx.mediaAsset.delete({ where: { id: entry.mediaId } });
 
-    const keys = [entry.media.storageKey, entry.media.originalStorageKey].filter(
-      (key): key is string => Boolean(key),
-    );
+    const keys = [
+      entry.media.storageKey,
+      entry.media.originalStorageKey,
+      entry.media.renderStorageKey,
+    ].filter((key): key is string => Boolean(key));
     // Une clé qu'une autre ligne nomme encore reste en stockage.
     const stillNamed = await tx.mediaAsset.findMany({
-      where: { OR: [{ storageKey: { in: keys } }, { originalStorageKey: { in: keys } }] },
-      select: { storageKey: true, originalStorageKey: true },
+      where: {
+        OR: [
+          { storageKey: { in: keys } },
+          { originalStorageKey: { in: keys } },
+          { renderStorageKey: { in: keys } },
+        ],
+      },
+      select: { storageKey: true, originalStorageKey: true, renderStorageKey: true },
     });
-    const named = new Set(stillNamed.flatMap((asset) => [asset.storageKey, asset.originalStorageKey]));
+    const named = new Set(
+      stillNamed.flatMap((asset) => [
+        asset.storageKey,
+        asset.originalStorageKey,
+        asset.renderStorageKey,
+      ]),
+    );
     return {
       storageKeys: [...duSticker, ...new Set(keys)].filter((key) => !named.has(key)),
       cdnAssetId: entry.media.cdnAssetId,

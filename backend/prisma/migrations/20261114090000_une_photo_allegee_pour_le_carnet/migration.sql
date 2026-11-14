@@ -1,0 +1,13 @@
+-- **La copie allégée qu'on sert au moteur de PDF.**
+--
+-- APITemplate télécharge chaque photo depuis ses serveurs avant de composer.
+-- Les photos d'un iPhone pèsent quatre mégaoctets et demi en moyenne : à
+-- soixante-dix photos, c'est trois cents mégaoctets à tirer dans sa fenêtre de
+-- rendu, et il rend un HTTP 504 (Hugo, 14/11/2026). La colonne retient la clé
+-- d'une copie à 2400 px de grand côté, fabriquée une fois et resservie à
+-- chaque composition.
+--
+-- Nulle partout au départ : la première composition qui demande une photo
+-- fabrique sa copie. Rien à rattraper ici — `scripts/alleger-les-photos.ts`
+-- est là pour prendre de l'avance sur les carnets déjà écrits.
+ALTER TABLE "media_assets" ADD COLUMN "renderStorageKey" TEXT;

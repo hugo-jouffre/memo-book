@@ -135,6 +135,64 @@ vérifiait que la boucle locale et le `http` simple. D'où la ligne ajoutée au
 tableau : un outil de diagnostic qui laisse passer la panne qu'il est fait pour
 nommer coûte plus cher que pas d'outil du tout.
 
+### Une adresse écrite en base y reste (14/11/2026)
+
+Arrêter d'en fabriquer ne défaisait pas celles déjà posées. Le 14/11, **68
+photos de production** portaient encore `cdn.example.test` en base, dont **59
+des 71 d'un même voyage** — écrites avant le 11/11, quand chaque photo qui
+passait dans un carnet se voyait attribuer l'adresse du publicateur simulé.
+
+`renderPhotos.ts` lisait `if (ready.cdnUrl) return ready.cdnUrl` : une adresse
+en base était crue sur parole, avant même de regarder si quelqu'un la sert. Le
+carnet repartait donc sans photos, exactement comme avant le correctif, et
+`displayablePhotoUrl` donnait la même adresse morte à l'app — vignettes grises
+sur les étapes, sans un mot.
+
+Deux raisons pour que ça n'ait pas été vu plus tôt : les voyages **créés
+après** le correctif n'ont jamais eu cette adresse, et une photo **convertie**
+depuis le HEIC voyait la sienne remise à nul au passage. Les deux carnets de
+test étaient dans ce cas.
+
+`isSimulatedCdnUrl` (`services/webflow.ts`) répond maintenant à la question
+« cette adresse sert-elle quelqu'un ». Les deux lecteurs la posent, et le
+rendu **efface** l'adresse morte en passant : une ligne nettoyée répare le
+carnet et l'app d'un coup.
+
+### Le poids, qui attendait son tour (14/11/2026)
+
+Le jour où les adresses sont devenues bonnes, APITemplate s'est mis à
+télécharger pour de vrai — et a abandonné. Trois compositions, trois
+`HTTP 504` (Hugo : « ça a galéré à créer le PDF, j'ai dû fermer l'app 4-5
+fois »).
+
+| Le carnet de 71 photos | |
+|---|---|
+| poids total | 306 Mo |
+| poids moyen | 4,4 Mo |
+| la plus lourde | 9,4 Mo |
+
+C'est le revers du correctif, et il était invisible tant que les adresses
+étaient fausses : **une adresse qui ne résout pas échoue en quelques
+millisecondes**. Le carnet sortait vide, mais vite. Un carnet de neuf photos
+ne pouvait pas le révéler.
+
+Une photo de plus de 900 Ko part donc en **copie 2400 px**
+(`services/photoDownscale.ts`), quelques centaines de kilo-octets. Elle est
+fabriquée une fois, retenue sur `media_assets.renderStorageKey`, et c'est elle
+qu'on publie comme qu'on sert. L'original ne bouge pas ; il part avec la photo
+quand le souvenir s'efface (`services/deletion.ts`).
+
+Deux pièges tenus par les tests :
+
+- **`sharp` n'applique pas le drapeau EXIF** et efface les métadonnées en
+  sortie. Sans `rotate()`, les photos verticales d'iPhone partiraient couchées
+  dans le carnet, et l'original, lui, s'affichait droit — un défaut qu'on
+  n'aurait vu qu'à l'impression ;
+- la copie se fabrique **à la première composition qui demande la photo**.
+  Pour les carnets déjà écrits, `npm run photos:alleger` prend de l'avance :
+  sans ça, cette composition-là paie soixante-dix téléchargements dans sa
+  propre fenêtre, ce qui est précisément ce qu'on évite.
+
 ## 0 ter. Le sticker découpé dans la photo — *implémenté* (12/11/2026)
 
 Hugo, 10/11/2026 : « stickers découpés depuis tes vraies photos de billets et
