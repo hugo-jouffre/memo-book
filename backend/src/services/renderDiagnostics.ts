@@ -12,7 +12,9 @@ import { selectedRenderer, type RendererKind } from "./apitemplate.js";
  * 1. Le moteur est **simulé** — `RENDERER=auto` sans `APITEMPLATE_API_KEY`.
  * 2. L'adresse des photos est une **boucle locale**, que le moteur, qui
  *    télécharge depuis ses serveurs, ne joindra jamais.
- * 3. L'adresse est juste mais vient d'un **repli** (`APP_LINK_BASE_URL`,
+ * 3. L'adresse posée n'a **pas de protocole** — `api.exemple.fr` au lieu de
+ *    `https://api.exemple.fr`. Collée à un chemin, elle ne joint rien.
+ * 4. L'adresse est juste mais vient d'un **repli** (`APP_LINK_BASE_URL`,
  *    faite pour les liens des e-mails) : juste aujourd'hui, fausse le jour où
  *    cette variable-là changera de valeur.
  *
@@ -46,10 +48,18 @@ type DiagnosticEnv = Pick<
 const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])([:/]|$)/i;
 
 export function photosDiagnostic(env: DiagnosticEnv): PhotosDiagnostic {
-  const { url, from } = resolvePublicApiBaseUrl(env);
+  const { url, from, schemeAssumed } = resolvePublicApiBaseUrl(env);
   const renderer = selectedRenderer(env);
   const production = env.NODE_ENV === "production";
   const problems: string[] = [];
+
+  // Avant tout le reste, et quel que soit le moteur : une variable mal écrite
+  // est un défaut de configuration, pas une conséquence du rendu choisi.
+  if (schemeAssumed) {
+    problems.push(
+      `API_PUBLIC_BASE_URL ne porte pas son protocole : on a supposé ${url}. Écris l'adresse entière, https:// compris.`,
+    );
+  }
 
   if (renderer === "fake") {
     problems.push(

@@ -112,6 +112,7 @@ qui a donné cette adresse, et la liste des reproches :
 |---|---|
 | moteur simulé | `RENDERER=auto` sans `APITEMPLATE_API_KEY` : un PDF se produit, sans mise en page ni photos |
 | boucle locale | aucune variable d'adresse ne tient sur ce service : le moteur, qui télécharge depuis ses serveurs, ne joindra jamais `localhost` |
+| adresse sans protocole | la variable vaut `api.exemple.fr` et non `https://api.exemple.fr` : collée à un chemin, elle ne joint rien. On suppose `https` pour que la production tienne, et on le reproche quand même |
 | adresse par repli | l'adresse vient d'`APP_LINK_BASE_URL` : juste aujourd'hui, fausse le jour où cette variable changera |
 
 Deux endroits le disent, parce qu'il y a **deux services** et qu'ils n'ont pas
@@ -122,8 +123,17 @@ les mêmes variables :
   l'**annonce au démarrage** dans ses logs : en `error` s'il a un reproche, en
   `info` sinon.
 
-Le moteur `local` échappe aux deux derniers reproches : il compose sur place,
-avec son propre Chromium, et une boucle locale lui va très bien.
+Le moteur `local` échappe aux reproches d'adresse joignable : il compose sur
+place, avec son propre Chromium, et une boucle locale lui va très bien. Pas au
+protocole manquant, en revanche — là, c'est la variable qui est mal écrite, et
+elle le serait partout.
+
+**Le diagnostic s'est fait prendre une fois** (13/11/2026). La variable posée
+en production valait `api-production-9f35a.up.railway.app`, sans `https://` ;
+il a répondu « aucun reproche » et les carnets sont ressortis sans photos. Il ne
+vérifiait que la boucle locale et le `http` simple. D'où la ligne ajoutée au
+tableau : un outil de diagnostic qui laisse passer la panne qu'il est fait pour
+nommer coûte plus cher que pas d'outil du tout.
 
 ## 0 ter. Le sticker découpé dans la photo — *implémenté* (12/11/2026)
 

@@ -61,10 +61,20 @@ export type PublicBaseSource =
 export function resolvePublicApiBaseUrl(env: PublicBaseEnv): {
   url: string;
   from: PublicBaseSource;
+  /** Vrai quand la valeur posée n'avait pas de protocole et qu'on l'a supposé. */
+  schemeAssumed: boolean;
 } {
   const configured = env.API_PUBLIC_BASE_URL.trim();
   if (configured) {
-    return { url: configured.replace(/\/+$/, ""), from: "API_PUBLIC_BASE_URL" };
+    // **Une adresse sans protocole n'est pas une adresse** : collée à un
+    // chemin, elle donne `api.exemple.fr/v1/…`, que rien ne sait joindre. Le
+    // 13/11/2026, la variable a été posée ainsi en production et les carnets
+    // sont ressortis sans photos — le diagnostic, lui, ne disait rien. On
+    // suppose donc `https`, pour que la production tienne, **et** on le
+    // reproche, pour que la variable soit réparée.
+    const schemeAssumed = !/^https?:\/\//i.test(configured);
+    const url = schemeAssumed ? `https://${configured}` : configured;
+    return { url: url.replace(/\/+$/, ""), from: "API_PUBLIC_BASE_URL", schemeAssumed };
   }
 
   const railway = env.RAILWAY_PUBLIC_DOMAIN.trim();
@@ -72,14 +82,19 @@ export function resolvePublicApiBaseUrl(env: PublicBaseEnv): {
     return {
       url: `https://${railway.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`,
       from: "RAILWAY_PUBLIC_DOMAIN",
+      schemeAssumed: false,
     };
   }
 
   if (/^https?:\/\//.test(env.APP_LINK_BASE_URL)) {
-    return { url: env.APP_LINK_BASE_URL.replace(/\/+$/, ""), from: "APP_LINK_BASE_URL" };
+    return {
+      url: env.APP_LINK_BASE_URL.replace(/\/+$/, ""),
+      from: "APP_LINK_BASE_URL",
+      schemeAssumed: false,
+    };
   }
 
-  return { url: "http://localhost:3000", from: "defaut-local" };
+  return { url: "http://localhost:3000", from: "defaut-local", schemeAssumed: false };
 }
 
 /**

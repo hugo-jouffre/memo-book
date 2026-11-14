@@ -56,6 +56,25 @@ describe("le diagnostic des photos du carnet", () => {
     expect(diagnostic.problems.join(" ")).toContain("rien ne la tient");
   });
 
+  it("attrape l'adresse posée sans son protocole, et la répare", () => {
+    // La vraie valeur posée en production le 13/11/2026, après la panne de
+    // `sharp` : la variable était là, et les cadres restaient vides.
+    const diagnostic = photosDiagnostic(
+      production({ API_PUBLIC_BASE_URL: "api-production-9f35a.up.railway.app" }),
+    );
+
+    expect(diagnostic.photoBaseUrl).toBe("https://api-production-9f35a.up.railway.app");
+    expect(diagnostic.problems.join(" ")).toContain("ne porte pas son protocole");
+  });
+
+  it("le reproche même en rendu local : c'est la variable qui est fautive", () => {
+    const diagnostic = photosDiagnostic(
+      production({ RENDERER: "local", API_PUBLIC_BASE_URL: "api.exemple.fr" }),
+    );
+
+    expect(diagnostic.problems).toHaveLength(1);
+  });
+
   it("laisse tranquille le rendu local, qui compose sur place", () => {
     const diagnostic = photosDiagnostic(
       production({ NODE_ENV: "development", RENDERER: "local", API_PUBLIC_BASE_URL: "" , APP_LINK_BASE_URL: "memobook://" }),
