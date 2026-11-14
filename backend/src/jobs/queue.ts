@@ -61,6 +61,10 @@ export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
  */
 const RETRY_POLICIES: Partial<Record<JobName, PgBoss.SendOptions>> = {
   [JOB_NAMES.eraseTrace]: { retryLimit: 12, retryDelay: 60, retryBackoff: true },
+  // Le relevé du jour échoue exprès sur une instance sans feuille configurée
+  // (`jobs/exportStats.ts`) : on le repropose toutes les 5 minutes, une heure
+  // durant, le temps que la bonne instance le prenne.
+  [JOB_NAMES.exportStats]: { retryLimit: 12, retryDelay: 300 },
 };
 
 /**
@@ -182,7 +186,7 @@ export class PgBossQueue implements JobQueue {
       return;
     }
     await this.boss.createQueue(name);
-    await this.boss.schedule(name, cron);
+    await this.boss.schedule(name, cron, {}, RETRY_POLICIES[name] ?? {});
   }
 
   /** Les horaires demandés avant le démarrage, posés dès qu'il a lieu. */

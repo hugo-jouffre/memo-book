@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { verifyPassword } from "../src/lib/password.js";
-import { collectStats, postToSheet } from "../src/services/statsExport.js";
+import { collectStats, isAccountInScope, postToSheet, statsScopeFromEnv } from "../src/services/statsExport.js";
 import {
   createHarness,
   multipartBody,
@@ -355,6 +355,79 @@ describe("la feuille de bord", () => {
     expect(snapshot.subscriptions).toMatchObject({ active: 1, cancelled: 1, cancellationReasons: { tooExpensive: 1 } });
     expect(snapshot.deliveries).toHaveLength(1);
     expect(snapshot.deliveries[0]).toMatchObject({ tripTitle: "Rome 2026", city: "Lyon", status: "shipped", copies: 2 });
+  });
+
+  it("ne relève que les comptes du périmètre : récents, inclus, jamais les tests", async () => {
+    const old = await registerAccount(harness.app, "ancien@memobook.app");
+    const kept = await registerAccount(harness.app, "garde@memobook.app");
+    const recent = await registerAccount(harness.app, "nouveau@memobook.app");
+    const e2e = await registerAccount(harness.app, "e2e-123@memobook.test");
+    await registerAccount(harness.app, "smoke-123@memobook.app");
+
+    // Les deux premiers sont « anciens » : ouverts avant la date de départ.
+    await harness.prisma.account.updateMany({
+      where: { id: { in: [old.accountId, kept.accountId] } },
+      data: { createdAt: new Date("2026-10-01T00:00:00Z") },
+    });
+
+    // Un voyage et une commande chez l'ancien : ils ne doivent pas compter.
+    const oldMemo = await seedTrip(old.accountId);
+    const oldRender = await harness.prisma.render.create({ data: { memoId: oldMemo.id, status: "ready" } });
+    await harness.prisma.printOrder.create({
+      data: {
+        memoId: oldMemo.id,
+        renderId: oldRender.id,
+        orderedByAccountId: old.accountId,
+        status: "submitted",
+        copies: 1,
+        pageCount: 60,
+        amountCents: 10000,
+        shippingName: "Test Stripe",
+        shippingLine1: "1 rue du Test",
+        shippingPostalCode: "44000",
+        shippingCity: "Nantes",
+        shippingCountry: "FR",
+      },
+    });
+    // Un voyage chez le compte récent, et un chez le compte e2e.
+    await seedTrip(recent.accountId);
+    await seedTrip(e2e.accountId);
+
+    // Un voyage d'un compte ancien, partagé avec le compte gardé : il compte.
+    // Partagé avec une simple invitation (pas encore acceptée) : il ne compte pas.
+    const sharedMemo = await seedTrip(old.accountId);
+    await harness.prisma.memoMember.create({
+      data: { memoId: sharedMemo.id, accountId: kept.accountId, status: "active" },
+    });
+    const invitedMemo = await seedTrip(old.accountId);
+    await harness.prisma.memoMember.create({
+      data: { memoId: invitedMemo.id, accountId: recent.accountId, status: "invited" },
+    });
+
+    const scope = statsScopeFromEnv({
+      STATS_COUNT_FROM: "2026-11-14T00:00:00Z",
+      STATS_INCLUDED_ACCOUNT_IDS: ` ${kept.accountId} ,`,
+    });
+    const now = new Date();
+    const snapshot = await collectStats(harness.prisma, now, scope);
+    console.log("[test] relevé du périmètre", JSON.stringify(snapshot.accounts), JSON.stringify(snapshot.orders));
+
+    expect(snapshot.accounts.total).toBe(2); // garde + nouveau
+    expect(snapshot.trips.total).toBe(2); // celui de nouveau + le voyage partagé avec garde
+    expect(snapshot.orders).toMatchObject({ total: 0, inProgress: 0, revenueEuros: 0 });
+    expect(snapshot.deliveries).toHaveLength(0);
+
+    expect(await isAccountInScope(harness.prisma, kept.accountId, scope)).toBe(true);
+    expect(await isAccountInScope(harness.prisma, old.accountId, scope)).toBe(false);
+    expect(await isAccountInScope(harness.prisma, e2e.accountId, scope)).toBe(false);
+
+    // Sans date de départ : tout le monde, sauf les comptes de test.
+    const everyone = await collectStats(harness.prisma, now, statsScopeFromEnv({ STATS_COUNT_FROM: "", STATS_INCLUDED_ACCOUNT_IDS: "" }));
+    expect(everyone.accounts.total).toBe(3);
+    expect(everyone.trips.total).toBe(4); // tout sauf le voyage du compte e2e
+    expect(everyone.orders.total).toBe(1);
+
+    expect(() => statsScopeFromEnv({ STATS_COUNT_FROM: "pas une date", STATS_INCLUDED_ACCOUNT_IDS: "" })).toThrow(/illisible/);
   });
 
   it("envoie au script avec le secret, et lit sa réponse", async () => {

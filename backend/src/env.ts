@@ -235,6 +235,36 @@ const schema = z.object({
   STATS_SHEET_SECRET: z.string().default(""),
 
   /**
+   * Qui compte dans la feuille de bord. La base sert à la fois TestFlight,
+   * l'App Store et les tests : sans tri, les comptes de démo, les comptes e2e
+   * et les commandes « test Stripe » gonflent tous les chiffres.
+   *
+   * - `STATS_COUNT_FROM` : les comptes ouverts à partir de cette date
+   *   comptent, d'où qu'ils viennent (TestFlight ou App Store, même API, même
+   *   base). Vide : tous les comptes, sans date.
+   * - `STATS_INCLUDED_ACCOUNT_IDS` : des comptes plus anciens qui comptent
+   *   quand même, séparés par des virgules. Par défaut, les comptes des
+   *   fondateurs qui servent vraiment (pas les comptes de démo) :
+   *     - Hugo, TestFlight, connexion Google (ouvert le 02/10/2026) ;
+   *     - Hugo, iPhone, connexion Apple (25/09/2026) ;
+   *     - Paul, ses deux comptes (15/09 et 21/09/2026).
+   *
+   * Les comptes de test automatiques (`…@memobook.test`, `smoke-…`) ne
+   * comptent jamais. Décision du 14/11/2026 : la feuille repart de zéro.
+   */
+  STATS_COUNT_FROM: z.string().default("2026-11-14T00:00:00.000Z"),
+  STATS_INCLUDED_ACCOUNT_IDS: z
+    .string()
+    .default(
+      [
+        "711e5bcb-c5ad-4d95-8dbd-5dc26ba33f0f",
+        "911b98d3-194e-463d-98ff-3a72a275c782",
+        "949db11f-2bde-4ad5-9590-17a5ac521a79",
+        "e9777f99-0a4d-46af-b3aa-d492df1482ce",
+      ].join(","),
+    ),
+
+  /**
    * Stripe — encaissement des carnets imprimés et des recharges de cagnotte.
    *
    * **Jamais l'abonnement.** Celui-là est un service numérique : Apple impose
