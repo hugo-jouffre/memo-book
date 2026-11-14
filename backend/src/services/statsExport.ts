@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import type { Env } from "../env.js";
 import { stageFromDates } from "./tripStage.js";
@@ -23,7 +23,85 @@ import { stageFromDates } from "./tripStage.js";
  * encore livrées, avec leur adresse).
  *
  * Sans `STATS_SHEET_WEBHOOK_URL`, rien ne part et rien n'échoue.
+ *
+ * **Qui compte** (14/11/2026) : la base sert TestFlight, l'App Store et les
+ * tests. Chaque chiffre se limite aux comptes du périmètre (`StatsScope`) :
+ * ceux ouverts depuis `STATS_COUNT_FROM`, plus ceux de
+ * `STATS_INCLUDED_ACCOUNT_IDS`, jamais les comptes de test automatiques.
+ *
+ * - Un **voyage** compte si son propriétaire compte, ou si un participant
+ *   actif compte : un voyage partagé avec un compte du périmètre est lié à
+ *   lui. Ses souvenirs, ses photos et ses rendus suivent le voyage.
+ * - Une **commande** compte si son acheteur compte, ou si son voyage compte.
+ * - Un **abonnement** suit le compte qui le paie.
  */
+
+/** Le périmètre des comptes relevés. */
+export interface StatsScope {
+  /** Les comptes ouverts à partir de cette date. Null : tous, sans date. */
+  countFrom: Date | null;
+  /** Des comptes plus anciens qui comptent quand même. */
+  includedAccountIds: string[];
+}
+
+/** Tous les comptes, sauf les comptes de test automatiques. */
+export const ALL_ACCOUNTS: StatsScope = { countFrom: null, includedAccountIds: [] };
+
+/** Les adresses des comptes créés par les scripts de test (e2e, smoke). */
+const TEST_EMAIL_SUFFIXES = ["@memobook.test"];
+const TEST_EMAIL_PREFIXES = ["smoke-"];
+
+export type StatsScopeEnv = Pick<Env, "STATS_COUNT_FROM" | "STATS_INCLUDED_ACCOUNT_IDS">;
+
+/** Lit le périmètre dans l'environnement. Une date illisible est une erreur qu'on voit. */
+export function statsScopeFromEnv(env: StatsScopeEnv): StatsScope {
+  const raw = env.STATS_COUNT_FROM.trim();
+  let countFrom: Date | null = null;
+  if (raw !== "") {
+    countFrom = new Date(raw);
+    if (Number.isNaN(countFrom.getTime())) {
+      throw new Error(`STATS_COUNT_FROM illisible : « ${raw} ».`);
+    }
+  }
+  const includedAccountIds = env.STATS_INCLUDED_ACCOUNT_IDS.split(",")
+    .map((id) => id.trim())
+    .filter((id) => id !== "");
+  return { countFrom, includedAccountIds };
+}
+
+/** Le filtre Prisma des comptes du périmètre. */
+export function scopedAccounts(scope: StatsScope): Prisma.AccountWhereInput {
+  // `NOT` sur une colonne nullable écarte aussi les NULL en SQL : un compte
+  // sans e-mail (Apple qui masque tout) doit rester, d'où le `email: null`.
+  const conditions: Prisma.AccountWhereInput[] = [
+    ...TEST_EMAIL_SUFFIXES.map(
+      (suffix): Prisma.AccountWhereInput => ({
+        OR: [{ email: null }, { NOT: { email: { endsWith: suffix, mode: "insensitive" } } }],
+      }),
+    ),
+    ...TEST_EMAIL_PREFIXES.map(
+      (prefix): Prisma.AccountWhereInput => ({
+        OR: [{ email: null }, { NOT: { email: { startsWith: prefix, mode: "insensitive" } } }],
+      }),
+    ),
+  ];
+  if (scope.countFrom) {
+    conditions.push({
+      OR: [{ createdAt: { gte: scope.countFrom } }, { id: { in: scope.includedAccountIds } }],
+    });
+  }
+  return { AND: conditions };
+}
+
+/** Ce compte compte-t-il ? Pour les envois à l'unité (raisons de départ). */
+export async function isAccountInScope(
+  prisma: PrismaClient,
+  accountId: string,
+  scope: StatsScope,
+): Promise<boolean> {
+  const count = await prisma.account.count({ where: { AND: [{ id: accountId }, scopedAccounts(scope)] } });
+  return count > 0;
+}
 
 export interface StatsSnapshot {
   generatedAt: string;
@@ -97,8 +175,19 @@ function euros(cents: number | null): number | null {
 }
 
 /** Relève les chiffres du moment. Une poignée de requêtes, aucune par ligne. */
-export async function collectStats(prisma: PrismaClient, now: Date = new Date()): Promise<StatsSnapshot> {
+export async function collectStats(
+  prisma: PrismaClient,
+  now: Date = new Date(),
+  scope: StatsScope = ALL_ACCOUNTS,
+): Promise<StatsSnapshot> {
   const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
+  const accounts = scopedAccounts(scope);
+  const memos: Prisma.MemoWhereInput = {
+    OR: [{ owner: accounts }, { members: { some: { status: "active", account: accounts } } }],
+  };
+  const orderWhere: Prisma.PrintOrderWhereInput = {
+    OR: [{ orderedBy: accounts }, { memo: memos }],
+  };
 
   const [
     accountsTotal,
@@ -111,20 +200,21 @@ export async function collectStats(prisma: PrismaClient, now: Date = new Date())
     memoriesTotal,
     photosTotal,
   ] = await Promise.all([
-    prisma.account.count(),
-    prisma.account.count({ where: { createdAt: { gte: weekAgo } } }),
+    prisma.account.count({ where: accounts }),
+    prisma.account.count({ where: { AND: [accounts, { createdAt: { gte: weekAgo } }] } }),
     prisma.subscription.findMany({
-      where: { status: { in: ["active", "trialing"] } },
+      where: { status: { in: ["active", "trialing"] }, account: accounts },
       select: { accountId: true },
       distinct: ["accountId"],
     }),
-    prisma.memo.findMany({ select: { stage: true, startDate: true, endDate: true } }),
+    prisma.memo.findMany({ where: memos, select: { stage: true, startDate: true, endDate: true } }),
     prisma.render.findMany({
-      where: { status: "ready" },
+      where: { status: "ready", memo: memos },
       select: { memoId: true },
       distinct: ["memoId"],
     }),
     prisma.printOrder.findMany({
+      where: orderWhere,
       select: {
         id: true,
         status: true,
@@ -142,9 +232,9 @@ export async function collectStats(prisma: PrismaClient, now: Date = new Date())
       },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.subscription.findMany({ select: { status: true, cancellationReason: true } }),
-    prisma.entry.count({ where: { kind: { in: ["audio", "text"] } } }),
-    prisma.entry.count({ where: { kind: "photo" } }),
+    prisma.subscription.findMany({ where: { account: accounts }, select: { status: true, cancellationReason: true } }),
+    prisma.entry.count({ where: { kind: { in: ["audio", "text"] }, memo: memos } }),
+    prisma.entry.count({ where: { kind: "photo", memo: memos } }),
   ]);
 
   const stages = { ongoing: 0, upcoming: 0, past: 0 };
@@ -278,7 +368,7 @@ export async function postToSheet(
 
 /** Le relevé du jour, envoyé. Rend le relevé pour qui veut le lire. */
 export async function pushSnapshotToSheet(context: AppContext): Promise<StatsSnapshot> {
-  const snapshot = await collectStats(context.prisma);
+  const snapshot = await collectStats(context.prisma, new Date(), statsScopeFromEnv(context.env));
   if (!isSheetConfigured(context.env)) {
     context.logger.info(
       { accounts: snapshot.accounts.total, trips: snapshot.trips.total, orders: snapshot.orders.total },
@@ -300,6 +390,12 @@ export async function pushCancellationToSheet(
 ): Promise<void> {
   if (!isSheetConfigured(context.env)) return;
   try {
+    // Un compte hors périmètre (démo, test) ne laisse pas de ligne.
+    const inScope = await isAccountInScope(context.prisma, input.accountId, statsScopeFromEnv(context.env));
+    if (!inScope) {
+      context.logger.info({ accountId: input.accountId }, "Raison de départ hors périmètre : pas envoyée à la feuille de bord.");
+      return;
+    }
     await postToSheet(context.env, {
       type: "cancellation",
       at: new Date().toISOString(),

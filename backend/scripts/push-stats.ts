@@ -13,7 +13,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { loadEnv } from "../src/env.js";
-import { collectStats, isSheetConfigured, postToSheet } from "../src/services/statsExport.js";
+import { collectStats, isSheetConfigured, postToSheet, statsScopeFromEnv } from "../src/services/statsExport.js";
 
 async function main(): Promise<void> {
   const dryRun = process.argv.includes("--dry-run");
@@ -21,7 +21,12 @@ async function main(): Promise<void> {
   const prisma = new PrismaClient();
 
   try {
-    const snapshot = await collectStats(prisma);
+    const scope = statsScopeFromEnv(env);
+    console.log(
+      `Périmètre : comptes ouverts depuis ${scope.countFrom?.toISOString() ?? "toujours"}` +
+        ` + ${scope.includedAccountIds.length} compte(s) inclus, hors comptes de test.`,
+    );
+    const snapshot = await collectStats(prisma, new Date(), scope);
     console.log(JSON.stringify(snapshot, null, 2));
 
     if (dryRun) return;

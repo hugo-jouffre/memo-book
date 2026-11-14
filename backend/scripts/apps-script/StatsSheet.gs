@@ -239,12 +239,14 @@ function writeCancellation(message) {
 function writeReasons(reasons) {
   var sheet = sheetNamed("Résiliations", CANCELLATION_COLUMNS);
   var keys = Object.keys(reasons);
-  if (keys.length === 0) return;
 
   // Le cumul vit à droite de la table, à partir de la colonne F, et se
-  // réécrit en entier.
+  // réécrit en entier. Il s'efface même quand le relevé n'apporte aucune
+  // raison : sinon un ancien cumul restait affiché indéfiniment.
   sheet.getRange(1, 6, Math.max(sheet.getLastRow(), keys.length + 1), 2).clearContent();
   sheet.getRange(1, 6, 1, 2).setValues([["Raison", "Total"]]).setFontWeight("bold");
+  console.log("[MemoBook] cumul des raisons : " + keys.length + " raison(s)");
+  if (keys.length === 0) return;
   var rows = keys.map(function (key) {
     return [key, reasons[key]];
   });
