@@ -116,6 +116,31 @@ C'est le compte gratuit : l'équipe y voit le crédit du jour et le paywall, et
 peut acheter en sandbox. Le compte abonné, `demo@memobook.app`, ne montre pas
 l'offre.
 
+## Une mise à jour ne fait rien perdre, et voici pourquoi
+
+La question s'est posée pour le passage de TestFlight à l'App Store (Hugo,
+28/10/2026). La réponse tient en trois points, et le troisième est le seul qui
+demande de l'attention.
+
+1. **Le conteneur de l'app survit à une mise à jour.** Même identifiant de
+   paquet, même conteneur : iOS réinstalle le binaire par-dessus et ne touche
+   ni aux fichiers, ni aux réglages. Passer d'un build TestFlight au même
+   numéro de version publié ne change rien à cela.
+2. **La session reste ouverte.** Le jeton est dans le trousseau, en
+   `kSecAttrAccessibleAfterFirstUnlock` : il survit même à une
+   désinstallation. Et presque tout le récit n'est pas sur le téléphone — il
+   est sur le serveur, qu'une mise à jour n'approche pas.
+3. **Deux choses n'existent que sur le téléphone** : les tours qui n'ont pas
+   pu partir et les voyages créés hors ligne. Ceux-là sont relus d'un format
+   écrit par la version d'avant. **C'est là, et seulement là, qu'une mise à
+   jour peut faire perdre quelque chose** — en silence, si un champ a changé
+   de nom. La règle et son filet de tests sont dans `ios/CLAUDE.md`,
+   § « Ces deux formats sur le disque ne se renomment pas ».
+
+Ce qu'une mise à jour peut légitimement emporter, et qui n'est pas une perte :
+le contenu de `Caches` (une copie de ce que le serveur sait, redemandée au
+premier écran).
+
 ## Après l'envoi
 
 - Le build passe en *Processing* puis arrive dans TestFlight : l'installer sur
@@ -129,7 +154,11 @@ Les deux vivent dans `ios/project.yml`, et nulle part ailleurs : les régler
 dans Xcode les perdrait au prochain `make project`.
 
 - `CFBundleVersion` — **à monter avant chaque envoi**. App Store Connect
-  refuse deux fois le même numéro. Prochain envoi : **build 31**.
+  refuse deux fois le même numéro. Prochain envoi : **build 32**.
+  Le 31 est parti le 12/11/2026 — relevé dans l'Organizer, alors que ce
+  document l'annonçait encore comme le prochain. **Le numéro à écrire ici
+  se lit dans l'Organizer, pas dans ce fichier** : une archive envoyée ne
+  laisse aucune trace dans le dépôt.
 - `CFBundleShortVersionString` — **à monter dès que la version courante est
   approuvée**. Une version publiée ferme son train : tout build qui s'y
   présente est refusé en *« Invalid Pre-Release Train »*, quel que soit son

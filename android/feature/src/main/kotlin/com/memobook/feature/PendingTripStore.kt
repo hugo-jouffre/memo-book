@@ -12,6 +12,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -64,6 +66,13 @@ class PendingTripStore(
     private val lock = Mutex()
     private var trips: List<PendingTrip>? = null
 
+    /**
+     * Les entrées qu'on n'a pas su relire, gardées **telles que le disque les
+     * portait**. Elles ne se montrent pas et ne partent pas — elles
+     * survivent, et repartiront le jour où une version saura les lire.
+     */
+    private var unreadable: List<JsonElement> = emptyList()
+
     /** Les voyages en attente, le plus ancien d'abord — l'ordre où ils partent. */
     suspend fun all(): List<PendingTrip> = locked { loaded() }
 
@@ -94,6 +103,7 @@ class PendingTripStore(
     suspend fun removeAll() = locked {
         file.delete()
         trips = emptyList()
+        unreadable = emptyList()
     }
 
     private fun removeLocked(id: String) {
@@ -104,9 +114,51 @@ class PendingTripStore(
 
     private suspend fun <T> locked(block: () -> T): T = lock.withLock { withContext(dispatcher) { block() } }
 
+    /**
+     * ⚠️ **Toute la file tient dans un seul fichier**, et une entrée qu'on ne
+     * comprend pas ne doit pas emporter les autres (Hugo, 28/10/2026 — « que
+     * le passage d'une version à une autre ne fasse pas perdre ce que les
+     * utilisateurs ont commencé à raconter »). Un champ obligatoire ajouté à
+     * `TripDraft` suffisait à détruire en silence les voyages créés dans
+     * l'avion : la liste entière échouait à se décoder, et le prochain
+     * enregistrement écrasait le fichier.
+     *
+     * Chaque entrée est donc relue séparément, comme sur iOS : celles qu'on
+     * comprend arrivent, les autres sont gardées telles quelles
+     * ([unreadable]) et réécrites avec le reste. Un fichier entièrement
+     * illisible est copié de côté avant toute réécriture.
+     */
     private fun loaded(): List<PendingTrip> = trips ?: run {
-        val read = runCatching { MemoBookJson.decodeFromString(serializer, file.readText()) }.getOrNull().orEmpty()
-        read.sortedBy { it.queuedAt }.also { trips = it }
+        val text = runCatching { file.readText() }.getOrNull()
+        val array = text?.let { runCatching { MemoBookJson.parseToJsonElement(it) as? JsonArray }.getOrNull() }
+        if (text != null && array == null) {
+            // Le fichier portait quelque chose qu'on n'a pas su ouvrir : on ne
+            // l'écrasera pas sans en garder une copie.
+            setAsideCorruptedFile()
+        }
+
+        val lisibles = mutableListOf<PendingTrip>()
+        val gardees = mutableListOf<JsonElement>()
+        for (element in array.orEmpty()) {
+            val trip = runCatching {
+                MemoBookJson.decodeFromJsonElement(PendingTrip.serializer(), element)
+            }.getOrNull()
+            if (trip != null) lisibles += trip else gardees += element
+        }
+        unreadable = gardees
+        lisibles.sortedBy { it.queuedAt }.also { trips = it }
+    }
+
+    /**
+     * Range le fichier qu'on n'a pas su relire à côté du vrai, avec l'heure où
+     * on l'a trouvé. Il n'est jamais relu par l'app : il existe pour que rien
+     * ne soit détruit.
+     */
+    private fun setAsideCorruptedFile() {
+        val directory = file.parentFile ?: return
+        val stamp = Instant.now().toString().replace(":", "-")
+        val destination = File(directory, "${file.nameWithoutExtension}-illisible-$stamp.json")
+        runCatching { file.copyTo(destination) }
     }
 
     /** L'`.atomic` d'iOS : un fichier entier ou rien. */
@@ -115,7 +167,11 @@ class PendingTripStore(
         if (!directory.isDirectory && !directory.mkdirs()) throw IOException("Le dossier des voyages n’a pas pu être créé.")
         val partial = File(directory, "${file.name}.${UUID.randomUUID()}.partial")
         try {
-            partial.writeText(MemoBookJson.encodeToString(serializer, trips))
+            // Ce qu'on n'a pas su relire repart dans le fichier, intact.
+            val payload = JsonArray(
+                trips.map { MemoBookJson.encodeToJsonElement(PendingTrip.serializer(), it) } + unreadable,
+            )
+            partial.writeText(MemoBookJson.encodeToString(JsonArray.serializer(), payload))
             Files.move(partial.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
         } finally {
             partial.delete()
