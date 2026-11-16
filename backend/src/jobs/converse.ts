@@ -430,6 +430,10 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
         [...SUGGESTION_SETS.photosMissing],
         "memory",
         placeName,
+        undefined,
+        // La bulle vient de dire que le carnet aura moins de photos et de
+        // pages que les réglages : c'est là qu'on change d'avis.
+        "open_trip_settings",
       );
     } else if (tally && tally.received > tally.asked) {
       reply = flowReply(
@@ -437,6 +441,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
         [...SUGGESTION_SETS.afterPhotos],
         "memory",
         placeName,
+        undefined,
+        // Même raison : « ton carnet s'écartera un peu de tes réglages ».
+        "open_trip_settings",
       );
     } else {
       reply = flowReply(composeBeats("", [photosKept(count)]), [...SUGGESTION_SETS.afterPhotos], "memory", placeName);
@@ -1229,6 +1236,24 @@ function flowReply(
   disposition: ChatDisposition,
   placeName: string | null,
   notice?: string,
+  /**
+   * **Le raccourci vers le réglage** (Hugo, 25/10/2026 — « un bouton-raccourci
+   * vers le réglage dans la bulle »). Une bulle qui annonce que le carnet
+   * s'écartera des réglages doit donner la main sur ce qui l'a causé : sans
+   * lui, il fallait sortir du fil, revenir au voyage, ouvrir ses réglages.
+   *
+   * ⚠️ **Un bouton, et surtout pas une puce.** Une puce portant une intention
+   * nouvelle arriverait aux apps déjà installées en intention inconnue, et
+   * une intention inconnue s'envoie comme un texte : « Mes réglages »
+   * s'écrirait dans le récit du voyage. Les apps anciennes ignorent la clé
+   * `callToAction` — elles ne montrent rien, et la phrase se suffit à
+   * elle-même, qui nomme déjà les réglages (`docs/conversation.md`
+   * § Les boutons sous une bulle).
+   *
+   * Celui-ci est **posé par le code**, comme `open_photo_settings` : ce n'est
+   * pas un bouton que le modèle choisit.
+   */
+  callToActionId: ConversationReply["callToActionId"] = null,
 ): ConversationReply {
   return {
     beats,
@@ -1236,7 +1261,7 @@ function flowReply(
     suggestionIds,
     prompt: fallbackPrompt(placeName),
     asksRoseEpineGraine: false,
-    callToActionId: null,
+    callToActionId,
     model: "scripted",
     ...(notice ? { notice } : {}),
   };
