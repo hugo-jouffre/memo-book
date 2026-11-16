@@ -154,11 +154,14 @@ Les deux vivent dans `ios/project.yml`, et nulle part ailleurs : les régler
 dans Xcode les perdrait au prochain `make project`.
 
 - `CFBundleVersion` — **à monter avant chaque envoi**. App Store Connect
-  refuse deux fois le même numéro. Prochain envoi : **build 32**.
-  Le 31 est parti le 12/11/2026 — relevé dans l'Organizer, alors que ce
-  document l'annonçait encore comme le prochain. **Le numéro à écrire ici
-  se lit dans l'Organizer, pas dans ce fichier** : une archive envoyée ne
-  laisse aucune trace dans le dépôt.
+  refuse deux fois le même numéro. Prochain envoi : **build 33**.
+  Le 31 est parti le 12/11/2026 et le 32 le 14/11/2026 — relevés dans
+  l'Organizer, alors que ce document les annonçait encore comme prochains,
+  l'un après l'autre. **Le numéro à écrire ici se lit dans l'Organizer, pas
+  dans ce fichier** : une archive envoyée ne laisse aucune trace dans le
+  dépôt, donc ce fichier a toujours un envoi de retard. Le vérifier avant
+  d'archiver coûte dix secondes ; le découvrir au rejet en coûte vingt
+  minutes.
 - `CFBundleShortVersionString` — **à monter dès que la version courante est
   approuvée**. Une version publiée ferme son train : tout build qui s'y
   présente est refusé en *« Invalid Pre-Release Train »*, quel que soit son
