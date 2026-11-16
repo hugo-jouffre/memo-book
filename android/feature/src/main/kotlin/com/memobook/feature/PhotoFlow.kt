@@ -292,7 +292,7 @@ fun rememberPhotoFlow(): PhotoFlow = remember { PhotoFlow() }
 fun PhotoFlowHost(
     flow: PhotoFlow,
     title: String = ChatCopy.Photos.title,
-    maxSelection: Int = ChatMetrics.visiblePhotoCount,
+    maxSelection: Int = ChatMetrics.maxPhotosPerMessage,
     onRemove: (() -> Unit)? = null,
     onPicked: (List<ByteArray>) -> Unit,
 ) {

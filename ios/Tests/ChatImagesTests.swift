@@ -87,6 +87,34 @@ final class ChatImagesTests: XCTestCase {
         XCTAssertTrue(asked.isEmpty, "Rien ne part au serveur pour une photo sur le disque.")
     }
 
+    /// **Ce qui ne part pas se dit** (Hugo, 05/11/2026 — « on ne peut pas
+    /// ajouter plus de 6 photos »).
+    ///
+    /// La photothèque s'arrêtait à ``ChatMetrics/visiblePhotoCount``, un
+    /// nombre de **vignettes**, et `sendPhotos` coupait le reste en silence :
+    /// dix photos choisies, six parties, rien à l'écran. La borne est
+    /// maintenant celle du serveur, et le surplus est **annoncé**.
+    func testPhotosBeyondTheServerLimitAreAnnouncedNotSwallowed() async throws {
+        let model = model(downloads: Downloads())
+        let trop = ChatMetrics.maxPhotosPerMessage + 5
+
+        model.sendPhotos(Array(repeating: picture, count: trop))
+
+        let dit = try XCTUnwrap(model.errorMessage, "Le surplus doit se dire.")
+        XCTAssertTrue(dit.contains("\(ChatMetrics.maxPhotosPerMessage)"), dit)
+        XCTAssertTrue(dit.contains("5"), "Et combien restent : \(dit)")
+    }
+
+    /// Juste en dessous de la borne, rien ne s'affiche : un avertissement qui
+    /// arrive quand tout est parti apprend à ne plus être lu.
+    func testTheLimitSaysNothingWhenEverythingFits() async throws {
+        let model = model(downloads: Downloads())
+
+        model.sendPhotos(Array(repeating: picture, count: ChatMetrics.maxPhotosPerMessage))
+
+        XCTAssertNil(model.errorMessage, "Tout est parti : rien à signaler.")
+    }
+
     func testSomethingThatIsNotAnImageIsNotKept() async throws {
         let downloads = Downloads()
         let model = model(downloads: downloads)

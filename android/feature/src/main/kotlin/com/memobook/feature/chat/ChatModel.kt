@@ -2149,8 +2149,18 @@ class ChatModel(
         hideExhaustedNotice()
         val id = newId()
 
+        // ⚠️ **Couper, mais le dire.** La borne vient du serveur
+        // ([ChatMetrics.maxPhotosPerMessage]) ; la photothèque s'y arrête
+        // déjà, mais un partage depuis une autre app peut en apporter
+        // davantage. Ce qui ne part pas doit se savoir.
+        if (images.size > ChatMetrics.maxPhotosPerMessage) {
+            change {
+                copy(errorMessage = ChatCopy.tooManyPhotos(ChatMetrics.maxPhotosPerMessage, images.size))
+            }
+        }
+
         val uploads = mutableListOf<ChatPhotoUpload>()
-        images.take(ChatMetrics.visiblePhotoCount).forEachIndexed { index, data ->
+        images.take(ChatMetrics.maxPhotosPerMessage).forEachIndexed { index, data ->
             val photoId = "$id-$index"
             val file = runCatching { ChatPhotoFile.save(audio.cacheDirectory, data, photoId) }.getOrNull() ?: return@forEachIndexed
             localPhotoUrls[photoId] = file

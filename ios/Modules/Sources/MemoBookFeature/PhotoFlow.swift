@@ -145,7 +145,7 @@ extension View {
     func photoFlow(
         _ flow: PhotoFlow,
         title: String = ChatCopy.Photos.title,
-        maxSelection: Int = ChatMetrics.visiblePhotoCount,
+        maxSelection: Int = ChatMetrics.maxPhotosPerMessage,
         onRemove: (() -> Void)? = nil,
         onPicked: @escaping ([Data]) -> Void
     ) -> some View {

@@ -560,6 +560,13 @@ public enum ChatCopy {
     public static let photosUnreadable =
         "Je n’ai pas réussi à ouvrir ces photos. Réessaie, ou choisis-en d’autres."
 
+    /// Plus de photos que le serveur n'en prend dans un message : celles qui
+    /// partent sont nommées, et celles qui restent aussi. Rien ne disparaît
+    /// sans que personne ne le dise (Hugo, 05/11/2026).
+    public static func tooManyPhotos(kept: Int, sent: Int) -> String {
+        "J’en prends \(kept) à la fois. Les \(sent - kept) autres ne sont pas parties — renvoie-les dans un second message."
+    }
+
     public static let notSent = "Non envoyé"
     public static let retry = "Réessayer"
 
