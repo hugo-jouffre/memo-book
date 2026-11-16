@@ -23,7 +23,7 @@ import {
   SUGGESTIONS,
   VALIDATION_QUESTION,
   tooShort,
-  validationQuestionFor,
+  validationQuestion,
 } from "./conversationCopy.js";
 import { HeuristicResponder, mentionsSubscription, readSignals } from "./conversationHeuristics.js";
 import { EMPTY_COHERENCE_SHEET } from "./redaction.js";
@@ -642,22 +642,24 @@ describe("les boutons qu'un tour permet", () => {
 });
 
 describe("la question de validation", () => {
-  it("reste la même quand l'écrivain a tout compris", () => {
-    expect(validationQuestionFor([])).toBe(VALIDATION_QUESTION);
+  it("est la même pour tout le monde", () => {
+    expect(validationQuestion()).toBe(VALIDATION_QUESTION);
   });
 
-  it("cite dans la même bulle ce qu'il a laissé de côté", () => {
-    expect(validationQuestionFor(["je tarbé"])).toBe(
-      "Voilà ton texte pour le carnet. Je n’ai pas compris « je tarbé » : je l’ai laissé de côté. " +
-        "Redis-le-moi autrement si tu veux qu’il y soit. Il te convient ?",
-    );
-  });
-
-  it("n'en cite jamais plus de deux", () => {
-    const question = validationQuestionFor(["Famine", "jeans toniques", "Cora"]);
-
-    expect(question).toContain("Je n’ai compris ni « Famine » ni « jeans toniques »");
-    expect(question).not.toContain("Cora");
-    expect(question.endsWith("Il te convient ?")).toBe(true);
+  /**
+   * ⚠️ **Elle ne cite plus ce que l'écrivain n'a pas compris** (Hugo,
+   * 16/11/2026 — « le chat ne veut pas ajouter certains éléments sous
+   * prétexte qu'il ne les comprend pas »).
+   *
+   * Elle le citait, et l'intention était bonne : prévenir plutôt que perdre
+   * en silence. Mais répétée à chaque souvenir, la phrase sonnait comme un
+   * refus. Le comportement ne change pas — l'écrivain n'imprime toujours que
+   * ce qu'il a compris —, seulement on ne le dit plus : la bascule « Mot pour
+   * mot » de la fiche porte déjà le passage, à une touche de là.
+   */
+  it("ne cite plus les passages laissés de côté", () => {
+    const question = validationQuestion();
+    expect(question).not.toContain("je l’ai laissé de côté");
+    expect(question).not.toContain("Je n’ai pas compris");
   });
 });

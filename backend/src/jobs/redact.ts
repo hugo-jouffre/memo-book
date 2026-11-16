@@ -328,7 +328,10 @@ export async function redactEntry(
     // l'app.
     if (!rewrite) {
       const asked = await askToSplit(prisma, entryId, result.moments);
-      if (!asked) await confirmRedaction(prisma, entryId, result.doubts);
+      // Les doutes de l'écrivain ne passent plus dans la bulle (Hugo,
+      // 16/11/2026) : ils restent dans `doubts`, qui dit pourquoi un
+      // passage n'est pas dans le texte, et se lisent dans « Mot pour mot ».
+      if (!asked) await confirmRedaction(prisma, entryId);
     }
     await refreshTripFactsQuietly(context, entry.memoId);
   } catch (cause) {
