@@ -506,22 +506,30 @@ enum class BookPageTarget(val rawValue: String) {
      * ratio photo / texte `ratio`.
      *
      * Une page par jour au palier « Par défaut » à 50 %, **pondérée par le
-     * ratio** (Hugo, 18/10/2026 — [ratioFactor]), arrondie à la dizaine, bornée
-     * entre un carnet minimal et ce qu'une reliure accepte. Les deux autres
-     * paliers en sont les **deux tiers et les quatre tiers** (Hugo, 15/10/2026).
-     * Sans date de fin, 40 / 60 / 80 à 50 %. `null` pour [Custom], qui ne
-     * projette rien — c'est le voyageur qui pose le nombre.
+     * ratio** (Hugo, 18/10/2026 — [ratioFactor]), arrondie à la dizaine. Les
+     * deux autres paliers en sont les **deux tiers et les quatre tiers**
+     * (Hugo, 15/10/2026). Sans date de fin, 40 / 60 / 80 à 50 %. `null` pour
+     * [Custom], qui ne projette rien — c'est le voyageur qui pose le nombre.
+     *
+     * ⚠️ **Le plafond est celui de la grille tarifaire** (Hugo, 16/11/2026),
+     * servi par `PrintPricing.maxPages`. Il était figé à 180, au nom de la
+     * reliure — c'était faux : l'imprimeur n'a pas de limite de pages, et la
+     * grille va jusqu'à 300. La contrainte n'est pas physique, elle est
+     * commerciale : **on ne propose pas une cible dont on ne sait pas
+     * annoncer le prix.** Les trois paliers s'y bornent, et pas le seul
+     * « Par défaut ».
      *
      * Le serveur fait le même calcul (`backend/src/services/pageTarget.ts`) :
      * c'est lui qui lit la densité du récit dans la cible.
      */
-    fun pageCount(forTripDays: Int?, ratio: Int = 50): Int? {
+    fun pageCount(forTripDays: Int?, ratio: Int = 50, maxPages: Int = PrintPricing.CLOSED_GRID_MAX_PAGES): Int? {
         if (this == Custom) return null
-        val standard = standardPageCount(forTripDays, ratio)
+        val standard = standardPageCount(forTripDays, ratio, maxPages)
+        fun borne(pages: Int) = minOf(pages, maxPages)
         return when (this) {
-            Compact -> roundedToTen(standard.toDouble() * 2 / 3)
+            Compact -> borne(roundedToTen(standard.toDouble() * 2 / 3))
             Standard -> standard
-            Detailed -> roundedToTen(standard.toDouble() * 4 / 3)
+            Detailed -> borne(roundedToTen(standard.toDouble() * 4 / 3))
             Custom -> null
         }
     }
@@ -531,9 +539,14 @@ enum class BookPageTarget(val rawValue: String) {
          * Le palier auquel un nombre de pages correspond, ou [Custom] s'il ne
          * tombe sur aucun.
          */
-        fun matching(pageCount: Int, tripDays: Int?, ratio: Int = 50): BookPageTarget =
+        fun matching(
+            pageCount: Int,
+            tripDays: Int?,
+            ratio: Int = 50,
+            maxPages: Int = PrintPricing.CLOSED_GRID_MAX_PAGES,
+        ): BookPageTarget =
             listOf(Compact, Standard, Detailed)
-                .firstOrNull { it.pageCount(tripDays, ratio) == pageCount } ?: Custom
+                .firstOrNull { it.pageCount(tripDays, ratio, maxPages) == pageCount } ?: Custom
 
         /**
          * **Les paliers suivent aussi le ratio** (Hugo, 18/10/2026) : un carnet
@@ -550,13 +563,14 @@ enum class BookPageTarget(val rawValue: String) {
         }
 
         /**
-         * Un carnet de moins de 30 pages ne vaut pas une reliure, et au-delà de 180
-         * le dos ne tient plus. Sans durée connue, 60 pages à 50 %.
+         * Un carnet de moins de 30 pages ne vaut pas une reliure ; le plafond,
+         * lui, est celui de la grille tarifaire ([pageCount]). Sans durée
+         * connue, 60 pages à 50 %.
          */
-        private fun standardPageCount(days: Int?, ratio: Int): Int {
+        private fun standardPageCount(days: Int?, ratio: Int, maxPages: Int): Int {
             val factor = ratioFactor(ratio)
-            if (days == null || days <= 0) return roundedToTen(60 * factor)
-            return minOf(maxOf(roundedToTen(days.toDouble() * factor), 30), 180)
+            if (days == null || days <= 0) return minOf(roundedToTen(60 * factor), maxPages)
+            return minOf(maxOf(roundedToTen(days.toDouble() * factor), 30), maxPages)
         }
 
         /** Le `.rounded()` de Swift : au plus proche, la moitié loin de zéro. */
@@ -607,7 +621,7 @@ data class PageTargetAllowance(
      * Le carnet final tient à ± 5 pages de sa cible
      * (`PAGE_TARGET_TOLERANCE`) : une cible à 5 pages de la fourchette passe.
      */
-    fun reach(of: Int, ratio: Int): PageTargetReach? {
+    fun reach(of: Int, ratio: Int, maxPages: Int = PrintPricing.CLOSED_GRID_MAX_PAGES): PageTargetReach? {
         val target = of
         val range = reachableByRatio[ratio] ?: return null
         val tolerance = 5
@@ -616,7 +630,10 @@ data class PageTargetAllowance(
         // La cible atteignable la plus proche, dans les bornes de la feuille.
         val rounded = BigDecimal((if (isTooLong) range.max else range.min).toDouble() / 10)
             .setScale(0, RoundingMode.HALF_UP).toInt() * 10
-        val closest = minOf(maxOf(rounded, 30), 180)
+        // Le plafond est celui de la grille, comme les paliers : un 180 figé
+        // proposait de « revenir » à 180 un carnet qu'on sait relier plus
+        // épais (Hugo, 16/11/2026).
+        val closest = minOf(maxOf(rounded, 30), maxPages)
         val opening = if (isTooLong) {
             reachableByRatio.keys.sorted()
                 .firstOrNull { it > ratio && (reachableByRatio[it]?.max ?: 0) + tolerance >= target }

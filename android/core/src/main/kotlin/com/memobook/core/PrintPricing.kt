@@ -43,7 +43,7 @@ data class PrintPricing(
      * Le maximum qu'on accepte de facturer — 300, ou 400 si la configuration
      * ouvre le dernier palier. Au-delà, pas de prix.
      */
-    val maxPages: Int = 300,
+    val maxPages: Int = CLOSED_GRID_MAX_PAGES,
     /**
      * L'écart toléré entre le carnet composé et sa cible — 5 pages
      * (`PAGE_TARGET_TOLERANCE`). C'est lui qui fait annoncer le prix de
@@ -105,4 +105,15 @@ data class PrintPricing(
     fun allows(pages: Int): Boolean = pages in minPages..maxPages
 
     object Serializer : DecodeIfPresentSerializer<PrintPricing>(generatedSerializer())
+
+    companion object {
+        /**
+         * Le plafond de la grille **fermée** — celle que le serveur sert par
+         * défaut, sans `ALLOW_OVER_300_PAGES`. Repli des projections de
+         * paliers quand la grille n'est pas encore arrivée : mieux vaut
+         * projeter sur une grille toujours vraie que sur un plafond inventé,
+         * ce que faisait le 180 d'avant (Hugo, 16/11/2026).
+         */
+        const val CLOSED_GRID_MAX_PAGES = 300
+    }
 }

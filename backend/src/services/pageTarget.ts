@@ -19,6 +19,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { normaliserRatio, RATIO_DEFAUT, type PhotoRatio } from "./photoRatio.js";
+import { maxBillablePages } from "./printPricing.js";
 
 export const PAGE_TARGET_CHANGE_LIMIT = 2;
 
@@ -60,21 +61,44 @@ export const RATIO_PAGE_FACTOR: Readonly<Record<PhotoRatio, number>> = {
 /**
  * Les pages du palier « Par défaut » pour un voyage de `days` jours au ratio
  * `ratio`. Recopie de `BookPageTarget.standardPageCount` (app) : une page par
- * jour à 50 %, pondérée par le ratio, à la dizaine, entre 30 et 180.
+ * jour à 50 %, pondérée par le ratio, à la dizaine.
+ *
+ * ⚠️ **Le plafond est celui de la grille tarifaire**, `maxBillablePages()`
+ * (Hugo, 16/11/2026). Il était figé à 180, avec un commentaire qui invoquait
+ * la reliure — « au-delà de 180 le dos ne tient plus ». C'était faux :
+ * l'imprimeur n'a pas de limite de pages, et la grille va jusqu'à 300, voire
+ * 400 avec `ALLOW_OVER_300_PAGES`. La vraie contrainte n'est pas physique,
+ * elle est commerciale : **on ne propose pas une cible dont on ne sait pas
+ * annoncer le prix.**
+ *
+ * Ce que le 180 produisait : sur un long voyage, « Par défaut » butait sur le
+ * plafond pendant que « Détaillé » calculait 4/3 **sans plafond** — deux
+ * paliers qui se rejoignaient ou se dépassaient n'importe comment
+ * (Hugo, 05/11/2026 : « les 2 options proposent 180 pages »).
  */
 export function standardPageCount(days: number | null, ratio: number = RATIO_DEFAUT): number {
   const factor = RATIO_PAGE_FACTOR[normaliserRatio(ratio)];
-  if (!days || days <= 0) return roundedToTen(DEFAULT_STANDARD_PAGES * factor);
-  return Math.min(Math.max(roundedToTen(days * factor), 30), 180);
+  const plafond = maxBillablePages();
+  if (!days || days <= 0) return Math.min(roundedToTen(DEFAULT_STANDARD_PAGES * factor), plafond);
+  return Math.min(Math.max(roundedToTen(days * factor), 30), plafond);
 }
 
-/** Les trois paliers de la feuille « Nombre de page » : ×2/3, ×1, ×4/3 du palier par défaut. */
+/**
+ * Les trois paliers de la feuille « Nombre de page » : ×2/3, ×1, ×4/3 du
+ * palier par défaut.
+ *
+ * **Les trois sont bornés par la grille**, et pas le seul « Par défaut » :
+ * un « Détaillé » à 4/3 d'un palier déjà haut dépassait ce qu'on sait
+ * facturer, et l'app affichait une cible sans prix.
+ */
 export function pageTargetTiers(days: number | null, ratio: number = RATIO_DEFAUT) {
+  const plafond = maxBillablePages();
   const standard = standardPageCount(days, ratio);
+  const borne = (pages: number) => Math.min(pages, plafond);
   return {
-    compact: roundedToTen((standard * 2) / 3),
+    compact: borne(roundedToTen((standard * 2) / 3)),
     standard,
-    detailed: roundedToTen((standard * 4) / 3),
+    detailed: borne(roundedToTen((standard * 4) / 3)),
   };
 }
 
