@@ -90,6 +90,14 @@ Mesuré sur quatre étapes au même lieu portant les mêmes photos, toutes digne
 d'une pleine page : **0, 0, 1, 2, 4** pages pleines à 0, 30, 50, 75 et 100 %.
 Le cas est dans `backend/test/miseEnPageAtelier.test.ts`.
 
+⚠️ **Une pleine page est une page, jamais deux.** « On ne veut jamais une
+seule photo à cheval sur la reliure » (Hugo, 16/11/2026). Ce qu'on appelle
+double page dans ce carnet, c'est **deux pages de photos qui se font face**
+(`MAX_PAGES_PHOTOS`, et à 100 % `layout_photo_wall_intro` puis
+`layout_photo_page`) — pas une image coupée par le pli. Le pli mange une
+bande variable selon l'épaisseur du dos, et ce qu'il mange est toujours le
+milieu du sujet. La question a été posée et tranchée : ne pas y revenir.
+
 Le réglage continu, c'est la **hauteur de bande** (`band_scale` sur la page,
 `--mb-band` dans le CSS) : entre le plancher du CSS — `mb-gallery` jamais sous
 160 pt — et le plafond que le texte de la page laisse libre. Une bande ne vole
