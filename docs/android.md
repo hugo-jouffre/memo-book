@@ -225,11 +225,62 @@ régénérer avec elle (deux tests le vérifient).
 
 | Sujet | État |
 |---|---|
-| La recette iOS rejouée : deux comptes, petit et grand téléphone, police à 200 %, TalkBack | ⏳ |
+| La recette iOS rejouée : deux comptes, petit et grand téléphone, police à 200 %, TalkBack | 🔄 premier passage le 16/11/2026, voir plus bas |
 | Fiche Play en français, classification, sécurité des données : textes et réponses prêts dans [`fiche-play-store.md`](fiche-play-store.md), à saisir par Hugo | 🔶 |
 | URL de suppression : `/account/delete` (PR #143) | 🔶 |
 | Envoi signé sur la piste interne : `.github/workflows/play-internal.yml`, attend les cinq secrets de Hugo | 🔶 |
 | Piste interne → production (pas de test fermé obligatoire pour un compte organisation) | ⏳ |
+
+#### Le premier passage de recette — 16/11/2026
+
+Dans l'émulateur, en français, sur le bac à sable (`--ez previewSignedIn true`).
+**L'app est fidèle à iOS** : accueil, écran du voyage et conversation sont
+difficiles à distinguer de leurs jumeaux, polices, ombres et bulles comprises.
+
+| Axe | Résultat |
+|---|---|
+| Pixel 7 (1080 × 2400, 420 dpi), fr-FR | ✅ |
+| Police à 200 % | ✅ les statistiques passent en colonne, la pastille descend sous le pays, rien ne déborde |
+| Petit écran (360 × 640 dp) | ✅ tout tient, les trois statistiques restent sur une ligne |
+
+**Les deux écarts trouvés**, tous deux cosmétiques et laissés tels quels
+(Hugo, 16/11/2026) :
+
+- **Le format des dates.** `TripFormatting.kt` écrit « 26 août – 15 sept. 2026 »
+  avec des espaces autour du tiret ; le formateur de Foundation, côté iOS, rend
+  « 26 août–15 sept. 2026 » sans. Écrit à la main sans comparer.
+- **Les unités suivent la locale de l'appareil.** Émulateur en anglais :
+  « 23 mi » au lieu de « 37 km ». Correct en français, mais l'app ne parle que
+  français — un Français au téléphone anglais lira des miles. Arbitrage à
+  prendre, pas un bug.
+
+⚠️ **Ce que ce passage n'a pas couvert**, et c'est la moitié qui mord :
+
+- **tout ce qui touche au serveur** — connexion, envoi d'un vocal, composition
+  d'un carnet, paiement. Le bac à sable n'appelle rien ;
+- **TalkBack**, qui demande une activation à la main dans les réglages système ;
+- les écrans au-delà de la conversation : carnet, profil, tunnel de commande.
+
+Deux fausses alertes, notées pour qui recommencera : les avatars qui se
+chevauchent sur la couverture sont le motif voulu (iOS fait pareil), et un
+écran entièrement vide à 200 % était la lenteur de l'émulateur — des images à
+quatre secondes, aucune exception dans les journaux. **Attendre 30 secondes
+avant de capturer**, sans quoi on photographie une composition en cours.
+
+#### L'émulateur, qui n'existait pas
+
+`make emulator` pointait vers un AVD `MemoBook_Pixel` que personne n'avait
+créé. Il existe maintenant. Pour le refaire ailleurs :
+
+```bash
+sdkmanager "system-images;android-36;google_apis;arm64-v8a"
+avdmanager create avd -n MemoBook_Pixel -k "system-images;android-36;google_apis;arm64-v8a"
+```
+
+⚠️ L'option `-d pixel_7` échoue (« Could not load devices from … devices.xml ») :
+l'AVD se crée quand même, avec un écran par défaut. Régler à la main dans
+`~/.android/avd/MemoBook_Pixel.avd/config.ini` : `hw.lcd.width=1080`,
+`hw.lcd.height=2400`, `hw.lcd.density=420`.
 
 ### Textes propres à Android, à relire par Clara
 
