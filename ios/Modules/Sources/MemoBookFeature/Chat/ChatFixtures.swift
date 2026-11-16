@@ -201,8 +201,23 @@ extension ChatThread {
                             placeLabel: step.placeName,
                             duration: note.duration,
                             text: transcripts[index % transcripts.count],
+                            // **Les deux versions dans le bac à sable** : sans
+                            // elles, la fiche n'y montre jamais sa bascule
+                            // « Mot pour mot » ni « Ré-analyser », et ces
+                            // trois boutons ne se vérifient qu'avec un
+                            // back-end et un vrai vocal. Le brut est la même
+                            // phrase sans ponctuation : c'est ce qu'une
+                            // transcription rend.
                             isSimulated: true,
-                            footnote: ChatCopy.transcriptFootnote
+                            // Sans identifiant de souvenir, la fiche ne
+                            // dessine ni la bascule ni ses boutons : ils
+                            // agissent sur un souvenir précis.
+                            entryId: "\(step.id)-entry",
+                            footnote: ChatCopy.transcriptFootnote,
+                            rawText: transcripts[index % transcripts.count]
+                                .replacingOccurrences(of: ",", with: "")
+                                .lowercased(),
+                            writtenText: transcripts[index % transcripts.count]
                         )
                     ),
                     sentAt: day,

@@ -434,6 +434,16 @@ résolue par `MemoBookDesign/LucideIcon.swift`, qui retombe sur une boussole pou
 une clé inconnue : ajouter une catégorie en base ne demande pas de livrer une
 version.
 
+⚠️ **L'exception s'est élargie le 16/11/2026** (décision de Hugo). Elle ne
+couvrait que des pictogrammes de **contenu** — des images qu'on regarde.
+`rotate-cw` est le premier pictogramme de **commande** : la flèche circulaire
+de « Ré-analyser », posée sur un bouton, à côté des icônes de marque. Une
+icône d'interface se compare à ses voisines, et Lucide n'a ni la même
+épaisseur de trait ni les mêmes arrondis. Le détail est dans
+`assets/icons/lucide-icons/README.md`, et la ligne se retire le jour où la
+flèche existe en Figma. **Ce n'est pas un précédent à invoquer** : la
+prochaine icône d'interface se dessine.
+
 ## Un choix de design ne s'arrête pas au dessin
 
 Une décision de design qui demande une donnée que la base n'a pas **n'est pas
