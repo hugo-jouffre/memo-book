@@ -497,15 +497,23 @@ public enum MemoBookFont {
     public static let bubbleAction = Font.custom(BrandFonts.generalSansMedium, size: 17, relativeTo: .body)
 
     /// Ce qu'on tape dans la barre d'envoi, et le libellé « Record » à côté.
-    /// (General Sans Regular 21.)
+    /// (General Sans Regular 17 — la taille d'une bulle.)
     ///
-    /// Plus gros que le texte des bulles, et c'est voulu : on écrit d'une main,
-    /// souvent en marchant, et c'est la seule ligne de l'app qu'on relit
-    /// pendant qu'on la produit.
+    /// ⚠️ **Il était à 21, relevé sur la maquette Figma**, et l'argument se
+    /// tenait : on écrit d'une main, souvent en marchant, et c'est la seule
+    /// ligne de l'app qu'on relit pendant qu'on la produit. L'usage a tranché
+    /// autrement (Hugo, 05/11/2026, depuis le Japon : « le texte dans l'input
+    /// field du chat est trop gros, il doit être comme sur WhatsApp »).
     ///
-    /// ⚠️ **Pas encore une variable Figma** : relevé sur le nœud des états de
-    /// la barre d'envoi (General Sans Regular 21).
-    public static let composer = Font.custom(BrandFonts.generalSansRegular, size: 21, relativeTo: .body)
+    /// **17, la taille de ``bubble``** : ce qui fait l'effet WhatsApp n'est pas
+    /// un chiffre copié, c'est que le champ et les bulles aient la **même**
+    /// taille — on relit ce qu'on vient d'écrire sans changement d'échelle, et
+    /// le texte qu'on tape ressemble déjà au message qu'il deviendra. Le
+    /// barème du chat est à 17, pas au 16 du corps : prendre `body` aurait
+    /// fait un champ plus petit que ses propres bulles.
+    ///
+    /// La maquette diverge donc du code sur ce nœud : à dire à Clara.
+    public static let composer = Font.custom(BrandFonts.generalSansRegular, size: 17, relativeTo: .body)
 
     /// Les mentions de bas de page : version de l'app, droit d'auteur. Le plus
     /// petit corps de la marque, et le seul en dessous de la légende — il ne

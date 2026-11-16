@@ -159,7 +159,16 @@ object MemoBookFont {
     val caption = style(BrandFonts.generalSans, FontWeight.Normal, 12)
     val bubble = style(BrandFonts.generalSans, FontWeight.Normal, 17)
     val bubbleAction = style(BrandFonts.generalSans, FontWeight.Medium, 17)
-    val composer = style(BrandFonts.generalSans, FontWeight.Normal, 21)
+    /**
+     * Le champ de saisie du chat. **17, la taille de [bubble]** — il était à
+     * 21, relevé sur la maquette Figma (Hugo, 05/11/2026 : « le texte dans
+     * l'input field du chat est trop gros, il doit être comme sur WhatsApp »).
+     *
+     * Ce qui fait l'effet WhatsApp n'est pas un chiffre copié, c'est que le
+     * champ et les bulles aient la **même** taille : le texte qu'on tape
+     * ressemble déjà au message qu'il deviendra.
+     */
+    val composer = style(BrandFonts.generalSans, FontWeight.Normal, 17)
     val mention = style(BrandFonts.generalSans, FontWeight.Normal, 11)
     val notification = body
     val sectionTitle = style(BrandFonts.generalSans, FontWeight.SemiBold, 17)
