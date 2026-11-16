@@ -261,6 +261,10 @@ struct TripStepCard: View {
         .buttonStyle(CardPressStyle())
         .homeCard()
         .accessibilityElement(children: .combine)
+        // Dite, et non seulement montrée : la carte ne dessine plus les
+        // co-voyageurs (ils se répétaient d'une étape à l'autre), mais les
+        // retirer de l'écran ne doit pas les retirer de l'oreille.
+        .accessibilityLabel(step.spokenLabel)
         .accessibilityAddTraits(.isButton)
     }
 
@@ -317,7 +321,20 @@ struct TripStepCard: View {
 
     private var text: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: MemoBookSpacing.xs / 2) {
+            // Deux écarts, et pas un seul : la pastille a besoin d'air
+            // (`xs`), la coche doit rester collée au titre qu'elle valide
+            // (`xs / 2`). Un écart unique donnait « ①Trastevere » collés aux
+            // tailles accessibles, où la pastille grandit avec le texte.
+            HStack(spacing: MemoBookSpacing.xs) {
+                // Le numéro quitte le titre pour sa pastille : la ligne dit
+                // alors **où on était**, et non « Etape n°3 » trois fois de
+                // suite (Hugo, 25/10/2026). Sans lieu, il reste dans le titre
+                // — la pastille ne doublerait rien d'autre que lui.
+                if step.placeName != nil {
+                    BrandTagPill("\(step.number)", tone: .info, shrinksToFit: true)
+                }
+
+                HStack(spacing: MemoBookSpacing.xs / 2) {
                 Text(step.title)
                     .font(MemoBookFont.bodySemibold)
                     .foregroundStyle(MemoBookColor.ink)
@@ -331,6 +348,7 @@ struct TripStepCard: View {
                         .foregroundStyle(MemoBookColor.valid)
                         .accessibilityHidden(true)
                 }
+                }
             }
 
             if let dates = step.dateRangeLabel {
@@ -339,11 +357,14 @@ struct TripStepCard: View {
                     .foregroundStyle(MemoBookColor.inkMuted)
             }
 
-            if let companions = step.companionsLabel {
-                Text(companions)
-                    .font(MemoBookFont.label)
-                    .foregroundStyle(MemoBookColor.inkMuted)
-            }
+            // ⚠️ **Plus de ligne « avec Fanny »** (Hugo, 25/10/2026 — « la
+            // ville à la place du co-voyageur répété »). Les co-voyageurs d'un
+            // voyage sont presque toujours les mêmes d'une étape à l'autre :
+            // la ligne disait le même nom sur chaque carte, et poussait la
+            // seule information qui change — le lieu — hors de la ligne de
+            // titre. Ils restent lus par VoiceOver (``accessibilityLabel``) et
+            // visibles dans l'étape, où ils peuvent différer — voir
+            // ``TripStep/spokenLabel``.
         }
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
@@ -399,11 +420,16 @@ private struct TripStepsEmptyState: View {
 // MARK: - Mise en forme
 
 extension TripStep {
-    /// « Etape n°1 » tant que l'étape n'a pas de titre à elle.
+    /// **Le lieu**, et « Etape n°1 » seulement quand l'étape n'en a pas
+    /// (Hugo, 25/10/2026 : « la ville à la place du co-voyageur répété »).
     ///
-    /// ⚠️ Sans accent sur le E : c'est la copie de la maquette, recopiée telle
-    /// quelle (R8). Signalée dans la fiche écran.
-    var title: String { "Etape n°\(number)" }
+    /// Le numéro part alors dans sa pastille, à gauche du titre : une liste
+    /// d'étapes doit se lire comme un itinéraire — Paros, Naxos, Santorin —,
+    /// pas comme une numérotation.
+    ///
+    /// ⚠️ Sans accent sur le E dans le repli : c'est la copie de la maquette,
+    /// recopiée telle quelle (R8). Signalée dans la fiche écran.
+    var title: String { placeName ?? "Etape n°\(number)" }
 
     /// Les dates de l'étape, avec l'année écrite une seule fois. Même règle que
     /// celles d'un voyage.
@@ -423,6 +449,19 @@ extension TripStep {
     /// « avec Mila », « avec Léa et Tom ». La liste est assemblée par le
     /// système : c'est lui qui sait mettre « et » en français et « and »
     /// ailleurs.
+    /// Ce que VoiceOver lit d'une carte d'étape : le numéro, le lieu, les
+    /// dates, et **les co-voyageurs que la carte ne dessine plus**.
+    ///
+    /// Une carte dit moins qu'avant à l'œil, pour qu'on la parcoure ; elle ne
+    /// doit pas dire moins à l'oreille, où rien ne se parcourt.
+    var spokenLabel: String {
+        var dit = ["Étape \(number)", placeName].compactMap(\.self)
+        if let dateRangeLabel { dit.append(dateRangeLabel) }
+        if let companionsLabel { dit.append(companionsLabel) }
+        if validatedAt != nil { dit.append("validée") }
+        return dit.joined(separator: ", ")
+    }
+
     var companionsLabel: String? {
         guard !companions.isEmpty else { return nil }
         let names = companions.map { $0.name.firstNameOnly }.formatted(.list(type: .and))

@@ -30,6 +30,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -44,6 +46,7 @@ import com.memobook.design.BrandSheet
 import com.memobook.design.BrandSheetHost
 import com.memobook.design.BrandSwipeAction
 import com.memobook.design.BrandSwipeDrawer
+import com.memobook.design.BrandTagPill
 import com.memobook.design.BrandText
 import com.memobook.design.LucideIcon
 import com.memobook.design.MemoBookColor
@@ -304,6 +307,10 @@ internal fun TripStepCard(
                 .homeCard()
                 .then(accessibility)
                 .clickable(interactionSource = null, indication = CardPressStyle, role = Role.Button, onClick = onOpen)
+                // Dite, et non seulement montrée : la carte ne dessine plus
+                // les co-voyageurs, mais les retirer de l'écran ne doit pas
+                // les retirer de l'oreille ([spokenLabel]).
+                .semantics(mergeDescendants = true) { contentDescription = step.spokenLabel }
                 .padding(MemoBookSpacing.xs + 2.dp),
         ) {
             StepContent(step)
@@ -363,6 +370,13 @@ private fun Thumbnail(step: TripStep, side: Dp) {
 private fun StepText(step: TripStep, modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs / 2), verticalAlignment = Alignment.CenterVertically) {
+            // Le numéro quitte le titre pour sa pastille : la ligne dit alors
+            // **où on était**, et non « Etape n°3 » trois fois de suite (Hugo,
+            // 25/10/2026). Sans lieu, il reste dans le titre — la pastille ne
+            // doublerait rien d'autre que lui.
+            if (step.placeName != null) {
+                BrandTagPill("${step.number}", tone = BrandTagPill.Tone.Info, shrinksToFit = true)
+            }
             BrandText(step.title, MemoBookFont.bodySemibold, color = MemoBookColor.ink)
             if (step.validatedAt != null) {
                 Image(
@@ -375,7 +389,12 @@ private fun StepText(step: TripStep, modifier: Modifier = Modifier) {
         }
 
         step.dateRangeLabel?.let { BrandText(it, MemoBookFont.label, color = MemoBookColor.inkMuted) }
-        step.companionsLabel?.let { BrandText(it, MemoBookFont.label, color = MemoBookColor.inkMuted) }
+        // ⚠️ **Plus de ligne « avec Fanny »** (Hugo, 25/10/2026 — « la ville à
+        // la place du co-voyageur répété »). Les co-voyageurs d'un voyage sont
+        // presque toujours les mêmes d'une étape à l'autre : la ligne disait le
+        // même nom sur chaque carte, et poussait la seule information qui
+        // change — le lieu — hors de la ligne de titre. TalkBack les lit
+        // toujours, voir [spokenLabel].
     }
 }
 
@@ -416,12 +435,33 @@ private fun TripStepsEmptyState(title: String, message: String, action: Pair<Str
 // MARK: - Mise en forme
 
 /**
- * « Etape n°1 » tant que l'étape n'a pas de titre à elle.
+ * **Le lieu**, et « Etape n°1 » seulement quand l'étape n'en a pas (Hugo,
+ * 25/10/2026 : « la ville à la place du co-voyageur répété »).
  *
- * ⚠️ Sans accent sur le E : c'est la copie de la maquette, recopiée telle
- * quelle (R8). Signalée dans la fiche écran.
+ * Le numéro part alors dans sa pastille, à gauche du titre : une liste
+ * d'étapes doit se lire comme un itinéraire — Paros, Naxos, Santorin —, pas
+ * comme une numérotation.
+ *
+ * ⚠️ Sans accent sur le E dans le repli : c'est la copie de la maquette,
+ * recopiée telle quelle (R8). Signalée dans la fiche écran.
  */
-internal val TripStep.title: String get() = "Etape n°$number"
+internal val TripStep.title: String get() = placeName ?: "Etape n°$number"
+
+/**
+ * Ce que TalkBack lit d'une carte d'étape : le numéro, le lieu, les dates, et
+ * **les co-voyageurs que la carte ne dessine plus**.
+ *
+ * Une carte dit moins qu'avant à l'œil, pour qu'on la parcoure ; elle ne doit
+ * pas dire moins à l'oreille, où rien ne se parcourt.
+ */
+internal val TripStep.spokenLabel: String
+    get() = listOfNotNull(
+        "Étape $number",
+        placeName,
+        dateRangeLabel,
+        companionsLabel,
+        if (validatedAt != null) "validée" else null,
+    ).joinToString(", ")
 
 /** Les dates de l'étape, avec l'année écrite une seule fois. Même règle que celles d'un voyage. */
 internal val TripStep.dateRangeLabel: String?
