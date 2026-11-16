@@ -22,6 +22,37 @@ const pages = (payload: Record<string, unknown>) =>
   );
 const cote = (classes: string) => (classes.includes("page--gauche") ? "G" : classes.includes("page--droite") ? "D" : "?");
 
+/** Le HTML entier, couverture comprise. */
+const html = (payload: Record<string, unknown>) =>
+  renderTemplateToHtml({ payload: { sans_couvertures: true, ...payload }, profile: "print" });
+
+describe("le titre d'un quiz", () => {
+  /**
+   * **Un quiz s'appelle un quiz** (Hugo, 05/11/2026 — « parfois il est
+   * indiqué "Le saviez-vous" alors que c'est un quiz »).
+   *
+   * Le repli du gabarit était « Le saviez-vous ? », l'un des quatre titres du
+   * post-it de **fun fact** (`TITRES_ENCART`, `mise-en-page.js`) : il annonce
+   * une anecdote qu'on lit, pas une question à laquelle on répond. Et comme
+   * rien ne pose jamais `quiz.label`, ce repli s'appliquait à **tous** les
+   * quiz du carnet.
+   */
+  const avecQuiz = { question: "Quelle est la plus haute montagne du Japon ?", choices: ["Fuji", "Haku"], answer: "Fuji" };
+
+  it("ne reprend pas un titre de fun fact", () => {
+    const rendu = html({ book_title: "Carnet", days: [{ ...jour("01"), quiz: avecQuiz }] });
+    expect(rendu).toContain("mb-quiz__label");
+    expect(rendu).toContain(">Quiz<");
+    expect(rendu).not.toContain(">Le saviez-vous ?<");
+  });
+
+  /** Un titre posé par l'atelier reste le sien : le repli ne l'écrase pas. */
+  it("garde le titre que l'atelier donne, s'il y en a un", () => {
+    const rendu = html({ book_title: "Carnet", days: [{ ...jour("01"), quiz: { ...avecQuiz, label: "À toi de jouer" } }] });
+    expect(rendu).toContain(">À toi de jouer<");
+  });
+});
+
 describe("gabarit — pages du livre relié", () => {
   it("pose des marges miroir : le colophon à droite, puis gauche et droite en alternance", () => {
     const sansIntro = pages({ book_title: "Carnet", pages_libres_avant: 0, days: [jour("01"), jour("02"), jour("03")] });
