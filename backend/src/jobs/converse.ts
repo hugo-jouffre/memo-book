@@ -43,7 +43,7 @@ import {
   returnForPhotos,
   returnToValidate,
   tooShort,
-  validationQuestionFor,
+  validationQuestion,
 } from "../services/conversationCopy.js";
 import {
   DAILY_CREDIT_CALL_TO_ACTION,
@@ -731,7 +731,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
           model: "scripted",
         },
       });
-      const question = validationQuestionFor([]);
+      const question = validationQuestion();
       await tx.chatMessage.create({
         data: {
           memoId: memo.id,

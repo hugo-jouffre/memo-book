@@ -17,9 +17,9 @@ import {
   REDACTION_UNWRITTEN,
   SUGGESTION_SETS,
   photosWanted,
-  redactionKeptFor,
+  redactionKept,
   splitQuestionFor,
-  validationQuestionFor,
+  validationQuestion,
 } from "./conversationCopy.js";
 import { forTargetOf, photoRequestFor } from "./photoRequest.js";
 import type { RedactedNeighbour } from "./redaction.js";
@@ -403,8 +403,11 @@ export function conversationStateOf(memo: Pick<Memo, "conversationState">): Conv
  * rédaction rejouée après un échec —, on ne la repose pas. Une précision qui
  * fait réécrire le texte, elle, la fait revenir : le texte a changé.
  *
- * `doubts` : les passages que l'écrivain n'a pas compris. La bulle les cite,
- * dans la même question (`validationQuestionFor`).
+ * ⚠️ **La bulle ne cite plus les passages incompris** (Hugo, 16/11/2026).
+ * L'écrivain continue de ne rien imprimer qu'il n'ait compris — c'est ce qui
+ * empêche le carnet de mentir —, mais le dire à chaque souvenir sonnait comme
+ * un refus. Le passage reste lisible dans « Mot pour mot ». Voir
+ * ``redactionKept``.
  */
 /**
  * **« J'ai entendu plusieurs moments : je les sépare ? »** (Hugo,
@@ -476,7 +479,7 @@ export async function askToSplit(
  * Rend `false` quand il n'y a rien à dire — pas de fiche, ou un souvenir déjà
  * validé —, exactement comme la question qu'elle remplace.
  */
-export async function confirmRedaction(db: Db, entryId: string, doubts: readonly string[] = []): Promise<boolean> {
+export async function confirmRedaction(db: Db, entryId: string): Promise<boolean> {
   const card = await db.chatMessage.findFirst({
     where: { entryId, author: "memo", kind: "transcript" },
     include: { entry: true },
@@ -504,7 +507,7 @@ export async function confirmRedaction(db: Db, entryId: string, doubts: readonly
   // oublie de passer rendrait le mensonge silencieux. Le `catch` écrit
   // `failed` avant d'appeler, et le chemin heureux `ready` : la fiche relue
   // juste au-dessus porte déjà le bon état.
-  const kept = card.entry.redactionStatus === "failed" ? REDACTION_UNWRITTEN : redactionKeptFor(doubts);
+  const kept = card.entry.redactionStatus === "failed" ? REDACTION_UNWRITTEN : redactionKept();
   const written = finalTextOf(card.entry)?.trim() ?? "";
   const budget = written ? await photoRequestFor(db, card.memoId, written) : null;
   // À 0 % de photos, le carnet n'en porte aucune : on ne réclame pas au
@@ -549,7 +552,7 @@ export async function confirmRedaction(db: Db, entryId: string, doubts: readonly
  * laquelle MEMO revient : celle-là n'a jamais été validée, et c'est bien une
  * question qu'on lui pose.
  */
-export async function askValidation(db: Db, entryId: string, doubts: readonly string[] = []): Promise<boolean> {
+export async function askValidation(db: Db, entryId: string): Promise<boolean> {
   const card = await db.chatMessage.findFirst({
     where: { entryId, author: "memo", kind: "transcript" },
     include: { entry: { select: { validatedAt: true } } },
@@ -574,7 +577,7 @@ export async function askValidation(db: Db, entryId: string, doubts: readonly st
     if (since === 0) return false;
   }
 
-  const question = validationQuestionFor(doubts);
+  const question = validationQuestion();
   await db.chatMessage.create({
     data: {
       memoId: card.memoId,

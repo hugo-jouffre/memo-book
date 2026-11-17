@@ -12,7 +12,7 @@ import {
   PRECISION_NOTED,
   REDACTION_UNWRITTEN,
   REVISION_NOTED,
-  redactionKeptFor,
+  redactionKept,
   returnForPhotos,
   SPLIT_NOT_FOUND,
   SPLIT_REFUSED,
@@ -424,7 +424,17 @@ describe("parler à MEMO", () => {
     expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(0);
   });
 
-  it("cite dans la question ce que l'écrivain n'a pas compris", async () => {
+  /**
+   * ⚠️ **Il ne le cite plus** (Hugo, 16/11/2026 — « le chat ne veut pas
+   * ajouter certains éléments sous prétexte qu'il ne les comprend pas »).
+   *
+   * L'écrivain n'imprime toujours que ce qu'il a compris : c'est ce qui
+   * empêche le carnet d'affirmer « des Australiens totalement je tarbé ».
+   * Mais le dire à chaque souvenir sonnait comme un refus, et le passage est
+   * déjà lisible dans « Mot pour mot ». La bulle est donc la même, doute ou
+   * pas — et c'est ce que ce cas garde.
+   */
+  it("ne cite plus dans la bulle ce que l'écrivain n'a pas compris", async () => {
     const memo = await seedTrip(owner.accountId);
     redactor.doubts = ["je tarbé"];
     const { id } = await say(memo.id, "Le soir on a fini en boîte avec des Australiens totalement je tarbé.");
@@ -432,8 +442,20 @@ describe("parler à MEMO", () => {
     const thread = await readThread(memo.id);
     const mine = thread.messages.find((message) => message.id === id);
     const replies = memoBubbles(thread).filter((message) => message.seq > (mine?.seq ?? 0));
-    // Le doute se dit dans la bulle du texte gardé, il n'en ajoute pas une.
-    expect(replies.map((message) => message.body)).toEqual(await keptBubbles(memo, mine!.entryId!, ["je tarbé"]));
+    // La même bulle qu'un souvenir sans doute : rien n'est ajouté, et surtout
+    // pas une phrase qui s'excuse.
+    const bulles = replies.map((message) => message.body);
+    expect(bulles).toEqual(await keptBubbles(memo, mine!.entryId!));
+    expect(JSON.stringify(bulles)).not.toContain("je tarbé");
+
+    // ⚠️ **Et il n'est pas perdu pour autant** : c'est ce qui autorise la
+    // bulle à se taire. La transcription garde le passage entier, et la fiche
+    // la sert dès qu'elle diffère du texte rédigé (`twoVersionsOf`) — c'est
+    // la bascule « Mot pour mot ». Ce cas tient le maillon qui compte : la
+    // donnée. Si un jour la transcription perdait ce que l'écrivain écarte,
+    // se taire deviendrait une perte silencieuse.
+    const souvenir = await harness.prisma.entry.findUniqueOrThrow({ where: { id: mine!.entryId! } });
+    expect(souvenir.transcript, "la transcription garde ce que le texte écarte").toContain("je tarbé");
     expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos", "edit-hand", "edit-voice"]);
   });
 
@@ -585,11 +607,11 @@ async function sendPhotos(memoId: string, count: number, content?: Buffer) {
  * 03/11/2026, `confirmRedaction`) : le texte est gardé, puis il demande les
  * photos du récit, au nombre que le ratio du carnet appelle.
  */
-async function keptBubbles(memo: { photoTextRatio?: number | null }, entryId: string, doubts: string[] = []) {
+async function keptBubbles(memo: { photoTextRatio?: number | null }, entryId: string) {
   const entry = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entryId } });
   const budget = photoBudgetFor((entry.editedText ?? entry.redactedText ?? "").trim(), memo);
   return [
-    { kind: "text", text: redactionKeptFor(doubts) },
+    { kind: "text", text: redactionKept() },
     { kind: "text", text: photosWanted(budget.photos, budget.pages) },
   ];
 }

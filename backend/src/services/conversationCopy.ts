@@ -92,21 +92,29 @@ export const VALIDATION_QUESTION = "Voilà ton texte pour le carnet. Il te convi
  *
  * ``VALIDATION_QUESTION`` reste : une app plus ancienne pose encore la
  * question, et « Ça me convient » doit continuer de marcher.
+ *
+ * ⚠️ **Elle ne cite plus les passages incompris** (Hugo, 16/11/2026). Elle
+ * ajoutait « Je n'ai pas compris « je tarbé » : je l'ai laissé de côté. » à
+ * chaque fois que l'écrivain avait un doute. L'intention était bonne —
+ * prévenir plutôt que perdre en silence — mais le ton était celui d'un refus,
+ * répété à chaque souvenir : « le chat ne veut pas ajouter certains éléments
+ * sous prétexte qu'il ne les comprend pas » (25/10/2026).
+ *
+ * **Le comportement, lui, ne change pas** : l'écrivain continue de ne rien
+ * imprimer qu'il n'ait compris (`doubts`, `redaction.ts`), et rien n'est
+ * inventé. Ce qui change, c'est qu'on ne le dit plus — parce que la bascule
+ * « Mot pour mot » de la fiche porte déjà le passage, mot pour mot, à une
+ * touche de là. MEMO répétait ce que l'écran montrait.
  */
-export function redactionKeptFor(doubts: readonly string[]): string {
-  const [first, second] = doubts.map((doubt) => `« ${doubt} »`);
-  const kept = "Voilà ton texte pour le carnet : je le garde tel quel, et ton carnet compte une étape de plus.";
-  if (!first) return `${kept} Tu peux le retoucher quand tu veux.`;
-  const missing = second
-    ? `Je n’ai compris ni ${first} ni ${second} : je les ai laissés de côté.`
-    : `Je n’ai pas compris ${first} : je l’ai laissé de côté.`;
-  return `${kept} ${missing} Redis-${second ? "les" : "le"}-moi autrement si tu veux ${second ? "qu’ils y soient" : "qu’il y soit"}.`;
+export function redactionKept(): string {
+  return "Voilà ton texte pour le carnet : je le garde tel quel, et ton carnet compte une étape de plus. "
+    + "Tu peux le retoucher quand tu veux.";
 }
 
 /**
  * **Ce que MEMO dit quand la rédaction a échoué** (17/11/2026).
  *
- * Il disait ``redactionKeptFor`` — « Voilà ton texte pour le carnet » — et
+ * Il disait ``redactionKept`` — « Voilà ton texte pour le carnet » — et
  * c'était faux : il n'y avait pas de texte rédigé, seulement la
  * transcription. La fiche juste au-dessus l'annonçait pourtant
  * (`ChatCopy.transcriptUnwritten`, phase `unwritten`), si bien que la bulle
@@ -123,26 +131,24 @@ export function redactionKeptFor(doubts: readonly string[]): string {
  * compte). Ce qui manque l'est aussi, et sans alarme : le mot-pour-mot part
  * dans le carnet, rien n'est perdu. Réessayer est à un appui, sur la fiche
  * (« Ré-analyser »).
+ *
+ * Elle ne cite pas davantage les passages incompris que ``redactionKept`` :
+ * une rédaction qui n'a pas eu lieu n'a de toute façon rien compris ni
+ * écarté.
  */
 export const REDACTION_UNWRITTEN =
   "Je n’ai pas réussi à écrire ce souvenir cette fois. Tes mots sont gardés mot pour mot, " +
   "et ton carnet compte une étape de plus — tu peux me faire réessayer quand tu veux.";
 
 /**
- * La même bulle, quand l'écrivain a laissé de côté un passage qu'il n'a pas
- * compris (`RedactionResult.doubts`) — « des Australiens totalement je tarbé ».
- * Ce n'est pas une question de plus : c'est la même, qui dit ce qui manque, pour
- * que le voyageur le redonne s'il y tient. Sa réponse est une précision, et la
- * rédaction reprend le texte avec elle (`docs/conversation.md` § 3). Deux
- * passages au plus : au-delà, la bulle devient un questionnaire.
+ * La même bulle pour une app plus ancienne, qui pose encore la question.
+ *
+ * Elle citait elle aussi les passages incompris ; elle ne le fait plus, pour
+ * la même raison que ``redactionKept`` — et une app ancienne a sa bascule
+ * « Mot pour mot » comme les autres.
  */
-export function validationQuestionFor(doubts: readonly string[]): string {
-  const [first, second] = doubts.map((doubt) => `« ${doubt} »`);
-  if (!first) return VALIDATION_QUESTION;
-  const missing = second
-    ? `Je n’ai compris ni ${first} ni ${second} : je les ai laissés de côté. Redis-les-moi autrement si tu veux qu’ils y soient.`
-    : `Je n’ai pas compris ${first} : je l’ai laissé de côté. Redis-le-moi autrement si tu veux qu’il y soit.`;
-  return `Voilà ton texte pour le carnet. ${missing} Il te convient ?`;
+export function validationQuestion(): string {
+  return VALIDATION_QUESTION;
 }
 
 /** La réponse à une précision : le texte se réécrit, la question reviendra avec lui. */

@@ -136,12 +136,23 @@ un déroulé fixe, écrit par le code, sans modèle :
    seule bulle : « Voilà ton texte pour le carnet. Il te convient ? », avec le
    trio de validation (§ 6). C'est le job de rédaction qui la pose
    (`askValidation`), parce que lui seul sait quand le texte est là.
-   **Si l'écrivain a laissé de côté un passage qu'il n'a pas compris** — un
-   mot mal transcrit, que le contexte ne permet pas de rétablir —, la même
-   bulle le dit, deux passages au plus : « … Je n'ai pas compris « je tarbé » :
-   je l'ai laissé de côté. Redis-le-moi autrement si tu veux qu'il y soit. Il
-   te convient ? » Ce n'est pas une question de plus ; la réponse est une
-   précision, et le texte se réécrit avec elle (point 3).
+   ⚠️ **Elle ne dit plus ce que l'écrivain a laissé de côté** (Hugo,
+   16/11/2026 — « le chat ne veut pas ajouter certains éléments sous prétexte
+   qu'il ne les comprend pas »). Elle le disait : « Je n'ai pas compris
+   « je tarbé » : je l'ai laissé de côté. » L'intention était bonne —
+   prévenir plutôt que perdre en silence — mais répétée à chaque souvenir, la
+   phrase sonnait comme un refus.
+
+   **Le comportement ne change pas** : l'écrivain n'imprime toujours que ce
+   qu'il a compris (`doubts`, § 1), et c'est ce qui empêche le carnet
+   d'affirmer « des Australiens totalement je tarbé ». Ce qui change, c'est
+   qu'on ne le dit plus — **la bascule « Mot pour mot » de la fiche porte
+   déjà le passage**, à une touche de là. MEMO répétait ce que l'écran
+   montrait.
+
+   Le maillon qui autorise ce silence est la **transcription**, qui garde
+   tout ; un cas de `chat.test.ts` le tient. Le jour où elle perdrait ce que
+   l'écrivain écarte, se taire deviendrait une perte silencieuse.
 3. **On attend la validation.** Une précision tapée entre-temps (« c'était
    avec Clara ») reçoit « C'est noté, je reprends le texte avec ça. », le
    texte se réécrit, et la question revient avec lui. Une correction à la main
