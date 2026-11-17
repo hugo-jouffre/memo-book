@@ -117,14 +117,15 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 ### Lot du 5 novembre — retours du Japon
 
 Les points envoyés par Hugo le 05/11/2026 depuis le Japon, **dans son ordre** :
-c'est celui dans lequel ils se traitent. Trente-trois au départ, dont cinq
+c'est celui dans lequel ils se traitent. Trente-trois au départ, dont six
 réglés le 17/11 — les images absentes du PDF ([PR 188](https://github.com/hugo-jouffre/memo-book/pull/188)),
 le jour vide et les étapes sans lieu ([PR 211](https://github.com/hugo-jouffre/memo-book/pull/211),
 [212](https://github.com/hugo-jouffre/memo-book/pull/212)), le champ de saisie
 ([208](https://github.com/hugo-jouffre/memo-book/pull/208)), « Le saviez-vous » au lieu de « Quiz »
 ([207](https://github.com/hugo-jouffre/memo-book/pull/207)), le plafond de 180 pages
-([209](https://github.com/hugo-jouffre/memo-book/pull/209)) — et deux à moitié, dont
-seul le reste figure ici (T265, T267).
+([209](https://github.com/hugo-jouffre/memo-book/pull/209)) et l'aperçu qui se
+recomposait sans raison (T258) — et deux à moitié, dont seul le reste figure
+ici (T265, T267).
 
 ⚠️ **Ils n'étaient écrits nulle part** pendant douze jours : ni ici, ni dans un
 ticket, seulement dans le message de Hugo et dans les corps des PR qui en
@@ -133,7 +134,6 @@ pas dans ce fichier n'existe pas.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T258 | **L'aperçu se recompose alors que rien n'a changé.** « Ça mouline à nouveau même quand le carnet n'a subi aucune modification » : une composition coûte un rendu complet et une à deux minutes d'attente. Il manque un repère de fraîcheur — la dernière composition reste valable tant que ni souvenir, ni photo, ni réglage n'a bougé | Aperçu PDF |
 | T259 | **Les plats du PDF ne sont pas ceux choisis dans la personnalisation.** Le sélecteur de style des couvertures est dans l'app depuis le 08/10, mais la composition ne le lit pas : le carnet sort avec des plats qui ne sont pas ceux qu'on a validés. C'est le « reste à écrire » de T256 ; T223 n'existe plus comme ticket ouvert | Couvertures, Aperçu PDF |
 | T260 | **Le chargement des images est très long dans la personnalisation des couvertures.** À mesurer avant de corriger : ce sont les photos du voyage qui alimentent les gabarits, et rien ne dit encore si le temps part dans le réseau, dans le décodage ou dans le rendu des sept plats | Couvertures |
 | T261 | **Une ligne blanche horizontale en bas de la première de couverture** dans le PDF. Un filet d'un pixel, probablement un arrondi de la boîte du plat contre le bord de la page | Aperçu PDF, impression |

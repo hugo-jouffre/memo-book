@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
+import { currentBookFingerprint } from "../services/bookFingerprint.js";
 import { applyBookSettings, keepsPhotos } from "../services/bookSettings.js";
 import { validatePayload } from "../services/payloadValidator.js";
 import { premiereEtapeAGauche, quizForBook, type StructuringEntry } from "../services/structuring.js";
@@ -223,12 +224,39 @@ export async function structureRender(
       logger.warn({ renderId, ...warning }, "Écart aux bonnes pratiques éditoriales");
     }
 
+    // **L'empreinte se pose ici, sur ce qui vient d'être composé** (T258,
+    // Hugo 05/11/2026 : « ça mouline à nouveau même quand le carnet n'a subi
+    // aucune modification »).
+    //
+    // Elle était posée par `ensureRenderInProgress`, *avant* que ce job ne
+    // tourne — et les deux premières choses qu'il fait écrivent dans le
+    // carnet : `refreshTripFactsQuietly` arrange les étapes et y rattache des
+    // souvenirs, et la conversion des photos touche leurs médias. Le rendu
+    // portait donc l'empreinte d'un état que sa propre exécution venait de
+    // modifier : **il naissait périmé**, et chaque ouverture de l'aperçu
+    // recomposait pour rien.
+    //
+    // Posée au moment où le `payload` est figé, elle répond à la vraie
+    // question — « ce qu'il y a dans le carnet aujourd'hui est-il ce que ce
+    // PDF montre ? » — et elle couvre tout ce que ce job a écrit lui-même.
+    //
+    // ⚠️ **Jamais plus tard que le payload.** Une écriture qui arriverait
+    // entre les deux entrerait dans l'empreinte sans entrer dans le PDF : le
+    // carnet se dirait à jour en montrant l'état d'avant, et on commanderait
+    // un livre qui n'est plus le sien. Trop prudent fait attendre ; trop
+    // confiant fait imprimer.
+    const fingerprint = await currentBookFingerprint(prisma, memo.id);
+
     await prisma.render.update({
       where: { id: renderId },
       // `BookPayload` est un `Record<string, unknown>` : Prisma attend son
       // propre type d'entrée JSON, que la validation ci-dessus garantit.
       // `composingStartedAt` : la phase « composing » de l'aperçu commence.
-      data: { payload: payload as Prisma.InputJsonObject, composingStartedAt: new Date() },
+      data: {
+        payload: payload as Prisma.InputJsonObject,
+        composingStartedAt: new Date(),
+        inputFingerprint: fingerprint,
+      },
     });
 
     await queue.publish<RenderJob>(JOB_NAMES.render, { renderId });
