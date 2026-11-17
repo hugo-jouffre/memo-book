@@ -874,6 +874,51 @@ type RecitPart = Omit<RedactionResult, "model" | (typeof RELEVE_KEYS)[number]>;
 const RELEVE_EFFORT: RedactionEffort = "low";
 
 /**
+ * Le plafond du récit.
+ *
+ * **La réflexion adaptative se compte dedans**, avec le texte produit. À
+ * 16 000 elle absorbait le budget et le JSON s'arrêtait au milieu.
+ *
+ * Mesuré le 17/11/2026 sur le carnet de Hugo (89 souvenirs), en jetons
+ * d'entrée du même appel :
+ *
+ * | Souvenir | Entrée | Issue |
+ * |---|---|---|
+ * | 472 car. | 24 182 jetons | passe |
+ * | 1 944 car. | 26 211 jetons | plafond atteint |
+ * | 786 car. | 27 604 jetons | plafond atteint |
+ * | 3 530 car. | 28 357 jetons | plafond atteint |
+ *
+ * **Ce qui décide n'est pas la longueur du vocal mais la taille du prompt** :
+ * plus le carnet donne de matière à lire, plus le modèle réfléchit avant
+ * d'écrire. Un souvenir de 786 caractères échouait quand un de 4 273 passait,
+ * dans un carnet plus jeune. Le seuil se déplace donc avec le carnet, et un
+ * carnet ne fait que grossir.
+ *
+ * On prend large, pas juste : à `stop_reason: "max_tokens"` on ne perd pas un
+ * morceau de texte, on perd la rédaction entière. Et un plafond large ne coûte
+ * rien en soi — seuls les jetons réellement produits sont facturés.
+ *
+ * Il **impose la diffusion** (`demander`) : sans elle la requête expire sur le
+ * délai HTTP du SDK avant la fin de la réponse.
+ *
+ * ⚠️ Reste à faire, et c'est la cause de fond : le prompt porte les titres et
+ * les encarts de **tout** le carnet (`earlier`), plus l'historique des quiz.
+ * C'est l'essentiel de ces 24 000 jetons, et ça grandira. Les tailler est un
+ * choix de rendu — « jamais deux fois le même encart » en dépend —, pas une
+ * correction technique.
+ */
+const RECIT_MAX_TOKENS = 64_000;
+
+/**
+ * Le plafond du relevé. Il n'écrit pas : il relit le texte qui vient d'être
+ * produit et en tire des listes, à effort bas. 4 000 suffisaient et aucun
+ * relevé n'a jamais buté — on double la marge sans plus, pour que ce plafond
+ * reste ce qu'il est : une borne sur un appel qui ne doit pas s'étendre.
+ */
+const RELEVE_MAX_TOKENS = 8_000;
+
+/**
  * Un encart trop long fait échouer la validation du carnet entier
  * (`payloadValidator.ts`), et le schéma ne sait pas compter les caractères.
  * L'encart est facultatif : trop long, il saute — le couper ferait imprimer
@@ -1207,7 +1252,11 @@ export class AnthropicRedactor implements Redactor {
     effort: RedactionEffort,
     maxTokens: number,
   ): Promise<T> {
-    const response = await this.client.messages.create({
+    // **Diffusée, pas demandée d'un coup.** Le plafond doit laisser la place à
+    // la réflexion *et* au texte (voir `RECIT_MAX_TOKENS`), et un plafond large
+    // sans diffusion expire sur le délai HTTP du SDK avant la fin de la
+    // réponse. `finalMessage()` rend le message complet : rien à recoller ici.
+    const stream = this.client.messages.stream({
       max_tokens: maxTokens,
       model: this.model,
       thinking: { type: "adaptive" },
@@ -1215,6 +1264,7 @@ export class AnthropicRedactor implements Redactor {
       system: this.buildSystemPrompt(),
       messages: [{ role: "user", content: prompt }],
     } as never);
+    const response = await stream.finalMessage();
 
     // À vérifier avant de lire `content` : un refus renvoie un 200 avec un
     // tableau vide, et `content[0]` planterait sur un souvenir parfaitement
@@ -1227,9 +1277,14 @@ export class AnthropicRedactor implements Redactor {
     }
 
     if (response.stop_reason === "max_tokens") {
+      // ⚠️ **Ne pas accuser la longueur du souvenir.** C'est ce que disait ce
+      // message, et c'était faux : le 17/11/2026, un souvenir de 1 944
+      // caractères butait ici pendant qu'un de 4 273 passait. Ce qui déborde,
+      // c'est le plafond partagé avec la réflexion — pas le récit du voyageur,
+      // qui n'y peut rien et qu'on envoyait raccourcir pour rien.
       throw new Error(
-        "La rédaction s'est arrêtée avant la fin. Relance-la : si ça se reproduit, " +
-          "le souvenir est probablement trop long pour une seule étape.",
+        "La rédaction s'est arrêtée avant la fin : le modèle a atteint son plafond de " +
+          "jetons. Ton vocal et sa transcription sont intacts — relance la rédaction.",
       );
     }
 
@@ -1242,13 +1297,11 @@ export class AnthropicRedactor implements Redactor {
   }
 
   async redact(input: RedactionInput): Promise<RedactionResult> {
-    // Large : la réflexion et la lecture du vocal comptent dans ce plafond, et
-    // un texte tronqué au milieu d'une phrase est pire qu'une erreur franche.
     const recit = await this.demander<RecitPart>(
       RECIT_SCHEMA,
       buildRedactionPrompt(input),
       this.effort,
-      16_000,
+      RECIT_MAX_TOKENS,
     );
 
     // Le relevé n'écrit rien : il lit le texte qui vient d'être écrit et en
@@ -1257,7 +1310,7 @@ export class AnthropicRedactor implements Redactor {
       RELEVE_SCHEMA,
       buildRelevePrompt(input, recit.text),
       RELEVE_EFFORT,
-      4_000,
+      RELEVE_MAX_TOKENS,
     );
 
     const parsed: Omit<RedactionResult, "model"> = { ...recit, ...releve };
