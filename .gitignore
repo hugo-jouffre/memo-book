@@ -61,3 +61,7 @@ backend/.render-out/
 
 # Atelier carnet : vocaux déposés et sorties de transcription — jamais commités
 .atelier/
+
+# Les scripts jetables d'observation, lancés à la main contre la production :
+# ils portent un carnet ou un identifiant en dur et ne sont pas du code du projet.
+backend/scripts/_scratch*

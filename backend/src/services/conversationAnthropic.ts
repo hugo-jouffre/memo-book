@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { Logger } from "pino";
 import { loadConversationRules } from "../lib/templates.js";
+import { logModelUsage } from "./modelUsage.js";
 import {
   ASIDE_LIMIT,
   HISTORY_TEXT_LIMIT,
@@ -64,6 +66,13 @@ export class AnthropicResponder implements MemoResponder {
   constructor(
     private readonly client: Anthropic,
     private readonly model: string,
+    /**
+     * **Obligatoire, et c'est voulu** — même raison que pour le rédacteur
+     * (`logModelUsage`) : la conversation pèse moins que la rédaction, mais
+     * elle appelle à chaque tour, et un compte qu'on peut ne pas tenir est
+     * une panne qui ressemble à un succès. Les tests passent un logger muet.
+     */
+    private readonly logger: Logger,
   ) {}
 
   opening(): { text: string; suggestionIds: SuggestionId[] } {
@@ -92,6 +101,8 @@ export class AnthropicResponder implements MemoResponder {
       system: this.buildSystemPrompt(),
       messages: [{ role: "user", content: buildUserPrompt(input) }],
     });
+
+    logModelUsage(this.logger, "reponse", this.model, 2_000, response.usage);
 
     // À vérifier avant `content` : un refus renvoie un 200 avec un tableau
     // vide, et `content[0]` planterait sur un récit parfaitement anodin.
@@ -125,6 +136,8 @@ export class AnthropicResponder implements MemoResponder {
       system: [{ type: "text", text: TRIP_CONTEXT_SYSTEM, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: buildTripContextPrompt(input) }],
     });
+
+    logModelUsage(this.logger, "contexte", this.model, 2_000, response.usage);
 
     if (response.stop_reason === "refusal") throw new Error("Le modèle a refusé ce tour de contexte.");
     if (response.stop_reason === "max_tokens") throw new Error("La réponse s'est arrêtée avant la fin.");
@@ -178,6 +191,8 @@ export class AnthropicResponder implements MemoResponder {
       messages: [{ role: "user", content: buildMissingDayPrompt(input) }],
     });
 
+    logModelUsage(this.logger, "journee-manquante", this.model, 1_000, response.usage);
+
     if (response.stop_reason === "refusal") throw new Error("Le modèle a refusé la question du trou.");
     if (response.stop_reason === "max_tokens") throw new Error("La réponse s'est arrêtée avant la fin.");
     const text = response.content.find((block) => block.type === "text")?.text;
@@ -198,6 +213,8 @@ export class AnthropicResponder implements MemoResponder {
       system: [{ type: "text", text: TRIP_THEME_SYSTEM, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: buildTripThemePrompt(input) }],
     });
+
+    logModelUsage(this.logger, "theme", this.model, 400, response.usage);
 
     if (response.stop_reason === "refusal") throw new Error("Le modèle a refusé le thème.");
     if (response.stop_reason === "max_tokens") throw new Error("La réponse s'est arrêtée avant la fin.");

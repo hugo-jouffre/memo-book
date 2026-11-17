@@ -16,6 +16,7 @@ import {
   type RedactionInput,
 } from "./redaction.js";
 import { STEP_SIZES } from "./payloadValidator.js";
+import pino from "pino";
 
 /**
  * Le prompt système de la rédaction est le fichier de règles du dépôt. Si le
@@ -23,6 +24,14 @@ import { STEP_SIZES } from "./payloadValidator.js";
  * rédigerait sans aucune consigne, et personne ne s'en apercevrait avant de
  * lire le carnet imprimé.
  */
+
+/**
+ * Un logger qui n'écrit rien : le compteur de jetons (`logModelUsage`) est
+ * obligatoire dans le constructeur, et ce qu'il écrit n'est pas l'objet de ces
+ * tests.
+ */
+const muet = pino({ level: "silent" });
+
 describe("loadWritingRules", () => {
   it("charge agents/agent-transcription.md", () => {
     const rules = loadWritingRules();
@@ -430,12 +439,12 @@ describe("createRedactor", () => {
       }) as Env;
 
     // « Personne n'appelle personne » : la seule chose qui coupe Claude.
-    expect(createRedactor(env("fake", false, "sk-test")).constructor.name).toBe("FakeRedactor");
-    expect(createRedactor(env("auto", true, "")).constructor.name).toBe("FakeRedactor");
-    expect(createRedactor(env("auto", true, "sk-test")).constructor.name).toBe("AnthropicRedactor");
+    expect(createRedactor(env("fake", false, "sk-test"), muet).constructor.name).toBe("FakeRedactor");
+    expect(createRedactor(env("auto", true, ""), muet).constructor.name).toBe("FakeRedactor");
+    expect(createRedactor(env("auto", true, "sk-test"), muet).constructor.name).toBe("AnthropicRedactor");
 
     // Le piège de `docs/modeles-ia.md` § 5 : une clé Anthropic valide, mais
     // pas de clé OpenAI, donc `live` faux. La rédaction comprend quand même.
-    expect(createRedactor(env("auto", false, "sk-test")).constructor.name).toBe("AnthropicRedactor");
+    expect(createRedactor(env("auto", false, "sk-test"), muet).constructor.name).toBe("AnthropicRedactor");
   });
 });

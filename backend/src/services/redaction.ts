@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { Logger } from "pino";
 import { pageDensityInstruction, tripDays as pageTargetTripDays } from "./pageTarget.js";
 import type { Env } from "../env.js";
+import { logModelUsage } from "./modelUsage.js";
 import { loadWritingRules } from "../lib/templates.js";
 import { EDITORIAL_LIMITS, STEP_SIZES } from "./payloadValidator.js";
 
@@ -1211,6 +1213,16 @@ export class AnthropicRedactor implements Redactor {
   constructor(
     private readonly client: Anthropic,
     private readonly model: string,
+    /**
+     * **Obligatoire, et c'est voulu.** Chaque appel est payé sur un compte
+     * prépayé qui s'est déjà vidé en silence (`logModelUsage`) : un rédacteur
+     * qui pourrait ne pas compter serait, à nouveau, une panne qui ressemble
+     * à un succès. Les tests passent un logger muet.
+     *
+     * Il passe **avant** l'effort, qui a une valeur par défaut : derrière,
+     * chaque appelant devait réécrire `"high"` pour atteindre le logger.
+     */
+    private readonly logger: Logger,
     private readonly effort: RedactionEffort = "high",
   ) {}
 
@@ -1247,6 +1259,7 @@ export class AnthropicRedactor implements Redactor {
    * relevé ne repaie que son propre message.
    */
   private async demander<T>(
+    step: "recit" | "releve",
     schema: unknown,
     prompt: string,
     effort: RedactionEffort,
@@ -1265,6 +1278,12 @@ export class AnthropicRedactor implements Redactor {
       messages: [{ role: "user", content: prompt }],
     } as never);
     const response = await stream.finalMessage();
+
+    // **Compté avant d'être jugé** : un appel qui a réfléchi jusqu'au plafond
+    // est facturé comme les autres, et c'est précisément celui dont on veut
+    // lire le compte. Mettre ça après les gardes ci-dessous, c'est ne plus
+    // mesurer que les appels qui réussissent.
+    logModelUsage(this.logger, step, this.model, maxTokens, response.usage);
 
     // À vérifier avant de lire `content` : un refus renvoie un 200 avec un
     // tableau vide, et `content[0]` planterait sur un souvenir parfaitement
@@ -1298,6 +1317,7 @@ export class AnthropicRedactor implements Redactor {
 
   async redact(input: RedactionInput): Promise<RedactionResult> {
     const recit = await this.demander<RecitPart>(
+      "recit",
       RECIT_SCHEMA,
       buildRedactionPrompt(input),
       this.effort,
@@ -1307,6 +1327,7 @@ export class AnthropicRedactor implements Redactor {
     // Le relevé n'écrit rien : il lit le texte qui vient d'être écrit et en
     // tire des listes. Un effort bas suffit, et un plafond bien plus court.
     const releve = await this.demander<RelevePart>(
+      "releve",
       RELEVE_SCHEMA,
       buildRelevePrompt(input, recit.text),
       RELEVE_EFFORT,
@@ -1415,11 +1436,12 @@ export class FakeRedactor implements Redactor {
  * `docs/modeles-ia.md` § 5, corrigé pour la conversation le 24/09/2026.
  * Seul `PIPELINE_MODE=fake` coupe Claude.
  */
-export function createRedactor(env: Env): Redactor {
+export function createRedactor(env: Env, logger: Logger): Redactor {
   if (env.PIPELINE_MODE === "fake" || env.ANTHROPIC_API_KEY === "") return new FakeRedactor();
   return new AnthropicRedactor(
     new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }),
     env.ANTHROPIC_REDACTION_MODEL,
+    logger,
     env.ANTHROPIC_REDACTION_EFFORT,
   );
 }
