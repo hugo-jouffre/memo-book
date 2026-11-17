@@ -203,7 +203,88 @@ properties:
           $ref: '#/$defs/day'
       back_cover:
         $ref: '#/$defs/backCover'
+      cover:
+        $ref: '#/$defs/bookCovers'
 $defs:
+  bookCovers:
+    type: object
+    description: >
+      **Les deux plats choisis dans la personnalisation** (T259). Écrit par le
+      serveur après la mise en page (`backend/src/services/bookCovers.ts`),
+      jamais par toi : n'invente pas ce champ et ne le recopie pas.
+      Absent, le gabarit dessine la couverture générique — photo pleine page et
+      titre du voyage.
+    required: [front, back, ornaments]
+    properties:
+      front:
+        $ref: '#/$defs/bookCoverFace'
+      back:
+        $ref: '#/$defs/bookCoverFace'
+      ornaments:
+        type: object
+        description: >
+          Les découpes des plats de Hugo que le gabarit charge par leur adresse
+          — la palme, la moto, la route, le globe, le motard, les courbes.
+        properties:
+          palm: { type: string, format: uri }
+          motorbike: { type: string, format: uri }
+          road: { type: string, format: uri }
+          globe: { type: string, format: uri }
+          rider: { type: string, format: uri }
+          contours: { type: string, format: uri }
+  bookCoverFace:
+    type: object
+    description: Un plat, prêt à dessiner.
+    required: [family, title, text, paragraphs, frontTitle, gallery, stats, titleScale, textScale]
+    properties:
+      family:
+        type: string
+        enum: [default, watercolor, assouline, drawing, photo-drawing, travel-book, elegant]
+        description: Le gabarit à dessiner. C'est lui qui décide de tout le reste.
+      title: { type: string }
+      text:
+        type: string
+        description: >
+          La signature au devant (qui, quand), le texte de quatrième au dos.
+          Vide quand ce plat n'en porte pas — « Par défaut » et « Travel book »
+          au dos n'impriment aucun texte.
+      paragraphs:
+        type: array
+        description: >
+          Le texte de quatrième, coupé en paragraphes et déjà apparié à une
+          image du voyage : c'est le dos d'« Aquarelle », qui raconte en trois
+          temps.
+        items:
+          type: object
+          required: [text]
+          properties:
+            text: { type: string }
+            photo: { type: string, format: uri }
+      authors: { type: string, description: "Qui a voyagé — la première ligne de la signature, quand elle en a deux." }
+      when: { type: string, description: "Quand — la dernière ligne de la signature." }
+      frontTitle: { type: string, description: "Le titre du devant, que deux dos reprennent." }
+      photo: { type: string, format: uri }
+      gallery:
+        type: array
+        description: Les photos du voyage, la choisie d'abord — les timbres, les vignettes.
+        items: { type: string, format: uri }
+      stats:
+        type: array
+        description: Les chiffres du dos, déjà abrégés et coupés en lignes. Vides ailleurs.
+        items:
+          type: object
+          required: [value, lines]
+          properties:
+            value: { type: string }
+            lines: { type: array, items: { type: string } }
+      titleScale:
+        type: number
+        description: >
+          De combien réduire le titre pour qu'il tienne sur le plat, de 1 à 0,4.
+          CSS ne sait pas réduire un texte jusqu'à ce qu'il tienne.
+      textScale:
+        type: number
+        description: De même pour le texte, de 1 à 0,6.
   day:
     type: object
     required: [title, body_html]

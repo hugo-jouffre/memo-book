@@ -986,6 +986,752 @@ li { margin: 0; }
 .page--cover::before,
 .page--cover::after { display: none; }
 
+/* --- Les plats du carnet ---------------------------------------------------
+   Les sept gabarits de couverture, devant et dos (T259). Le dessin est celui
+   que l'app montre (`CoverTemplates.swift`), et ses mesures sont les mêmes :
+   des **centièmes de la largeur du plat**, d'où `--u`. Une valeur relevée
+   là-bas se reporte ici telle quelle — `unit(0.14)` devient `14 * var(--u)`.
+
+   La **typographie** est portée par les classes de base (`mb-plat__titre-…`),
+   la **place** par les sélecteurs de famille : deux gabarits écrivent leur
+   date dans la même police et ne la posent pas au même endroit.
+
+   Ce que le serveur fournit et que CSS ne sait pas calculer : `--mb-plat-titre`
+   et `--mb-plat-texte`, de combien réduire un texte trop long pour son plat
+   (`services/bookCovers.ts`). CSS n'a pas de `minimumScaleFactor`. */
+.page--plat {
+  --u: 4.2pt;                              /* un centième de la largeur du plat */
+  --mb-plat-papier: #fffcf8;
+  --mb-plat-creme: #f5ede5;
+  --mb-plat-encre: #2d231a;
+  --mb-plat-action: #28654b;
+  --mb-plat-ciel: #afd2f0;
+  --mb-plat-menthe: #cdf9f5;
+  --mb-plat-foret: #19532b;
+  --mb-plat-tampon: #8e3343;
+  --mb-plat-tache: #e9ddd1;
+  --mb-plat-filet: #cfbbaa;
+  /* Le grotesque épais d'Aquarelle, d'Assouline et de Travel book. Archivo
+     Black est la police des couvertures imprimées (`couverture-styles.js`) ;
+     elle n'est pas encore embarquée ici, et le gabarit retombe donc sur le
+     grotesque du système à sa graisse la plus lourde — ce que fait aussi
+     l'app, qui dessine ces trois plats en police système. */
+  --mb-plat-grotesk: "Archivo Black", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mb-plat-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background-color: var(--mb-plat-creme);
+}
+
+/* Un plat porte son propre aplat : ni teinte crème ni grain par-dessus. */
+.page--plat::before,
+.page--plat::after { display: none; }
+
+/* **Ce qui se lit passe devant les décors.** Un élément positionné se peint
+   au-dessus de ce qui ne l'est pas, quel que soit l'ordre du balisage : les
+   taches de l'aquarelle recouvraient le récit. Tout ce qui est posé sur un
+   plat est donc positionné ici, et les décors redescendent à zéro juste
+   après — cette règle vient avant eux, exprès. */
+.page--plat > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Les pièces communes --- */
+.mb-plat__photo {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* Sans photo, l'aplat du papier plutôt qu'un trou blanc. */
+  background-color: var(--mb-plat-tache);
+}
+
+.mb-plat__photo img,
+.mb-plat__vignette img,
+.mb-plat__timbre-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mb-plat__photo--fond {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+/* Le voile de « Par défaut » : le blanc se lit sur un ciel clair, et le milieu
+   de la photo reste intact. */
+.mb-plat__voile {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.35) 0%,
+    rgba(0, 0, 0, 0) 28%,
+    rgba(0, 0, 0, 0) 68%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+}
+
+.mb-plat__logo {
+  width: calc(7.5 * var(--u));
+  height: calc(7.5 * var(--u));
+  color: var(--mb-plat-action);
+}
+
+.mb-plat__logo--filet {
+  color: var(--mb-plat-filet);
+  opacity: 0.8;
+}
+
+.mb-plat__ornement { display: block; }
+
+/* Un dessin au trait sur son disque bleu pâle, comme la maquette. */
+.mb-plat__dessine {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mb-plat__dessine::before {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background-color: rgba(175, 210, 240, 0.25);
+}
+
+/* --- Les titres et les textes, par police --- */
+.mb-plat__titre-serif,
+.mb-plat__titre-grotesk,
+.mb-plat__titre-main {
+  width: 100%;
+  margin: 0;
+  line-height: 1;
+}
+
+.mb-plat__titre-serif {
+  position: relative;
+  z-index: 2;
+  font-family: var(--mb-font-display);
+  font-weight: 900;
+  font-size: calc(14 * var(--u) * var(--mb-plat-titre, 1));
+  letter-spacing: 0.01em;
+  color: var(--mb-plat-encre);
+}
+
+.mb-plat__titre-serif--blanc {
+  color: #ffffff;
+  /* Nette, pour la même raison que les ombres portées du carnet. */
+  text-shadow: 0 1.2pt 0 rgba(0, 0, 0, 0.3);
+}
+
+.mb-plat__titre-grotesk {
+  font-family: var(--mb-plat-grotesk);
+  font-weight: 900;
+  font-size: calc(11.5 * var(--u) * var(--mb-plat-titre, 1));
+  color: var(--mb-plat-encre);
+}
+
+.mb-plat__titre-grotesk--dos { font-size: calc(5.5 * var(--u) * var(--mb-plat-titre, 1)); }
+
+.mb-plat__titre-main {
+  font-family: var(--mb-font-hand);
+  font-size: calc(8.5 * var(--u) * var(--mb-plat-titre, 1));
+  line-height: 1.15;
+  color: var(--mb-plat-encre);
+}
+
+.mb-plat__titre-main--dos { font-size: calc(8 * var(--u) * var(--mb-plat-titre, 1)); }
+
+.mb-plat__signature-serif {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  /* La signature est écrite sur deux lignes — qui, puis quand. */
+  white-space: pre-line;
+  font-family: var(--mb-font-display);
+  font-size: calc(5 * var(--u) * var(--mb-plat-texte, 1));
+  line-height: 1.25;
+  color: #ffffff;
+  text-shadow: 0 1pt 0 rgba(0, 0, 0, 0.35);
+}
+
+.mb-plat__quand-grotesk { font-family: var(--mb-plat-grotesk); font-weight: 900; }
+.mb-plat__quand-main { font-family: var(--mb-font-hand); font-size: calc(4.5 * var(--u)); color: var(--mb-plat-encre); }
+.mb-plat__quand-serif {
+  font-family: var(--mb-font-display);
+  font-size: calc(4 * var(--u));
+  letter-spacing: calc(0.3 * var(--u));
+  color: var(--mb-plat-encre);
+}
+
+.mb-plat__qui-main {
+  width: 100%;
+  font-family: var(--mb-font-hand);
+  font-size: calc(3.5 * var(--u));
+  color: var(--mb-plat-encre);
+}
+
+.mb-plat__qui-grotesk {
+  width: 100%;
+  font-family: var(--mb-plat-grotesk);
+  font-weight: 900;
+  font-size: calc(5.5 * var(--u));
+  color: var(--mb-plat-action);
+}
+
+.mb-plat__recit-serif,
+.mb-plat__recit-main {
+  width: 100%;
+  white-space: pre-line;
+  color: var(--mb-plat-encre);
+}
+
+.mb-plat__recit-serif {
+  font-family: var(--mb-font-display);
+  font-size: calc(3 * var(--u) * var(--mb-plat-texte, 1));
+  line-height: 1.45;
+}
+
+.mb-plat__recit-main {
+  font-family: var(--mb-font-hand);
+  font-size: calc(3.2 * var(--u) * var(--mb-plat-texte, 1));
+  line-height: 1.5;
+}
+
+/* --- « Mon voyage en quelques chiffres » --- */
+.mb-plat__chiffres {
+  width: 100%;
+  padding: calc(3.5 * var(--u));
+  border: 1.7pt solid rgba(40, 101, 75, 0.6);
+  border-radius: calc(4 * var(--u));
+}
+
+.mb-plat__chiffres--blanc {
+  background-color: var(--mb-plat-papier);
+  border-color: rgba(45, 35, 26, 0.2);
+}
+
+.mb-plat__chiffres-titre {
+  font-family: var(--mb-font-display);
+  font-weight: 600;
+  font-size: calc(3.6 * var(--u));
+  color: var(--mb-plat-encre);
+}
+
+.mb-plat__chiffres-liste {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(2.5 * var(--u));
+  margin-top: calc(2.5 * var(--u));
+}
+
+.mb-plat__chiffre { flex: 1 1 0; color: var(--mb-plat-encre); }
+
+.mb-plat__chiffre-valeur {
+  font-family: var(--mb-font-display);
+  font-weight: 600;
+  font-size: calc(7.5 * var(--u));
+  line-height: 1;
+}
+
+.mb-plat__chiffre-libelle {
+  margin-top: calc(0.8 * var(--u));
+  font-family: var(--mb-font-display);
+  font-size: calc(2.8 * var(--u));
+  line-height: 1.15;
+}
+
+/* --- Par défaut ------------------------------------------------------------ */
+.page--plat--default.page--plat--front {
+  justify-content: space-between;
+  padding: calc(7 * var(--u)) calc(6 * var(--u)) calc(8 * var(--u));
+}
+
+.page--plat--default.page--plat--back {
+  justify-content: flex-start;
+  padding: calc(12 * var(--u)) calc(10 * var(--u)) calc(8 * var(--u));
+  background-color: var(--mb-plat-papier);
+}
+
+.mb-plat__filet-pointille {
+  position: absolute;
+  inset: calc(3.5 * var(--u));
+  z-index: 0;
+  border: 1.3pt dashed rgba(40, 101, 75, 0.35);
+  border-radius: calc(1 * var(--u));
+}
+
+.mb-plat__trajet {
+  width: calc(55 * var(--u));
+  height: calc(62 * var(--u));
+}
+
+/* Les traits sont en unités du `viewBox`, où une unité vaut un `--u` : la
+   valeur relevée dans l'app s'y reporte sans conversion. */
+.mb-plat__trajet-route {
+  fill: none;
+  stroke: rgba(40, 101, 75, 0.7);
+  stroke-width: 0.6;
+  stroke-linecap: round;
+  stroke-dasharray: 1.5 1.2;
+}
+
+.mb-plat__trajet circle {
+  fill: var(--mb-plat-action);
+  stroke: var(--mb-plat-papier);
+  stroke-width: 0.64;
+}
+
+.page--plat--default .mb-plat__chiffres { margin-top: auto; }
+.page--plat--default .mb-plat__logo { margin-top: calc(5 * var(--u)); }
+
+/* --- Aquarelle ------------------------------------------------------------- */
+.page--plat--watercolor.page--plat--front { justify-content: flex-start; }
+
+.mb-plat__bandeau {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 17%;
+  padding: 0 calc(5 * var(--u));
+}
+
+.mb-plat__aquarelle {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* L'aquarelle de la maquette ne s'arrête pas net : elle se perd dans le
+   papier. Un dégradé vers l'aplat du plat, et non un masque — un masque, à
+   l'export PDF, devient une transparence que certains lecteurs peignent en
+   gris (voir `--mb-card-shadow`). */
+.mb-plat__fondu {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 18%;
+  background-image: linear-gradient(to bottom, rgba(245, 237, 229, 0) 0%, var(--mb-plat-creme) 100%);
+}
+
+.page--plat--watercolor.page--plat--front .mb-plat__quand-grotesk {
+  position: absolute;
+  right: calc(5 * var(--u));
+  bottom: calc(4 * var(--u));
+  font-size: calc(4 * var(--u));
+  color: rgba(45, 35, 26, 0.8);
+}
+
+.page--plat--watercolor.page--plat--back {
+  justify-content: flex-start;
+  padding: calc(8 * var(--u)) calc(8 * var(--u)) calc(6 * var(--u));
+}
+
+.mb-plat__taches {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.mb-plat__taches ellipse { fill: var(--mb-plat-tache); }
+
+.mb-plat__temps {
+  display: flex;
+  flex-direction: column;
+  gap: calc(5 * var(--u));
+  width: 100%;
+  margin-top: calc(4.5 * var(--u));
+}
+
+.mb-plat__temps-ligne {
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--u));
+}
+
+/* Une vignette à gauche, la suivante à droite, comme la maquette. */
+.mb-plat__temps-ligne:nth-child(even) { flex-direction: row-reverse; }
+
+.mb-plat__vignette {
+  flex: 0 0 auto;
+  width: calc(22 * var(--u));
+  height: calc(18 * var(--u));
+  overflow: hidden;
+  border-radius: calc(2 * var(--u));
+  background-color: var(--mb-plat-tache);
+}
+
+.mb-plat__temps-texte {
+  flex: 1 1 auto;
+  margin: 0;
+  text-align: left;
+  font-family: var(--mb-plat-sans);
+  font-size: calc(3 * var(--u) * var(--mb-plat-texte, 1));
+  line-height: 1.4;
+  color: var(--mb-plat-encre);
+}
+
+.page--plat--watercolor .mb-plat__logo { margin-top: auto; }
+
+/* --- Assouline ------------------------------------------------------------- */
+.page--plat--assouline { background-color: var(--mb-plat-ciel); }
+
+.page--plat--assouline.page--plat--front {
+  justify-content: space-between;
+  padding: calc(10 * var(--u)) calc(5 * var(--u)) calc(6 * var(--u));
+}
+
+.page--plat--assouline .mb-plat__titre-grotesk {
+  color: var(--mb-plat-action);
+  font-size: calc(12 * var(--u) * var(--mb-plat-titre, 1));
+}
+
+.page--plat--assouline .mb-plat__titre-grotesk--dos { font-size: calc(5.5 * var(--u) * var(--mb-plat-titre, 1)); }
+
+.mb-plat__ornement--palme { width: calc(72 * var(--u)); }
+
+.page--plat--assouline .mb-plat__quand-grotesk {
+  width: 100%;
+  min-height: calc(7 * var(--u));
+  font-size: calc(6 * var(--u));
+  color: var(--mb-plat-action);
+}
+
+.page--plat--assouline.page--plat--back {
+  justify-content: flex-start;
+  padding: calc(10 * var(--u)) calc(8 * var(--u)) calc(7 * var(--u));
+}
+
+.page--plat--assouline .mb-plat__recit-serif { margin-top: calc(4 * var(--u)); }
+.page--plat--assouline .mb-plat__chiffres { margin-top: auto; }
+
+/* --- Dessin ---------------------------------------------------------------- */
+.page--plat--drawing.page--plat--front {
+  justify-content: flex-start;
+  gap: calc(4 * var(--u));
+  padding: calc(13 * var(--u)) calc(12 * var(--u)) calc(7 * var(--u));
+}
+
+.mb-plat__sentiers {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Le `viewBox` est celui de la page en points : les traits et les pointillés
+   s'écrivent donc dans l'unité du carnet. */
+.mb-plat__sentiers path {
+  fill: none;
+  stroke: var(--mb-plat-encre);
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-dasharray: 7.56 5.04;
+}
+
+.mb-plat__dessine--moto::before {
+  width: calc(27.2 * var(--u));
+  height: calc(27.2 * var(--u));
+  transform: translateX(calc(1.7 * var(--u)));
+}
+
+.mb-plat__dessine--globe::before {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  transform: translateX(calc(1 * var(--u)));
+}
+
+.mb-plat__dessine--motard::before {
+  width: calc(33.6 * var(--u));
+  height: calc(33.6 * var(--u));
+  transform: translateX(calc(2.1 * var(--u)));
+}
+
+.mb-plat__ornement--moto { width: calc(34 * var(--u)); }
+.mb-plat__ornement--route { width: calc(50 * var(--u)); }
+.mb-plat__ornement--globe { width: calc(20 * var(--u)); }
+.mb-plat__ornement--motard { width: calc(42 * var(--u)); }
+
+.page--plat--drawing .mb-plat__qui-main { margin-top: auto; }
+
+.page--plat--drawing.page--plat--back {
+  justify-content: flex-start;
+  padding: calc(12 * var(--u)) calc(8 * var(--u)) calc(7 * var(--u));
+}
+
+.mb-plat__souligne {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.mb-plat__trait {
+  width: calc(25 * var(--u));
+  height: calc(0.8 * var(--u));
+  margin-right: calc(10 * var(--u));
+  border-radius: 99pt;
+  background-color: var(--mb-plat-encre);
+}
+
+.page--plat--drawing .mb-plat__dessine--motard { margin: auto 0; }
+
+/* --- Photo-dessin ---------------------------------------------------------- */
+.page--plat--photo-drawing.page--plat--front {
+  justify-content: space-between;
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+}
+
+/* Sous le titre, comme la maquette : le titre se pose au-dessus des courbes,
+   pas dedans. */
+.mb-plat__courbes {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  width: calc(90 * var(--u));
+  height: calc(72 * var(--u));
+  transform: translate(-50%, -50%) translateY(calc(26 * var(--u)));
+}
+
+.mb-plat__courbes path {
+  fill: none;
+  stroke: rgba(205, 249, 245, 0.9);
+  stroke-width: 3.4;
+}
+
+.mb-plat__qui-main--menthe,
+.mb-plat__quand-main--menthe { color: var(--mb-plat-menthe); }
+
+.page--plat--photo-drawing .mb-plat__qui-main {
+  position: relative;
+  z-index: 2;
+  min-height: calc(6 * var(--u));
+  font-size: calc(5 * var(--u));
+}
+
+/* Le titre posé sur un arc : un `textPath`, qui fait pencher les lettres avec
+   la courbe sans qu'on ait à les poser une par une. */
+.mb-plat__arc {
+  position: relative;
+  z-index: 2;
+  margin: auto 0;
+  width: calc(88 * var(--u));
+  height: calc(29 * var(--u));
+}
+
+.mb-plat__arc text {
+  font-family: var(--mb-font-hand);
+  font-size: calc(71.4px * var(--mb-plat-titre, 1));
+  fill: var(--mb-plat-menthe);
+}
+
+.page--plat--photo-drawing .mb-plat__quand-main {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  text-align: right;
+  font-size: calc(8 * var(--u));
+}
+
+.page--plat--photo-drawing.page--plat--back {
+  justify-content: flex-start;
+  padding: calc(34 * var(--u)) calc(10 * var(--u)) calc(7 * var(--u));
+  background-color: var(--mb-plat-menthe);
+}
+
+.mb-plat__ornement--contours {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: calc(62 * var(--u));
+}
+
+.page--plat--photo-drawing .mb-plat__recit-main {
+  margin: auto 0;
+  font-size: calc(4.2 * var(--u) * var(--mb-plat-texte, 1));
+  color: var(--mb-plat-action);
+}
+
+/* --- Travel book ----------------------------------------------------------- */
+.page--plat--travel-book.page--plat--front {
+  justify-content: flex-start;
+  padding: calc(10 * var(--u)) calc(10 * var(--u)) calc(6 * var(--u));
+}
+
+.mb-plat__entete {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(3 * var(--u));
+  width: 100%;
+}
+
+.mb-plat__entete-mots {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.page--plat--travel-book .mb-plat__titre-grotesk {
+  color: var(--mb-plat-action);
+  font-size: calc(7 * var(--u) * var(--mb-plat-titre, 1));
+}
+
+.page--plat--travel-book .mb-plat__quand-grotesk {
+  font-size: calc(7 * var(--u));
+  color: var(--mb-plat-action);
+}
+
+/* Le tampon : deux cercles, l'année au milieu, de travers. */
+.mb-plat__tampon {
+  flex: 0 0 auto;
+  width: calc(22 * var(--u));
+  height: calc(22 * var(--u));
+  opacity: 0.85;
+  transform: rotate(-12deg);
+}
+
+.mb-plat__tampon-fond { fill: none; stroke: var(--mb-plat-tampon); stroke-width: 3.5; }
+.mb-plat__tampon-fin { fill: none; stroke: var(--mb-plat-tampon); stroke-width: 1.5; stroke-dasharray: 2 3; }
+
+.mb-plat__tampon-mot {
+  font-family: var(--mb-font-display);
+  font-weight: 900;
+  font-size: 13px;
+  fill: var(--mb-plat-tampon);
+}
+
+/* Les timbres : jusqu'à quatre photos du voyage, de travers, bord dentelé. */
+.mb-plat__timbres {
+  position: relative;
+  width: calc(80 * var(--u));
+  height: calc(72 * var(--u));
+  margin: auto 0;
+}
+
+.mb-plat__timbre {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background-color: var(--mb-plat-papier);
+  clip-path: url(#mb-plat-dentele);
+}
+
+.mb-plat__timbre-photo {
+  position: absolute;
+  inset: 8%;
+  overflow: hidden;
+  background-color: var(--mb-plat-tache);
+}
+
+.mb-plat__timbre:nth-child(1) {
+  width: calc(34 * var(--u));
+  height: calc(34 * var(--u));
+  transform: translate(-50%, -50%) translate(calc(-17 * var(--u)), calc(-12 * var(--u))) rotate(-7deg);
+}
+
+.mb-plat__timbre:nth-child(2) {
+  width: calc(36 * var(--u));
+  height: calc(36 * var(--u));
+  transform: translate(-50%, -50%) translate(calc(14 * var(--u)), calc(-15 * var(--u))) rotate(3deg);
+}
+
+.mb-plat__timbre:nth-child(3) {
+  width: calc(30 * var(--u));
+  height: calc(30 * var(--u));
+  transform: translate(-50%, -50%) translate(calc(-15 * var(--u)), calc(17 * var(--u))) rotate(4deg);
+}
+
+.mb-plat__timbre:nth-child(4) {
+  width: calc(32 * var(--u));
+  height: calc(32 * var(--u));
+  transform: translate(-50%, -50%) translate(calc(17 * var(--u)), calc(13 * var(--u))) rotate(-5deg);
+}
+
+/* Aucune photo dans ce voyage : un seul timbre vide, au milieu. */
+.mb-plat__timbre--seul {
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
+  transform: translate(-50%, -50%) rotate(-4deg);
+}
+
+.page--plat--travel-book.page--plat--back {
+  justify-content: flex-start;
+  padding: calc(12 * var(--u)) 0 calc(8 * var(--u));
+}
+
+.mb-plat__cadre {
+  position: relative;
+  width: calc(86 * var(--u));
+  height: calc(96 * var(--u));
+  margin: auto 0;
+}
+
+/* Le cadre déchiré : un rectangle dont le bord tremble toujours de la même
+   façon — un bruit fixe, pas un hasard, et c'est pour ça qu'il est écrit. */
+.mb-plat__cadre-trace {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.mb-plat__cadre-trace path {
+  fill: none;
+  stroke: var(--mb-plat-foret);
+  stroke-width: 7.56;
+}
+
+/* --- Élégant --------------------------------------------------------------- */
+.page--plat--elegant.page--plat--front {
+  justify-content: flex-start;
+  gap: calc(5 * var(--u));
+  padding: calc(8 * var(--u)) calc(6 * var(--u)) calc(6 * var(--u));
+}
+
+.page--plat--elegant .mb-plat__titre-serif {
+  font-weight: 400;
+  font-size: calc(10 * var(--u) * var(--mb-plat-titre, 1));
+  letter-spacing: calc(0.4 * var(--u));
+}
+
+.mb-plat__tirage {
+  width: calc(82 * var(--u));
+  height: calc(68 * var(--u));
+}
+
+.page--plat--elegant .mb-plat__quand-serif { margin: auto 0; }
+
+.page--plat--elegant.page--plat--back {
+  justify-content: flex-start;
+  gap: calc(8 * var(--u));
+  padding: calc(10 * var(--u)) calc(8 * var(--u)) calc(7 * var(--u));
+}
+
+.mb-plat__panorama {
+  width: calc(84 * var(--u));
+  height: calc(26 * var(--u));
+}
+
+.mb-plat__recit-serif--elegant {
+  margin: auto 0;
+  font-size: calc(3.2 * var(--u) * var(--mb-plat-texte, 1));
+}
+
 /* --- Colophon ---------------------------------------------------------------- */
 .page--colophon .page__content {
   display: flex;

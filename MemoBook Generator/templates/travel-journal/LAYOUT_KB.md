@@ -57,7 +57,7 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 
 | Champ | Type | Rôle |
 |---|---|---|
-| `book_title` | requis | Titre de couverture, sur la photo |
+| `book_title` | requis | Titre de couverture, sur la photo. **Sans `cover`** : voir la ligne `cover` |
 | `book_subtitle` | optionnel | Bandeau blanc incliné sous le titre |
 | `authors`, `date_range` | optionnels | Signature en bas de couverture |
 | `cover_photo` | optionnel | Photo pleine page de couverture |
@@ -69,10 +69,14 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 | `intro_title`, `intro_text` | optionnels | Page d'introduction (`intro_text` en HTML) |
 | `intro_photos[]` | 0 à 2 | Photos scotchées en haut de l'introduction |
 | `days[]` | requis | **Une entrée = un bloc de récit, pas une page** — voir ci-dessous |
+| `cover` | optionnel | **Les deux plats choisis dans la personnalisation** (T259). Écrit par le serveur après la mise en page (`backend/src/services/bookCovers.ts`) : le gabarit de chaque plat (`family`, l'un des sept), sa photo, ses mots, ses chiffres, et de combien réduire un texte trop long. Présent, il **remplace** la couverture générique (`book_title` sur `cover_photo`) et ajoute le plat de dos en toute dernière page. Absent — un carnet composé avant le 17/11/2026 —, rien ne change. ⚠️ Ce n'est pas la couverture **imprimée** d'un relié, que l'atelier compose à part (§ « Couverture imprimée (Pumbo) ») |
 | `back_cover` | optionnel | Quatrième de couverture. **Sans `image`, la page « Le voyage continue en dehors du livre »** (15/10/2026) : invitation à suivre le compte Instagram, QR code, tampon, compte et logo — la même pour tous les carnets, ses champs de texte n'y sont plus lus. Avec `image`, la variante photo, inchangée |
 
 Pages toujours produites, dans l'ordre : **couverture → colophon →
-introduction (si `intro_text`) → étapes → quatrième de couverture**.
+introduction (si `intro_text`) → étapes → quatrième de couverture**, et, avec
+`cover`, **le plat de dos en dernier** — on referme le carnet dessus. La page
+« Le voyage continue » le précède et ne bouge pas : elle est la dernière page
+qu'on lit, le plat est le dos qu'on regarde.
 
 ## Étapes, chapitres et sauts de page
 

@@ -409,6 +409,47 @@ describe("garde-fous de l'API", () => {
     expect(await harness.prisma.render.count({ where: { memoId } })).toBe(1);
   });
 
+  it("compose le carnet avec les plats choisis dans la personnalisation (T259)", async () => {
+    const memoId = await createMemo();
+    await postAudio(memoId, "2026-01-03T09:00:00.000Z", "Bogotá");
+
+    // Ce que le voyageur règle sur l'écran des couvertures : un gabarit par
+    // plat, ses mots, et les chiffres qu'il veut au dos.
+    const regler = (body: Record<string, unknown>) =>
+      harness.app.inject({
+        method: "PATCH",
+        url: `/v1/trips/${memoId}/covers`,
+        headers: { authorization },
+        payload: body,
+      });
+    expect((await regler({ face: "front", styleId: "front-assouline" })).statusCode).toBe(200);
+    expect((await regler({ face: "front", title: "Colombie" })).statusCode).toBe(200);
+    expect((await regler({ face: "front", subtitle: "Claire et Gus\nJanvier 2026" })).statusCode).toBe(200);
+    expect((await regler({ face: "back", styleId: "back-assouline" })).statusCode).toBe(200);
+    expect((await regler({ face: "back", subtitle: "Trois semaines de routes." })).statusCode).toBe(200);
+    expect((await regler({ face: "back", statIds: ["stat-days", "stat-memories"] })).statusCode).toBe(200);
+
+    const lance = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memoId}/renders`,
+      headers: { authorization },
+    });
+    expect(lance.statusCode).toBe(202);
+
+    const render = await harness.prisma.render.findUniqueOrThrow({
+      where: { id: lance.json<{ id: string }>().id },
+    });
+    const payload = render.payload as { cover?: Record<string, Record<string, unknown>> };
+
+    // **Le chaînon qui manquait** : les choix arrivent jusqu'au payload, donc
+    // jusqu'au gabarit. Ils se rangeaient en base et personne ne venait les y
+    // lire — le carnet sortait avec la couverture générique.
+    expect(payload.cover?.["front"]).toMatchObject({ family: "assouline", title: "Colombie" });
+    expect(payload.cover?.["front"]).toMatchObject({ authors: "Claire et Gus", when: "Janvier 2026" });
+    expect(payload.cover?.["back"]).toMatchObject({ family: "assouline", text: "Trois semaines de routes." });
+    expect(payload.cover?.["back"]?.["stats"]).toHaveLength(2);
+  });
+
   it("rend la composition en cours, et remplace celle qui ne finira jamais", async () => {
     const memoId = await createMemo();
     await postAudio(memoId, "2026-01-03T09:00:00.000Z", "Bogotá");

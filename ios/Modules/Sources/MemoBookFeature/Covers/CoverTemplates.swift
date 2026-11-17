@@ -27,8 +27,18 @@ import SwiftUI
 ///   300 pt sur l'écran de choix. Et les tailles de texte ne suivent pas le
 ///   Dynamic Type — c'est l'image d'un objet imprimé (voir ``CoverPlate``).
 ///
-/// ⚠️ **Ce n'est toujours pas le rendu d'impression** : la composition du PDF
-/// qui lira ces choix reste à écrire (T223).
+/// **L'aperçu PDF dessine les mêmes plats** depuis le 17/11/2026 (T259) : le
+/// gabarit du carnet les redessine en HTML d'après ces mêmes choix
+/// (`templates/travel-journal/index.html`, § « Les plats du carnet »). Les
+/// mesures sont les mêmes des deux côtés — des centièmes de la largeur du
+/// plat —, et une valeur changée ici se reporte là-bas telle quelle. On
+/// choisit une couverture en la regardant : elle doit sortir telle qu'on l'a
+/// vue.
+///
+/// ⚠️ **Ce n'est toujours pas le rendu d'impression** d'un relié : la
+/// couverture imprimée n'est pas une page du carnet (largeur du dos, fond
+/// perdu, autre papier) et l'atelier la compose à part
+/// (`MemoBook Generator/public/couverture-styles.js`).
 struct CoverTemplate: View {
     let family: CoverFamily
     let face: CoverFace

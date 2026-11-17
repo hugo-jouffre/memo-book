@@ -67,7 +67,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T256 | **Les sept gabarits de couverture sont dans l'app** (08/10/2026), redessinés d'après `assets/covers` avec la photo et les mots du voyageur ; la 4e « assortie » est celle de la même famille. Restent trois choix à valider : (1) **les ornements** — la palme d'Assouline, la moto, la route, le globe et le motard de Dessin, les courbes de Photo-dessin — sont **découpés tels quels** dans tes plats (`ios/Tools/import-cover-ornaments.py`), donc les mêmes pour tous les voyages ; les aquarelles et les timbres de ta maquette sont remplacés par les **photos du voyage**. Faut-il des ornements par voyage (générés) ? (2) le dos « Par défaut » montre un trajet stylisé à la place de la carte du pays (elle viendra du gabarit d'impression) ; (3) les polices sont approchées (empattements et grotesque du système, Gloria Hallelujah) : les cadres Figma de chaque plat les donneraient au point près. La composition du PDF qui lit ces choix reste à écrire (T223) | Couvertures |
+| T256 | **Les sept gabarits de couverture sont dans l'app** (08/10/2026), redessinés d'après `assets/covers` avec la photo et les mots du voyageur ; la 4e « assortie » est celle de la même famille. Restent trois choix à valider : (1) **les ornements** — la palme d'Assouline, la moto, la route, le globe et le motard de Dessin, les courbes de Photo-dessin — sont **découpés tels quels** dans tes plats (`ios/Tools/import-cover-ornaments.py`), donc les mêmes pour tous les voyages ; les aquarelles et les timbres de ta maquette sont remplacés par les **photos du voyage**. Faut-il des ornements par voyage (générés) ? (2) le dos « Par défaut » montre un trajet stylisé à la place de la carte du pays (elle viendra du gabarit d'impression) ; (3) les polices sont approchées (empattements et grotesque du système, Gloria Hallelujah) : les cadres Figma de chaque plat les donneraient au point près. La composition de l'aperçu PDF lit désormais ces choix et dessine les mêmes plats (T259, 17/11/2026) ; la couverture **imprimée** reste celle de l'atelier | Couvertures |
 
 ### Aperçu PDF, partage, commande
 
@@ -117,14 +117,15 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 ### Lot du 5 novembre — retours du Japon
 
 Les points envoyés par Hugo le 05/11/2026 depuis le Japon, **dans son ordre** :
-c'est celui dans lequel ils se traitent. Trente-trois au départ, dont six
+c'est celui dans lequel ils se traitent. Trente-trois au départ, dont sept
 réglés le 17/11 — les images absentes du PDF ([PR 188](https://github.com/hugo-jouffre/memo-book/pull/188)),
 le jour vide et les étapes sans lieu ([PR 211](https://github.com/hugo-jouffre/memo-book/pull/211),
 [212](https://github.com/hugo-jouffre/memo-book/pull/212)), le champ de saisie
 ([208](https://github.com/hugo-jouffre/memo-book/pull/208)), « Le saviez-vous » au lieu de « Quiz »
 ([207](https://github.com/hugo-jouffre/memo-book/pull/207)), le plafond de 180 pages
-([209](https://github.com/hugo-jouffre/memo-book/pull/209)) et l'aperçu qui se
-recomposait sans raison (T258) — et deux à moitié, dont seul le reste figure
+([209](https://github.com/hugo-jouffre/memo-book/pull/209)) l'aperçu qui se
+recomposait sans raison (T258) et les plats du PDF qui n'étaient pas ceux
+qu'on avait choisis (T259) — et deux à moitié, dont seul le reste figure
 ici (T265, T267).
 
 ⚠️ **Ils n'étaient écrits nulle part** pendant douze jours : ni ici, ni dans un
@@ -134,7 +135,6 @@ pas dans ce fichier n'existe pas.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T259 | **Les plats du PDF ne sont pas ceux choisis dans la personnalisation.** Le sélecteur de style des couvertures est dans l'app depuis le 08/10, mais la composition ne le lit pas : le carnet sort avec des plats qui ne sont pas ceux qu'on a validés. C'est le « reste à écrire » de T256 ; T223 n'existe plus comme ticket ouvert | Couvertures, Aperçu PDF |
 | T260 | **Le chargement des images est très long dans la personnalisation des couvertures.** À mesurer avant de corriger : ce sont les photos du voyage qui alimentent les gabarits, et rien ne dit encore si le temps part dans le réseau, dans le décodage ou dans le rendu des sept plats | Couvertures |
 | T261 | **Une ligne blanche horizontale en bas de la première de couverture** dans le PDF. Un filet d'un pixel, probablement un arrondi de la boîte du plat contre le bord de la page | Aperçu PDF, impression |
 | T262 | **Un export pendant le voyage ne dit pas qu'il est partiel.** La couverture devrait porter le **numéro d'édition** (#1, #2…), le **pourcentage du trajet** déjà parcouru, et le **nom de l'étape qui regroupe** les étapes couvertes. Rien de tout ça n'existe : aucune notion d'édition dans le code (`bookComposer.ts`, gabarit `travel-journal`) | Aperçu PDF, impression |
@@ -151,7 +151,7 @@ pas dans ce fichier n'existe pas.
 | T273 | **Vérifier qu'on peut envoyer des popups aux utilisateurs sans leur faire retélécharger l'app**, et comprendre comment on le fait. Commencer à recueillir leur avis dans l'app, **sans** proposer de note sur l'App Store pour le moment | Partout |
 | T274 | **Vérifier que tout est bien en production**, et que le compte TestFlight de Hugo l'est aussi | Hors app |
 | T275 | **L'envoi d'une photo traîne et annonce « hors ligne » alors que la connexion est bonne.** Le diagnostic est déjà écrit dans `ios/CLAUDE.md` § Hors ligne — « en ligne » ne veut pas dire « l'API répond », et un échec de transport renvoie le tour dans la file. Reste à savoir pourquoi l'envoi d'une photo y tombe si souvent : taille du fichier, délai d'attente, ou conversion JPEG | Conversation — photos |
-| T276 | **Les titres posés sur la 1re et la 4e de couverture ne fonctionnent pas.** Distinct de T259 : là ce sont les mots du voyageur, pas le gabarit | Couvertures |
+| T276 | **Les titres posés sur la 1re et la 4e de couverture ne fonctionnent pas.** Distinct de T259 : là ce sont les mots du voyageur, pas le gabarit. Depuis T259 (17/11/2026), le chemin serveur est vérifié de bout en bout — `PATCH /v1/trips/:id/covers` les garde et le payload de composition les porte (`test/pipeline.test.ts`) : ce qui reste est à chercher côté app | Couvertures |
 | T277 | **Un appui sur l'aperçu du PDF doit l'afficher en grand.** Aujourd'hui la vignette ne mène nulle part | Aperçu PDF |
 | T278 | **Les titres ne se distinguent pas assez du corps du texte** dans le carnet composé. Affaire de hiérarchie typographique dans le gabarit, pas de contenu | Impression, Aperçu PDF |
 | T279 | **Les souvenirs ne sont pas toujours dans l'ordre chronologique** et gardent l'ordre du vocal, qui peut être très désordonné. Hugo demande si c'est dû au modèle. [PR 210](https://github.com/hugo-jouffre/memo-book/pull/210) donne l'outil pour **voir** les reculs de date sur un vrai voyage ; aucun correctif n'est écrit | Impression, Conversation |
