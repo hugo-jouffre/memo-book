@@ -14,6 +14,7 @@ import {
 } from "./conversation.js";
 import {
   OPENING_PAUSE_MS,
+  REDACTION_UNWRITTEN,
   SUGGESTION_SETS,
   photosWanted,
   redactionKeptFor,
@@ -468,6 +469,10 @@ export async function askToSplit(
  * `asksPhotosFor` part avec la bulle : c'est lui qui rangera les photos qui
  * suivent dans l'étape de **ce** récit (`photosTargetEntryId`).
  *
+ * **Elle parle aussi quand la rédaction a échoué** : le mot-pour-mot part
+ * dans le carnet, le souvenir compte, et MEMO le dit — mais sans prétendre
+ * l'avoir écrit (``REDACTION_UNWRITTEN``).
+ *
  * Rend `false` quand il n'y a rien à dire — pas de fiche, ou un souvenir déjà
  * validé —, exactement comme la question qu'elle remplace.
  */
@@ -487,7 +492,19 @@ export async function confirmRedaction(db: Db, entryId: string, doubts: readonly
   });
   if (count === 0) return false;
 
-  const kept = redactionKeptFor(doubts);
+  // ⚠️ **La bulle ne doit pas démentir la fiche** (17/11/2026). Appelée aussi
+  // depuis le `catch` de la rédaction (`jobs/redact.ts`), elle disait « Voilà
+  // ton texte pour le carnet » au-dessus d'une fiche qui venait d'annoncer
+  // qu'elle n'avait pas réussi à l'écrire — et c'est la bulle qu'on lit en
+  // dernier. Voir ``REDACTION_UNWRITTEN`` : deux semaines de rédactions
+  // tombées faute de crédit ont été annoncées comme des succès.
+  //
+  // L'état se **lit** ici, plutôt que de se passer en paramètre : les deux
+  // appels viennent du même job, à une ligne d'écart, et un drapeau qu'on
+  // oublie de passer rendrait le mensonge silencieux. Le `catch` écrit
+  // `failed` avant d'appeler, et le chemin heureux `ready` : la fiche relue
+  // juste au-dessus porte déjà le bon état.
+  const kept = card.entry.redactionStatus === "failed" ? REDACTION_UNWRITTEN : redactionKeptFor(doubts);
   const written = finalTextOf(card.entry)?.trim() ?? "";
   const budget = written ? await photoRequestFor(db, card.memoId, written) : null;
   // À 0 % de photos, le carnet n'en porte aucune : on ne réclame pas au
