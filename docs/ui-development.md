@@ -13,6 +13,11 @@ trois colonnes : `| # | Sujet | Écran / parcours |`, l'écran nommé comme dans
 `docs/vocabulaire.md`. Un nouveau ticket prend le numéro suivant du plus grand
 de ce fichier.
 
+**Une exception au classement par écran** : un lot de retours arrivé d'un coup
+garde sa propre table, dans l'ordre où il a été envoyé — voir « Lot du
+5 novembre ». Éclaté par écran, un lot cesse de se lire comme un lot, et c'est
+exactement comme ça que celui-là s'est perdu douze jours.
+
 ## Les règles, en une ligne chacune
 
 Le détail et leurs raisons : § 1 du journal archivé.
@@ -108,6 +113,54 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 | T204 | L'e-mail de réinitialisation arrive en indésirables : SPF, DKIM, DMARC et le sous-domaine `tx.memo-book.com` à poser chez Resend et au registrar (ex-T145). Même domaine, même sort pour l'e-mail « Tes données MemoBook sont prêtes » (01/10/2026) | Entrée — mot de passe oublié, Profil — export |
 | T254 | Les conditions d'utilisation et la politique de confidentialité de l'app sont à republier **à l'identique** sur memo-book.com (reste de T247) | Site |
 | T257 | **Rappel pour Hugo : republier sur memo-book.com les CGU et la confidentialité du lot 14** (19/10/2026). CGU, chapitre « Abonnement » : « Quand votre dernier voyage en cours se termine, MemoBook vous rappelle que vous pouvez résilier votre abonnement » (D4). Confidentialité : même rappel au § 2.4 (ex-2.5), l'ancien § 2.1 « Formulaire bêta-testeur » retiré (les suivants glissent d'un rang) et « Stripe Payments Europe Ltd. (paiement des carnets imprimés) » ajouté aux destinataires (D6). Le texte à copier est celui de `TermsOfUse.swift` et `PrivacyPolicy.swift` | Site |
+
+### Lot du 5 novembre — retours du Japon
+
+Les points envoyés par Hugo le 05/11/2026 depuis le Japon, **dans son ordre** :
+c'est celui dans lequel ils se traitent. Trente-trois au départ, dont cinq
+réglés le 17/11 — les images absentes du PDF ([PR 188](https://github.com/hugo-jouffre/memo-book/pull/188)),
+le jour vide et les étapes sans lieu ([PR 211](https://github.com/hugo-jouffre/memo-book/pull/211),
+[212](https://github.com/hugo-jouffre/memo-book/pull/212)), le champ de saisie
+([208](https://github.com/hugo-jouffre/memo-book/pull/208)), « Le saviez-vous » au lieu de « Quiz »
+([207](https://github.com/hugo-jouffre/memo-book/pull/207)), le plafond de 180 pages
+([209](https://github.com/hugo-jouffre/memo-book/pull/209)) — et deux à moitié, dont
+seul le reste figure ici (T265, T267).
+
+⚠️ **Ils n'étaient écrits nulle part** pendant douze jours : ni ici, ni dans un
+ticket, seulement dans le message de Hugo et dans les corps des PR qui en
+traitaient un. C'est pour ça qu'on a pu les croire perdus. Un retour qui n'entre
+pas dans ce fichier n'existe pas.
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T258 | **L'aperçu se recompose alors que rien n'a changé.** « Ça mouline à nouveau même quand le carnet n'a subi aucune modification » : une composition coûte un rendu complet et une à deux minutes d'attente. Il manque un repère de fraîcheur — la dernière composition reste valable tant que ni souvenir, ni photo, ni réglage n'a bougé | Aperçu PDF |
+| T259 | **Les plats du PDF ne sont pas ceux choisis dans la personnalisation.** Le sélecteur de style des couvertures est dans l'app depuis le 08/10, mais la composition ne le lit pas : le carnet sort avec des plats qui ne sont pas ceux qu'on a validés. C'est le « reste à écrire » de T256 ; T223 n'existe plus comme ticket ouvert | Couvertures, Aperçu PDF |
+| T260 | **Le chargement des images est très long dans la personnalisation des couvertures.** À mesurer avant de corriger : ce sont les photos du voyage qui alimentent les gabarits, et rien ne dit encore si le temps part dans le réseau, dans le décodage ou dans le rendu des sept plats | Couvertures |
+| T261 | **Une ligne blanche horizontale en bas de la première de couverture** dans le PDF. Un filet d'un pixel, probablement un arrondi de la boîte du plat contre le bord de la page | Aperçu PDF, impression |
+| T262 | **Un export pendant le voyage ne dit pas qu'il est partiel.** La couverture devrait porter le **numéro d'édition** (#1, #2…), le **pourcentage du trajet** déjà parcouru, et le **nom de l'étape qui regroupe** les étapes couvertes. Rien de tout ça n'existe : aucune notion d'édition dans le code (`bookComposer.ts`, gabarit `travel-journal`) | Aperçu PDF, impression |
+| T263 | **Chaque étape devrait porter sa date et sa température, avec une petite icône météo, sur l'accueil du voyage.** La rédaction relève déjà une icône (`weatherKey`, servie par `routes/serializers.ts`), mais **aucune température n'existe nulle part** dans le projet, et aucune vue iOS ne lit `weatherKey` hors de l'aperçu du carnet. Chaîne entière à faire : source de la température, colonne, sérialiseur, modèle Swift, vue | Accueil d'un voyage |
+| T264 | **La météo est mal placée dans l'aperçu et le PDF.** Elle ne s'imprime désormais que si le voyageur l'a dite dans son vocal (`structuring.ts` § météo), ce qui règle le « encore affichée » ; reste son emplacement dans la page, à reprendre avec le metteur en page | Aperçu PDF |
+| T265 | **Reste de la limite de photos** ([PR 206](https://github.com/hugo-jouffre/memo-book/pull/206) a fait 6 → 20, et le surplus s'annonce). La demande allait plus loin : **sans limite**, l'envoi découpé en plusieurs messages côté app ou la borne serveur relevée ; et surtout, quand il y en a trop, une **sélection par l'IA** sur l'esthétique, la netteté et la pertinence par rapport aux textes, avec un avertissement si le nombre de pages change. Chantier à lui seul | Conversation, mise en page |
+| T266 | **Les transcriptions demandent beaucoup d'améliorations, et portent des « – » qui font très IA.** Deux sujets dans un : la qualité du texte rendu, et ce tiret cadratin que le modèle place et qu'aucun voyageur n'écrit. Le second se traite dans la consigne de rédaction | Conversation — fiche de transcription, impression |
+| T267 | **Reste des en-têtes sans lieu** (la cause — crédit épuisé puis plafond de jetons — est corrigée par les [PR 211](https://github.com/hugo-jouffre/memo-book/pull/211) et [212](https://github.com/hugo-jouffre/memo-book/pull/212)). Ce qui manque : **déduire** le lieu quand il est déductible des étapes voisines, et à défaut **le faire demander par MEMO** dans le fil plutôt que d'imprimer une date seule | Conversation, impression |
+| T268 | **Revenir deux fois sur un voyage en 24 h devrait ouvrir l'app directement sur ce voyage.** Rien de tel n'existe (`RootView` ouvre toujours l'accueil). Demande une trace locale du dernier voyage ouvert et de sa date, et une règle d'expiration | Accueil, Accueil d'un voyage |
+| T269 | **Les messages doivent être préchargés en local pour que le fil s'ouvre vite**, et les nouveautés des co-voyageurs chargées en arrière-plan. État actuel : la conversation **ne s'ouvre pas sur le cache** — elle relit toujours le serveur, et ses trente derniers messages ne servent qu'au mode hors ligne (`ChatThread.forOfflineCache()`, `ios/CLAUDE.md` § cache). C'est ce choix qu'il faut rouvrir | Conversation |
+| T270 | **Un appui long sur un message doit ouvrir le menu contextuel natif iOS**, avec : copier, partager, supprimer, **déplacer dans une autre étape**, et sur une photo seulement **définir comme photo principale de l'étape** (petite étoile verte en haut à droite, utilisée pour l'accueil du voyage, les propositions de couverture et la mise en page) et **définir comme photo principale du voyage** (étoile lime à contour vert, utilisée pour l'accueil de l'app, l'accueil du voyage, le haut du chat, les couvertures et la mise en page). `BrandSwipeDrawer` porte déjà le motif « tiroir + menu contextuel + rotor VoiceOver », mais il n'est posé que sur l'accueil, la liste d'étapes et les réglages — **pas sur les bulles**. Les deux « photo principale » sont des colonnes, une route et un sérialiseur avant d'être une étoile | Conversation |
+| T271 | **Commander un carnet template** (façon Nature & Découvertes ou UnikJournal) depuis la page d'inscription, l'accueil, et le bas de l'accueil d'un voyage — « au cas où les utilisateurs en ont marre de remplir dans l'app ». Commande dans l'app, rapide : choix de la 1re et de la 4e de couverture, et du pack de stickers associé. Demande aussi des pages d'atterrissage dédiées, et d'en parler sur la home et les tarifs | Inscription, Accueil, Accueil d'un voyage, Site |
+| T272 | **Proposer à Clara de continuer avec nous**, sur un ou plusieurs sujets : les posts Instagram, les articles de blog (« pas sûr… »), et l'offre de carnet template contre une commission sur les ventes, l'investissement initial étant de notre côté — trouver un imprimeur pour les couvertures personnalisées, faire designer puis imprimer cent carnets semblables et les vendre | Hors app |
+| T273 | **Vérifier qu'on peut envoyer des popups aux utilisateurs sans leur faire retélécharger l'app**, et comprendre comment on le fait. Commencer à recueillir leur avis dans l'app, **sans** proposer de note sur l'App Store pour le moment | Partout |
+| T274 | **Vérifier que tout est bien en production**, et que le compte TestFlight de Hugo l'est aussi | Hors app |
+| T275 | **L'envoi d'une photo traîne et annonce « hors ligne » alors que la connexion est bonne.** Le diagnostic est déjà écrit dans `ios/CLAUDE.md` § Hors ligne — « en ligne » ne veut pas dire « l'API répond », et un échec de transport renvoie le tour dans la file. Reste à savoir pourquoi l'envoi d'une photo y tombe si souvent : taille du fichier, délai d'attente, ou conversion JPEG | Conversation — photos |
+| T276 | **Les titres posés sur la 1re et la 4e de couverture ne fonctionnent pas.** Distinct de T259 : là ce sont les mots du voyageur, pas le gabarit | Couvertures |
+| T277 | **Un appui sur l'aperçu du PDF doit l'afficher en grand.** Aujourd'hui la vignette ne mène nulle part | Aperçu PDF |
+| T278 | **Les titres ne se distinguent pas assez du corps du texte** dans le carnet composé. Affaire de hiérarchie typographique dans le gabarit, pas de contenu | Impression, Aperçu PDF |
+| T279 | **Les souvenirs ne sont pas toujours dans l'ordre chronologique** et gardent l'ordre du vocal, qui peut être très désordonné. Hugo demande si c'est dû au modèle. [PR 210](https://github.com/hugo-jouffre/memo-book/pull/210) donne l'outil pour **voir** les reculs de date sur un vrai voyage ; aucun correctif n'est écrit | Impression, Conversation |
+| T280 | **Le lieu en haut d'une étape est parfois complètement faux** — « Shanghai alors qu'on est à Tokyo ». La cause **n'est pas établie** : à instruire avec `scripts/inspecter-un-voyage.ts` sur le carnet réel avant de toucher au code | Impression, Accueil d'un voyage |
+| T281 | **Les notifications annoncent encore l'ancien lieu** — « on est encore à Tokyo alors qu'on a bougé » | Notifications |
+| T282 | **Faire valider les noms propres**, surtout ceux des amis, quand il y a un risque ou un doute : « Kom » au lieu de « Come ». MEMO devrait demander plutôt que d'imprimer une orthographe inventée | Conversation |
+| T283 | **Le bandeau « cible hors d'atteinte » arrive dès qu'on change le ratio.** Vérifié : `BookCustomisationModel.swift` le pose dans le réglage du ratio dès que la cible est personnalisée, avant tout appui sur la cible elle-même. La [PR 209](https://github.com/hugo-jouffre/memo-book/pull/209) a corrigé ce que le bandeau **proposait**, pas le moment où il paraît | Réglages du voyage |
+| T284 | **Aucune carte n'est générée dans le PDF d'aperçu.** Le gabarit sait pourtant le faire — `layout_chapter_map` ouvre un chapitre sur la carte de la région « quand l'analyse a situé le lieu » (`mise-en-page.js`, `README.md` du générateur). À reprendre par là : soit l'analyse ne situe rien, soit la carte ne se rend pas | Aperçu PDF, impression |
+| T285 | **Au partage d'un PDF, pouvoir choisir ce qu'on envoie** : tout depuis le début, ou seulement quelques étapes sélectionnées avant l'envoi. Rien de tel dans le code | Partager |
 
 ### En pause — v2
 
