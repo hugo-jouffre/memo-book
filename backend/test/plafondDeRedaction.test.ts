@@ -5,6 +5,7 @@ import {
   EMPTY_COHERENCE_SHEET,
   type RedactionInput,
 } from "../src/services/redaction.js";
+import pino from "pino";
 
 /**
  * Le plafond de jetons de la rédaction, et ce qu'on dit quand il est atteint.
@@ -51,6 +52,14 @@ function souvenir(): RedactionInput {
   };
 }
 
+
+/**
+ * Un logger qui n'écrit rien : le compteur de jetons (`logModelUsage`) est
+ * obligatoire dans le constructeur, et ce qu'il écrit n'est pas l'objet de ces
+ * tests.
+ */
+const muet = pino({ level: "silent" });
+
 describe("le plafond de jetons de la rédaction", () => {
   it("laisse au récit la place d'aller jusqu'au texte, et borne le relevé", async () => {
     const appels: Record<string, unknown>[] = [];
@@ -58,7 +67,7 @@ describe("le plafond de jetons de la rédaction", () => {
       { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ text: "ok" }) }] },
       appels,
     );
-    const redactor = new AnthropicRedactor(client, "claude-opus-5");
+    const redactor = new AnthropicRedactor(client, "claude-opus-5", muet);
 
     await redactor.redact(souvenir()).catch(() => undefined);
 
@@ -76,16 +85,40 @@ describe("le plafond de jetons de la rédaction", () => {
       { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ text: "ok" }) }] },
       appels,
     );
-    const redactor = new AnthropicRedactor(client, "claude-opus-5");
+    const redactor = new AnthropicRedactor(client, "claude-opus-5", muet);
 
     await redactor.redact(souvenir()).catch(() => undefined);
 
     expect(appels).toHaveLength(2);
   });
 
+  /**
+   * ⚠️ **Un appel qui bute au plafond est facturé comme les autres**, et c'est
+   * justement celui dont on veut lire le compte : c'est lui qui annonce que la
+   * réflexion a pris toute la place. Poser le compteur après les gardes, c'est
+   * ne plus mesurer que les appels qui réussissent — et perdre de vue le
+   * crédit au moment où il part le plus vite.
+   */
+  it("compte les jetons même quand l'appel bute au plafond", async () => {
+    const compte: Record<string, unknown>[] = [];
+    const logueur = {
+      info: (objet: Record<string, unknown>) => void compte.push(objet),
+      warn: () => undefined,
+    } as unknown as typeof muet;
+    const client = clientQuiRend(
+      { stop_reason: "max_tokens", content: [], usage: { input_tokens: 2_400, output_tokens: 64_000 } },
+      [],
+    );
+
+    await new AnthropicRedactor(client, "claude-opus-5", logueur).redact(souvenir()).catch(() => undefined);
+
+    expect(compte).toHaveLength(1);
+    expect(compte[0]).toMatchObject({ step: "recit", outputTokens: 64_000, headroomPercent: 0 });
+  });
+
   it("n'accuse pas la longueur du souvenir quand le plafond est atteint", async () => {
     const client = clientQuiRend({ stop_reason: "max_tokens", content: [] }, []);
-    const redactor = new AnthropicRedactor(client, "claude-opus-5");
+    const redactor = new AnthropicRedactor(client, "claude-opus-5", muet);
 
     const erreur = await redactor.redact(souvenir()).then(
       () => null,

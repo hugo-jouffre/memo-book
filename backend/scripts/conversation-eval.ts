@@ -39,6 +39,7 @@ import {
 import { AnthropicResponder } from "../src/services/conversationAnthropic.js";
 import { HeuristicResponder } from "../src/services/conversationHeuristics.js";
 import { EMPTY_COHERENCE_SHEET } from "../src/services/redaction.js";
+import pino from "pino";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SCENES_DIR = resolve(here, "../test/fixtures/conversation");
@@ -52,6 +53,14 @@ const { values } = parseArgs({
     model: { type: "string", default: process.env.ANTHROPIC_CONVERSATION_MODEL ?? "claude-sonnet-5" },
   },
 });
+
+
+/**
+ * Le compte des jetons va sur la **sortie d'erreur** : le rapport du banc
+ * garde stdout pour lui, et `2>/dev/null` suffit à n'en plus vouloir. C'est
+ * là qu'on veut les voir — un passage coûte 1 à 2 $ (`docs/modeles-ia.md`).
+ */
+const compteur = pino({ level: "info" }, pino.destination(2));
 
 // ---------------------------------------------------------------------------
 // Les scènes
@@ -400,7 +409,7 @@ function responderFor(): { responder: MemoResponder; label: string } {
     );
     process.exit(1);
   }
-  return { responder: new AnthropicResponder(new Anthropic({ apiKey }), values.model), label: values.model };
+  return { responder: new AnthropicResponder(new Anthropic({ apiKey }), values.model, compteur), label: values.model };
 }
 
 async function main(): Promise<void> {

@@ -1,4 +1,5 @@
 import type { ChatDisposition, ChatMessageKind } from "@prisma/client";
+import type { Logger } from "pino";
 import type { Env } from "../env.js";
 import type { CoherenceSheet, RedactedNeighbour } from "./redaction.js";
 import type { AppPlatform } from "./appPlatform.js";
@@ -723,12 +724,13 @@ export function fallbackResponder(): MemoResponder {
  * Le modèle **n'entre jamais en CI** : la CI pose `PIPELINE_MODE=fake`, comme
  * `test/helpers.ts`. Les tests du contrat se jouent contre un client doublé.
  */
-export function createResponder(env: Env): MemoResponder {
+export function createResponder(env: Env, logger: Logger): MemoResponder {
   if (env.PIPELINE_MODE === "fake") return new FakeResponder();
   if (env.ANTHROPIC_API_KEY === "") return env.live ? new HeuristicResponder() : new FakeResponder();
   return new AnthropicResponder(
     new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }),
     env.ANTHROPIC_CONVERSATION_MODEL,
+    logger,
   );
 }
 

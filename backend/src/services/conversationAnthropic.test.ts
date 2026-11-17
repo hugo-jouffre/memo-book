@@ -22,6 +22,7 @@ import {
   type ConversationInput,
 } from "./conversation.js";
 import { EMPTY_COHERENCE_SHEET } from "./redaction.js";
+import pino from "pino";
 
 /**
  * MEMO avec un modèle — **sans appeler le modèle**. Le client est doublé : ce
@@ -115,6 +116,14 @@ function client(
   } as unknown as Anthropic;
   return { anthropic, calls };
 }
+
+
+/**
+ * Un logger qui n'écrit rien : le compteur de jetons (`logModelUsage`) est
+ * obligatoire dans le constructeur, et ce qu'il écrit n'est pas l'objet de ces
+ * tests.
+ */
+const muet = pino({ level: "silent" });
 
 describe("le prompt", () => {
   it("donne le catalogue des puces depuis le code, pas une copie", () => {
@@ -258,7 +267,7 @@ describe("le rythme", () => {
 describe("un tour", () => {
   it("rend les bulles du modèle, avec sa signature", async () => {
     const { anthropic, calls } = client(ANSWER);
-    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").reply(turn());
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5", muet).reply(turn());
 
     expect(reply.beats.map((beat) => beat.text)).toEqual(ANSWER.beats);
     expect(reply.disposition).toBe("memory");
@@ -275,7 +284,7 @@ describe("un tour", () => {
 
   it("répond une commande sans appeler le modèle", async () => {
     const { anthropic, calls } = client(ANSWER);
-    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").reply(
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5", muet).reply(
       turn({ message: { ...turn().message, suggestionId: "accept" } }),
     );
 
@@ -286,19 +295,19 @@ describe("un tour", () => {
 
   it("jette une puce que le catalogue ne connaît pas", async () => {
     const { anthropic } = client({ ...ANSWER, suggestionIds: ["voice", "inventée"] });
-    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").reply(turn());
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5", muet).reply(turn());
     expect(reply.suggestionIds).toEqual(["voice"]);
   });
 
   it("ne retient pas la rose, l'épine et la graine quand le code l'interdit", async () => {
     const { anthropic } = client({ ...ANSWER, asksRoseEpineGraine: true });
-    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").reply(turn());
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5", muet).reply(turn());
     expect(reply.asksRoseEpineGraine).toBe(false);
   });
 
   it("garde le bouton quand le tour le permet", async () => {
     const { anthropic, calls } = client(PRICE_ANSWER);
-    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").reply(
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5", muet).reply(
       turn({
         message: PRICE_QUESTION,
         allows: { roseEpineGraine: false, callsToAction: ["subscribe", "open_trip_settings"] },
@@ -312,7 +321,7 @@ describe("un tour", () => {
 
   it("jette un bouton que le tour ne permet pas, ou que le catalogue ne connaît pas", async () => {
     const notAllowed = client(PRICE_ANSWER);
-    const reply = await new AnthropicResponder(notAllowed.anthropic, "claude-sonnet-5").reply(
+    const reply = await new AnthropicResponder(notAllowed.anthropic, "claude-sonnet-5", muet).reply(
       turn({ message: PRICE_QUESTION, allows: { roseEpineGraine: false, callsToAction: ["open_trip_settings"] } }),
     );
     expect(reply.callToActionId).toBeNull();
@@ -320,7 +329,7 @@ describe("un tour", () => {
     expect(reply.beats).toHaveLength(1);
 
     const invented = client({ ...PRICE_ANSWER, callToActionId: "open_url" });
-    const replyInvented = await new AnthropicResponder(invented.anthropic, "claude-sonnet-5").reply(
+    const replyInvented = await new AnthropicResponder(invented.anthropic, "claude-sonnet-5", muet).reply(
       turn({ message: PRICE_QUESTION, allows: { roseEpineGraine: false, callsToAction: ["subscribe"] } }),
     );
     expect(replyInvented.callToActionId).toBeNull();
@@ -331,7 +340,7 @@ describe("un tour", () => {
       ...ANSWER,
       beats: ["Tu étais où ?", "Et avec qui ?"],
     });
-    await expect(new AnthropicResponder(anthropic, "claude-sonnet-5").reply(turn())).rejects.toThrow(
+    await expect(new AnthropicResponder(anthropic, "claude-sonnet-5", muet).reply(turn())).rejects.toThrow(
       InvalidReplyError,
     );
   });
@@ -339,17 +348,17 @@ describe("un tour", () => {
   it("lève quand le modèle refuse, se coupe, ou rend du non-JSON", async () => {
     const refusal = client(ANSWER, { stopReason: "refusal" });
     await expect(
-      new AnthropicResponder(refusal.anthropic, "claude-sonnet-5").reply(turn()),
+      new AnthropicResponder(refusal.anthropic, "claude-sonnet-5", muet).reply(turn()),
     ).rejects.toThrow(/refusé/);
 
     const cut = client(ANSWER, { stopReason: "max_tokens" });
     await expect(
-      new AnthropicResponder(cut.anthropic, "claude-sonnet-5").reply(turn()),
+      new AnthropicResponder(cut.anthropic, "claude-sonnet-5", muet).reply(turn()),
     ).rejects.toThrow(/avant la fin/);
 
     const garbage = client(ANSWER, { text: "désolé, je ne peux pas" });
     await expect(
-      new AnthropicResponder(garbage.anthropic, "claude-sonnet-5").reply(turn()),
+      new AnthropicResponder(garbage.anthropic, "claude-sonnet-5", muet).reply(turn()),
     ).rejects.toThrow();
   });
 });
@@ -382,7 +391,7 @@ describe("le contexte du voyage", () => {
 
   it("extrait et reformule, en disant au modèle ce qui est su et ce qui vient d'être demandé", async () => {
     const { anthropic, calls } = client(EXTRACTED);
-    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").gatherContext(
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5", muet).gatherContext(
       contextTurn("Je pars avec ma femme Clara et Léo"),
     );
 
@@ -398,14 +407,14 @@ describe("le contexte du voyage", () => {
 
   it("jette un accusé qui pose une question : la question appartient au code", async () => {
     const { anthropic } = client({ ...EXTRACTED, acknowledgement: "Clara et Léo, super ! Vous partez quand ?" });
-    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").gatherContext(contextTurn("Clara et Léo"));
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5", muet).gatherContext(contextTurn("Clara et Léo"));
     expect(reply.acknowledgement).toBeNull();
   });
 
   it("lève sur un refus : le job passe au repli", async () => {
     const { anthropic } = client(EXTRACTED, { stopReason: "refusal" });
     await expect(
-      new AnthropicResponder(anthropic, "claude-sonnet-5").gatherContext(contextTurn("Clara")),
+      new AnthropicResponder(anthropic, "claude-sonnet-5", muet).gatherContext(contextTurn("Clara")),
     ).rejects.toThrow();
   });
 

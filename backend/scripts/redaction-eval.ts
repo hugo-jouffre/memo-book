@@ -39,6 +39,7 @@ import {
   type RedactionEffort,
   type RedactionResult,
 } from "../src/services/redaction.js";
+import pino from "pino";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SCENE_PATH = resolve(here, "../test/fixtures/redaction/grece-maxime.json");
@@ -57,6 +58,14 @@ const { values, positionals } = parseArgs({
     "judge-model": { type: "string", default: "claude-opus-5-5" },
   },
 });
+
+
+/**
+ * Le compte des jetons va sur la **sortie d'erreur** : le rapport du banc
+ * garde stdout pour lui, et `2>/dev/null` suffit à n'en plus vouloir. C'est
+ * là qu'on veut les voir — un passage coûte 1 à 2 $ (`docs/modeles-ia.md`).
+ */
+const compteur = pino({ level: "info" }, pino.destination(2));
 
 // ---------------------------------------------------------------------------
 // La scène
@@ -156,7 +165,7 @@ function checksOf(result: RedactionResult): string[] {
 
 async function run(client: Anthropic): Promise<RunReport> {
   const scene = JSON.parse(await readFile(values.scene, "utf8")) as Scene;
-  const redactor = new AnthropicRedactor(client, values.model, values.effort as RedactionEffort);
+  const redactor = new AnthropicRedactor(client, values.model, compteur, values.effort as RedactionEffort);
 
   let sheet: CoherenceSheet = EMPTY_COHERENCE_SHEET;
   const previous: RedactedNeighbour[] = [];
