@@ -10,6 +10,7 @@ import {
   OPENING_TEXT,
   PHOTOS_VALIDATED_BEFORE_RETURN,
   PRECISION_NOTED,
+  REDACTION_UNWRITTEN,
   REVISION_NOTED,
   redactionKept,
   returnForPhotos,
@@ -126,9 +127,16 @@ interface ChatThreadJson {
 class ScriptedRedactor extends FakeRedactor {
   doubts: string[] = [];
   inputs: RedactionInput[] = [];
+  /**
+   * **La panne de l'écrivain, sur commande.** Le crédit Anthropic épuisé
+   * (26/10–08/11/2026) et le plafond de jetons atteint (17/11/2026)
+   * remontent ici de la même façon : une exception, et une fiche `failed`.
+   */
+  fails: string | null = null;
 
   override async redact(input: RedactionInput): Promise<RedactionResult> {
     this.inputs.push(input);
+    if (this.fails) throw new Error(this.fails);
     return { ...(await super.redact(input)), doubts: this.doubts };
   }
 }
@@ -159,6 +167,7 @@ beforeEach(async () => {
   responder.inputs = [];
   redactor.doubts = [];
   redactor.inputs = [];
+  redactor.fails = null;
 });
 
 async function seedTrip(ownerId: string) {
@@ -618,6 +627,77 @@ async function readSteps(memoId: string) {
     steps: { id: string; number: number; entryIds: string[]; photoUrl: string | null; storyCount: number }[];
   }>().steps;
 }
+
+/**
+ * ⚠️ **Une panne qui s'annonce comme un succès ne se répare pas** — personne
+ * ne la voit.
+ *
+ * Du 26/10 au 08/11/2026, huit rédactions du carnet de Hugo sont tombées
+ * faute de crédit Anthropic. La fiche le disait pourtant (phase `unwritten`),
+ * mais la bulle juste en dessous répondait « Voilà ton texte pour le carnet :
+ * je le garde tel quel » — et c'est la dernière qu'on lit. Deux semaines ont
+ * passé sur « une journée vide alors que le chat m'a dit que tout avait été
+ * renseigné » (Hugo, 16/11/2026).
+ *
+ * La file **en ligne** des tests remonte l'exception de la rédaction jusqu'à
+ * la route, qui rend une erreur : en production c'est un job pg-boss à part,
+ * et le tour du voyageur ne la voit pas. Tout ce qui est vérifié ici est
+ * écrit **avant** qu'elle ne remonte — c'est bien ce que le voyageur trouve
+ * dans son fil.
+ */
+describe("la rédaction qui échoue ne s'annonce plus comme un succès (17/11/2026)", () => {
+  const PANNE = "Your credit balance is too low to access the Anthropic API.";
+  const RECIT =
+    "Ce matin on est partis tôt pour éviter la chaleur, on a marché jusqu'au marché de Testaccio.";
+
+  /** Les bulles de MEMO venues après le tour du voyageur, dans l'ordre. */
+  function saidAfter(thread: ChatThreadJson, afterId: string): string[] {
+    const mine = thread.messages.find((message) => message.id === afterId);
+    return memoBubbles(thread)
+      .filter((message) => message.seq > (mine?.seq ?? 0))
+      .map((message) => (message.body.kind === "text" ? message.body.text : ""));
+  }
+
+  it("dit qu'il n'a pas réussi à l'écrire, et la fiche ne le démentit plus", async () => {
+    const memo = await seedTrip(owner.accountId);
+    redactor.fails = PANNE;
+
+    const { id } = await say(memo.id, RECIT);
+    const thread = await readThread(memo.id);
+    const said = saidAfter(thread, id);
+
+    expect(said[0]).toBe(REDACTION_UNWRITTEN);
+    // Le mensonge, nommément : plus aucune bulle ne prétend qu'un texte a été
+    // écrit. C'est l'assertion qui garde la correction.
+    expect(said.some((text) => text.includes("Voilà ton texte pour le carnet"))).toBe(false);
+
+    // La fiche disait déjà la vérité — les deux concordent enfin.
+    const card = thread.messages.find((message) => message.body.kind === "transcript");
+    expect(card?.body.kind === "transcript" && card.body.transcript.phase).toBe("unwritten");
+
+    const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id } });
+    expect(entry.redactionStatus).toBe("failed");
+    expect(entry.redactionError).toContain("credit balance");
+  });
+
+  it("compte le souvenir quand même, et demande ses photos sur le mot-pour-mot", async () => {
+    const memo = await seedTrip(owner.accountId);
+    redactor.fails = PANNE;
+
+    const { id } = await say(memo.id, RECIT);
+    const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id } });
+
+    // Rien n'est perdu : le souvenir est validé, et son mot-pour-mot part
+    // dans le carnet (`finalTextOf`). C'est donc sur lui que le nombre de
+    // photos se calcule, et non sur un texte rédigé qui n'existe pas.
+    expect(entry.validatedAt).not.toBeNull();
+    const budget = photoBudgetFor((entry.transcript ?? "").trim(), memo);
+    expect(budget.photos).toBeGreaterThan(0);
+
+    const said = saidAfter(await readThread(memo.id), id);
+    expect(said).toEqual([REDACTION_UNWRITTEN, photosWanted(budget.photos, budget.pages)]);
+  });
+});
 
 describe("le téléphone du tour (lot B5, 22/10/2026)", () => {
   it("retient Android sur le tour, et le job le dit à MEMO", async () => {

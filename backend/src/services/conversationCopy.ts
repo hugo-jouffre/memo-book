@@ -112,6 +112,35 @@ export function redactionKept(): string {
 }
 
 /**
+ * **Ce que MEMO dit quand la rédaction a échoué** (17/11/2026).
+ *
+ * Il disait ``redactionKept`` — « Voilà ton texte pour le carnet » — et
+ * c'était faux : il n'y avait pas de texte rédigé, seulement la
+ * transcription. La fiche juste au-dessus l'annonçait pourtant
+ * (`ChatCopy.transcriptUnwritten`, phase `unwritten`), si bien que la bulle
+ * **démentait la fiche** — et c'est la bulle qu'on lit en dernier.
+ *
+ * ⚠️ **C'est ce qui a laissé passer deux semaines.** « Une journée vide alors
+ * que le chat m'a dit que tout avait été renseigné » (Hugo, 16/11/2026) : du
+ * 26/10 au 08/11, huit rédactions sont tombées faute de crédit Anthropic, et
+ * MEMO les a toutes annoncées comme autant de succès. Une panne qui se
+ * présente comme une réussite ne se répare pas : personne ne la voit.
+ *
+ * Ce qui reste vrai est dit — les mots sont gardés, et le souvenir compte
+ * dans le carnet (`finalTextOf` retombe sur la transcription, T227 la
+ * compte). Ce qui manque l'est aussi, et sans alarme : le mot-pour-mot part
+ * dans le carnet, rien n'est perdu. Réessayer est à un appui, sur la fiche
+ * (« Ré-analyser »).
+ *
+ * Elle ne cite pas davantage les passages incompris que ``redactionKept`` :
+ * une rédaction qui n'a pas eu lieu n'a de toute façon rien compris ni
+ * écarté.
+ */
+export const REDACTION_UNWRITTEN =
+  "Je n’ai pas réussi à écrire ce souvenir cette fois. Tes mots sont gardés mot pour mot, " +
+  "et ton carnet compte une étape de plus — tu peux me faire réessayer quand tu veux.";
+
+/**
  * La même bulle pour une app plus ancienne, qui pose encore la question.
  *
  * Elle citait elle aussi les passages incompris ; elle ne le fait plus, pour
