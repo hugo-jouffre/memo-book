@@ -710,7 +710,14 @@
             {% endif %}
             {% if day.quiz %}
               <div class="mb-quiz">
-                <span class="mb-quiz__label">{{ day.quiz.label | default('Le saviez-vous ?') }}</span>
+                {# **Un quiz s'appelle un quiz** (Hugo, 05/11/2026 — « parfois il
+                   est indiqué "Le saviez-vous" alors que c'est un quiz »).
+                   « Le saviez-vous ? » est l'un des quatre titres du post-it de
+                   fun fact (`TITRES_ENCART`, mise-en-page.js) : il annonce une
+                   anecdote, pas une question à laquelle on répond. Et comme
+                   rien ne pose jamais `quiz.label`, le repli s'appliquait à
+                   **tous** les quiz. #}
+                <span class="mb-quiz__label">{{ day.quiz.label | default('Quiz') }}</span>
                 <p class="mb-quiz__question">{{ day.quiz.question }}</p>
                 {% if day.quiz.choices and day.quiz.choices | length >= 2 %}
                   <ul class="mb-quiz__choices">
