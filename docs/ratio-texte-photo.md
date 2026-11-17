@@ -62,6 +62,42 @@ Mesurés sur le gabarit (colonne 349 pt depuis les marges de reliure, hauteur ut
 | **75 %** | 3 | `layout_hero_top` en tête, `layout_collage` à bande haussée, les trios, et une planche pour absorber le reliquat |
 | **100 %** | — (se déduit des pages) | `layout_photo_wall_intro` (la première page garde le bandeau), puis `layout_photo_page`. Aucun `mb-note`, des légendes sous environ une photo sur deux |
 
+### La pleine page, et combien le curseur en ouvre
+
+Une photo exceptionnelle, seule sur sa page, s'imprime bord à bord
+(`pleine_page`). Deux choses décident, et il faut les deux.
+
+**La photo a un droit de veto** (`pleinePageAdmise`) : notée 9 au moins par
+l'analyse, pas une photo de groupe — elle serait rognée —, au format de la
+page à un tiers près, et assez définie pour 154 × 216 mm à 200 dpi. Aucun
+palier ne lève ce veto : monter le curseur ne doit pas agrandir n'importe
+quoi.
+
+**Le curseur décide de la fréquence** (`quotaPleinePage`, Hugo, 25/10/2026 —
+« lorsque le ratio de photos est plus important, on doit vraiment avoir des
+pages entières dédiées à des photos »). Il ne la décidait pas : c'était une
+par chapitre à tous les paliers, et un carnet à 90 % en avait autant qu'un
+carnet à 30 %.
+
+| Palier | Pleines pages |
+|---|---|
+| **moins de 50 %** | aucune — le récit tient la feuille, et c'est tout le sens d'un palier bas |
+| **50 à 74 %** | une par chapitre, ce que le carnet faisait déjà |
+| **75 à 99 %** | une par étape : la planche existait pour absorber le reliquat, il manquait qu'une belle photo l'occupe seule |
+| **100 %** | sans limite — les pages sont de toute façon entièrement photo |
+
+Mesuré sur quatre étapes au même lieu portant les mêmes photos, toutes dignes
+d'une pleine page : **0, 0, 1, 2, 4** pages pleines à 0, 30, 50, 75 et 100 %.
+Le cas est dans `backend/test/miseEnPageAtelier.test.ts`.
+
+⚠️ **Une pleine page est une page, jamais deux.** « On ne veut jamais une
+seule photo à cheval sur la reliure » (Hugo, 16/11/2026). Ce qu'on appelle
+double page dans ce carnet, c'est **deux pages de photos qui se font face**
+(`MAX_PAGES_PHOTOS`, et à 100 % `layout_photo_wall_intro` puis
+`layout_photo_page`) — pas une image coupée par le pli. Le pli mange une
+bande variable selon l'épaisseur du dos, et ce qu'il mange est toujours le
+milieu du sujet. La question a été posée et tranchée : ne pas y revenir.
+
 Le réglage continu, c'est la **hauteur de bande** (`band_scale` sur la page,
 `--mb-band` dans le CSS) : entre le plancher du CSS — `mb-gallery` jamais sous
 160 pt — et le plafond que le texte de la page laisse libre. Une bande ne vole
