@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
+import { bookCoversOf, coverPhotoEntryIds } from "../services/bookCovers.js";
 import { currentBookFingerprint } from "../services/bookFingerprint.js";
 import { applyBookSettings, keepsPhotos } from "../services/bookSettings.js";
 import { validatePayload } from "../services/payloadValidator.js";
@@ -92,6 +93,11 @@ export async function structureRender(
           orderBy: { capturedAt: "asc" },
           include: { media: true },
         },
+        // Les deux plats du carnet lisent le voyage : les étapes et les pays
+        // traversés font les chiffres du dos, les photos importées font les
+        // couvertures (`services/bookCovers.ts`).
+        steps: { select: { destinationCountryCode: true, transport: true } },
+        coverPhotos: { select: { id: true, storageKey: true }, orderBy: { createdAt: "asc" } },
       },
     });
 
@@ -210,6 +216,29 @@ export async function structureRender(
         },
         photoStickers,
       ),
+    );
+
+    // **Les deux plats que le voyageur a validés** (T259) : le gabarit dessine
+    // le gabarit choisi, avec sa photo, ses mots et ses chiffres. Posés ici et
+    // non par le composeur : une couverture n'est pas une page du carnet, elle
+    // ne se recompose pas avec les étapes.
+    //
+    // La photo d'un plat se prépare d'abord, si la boucle ci-dessus ne l'a pas
+    // déjà fait : à 0 % de photos, aucune n'est entrée au carnet, et la
+    // couverture perdrait la sienne.
+    for (const entryId of coverPhotoEntryIds(memo)) {
+      if (adresseDeLaPhoto.has(entryId)) continue;
+      const entry = memo.entries.find((candidate) => candidate.id === entryId);
+      if (!entry?.media) continue;
+      const url = await renderablePhotoUrl(context, entry.media);
+      if (url) adresseDeLaPhoto.set(entryId, url);
+    }
+
+    payload["cover"] = bookCoversOf(
+      context.env,
+      memo,
+      adresseDeLaPhoto,
+      memo.entries.filter((entry) => entry.kind === "photo").length,
     );
 
     const validation = validatePayload(payload);

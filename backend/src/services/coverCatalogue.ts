@@ -101,6 +101,36 @@ export function defaultCoverStyleId(face: CoverFace): string {
 }
 
 /**
+ * La famille d'un style, qu'on reçoive son identifiant neuf ou d'avant les
+ * gabarits. Un identifiant inconnu retombe sur « par défaut » : le carnet sort
+ * avec une couverture, jamais sans.
+ */
+export function coverFamilyOf(face: CoverFace, styleId: string): CoverFamily {
+  const current = currentCoverStyleId(styleId);
+  return coverStylesFor(face).find((style) => style.id === current)?.family ?? "default";
+}
+
+/**
+ * Ce plat imprime-t-il **le texte du voyageur** ? Au dos, deux maquettes ne
+ * le portent pas : « Par défaut » tient sur son trajet et ses chiffres,
+ * « Travel book » sur sa photo encadrée.
+ *
+ * ⚠️ **Le jumeau de `CoverFamily.carriesText`** (`MemoBookCore/BookCovers.swift`) :
+ * l'app grise le champ que le plat n'imprime pas, le gabarit ne l'imprime pas.
+ * Les deux doivent dire la même chose, sinon on écrit un texte qui ne sort
+ * nulle part — ou l'inverse, on en imprime un que l'app a laissé grisé.
+ */
+export function coverCarriesText(face: CoverFace, family: CoverFamily): boolean {
+  if (face === "front") return true;
+  return family !== "default" && family !== "travel-book";
+}
+
+/** Ce plat imprime-t-il les chiffres du voyage ? Au dos, et sur deux maquettes. */
+export function coverCarriesStats(face: CoverFace, family: CoverFamily): boolean {
+  return face === "back" && (family === "default" || family === "assouline");
+}
+
+/**
  * Ce que le serveur garde d'un plat, dans `memos.coverFront` / `coverBack`.
  *
  * La structure « libre » que le schéma annonçait s'est fixée ici : c'est

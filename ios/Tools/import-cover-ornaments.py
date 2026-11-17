@@ -3,7 +3,11 @@
 
 Source : ``assets/covers`` — les quatorze plats de Hugo (08/10/2026), sept
 paires « front cover_style … » / « back cover_style … ».
-Cible  : ``ios/Modules/Sources/MemoBookDesign/Resources/MemoBookAssets.xcassets``
+Cibles : ``ios/Modules/Sources/MemoBookDesign/Resources/MemoBookAssets.xcassets``
+         et ``assets/covers/ornements`` — la copie que le **gabarit du PDF** lit
+         par son adresse publique, comme les stickers (T259,
+         ``backend/src/services/bookCovers.ts``). Les deux portent le même
+         dessin : l'app et le carnet imprimé ne peuvent pas en montrer deux.
 
 L'app **redessine** chaque gabarit avec la photo et les mots du voyageur
 (``CoverTemplates.swift``). Ce qui ne se redessine pas — une palme, une moto
@@ -28,6 +32,7 @@ from PIL import Image
 REPO = Path(__file__).resolve().parents[2]
 SOURCE = REPO / "assets" / "covers"
 CATALOG = REPO / "ios/Modules/Sources/MemoBookDesign/Resources/MemoBookAssets.xcassets"
+POUR_LE_PDF = REPO / "assets" / "covers" / "ornements"
 
 # (asset, fichier, cadre en fractions du plat (x0, y0, x1, y1), aplat à retirer)
 ORNAMENTS = [
@@ -95,6 +100,11 @@ def main() -> int:
             )
             + "\n"
         )
+        # La même image pour le gabarit du PDF : il la charge par son
+        # adresse publique, il ne sait pas lire un catalogue Xcode.
+        POUR_LE_PDF.mkdir(parents=True, exist_ok=True)
+        ornament.save(POUR_LE_PDF / f"{name}.png")
+
         print(f"{name}: {ornament.size[0]}×{ornament.size[1]}")
     return 0
 
