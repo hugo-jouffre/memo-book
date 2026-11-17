@@ -466,8 +466,8 @@ public enum BookPageTarget: String, Sendable, Hashable, CaseIterable, Identifiab
     }
 
     /// « Compact (≈ 30 pages) » — le titre, et sa projection pour ce voyage-ci.
-    public func label(forTripDays days: Int?, ratio: Int = 50) -> String {
-        guard let pages = pageCount(forTripDays: days, ratio: ratio) else { return title }
+    public func label(forTripDays days: Int?, ratio: Int = 50, maxPages: Int = PrintPricing.closedGridMaxPages) -> String {
+        guard let pages = pageCount(forTripDays: days, ratio: ratio, maxPages: maxPages) else { return title }
         return "\(title) (≈ \(pages) pages)"
     }
 
@@ -476,30 +476,46 @@ public enum BookPageTarget: String, Sendable, Hashable, CaseIterable, Identifiab
     ///
     /// Une page par jour au palier « Par défaut » à 50 %, **pondérée par le
     /// ratio** (Hugo, 18/10/2026 — ``ratioFactor(_:)``), arrondie à la
-    /// dizaine, bornée entre un carnet minimal et ce qu'une reliure accepte.
-    /// Les deux autres paliers en sont les **deux tiers et les quatre tiers**
-    /// (Hugo, 15/10/2026). Sans date de fin, 40 / 60 / 80 à 50 %. `nil` pour
-    /// ``BookPageTarget/custom``, qui ne projette rien — c'est le voyageur qui
-    /// pose le nombre.
+    /// dizaine. Les deux autres paliers en sont les **deux tiers et les
+    /// quatre tiers** (Hugo, 15/10/2026). Sans date de fin, 40 / 60 / 80 à
+    /// 50 %. `nil` pour ``BookPageTarget/custom``, qui ne projette rien —
+    /// c'est le voyageur qui pose le nombre.
+    ///
+    /// ⚠️ **Le plafond est celui de la grille tarifaire** (Hugo, 16/11/2026),
+    /// servi par ``PrintPricing/maxPages``. Il était figé à 180, au nom de la
+    /// reliure — c'était faux : l'imprimeur n'a pas de limite de pages, et la
+    /// grille va jusqu'à 300. La contrainte n'est pas physique, elle est
+    /// commerciale : **on ne propose pas une cible dont on ne sait pas
+    /// annoncer le prix.**
+    ///
+    /// Les **trois** paliers sont bornés, et pas le seul « Par défaut » : un
+    /// « Détaillé » à 4/3 d'un palier déjà haut dépassait la grille, et
+    /// l'écran affichait une cible sans prix.
     ///
     /// Le serveur fait le même calcul (`backend/src/services/pageTarget.ts`) :
     /// c'est lui qui lit la densité du récit dans la cible.
-    public func pageCount(forTripDays days: Int?, ratio: Int = 50) -> Int? {
+    public func pageCount(forTripDays days: Int?, ratio: Int = 50, maxPages: Int = PrintPricing.closedGridMaxPages) -> Int? {
         guard self != .custom else { return nil }
-        let standard = Self.standardPageCount(forTripDays: days, ratio: ratio)
+        let standard = Self.standardPageCount(forTripDays: days, ratio: ratio, maxPages: maxPages)
+        let borne = { min($0, maxPages) }
         return switch self {
-        case .compact: Self.roundedToTen(Double(standard) * 2 / 3)
+        case .compact: borne(Self.roundedToTen(Double(standard) * 2 / 3))
         case .standard: standard
-        case .detailed: Self.roundedToTen(Double(standard) * 4 / 3)
+        case .detailed: borne(Self.roundedToTen(Double(standard) * 4 / 3))
         case .custom: nil
         }
     }
 
     /// Le palier auquel un nombre de pages correspond, ou ``custom`` s'il ne
     /// tombe sur aucun.
-    public static func matching(pageCount: Int, tripDays: Int?, ratio: Int = 50) -> BookPageTarget {
+    public static func matching(
+        pageCount: Int,
+        tripDays: Int?,
+        ratio: Int = 50,
+        maxPages: Int = PrintPricing.closedGridMaxPages
+    ) -> BookPageTarget {
         [.compact, .standard, .detailed]
-            .first { $0.pageCount(forTripDays: tripDays, ratio: ratio) == pageCount } ?? .custom
+            .first { $0.pageCount(forTripDays: tripDays, ratio: ratio, maxPages: maxPages) == pageCount } ?? .custom
     }
 
     /// **Les paliers suivent aussi le ratio** (Hugo, 18/10/2026) : un carnet
@@ -516,12 +532,13 @@ public enum BookPageTarget: String, Sendable, Hashable, CaseIterable, Identifiab
         }
     }
 
-    /// Un carnet de moins de 30 pages ne vaut pas une reliure, et au-delà de 180
-    /// le dos ne tient plus. Sans durée connue, 60 pages à 50 %.
-    private static func standardPageCount(forTripDays days: Int?, ratio: Int) -> Int {
+    /// Un carnet de moins de 30 pages ne vaut pas une reliure ; le plafond,
+    /// lui, est celui de la grille tarifaire (``pageCount(forTripDays:ratio:maxPages:)``).
+    /// Sans durée connue, 60 pages à 50 %.
+    private static func standardPageCount(forTripDays days: Int?, ratio: Int, maxPages: Int) -> Int {
         let factor = ratioFactor(ratio)
-        guard let days, days > 0 else { return roundedToTen(60 * factor) }
-        return min(max(roundedToTen(Double(days) * factor), 30), 180)
+        guard let days, days > 0 else { return min(roundedToTen(60 * factor), maxPages) }
+        return min(max(roundedToTen(Double(days) * factor), 30), maxPages)
     }
 
     private static func roundedToTen(_ value: Double) -> Int {
@@ -610,14 +627,17 @@ public struct PageTargetAllowance: Codable, Sendable, Hashable {
     /// atteignable la plus proche, et le ratio qui ouvrirait la cible voulue.
     /// Le carnet final tient à ± 5 pages de sa cible
     /// (`PAGE_TARGET_TOLERANCE`) : une cible à 5 pages de la fourchette passe.
-    public func reach(of target: Int, ratio: Int) -> PageTargetReach? {
+    public func reach(of target: Int, ratio: Int, maxPages: Int = PrintPricing.closedGridMaxPages) -> PageTargetReach? {
         guard let range = reachableByRatio[ratio] else { return nil }
         let tolerance = 5
         guard target < range.min - tolerance || target > range.max + tolerance else { return nil }
         let isTooLong = target > range.max
         // La cible atteignable la plus proche, dans les bornes de la feuille.
+        // Le plafond est celui de la grille, comme les paliers : un 180 figé
+        // proposait de « revenir » à 180 un carnet qu'on sait relier plus
+        // épais (Hugo, 16/11/2026).
         let rounded = Int((Double(isTooLong ? range.max : range.min) / 10).rounded()) * 10
-        let closest = min(max(rounded, 30), 180)
+        let closest = min(max(rounded, 30), maxPages)
         let opening = isTooLong
             ? reachableByRatio.keys.sorted().first { $0 > ratio && (reachableByRatio[$0]?.max ?? 0) + tolerance >= target }
             : nil

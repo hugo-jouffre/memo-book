@@ -51,6 +51,15 @@ public struct PrintPricing: Codable, Sendable, Hashable {
     /// ouvre le dernier palier. Au-delà, pas de prix.
     public var maxPages: Int
 
+    /// Le plafond de la grille **fermée** — celle que le serveur sert par
+    /// défaut, sans `ALLOW_OVER_300_PAGES`.
+    ///
+    /// Il sert de repli aux projections de paliers quand la grille n'est pas
+    /// encore arrivée (``BookPageTarget/pageCount(forTripDays:ratio:maxPages:)``) :
+    /// mieux vaut projeter sur la grille fermée, qui est toujours vraie, que
+    /// sur un plafond inventé — c'est ce que faisait le 180 d'avant
+    /// (Hugo, 16/11/2026).
+
     /// L'écart toléré entre le carnet composé et sa cible — 5 pages
     /// (`PAGE_TARGET_TOLERANCE`). C'est lui qui fait annoncer le prix de
     /// **cible + tolérance** : le carnet final n'ira pas plus haut, donc le
@@ -61,10 +70,12 @@ public struct PrintPricing: Codable, Sendable, Hashable {
     /// le serveur ne le sert pas : la ligne s'affiche alors sans prix.
     public var freeZonesPrice: Decimal?
 
+    public static let closedGridMaxPages = 300
+
     public init(
         tiers: [Tier] = [],
         minPages: Int = 16,
-        maxPages: Int = 300,
+        maxPages: Int = closedGridMaxPages,
         tolerancePages: Int = 5,
         freeZonesPrice: Decimal? = nil
     ) {

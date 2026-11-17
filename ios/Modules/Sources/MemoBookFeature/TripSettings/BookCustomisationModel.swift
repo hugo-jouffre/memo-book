@@ -187,10 +187,16 @@ public final class BookCustomisationModel {
     public func setPhotoTextRatio(_ ratio: Int) {
         let before = customisation?.photoTextRatio ?? 50
         let target = customisation?.targetPageCount
-        let tier = target.map { BookPageTarget.matching(pageCount: $0, tripDays: tripDays, ratio: before) }
+        // Le plafond de la grille servie, pas un chiffre figé : voir
+        // ``BookPageTarget/pageCount(forTripDays:ratio:maxPages:)``.
+        let plafond = printPricing?.maxPages ?? PrintPricing.closedGridMaxPages
+        let tier = target.map {
+            BookPageTarget.matching(pageCount: $0, tripDays: tripDays, ratio: before, maxPages: plafond)
+        }
         edit(.photoTextRatio(ratio)) { customisation in
             customisation.photoTextRatio = ratio
-            if let tier, tier != .custom, let pages = tier.pageCount(forTripDays: tripDays, ratio: ratio) {
+            if let tier, tier != .custom,
+                let pages = tier.pageCount(forTripDays: tripDays, ratio: ratio, maxPages: plafond) {
                 customisation.targetPageCount = pages
             }
         }

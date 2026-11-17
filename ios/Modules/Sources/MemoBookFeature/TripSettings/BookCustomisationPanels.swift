@@ -124,7 +124,7 @@ struct BookPagesPanel: View {
             BookPanelCard {
                 ForEach(BookPageTarget.allCases) { target in
                     BrandOptionRow(
-                        target.label(forTripDays: days, ratio: ratio),
+                        target.label(forTripDays: days, ratio: ratio, maxPages: maxPages),
                         subtitle: target.detail,
                         value: price(of: target),
                         valueTone: .accent,
@@ -265,12 +265,17 @@ struct BookPagesPanel: View {
     /// `nil` — un serveur qui ne sert pas encore la grille, un nombre de pages
     /// hors de ce qu'on sait facturer — : la ligne s'affiche **sans prix**.
     /// Mieux vaut pas de prix qu'un prix faux.
+    /// Le plafond que la grille servie autorise — 300 par défaut, 400 quand
+    /// le dernier palier est ouvert. Les projections de paliers s'y bornent
+    /// (Hugo, 16/11/2026) : avant, elles butaient sur un 180 inventé.
+    private var maxPages: Int { model.printPricing?.maxPages ?? PrintPricing.closedGridMaxPages }
+
     private func price(of target: BookPageTarget) -> String? {
         guard let pricing = model.printPricing else { return nil }
         let amount: Decimal?
         if target == .custom {
             amount = pricing.price(forPages: Int(customPages))
-        } else if let pages = target.pageCount(forTripDays: days, ratio: ratio) {
+        } else if let pages = target.pageCount(forTripDays: days, ratio: ratio, maxPages: maxPages) {
             amount = pricing.displayedPrice(forTarget: pages)
         } else {
             amount = nil
@@ -289,9 +294,9 @@ struct BookPagesPanel: View {
             for target in BookPageTarget.allCases {
                 let pages = target == .custom
                     ? Int(customPages)
-                    : (target.pageCount(forTripDays: days, ratio: ratio) ?? 0) + pricing.tolerancePages
+                    : (target.pageCount(forTripDays: days, ratio: ratio, maxPages: maxPages) ?? 0) + pricing.tolerancePages
                 let tier = pricing.tier(forPages: pages)?.id ?? "aucun"
-                let cible = target.pageCount(forTripDays: days, ratio: ratio).map { "\($0)" } ?? "—"
+                let cible = target.pageCount(forTripDays: days, ratio: ratio, maxPages: maxPages).map { "\($0)" } ?? "—"
                 let affiché = price(of: target) ?? "—"
                 print("[pricing] \(target.rawValue) cible=\(cible) facturé=\(pages) palier=\(tier) prix=\(affiché)")
             }
@@ -305,7 +310,7 @@ struct BookPagesPanel: View {
             return
         }
         isCustomising = target == .custom
-        guard let pages = target.pageCount(forTripDays: days, ratio: ratio) else {
+        guard let pages = target.pageCount(forTripDays: days, ratio: ratio, maxPages: maxPages) else {
             // « Personnalisé » n'a pas de valeur à lui : on garde celle qui est
             // déjà posée et on ouvre le curseur dessous.
             return
