@@ -660,6 +660,29 @@ Dans le bac à sable, « Passer hors ligne » coupe aussi le double de l'API
 (`SandboxNetwork`) : l'accueil, le voyage et le fil répondent comme sans
 réseau, et le parcours se rejoue entier.
 
+### Ces deux formats sur le disque ne se renomment pas
+
+Les deux files — `PendingRecordingStore` et `PendingTripStore` — sont les
+**seuls** endroits où vit quelque chose que le serveur n'a jamais vu. Et
+elles sont relues d'un format écrit par la **version d'avant** : une mise à
+jour les trouve telles que le build précédent les a laissées.
+
+D'où la règle : **un champ de ces deux formats ne se renomme pas, ne devient
+pas obligatoire, ne change pas de type.** Ce qu'il faut ajouter s'ajoute en
+option, et ce qui existait se relit toujours — c'est ce que fait
+`PendingTurn.init(from:)` pour les fiches d'avant le 22/09/2026.
+
+Le filet est dans `ios/Tests/VersionUpgradeDataTests.swift` et son jumeau
+`android/feature/.../VersionUpgradeDataTest.kt`. Ils figent le format **octet
+pour octet**, tel qu'une version livrée l'écrit. Un cas qui devient rouge n'est
+pas un cas à corriger : c'est un format qu'on vient de casser, et il faut
+l'accompagner d'un décodage de l'ancien. Vérifié en cassant le format exprès —
+six cas sur onze rougissent côté iOS, trois sur dix côté Android (16/11/2026).
+
+Pourquoi ça compte plus qu'il n'y paraît : une fiche qu'on ne sait plus lire ne
+fait **aucun bruit**. Elle part en quarantaine, l'écran ne la montre plus, et
+la personne découvre un jour que son vocal de la veille n'est jamais parti.
+
 Trois règles portent tout le reste :
 
 1. **Ce qui n'existe nulle part ailleurs va dans `Application Support`, jamais

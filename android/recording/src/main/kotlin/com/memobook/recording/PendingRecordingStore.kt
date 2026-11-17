@@ -317,17 +317,29 @@ class PendingRecordingStore(
     }
 
     /**
-     * Relit la file. Une fiche illisible — disque abîmé — est **jetée avec ses
-     * fichiers** plutôt que de faire échouer la lecture entière : un souvenir
-     * perdu ne doit pas en bloquer neuf autres. Une fiche qui promet un
-     * fichier absent aussi.
+     * Relit la file. Une fiche illisible ne fait pas échouer la lecture
+     * entière : un souvenir perdu ne doit pas en bloquer neuf autres.
+     *
+     * ⚠️ **Et elle n'est plus jetée** (Hugo, 28/10/2026 — « que le passage
+     * d'une version à une autre ne fasse pas perdre ce que les utilisateurs
+     * ont commencé à raconter »). Elle l'était, avec son audio, dès le premier
+     * lancement qui ne savait pas la relire — or une fiche qu'on ne comprend
+     * pas est le plus souvent une fiche **d'une autre version**, pas un disque
+     * abîmé. Elle part donc de côté ([setAside]), avec ses fichiers.
+     *
+     * Ça ne la renvoie pas toute seule — il faudrait du code pour la relire —,
+     * mais ça laisse la chose possible, et c'est la seule propriété qui
+     * compte : une suppression, elle, ne se rattrape pas.
+     *
+     * Une fiche qui promet un fichier absent est supprimée, elle : il n'y a
+     * plus rien à envoyer ni à sauver.
      */
     private fun readFromDisk(): List<PendingTurn> {
         val files = directory.listFiles() ?: return emptyList()
         return files.filter { it.extension == "json" }.mapNotNull { file ->
             val turn = runCatching { MemoBookJson.decodeFromString(PendingTurn.serializer(), file.readText()) }.getOrNull()
             if (turn == null) {
-                file.delete()
+                setAside(file)
                 return@mapNotNull null
             }
             val filesArePresent = turn.filenames.indices.all { index -> fileOf(turn.id, index).exists() }
@@ -336,6 +348,35 @@ class PendingRecordingStore(
                 return@mapNotNull null
             }
             turn
+        }
+    }
+
+    /**
+     * Met une fiche illisible de côté, avec les fichiers qui portent son nom.
+     *
+     * Les fichiers sont retrouvés par **préfixe** et non par la fiche : on ne
+     * sait justement pas la lire, donc on ne connaît ni son identifiant ni le
+     * nombre de fichiers qu'elle promettait. Le nom du fichier JSON, lui, est
+     * l'identifiant ([metadataOf]).
+     *
+     * Tout échec est ignoré : ne pas réussir à mettre de côté ne doit pas
+     * empêcher de lire les neuf autres fiches.
+     */
+    private fun setAside(file: File) {
+        val quarantine = File(directory, "illisibles")
+        if (!quarantine.isDirectory) quarantine.mkdirs()
+
+        val id = file.nameWithoutExtension
+        val siblings = directory.listFiles()?.filter { it.name.startsWith(id) } ?: listOf(file)
+        for (sibling in siblings) {
+            val destination = File(quarantine, sibling.name)
+            // Une quarantaine d'un lancement précédent porte déjà ce nom : on
+            // garde la plus ancienne, qui est la plus proche de l'original.
+            if (destination.exists()) {
+                sibling.delete()
+                continue
+            }
+            runCatching { Files.move(sibling.toPath(), destination.toPath()) }
         }
     }
 
