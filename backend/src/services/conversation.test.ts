@@ -27,6 +27,7 @@ import {
 } from "./conversationCopy.js";
 import { HeuristicResponder, mentionsSubscription, readSignals } from "./conversationHeuristics.js";
 import { EMPTY_COHERENCE_SHEET } from "./redaction.js";
+import pino from "pino";
 
 /**
  * MEMO sans modèle, phrase par phrase — le portage de `ChatResponderTests`
@@ -81,6 +82,14 @@ const memoSaid = (texts: string[]): ConversationInput["history"] =>
     disposition: null,
     sentAt: new Date(),
   }));
+
+
+/**
+ * Un logger qui n'écrit rien : le compteur de jetons (`logModelUsage`) est
+ * obligatoire dans le constructeur, et ce qu'il écrit n'est pas l'objet de ces
+ * tests.
+ */
+const muet = pino({ level: "silent" });
 
 describe("les signaux", () => {
   it("relève un lieu derrière une préposition forte, verbatim", () => {
@@ -490,14 +499,14 @@ describe("les commandes et les garde-fous", () => {
       }) as Env;
 
     // « Personne n'appelle personne » : la seule chose qui coupe Claude.
-    expect(createResponder(env("fake", false, "sk-test")).constructor.name).toBe("FakeResponder");
-    expect(createResponder(env("auto", true, "")).constructor.name).toBe("HeuristicResponder");
-    expect(createResponder(env("auto", true, "sk-test")).constructor.name).toBe("AnthropicResponder");
+    expect(createResponder(env("fake", false, "sk-test"), muet).constructor.name).toBe("FakeResponder");
+    expect(createResponder(env("auto", true, ""), muet).constructor.name).toBe("HeuristicResponder");
+    expect(createResponder(env("auto", true, "sk-test"), muet).constructor.name).toBe("AnthropicResponder");
 
     // Le cas qui avait rendu MEMO muet sans le dire : une clé Anthropic
     // valide, mais pas de clé OpenAI, donc `live` faux. MEMO parle quand même.
-    expect(createResponder(env("auto", false, "sk-test")).constructor.name).toBe("AnthropicResponder");
-    expect(createResponder(env("auto", false, "")).constructor.name).toBe("FakeResponder");
+    expect(createResponder(env("auto", false, "sk-test"), muet).constructor.name).toBe("AnthropicResponder");
+    expect(createResponder(env("auto", false, ""), muet).constructor.name).toBe("FakeResponder");
   });
 });
 

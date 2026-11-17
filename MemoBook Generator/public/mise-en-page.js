@@ -889,6 +889,38 @@
     return dpi >= 200;
   }
 
+  /**
+   * **Combien de pleines pages le curseur ouvre** (Hugo, 25/10/2026 —
+   * « lorsque le ratio de photos est plus important, on doit vraiment avoir
+   * des pages entières dédiées à des photos »).
+   *
+   * La pleine page ne dépendait que de la photo (`pleinePageAdmise`) : une
+   * fois par chapitre, quel que soit le réglage. Le curseur ne commandait
+   * donc rien — un carnet à 90 % de photo en avait autant qu'un carnet à
+   * 30 %. Il commande maintenant la **fréquence**, la photo gardant son droit
+   * de veto : à aucun palier une image trop petite ou trop rognée ne passe en
+   * pleine page.
+   *
+   * - **sous 50 %** : aucune. Le récit tient la feuille, c'est tout le sens
+   *   d'un palier bas ; une pleine page y volerait la page d'à côté.
+   * - **50 à 74 %** : une par chapitre — ce que le carnet faisait déjà.
+   * - **75 à 99 %** : une par étape. À ce palier la planche existe déjà pour
+   *   absorber le reliquat (`docs/ratio-texte-photo.md`) ; ce qui manquait,
+   *   c'est qu'une belle photo l'occupe seule.
+   * - **100 %** : sans limite. Les pages sont de toute façon entièrement
+   *   photo, et rien ne justifie d'en border une au hasard.
+   *
+   * Rend la clé qui compte (ou `null` quand le palier n'en veut aucune) et si
+   * le quota est levé.
+   */
+  function quotaPleinePage(ratio) {
+    const palier = Number.isFinite(ratio) ? ratio : 50;
+    if (palier < 50) return { cle: () => null, illimite: false };
+    if (palier >= 100) return { cle: (_chapitre, etape) => `e${etape}`, illimite: true };
+    if (palier >= 75) return { cle: (_chapitre, etape) => `e${etape}`, illimite: false };
+    return { cle: (chapitre) => `c${chapitre}`, illimite: false };
+  }
+
   /** Une étape tient sur six pages au plus (Hugo, 12/10/2026)… */
   const MAX_PAGES_ETAPE = 6;
   /** …dont une double page de photos au plus en fin d'étape. */
@@ -2457,10 +2489,11 @@
     const parcoursEnVille = [];
     // Le dernier scénario (A ou B) choisi dans chaque situation, pour alterner.
     const memoire = new Map();
-    // Les chapitres — une suite d'étapes au même lieu — qui ont déjà leur
-    // photo en pleine page.
+    // Ce qui a déjà sa photo en pleine page — un chapitre, ou une étape selon
+    // le palier (`quotaPleinePage`).
     let numeroChapitre = 0;
     const pleinesPages = new Set();
+    const { cle: clePleinePage, illimite: pleinesPagesIllimitees } = quotaPleinePage(ratio);
     // Les planches de cinq photos alternent entre les rangées et les deux
     // colonnes décalées (maquette du 13/10/2026), en commençant par les
     // colonnes.
@@ -2666,9 +2699,15 @@
       // une fois par chapitre au plus.
       const planche = (liste) => {
         const plan = { genre: "planche", etape: index, photos: liste };
-        if (liste.length === 1 && !pleinesPages.has(numeroChapitre) && pleinePageAdmise(liste[0])) {
+        const cle = clePleinePage(numeroChapitre, index);
+        if (
+          liste.length === 1
+          && cle !== null
+          && (pleinesPagesIllimitees || !pleinesPages.has(cle))
+          && pleinePageAdmise(liste[0])
+        ) {
           plan.pleinePage = true;
-          pleinesPages.add(numeroChapitre);
+          pleinesPages.add(cle);
         }
         if (liste.length === 5 && planchesDeCinq++ % 2 === 0) plan.colonnes = true;
         return plan;

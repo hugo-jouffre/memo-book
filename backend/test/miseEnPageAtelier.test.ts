@@ -289,6 +289,47 @@ describe("mise en page de l'atelier", () => {
       for (const j of memeLieu.filter((x) => x["pleine_page"])) expect(j.photos).toHaveLength(1);
       expect(etapesDe(memeLieu).every((e) => e.length % 2 === 0)).toBe(true);
     });
+
+    /**
+     * **Le curseur commande la fréquence** (Hugo, 25/10/2026 — « lorsque le
+     * ratio de photos est plus important, on doit vraiment avoir des pages
+     * entières dédiées à des photos »).
+     *
+     * La photo garde son droit de veto : ces quatre cas partent des mêmes
+     * images, dignes d'une pleine page à tous les paliers. Seul le réglage
+     * change, et c'est lui qu'on mesure.
+     */
+    it("ouvre d'autant plus de pleines pages que le ratio est haut", () => {
+      const grande = (id: string) => ({ ...photo(id, 0.75), largeur: 3000, hauteur: 4000, mesure: nette });
+      const etapePleine = (lieu: string, index: number) =>
+        etape(paragrapheDe(lieu, 2), [grande(`${lieu}${index}-a`), grande(`${lieu}${index}-b`)], {
+          photos: ["a", "b"].map((x) => ({ id: `${lieu}${index}-${x}`, paragraphe: null, couverture: 10 })),
+        }, lieu);
+      // Quatre étapes au même lieu : un seul chapitre, quatre étapes.
+      const quatre = ["Paros", "Paros", "Paros", "Paros"].map(etapePleine);
+      const pleines = (ratio: number) =>
+        M.composerJours(quatre, { ratio }).filter((j) => j["pleine_page"]).length;
+
+      expect(pleines(30), "sous 50 %, le récit tient la feuille").toBe(0);
+      expect(pleines(50), "le palier d'avant : une par chapitre").toBe(1);
+      expect(pleines(75), "au-dessus de la moyenne : une par étape").toBeGreaterThan(1);
+      expect(pleines(100), "au maximum, plus rien ne les borde").toBeGreaterThanOrEqual(pleines(75));
+    });
+
+    /**
+     * Le palier ne force rien : une photo trop petite, trop rognée ou prise en
+     * groupe ne passe pas en pleine page, même à 100 %. Sans ce cas, « monter
+     * le ratio » finirait par agrandir n'importe quoi.
+     */
+    it("ne passe jamais une photo indigne en pleine page, même à 100 %", () => {
+      const petite = (id: string) => ({ ...photo(id, 0.75), largeur: 400, hauteur: 533, mesure: nette });
+      const quatre = ["Paros", "Paros", "Paros", "Paros"].map((lieu, index) =>
+        etape(paragrapheDe(lieu, 2), [petite(`p${index}-a`), petite(`p${index}-b`)], {
+          photos: ["a", "b"].map((x) => ({ id: `p${index}-${x}`, paragraphe: null, couverture: 10 })),
+        }, lieu),
+      );
+      expect(M.composerJours(quatre, { ratio: 100 }).filter((j) => j["pleine_page"]).length).toBe(0);
+    });
   });
 
   describe("retouches du 13/10/2026", () => {
