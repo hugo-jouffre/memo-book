@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { currentBookFingerprint } from "../src/services/bookFingerprint.js";
 import { sniffImageFormat } from "../src/services/photoFormat.js";
 import { FakeTranscriber } from "../src/services/transcription.js";
 import { validatePayload } from "../src/services/payloadValidator.js";
@@ -369,6 +370,43 @@ describe("garde-fous de l'API", () => {
     });
     expect((await compose()).statusCode).toBe(200);
     expect(await harness.prisma.render.count({ where: { memoId } })).toBe(3);
+  });
+
+  it("pose l'empreinte sur ce qui a été composé, et ne recompose plus un carnet intact (T258)", async () => {
+    const memoId = await createMemo();
+    await postAudio(memoId, "2026-01-03T09:00:00.000Z", "Bogotá");
+
+    const compose = () =>
+      harness.app.inject({ method: "POST", url: `/v1/memos/${memoId}/renders`, headers: { authorization } });
+
+    // **La composition écrit dans le carnet avant de le lire** : son premier
+    // geste est `refreshTripFactsQuietly`, qui arrange les étapes et y
+    // rattache les souvenirs. On efface donc les étapes pour qu'elle ait
+    // quelque chose à refaire — c'est ce qui arrive en production quand une
+    // étape se répare, ou qu'une rédaction tombe pendant les trois minutes
+    // d'attente et réécrit son souvenir.
+    //
+    // L'empreinte était posée *avant* ce job : le rendu naissait donc périmé.
+    await harness.prisma.memoStep.deleteMany({ where: { memoId } });
+
+    const first = await compose();
+    expect(first.statusCode).toBe(202);
+    const renderId = first.json<{ id: string }>().id;
+
+    // Les étapes ont bien été refaites par la composition elle-même.
+    expect(await harness.prisma.memoStep.count({ where: { memoId } })).toBeGreaterThan(0);
+
+    // L'invariant : le rendu porte l'empreinte du carnet **tel qu'il est
+    // maintenant**, et non celle d'avant sa propre exécution.
+    const row = await harness.prisma.render.findUniqueOrThrow({ where: { id: renderId } });
+    expect(row.inputFingerprint).toBe(await currentBookFingerprint(harness.prisma, memoId));
+
+    // La conséquence, celle que Hugo voyait : la seconde ouverture ne
+    // recompose pas.
+    const second = await compose();
+    expect(second.statusCode).toBe(200);
+    expect(second.json<{ id: string }>().id).toBe(renderId);
+    expect(await harness.prisma.render.count({ where: { memoId } })).toBe(1);
   });
 
   it("rend la composition en cours, et remplace celle qui ne finira jamais", async () => {

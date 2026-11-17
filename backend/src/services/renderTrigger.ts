@@ -34,6 +34,10 @@ export const STALE_RENDER_MS = 20 * 60 * 1000;
  *    (`services/bookFingerprint.ts`) : on le rend, sans rien relancer.
  * 3. Sinon — jamais composé, échec, contenu modifié — une composition part.
  *
+ * L'empreinte qu'on compare ici est celle que la composition a posée **sur ce
+ * qu'elle a composé** (`jobs/structure.ts`, T258), et non celle du carnet au
+ * moment où on l'a lancée.
+ *
  * Les trois se décident **sous verrou** (la ligne du carnet, comme le fil de la
  * conversation) : deux ouvertures simultanées ne voient pas toutes deux « rien
  * en cours » et ne lancent pas deux compositions.
@@ -74,7 +78,16 @@ export async function ensureRenderInProgress(
       return { render: lastReady, created: false };
     }
 
-    const render = await tx.render.create({ data: { memoId, inputFingerprint: fingerprint } });
+    // **Sans empreinte** : c'est `jobs/structure.ts` qui la pose, au moment où
+    // le payload est figé (T258). Posée ici, elle datait d'avant une exécution
+    // qui écrit elle-même dans le carnet — le rendu naissait périmé, et
+    // l'ouverture suivante recomposait pour rien.
+    //
+    // Un rendu sans empreinte ne peut pas se déclarer à jour : la comparaison
+    // ci-dessus ne retient que l'égalité de deux chaînes, et `null` n'en est
+    // pas une. Une composition interrompue avant son payload ne laisse donc
+    // jamais passer un PDF dont on ne sait pas ce qu'il montre.
+    const render = await tx.render.create({ data: { memoId } });
     return { render, created: true };
   });
 

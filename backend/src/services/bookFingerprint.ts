@@ -9,8 +9,15 @@ import type { Prisma, PrismaClient } from "@prisma/client";
  * l'accueil du voyage, « Prévisualisation PDF » des paramètres, le CTA des
  * écrans de personnalisation. Une composition coûte de l'IA et un rendu
  * APITemplate : le serveur ne la relance donc que si quelque chose a changé
- * depuis la dernière réussie. L'empreinte est posée sur le rendu à sa création
- * (`renders.inputFingerprint`) et comparée à celle du moment.
+ * depuis la dernière réussie.
+ *
+ * **Elle se pose à la fin de la composition**, sur le contenu qui vient d'être
+ * composé (`jobs/structure.ts`, au moment où le payload est figé), et se
+ * compare à celle du moment (`services/renderTrigger.ts`). Elle se posait
+ * d'abord à la *création* du rendu — donc avant une exécution qui écrit
+ * elle-même dans le carnet, arrange les étapes et convertit les photos : le
+ * rendu naissait périmé et l'aperçu recomposait à chaque ouverture (T258,
+ * Hugo 05/11/2026).
  *
  * **Ce qui y entre**, et c'est la liste de Hugo — « aucun souvenir,
  * personnalisation, couverture modifiés depuis » :
