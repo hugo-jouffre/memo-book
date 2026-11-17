@@ -1278,9 +1278,21 @@ final class ChatModelTests: XCTestCase {
 
     // MARK: -
 
+    /// Attend qu'une condition devienne vraie, et échoue si elle tarde trop.
+    ///
+    /// ⚠️ **Le délai est une horloge murale, pas une mesure du produit.** À
+    /// 2 s, `testAFailureKeepsTheBubbleAndRetryResendsTheSameId` tombait une
+    /// fois de temps en temps — jamais seul, toujours au milieu des 288 cas de
+    /// la cible, quand le simulateur a la machine sur le dos (16/11/2026, et
+    /// déjà le 11/11). La condition finissait par arriver ; elle arrivait
+    /// après la limite.
+    ///
+    /// Allonger ne ralentit rien : l'attente rend la main dès que la condition
+    /// est vraie, et un cas qui passe ne voit pas la différence. Seul un cas
+    /// **réellement** cassé met désormais 5 s à le dire.
     private func until(
         _ what: String,
-        timeout: Duration = .seconds(2),
+        timeout: Duration = .seconds(5),
         _ condition: @MainActor () async -> Bool,
         file: StaticString = #filePath,
         line: UInt = #line
