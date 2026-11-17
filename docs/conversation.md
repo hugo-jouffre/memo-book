@@ -427,6 +427,23 @@ qui n'est pas permis (03/10/2026).
 enchaîne dans le fil. Il est un bouton parce que c'est le dessin de la carte
 « ✦ Suggestions », pas parce qu'il mène ailleurs.
 
+**Le code en pose un troisième cas** (Hugo, 25/10/2026 — « un bouton-raccourci
+vers le réglage dans la bulle ») : `open_trip_settings` accompagne les deux
+bulles qui annoncent que le carnet s'écartera des réglages — il manque des
+photos (`photosMissing`), ou il y en a plus que demandé
+(`photosBeyondAsked`). Une phrase qui annonce un écart doit donner la main sur
+ce qui l'a causé ; sans ce bouton, il fallait sortir du fil, revenir au
+voyage, ouvrir ses réglages.
+
+⚠️ **Et surtout pas une puce.** La première version de ce raccourci en était
+une, avec une intention `open_settings` toute neuve : les apps déjà
+installées l'auraient reçue en intention inconnue, et une intention inconnue
+**s'envoie comme un texte** — « Mes réglages » se serait écrit dans le récit
+du voyage, sur le build déjà posé chez les testeurs. C'est exactement ce que
+le paragraphe ci-dessus interdit, et c'est lui qui l'a rattrapé. Le bouton,
+lui, existait déjà au catalogue : une app qui l'ignore ne montre rien, et la
+phrase se suffit — elle nomme les réglages.
+
 Jamais sous un vocal, des photos ou une puce. `validateReply` jette un bouton
 non autorisé ; le job le range sur la **dernière** bulle du tour, et le remet
 à `null` quand les bulles disparaissent (un souvenir) ou sont remplacées par
