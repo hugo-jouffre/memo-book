@@ -11,10 +11,25 @@ Deux trous aujourd'hui, et rien d'autre :
 | Les catégories de la **galerie de la communauté** | `globe`, `footprints`, `car-front`, `building-2`, `palmtree`, `mountain-snow`, `users`, `bike`, `sailboat` (+ `backpack`, `heart`, `tent-tree`, `utensils` en réserve) |
 | Le filtre **Transports** d'un voyage | `train-front` |
 | Le repli d'une clé inconnue | `compass` |
+| **Une commande de l'interface** | `rotate-cw` — « Ré-analyser », sous une fiche de transcription |
 
 > **Exception assumée à la règle R10** de `docs/ui-development.md` (« les assets
 > viennent de Figma, jamais d'ailleurs »). Elle est nommée dans la fiche écran
 > *Exemples de carnets*, et tombe le jour où Clara dessine la série.
+
+> ⚠️ **Et elle s'est élargie le 16/11/2026**, sur décision de Hugo. Jusque-là
+> elle ne couvrait que des pictogrammes de **contenu** — des catégories, un
+> moyen de transport : des images qu'on regarde. `rotate-cw` est le premier
+> pictogramme de **commande**, posé sur un bouton, à côté des icônes de
+> marque. C'est un glissement, et il est écrit ici pour qu'il reste visible :
+> une icône d'interface se compare à ses voisines, et Lucide n'a ni la même
+> épaisseur de trait ni les mêmes arrondis que le jeu de Figma.
+>
+> La demande était « une flèche circulaire pour illustrer le recommencer »
+> (Hugo, 25/10/2026) ; le jeu de marque n'en a aucune, et attendre un dessin
+> laissait le bouton illisible — on ne comprenait pas que « Ré-analyser »
+> était cliquable. Le jour où la flèche existe en Figma, elle remplace
+> celle-ci et cette ligne se retire.
 
 ## Source
 

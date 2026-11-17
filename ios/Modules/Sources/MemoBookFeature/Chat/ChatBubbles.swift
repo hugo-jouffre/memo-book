@@ -1101,7 +1101,18 @@ struct ChatTranscriptBubble: View {
                         }
                     }
 
-                    BrandButton(ChatCopy.Transcript.reanalyse, style: .link, size: .small) {
+                    // **La flèche circulaire** (Hugo, 25/10/2026 — « on ne
+                    // comprend pas que "ré-écrire" est cliquable, il faudrait
+                    // une flèche circulaire pour illustrer le recommencer »).
+                    // Un lien seul, entre deux autres liens, ne disait pas
+                    // qu'il relançait quelque chose ; le glyphe le dit avant
+                    // le mot.
+                    BrandButton(
+                        ChatCopy.Transcript.reanalyse,
+                        icon: Image(brand: "IconLucideRotateCw"),
+                        style: .link,
+                        size: .small
+                    ) {
                         model.reanalyse(entryId: entryId)
                     }
                 }
