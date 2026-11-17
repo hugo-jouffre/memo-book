@@ -87,13 +87,27 @@ if (entree && epaves.length === 0) {
 
 const carnets = new Set(epaves.map((epave) => epave.memoId)).size;
 console.log(`${epaves.length} épave(s), sur ${carnets} carnet(s).`);
-for (const epave of epaves.slice(0, 10)) {
-  // L'erreur d'un échec se lit **avant** de payer sa relance : un « souvenir
-  // trop long » retombera, un « crédit épuisé » passera.
-  const pourquoi = epave.redactionError ? `\n      ${epave.redactionError.replace(/\s+/g, " ").slice(0, 120)}` : "";
+// Une épave ne dit rien de plus que sa date : dix suffisent à en prendre la
+// mesure. Un échec, lui, porte son erreur — et c'est elle qu'on vient lire
+// avant de payer la relance. On les affiche donc tous, et en entier : tronquée
+// trop court, « Your credit balance is too low to access the Anth » ne dit
+// plus de quoi il s'agit.
+let attentesMasquees = 0;
+let attentesAffichees = 0;
+for (const epave of epaves) {
+  if (epave.redactionStatus !== "failed") {
+    if (attentesAffichees >= 10) {
+      attentesMasquees += 1;
+      continue;
+    }
+    attentesAffichees += 1;
+  }
+  const pourquoi = epave.redactionError ? `\n      ${epave.redactionError.replace(/\s+/g, " ").slice(0, 240)}` : "";
   console.log(`  ${epave.updatedAt.toISOString()}  ${epave.redactionStatus.padEnd(10)} ${epave.id}${pourquoi}`);
 }
-if (epaves.length > 10) console.log(`  … et ${epaves.length - 10} autres.`);
+if (attentesMasquees > 0) {
+  console.log(`  … et ${attentesMasquees} épave(s) de plus, sans erreur à lire.`);
+}
 
 if (!relancer || epaves.length === 0) {
   if (epaves.length > 0) console.log("\nLecture seule. Ajoute --relancer pour les remettre en file.");
