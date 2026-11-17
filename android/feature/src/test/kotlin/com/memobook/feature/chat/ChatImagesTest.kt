@@ -145,6 +145,37 @@ class ChatImagesTest {
         assertTrue(downloads.urls.isEmpty(), "Rien ne part au serveur pour une photo sur le disque.")
     }
 
+    /**
+     * **Ce qui ne part pas se dit** (Hugo, 05/11/2026 — « on ne peut pas
+     * ajouter plus de 6 photos »). Jumeau de
+     * `testPhotosBeyondTheServerLimitAreAnnouncedNotSwallowed`.
+     *
+     * La photothèque s'arrêtait à [ChatMetrics.visiblePhotoCount], un nombre
+     * de **vignettes**, et `sendPhotos` coupait le reste en silence.
+     */
+    @Test
+    fun photosBeyondTheServerLimitAreAnnouncedNotSwallowed() = runTest(dispatcher) {
+        val model = model(Downloads())
+        val trop = ChatMetrics.maxPhotosPerMessage + 5
+
+        model.sendPhotos(List(trop) { picture })
+
+        val dit = model.state.value.errorMessage
+        assertNotNull(dit, "Le surplus doit se dire.")
+        assertTrue(dit.contains("${ChatMetrics.maxPhotosPerMessage}"), dit)
+        assertTrue(dit.contains("5"), "Et combien restent : $dit")
+    }
+
+    /** Juste en dessous de la borne, rien ne s'affiche. */
+    @Test
+    fun theLimitSaysNothingWhenEverythingFits() = runTest(dispatcher) {
+        val model = model(Downloads())
+
+        model.sendPhotos(List(ChatMetrics.maxPhotosPerMessage) { picture })
+
+        assertNull(model.state.value.errorMessage, "Tout est parti : rien à signaler.")
+    }
+
     @Test
     fun somethingThatIsNotAnImageIsNotKept() = runTest(dispatcher) {
         val downloads = Downloads()

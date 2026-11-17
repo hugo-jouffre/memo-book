@@ -578,6 +578,14 @@ object ChatCopy {
      * Les images choisies n'ont pas pu être écrites sur l'appareil — disque
      * plein, ou fichier illisible.
      */
+    /**
+     * Plus de photos que le serveur n'en prend dans un message : celles qui
+     * partent sont nommées, et celles qui restent aussi. Rien ne disparaît
+     * sans que personne ne le dise (Hugo, 05/11/2026).
+     */
+    fun tooManyPhotos(kept: Int, sent: Int): String =
+        "J’en prends $kept à la fois. Les ${sent - kept} autres ne sont pas parties — renvoie-les dans un second message."
+
     const val photosUnreadable =
         "Je n’ai pas réussi à ouvrir ces photos. Réessaie, ou choisis-en d’autres."
 

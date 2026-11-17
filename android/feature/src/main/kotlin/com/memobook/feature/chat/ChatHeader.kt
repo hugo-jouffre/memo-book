@@ -100,12 +100,24 @@ object ChatMetrics {
     // de faire grandir la barre qui la porte — voir `BrandWaveform`.
 
     /**
-     * Combien de photos un envoi porte, et combien de vignettes sa bulle
-     * montre : six, le plus que MEMO demande pour une étape sur deux pages
-     * (`backend/src/services/photoBudget.ts`, Hugo, 01/10/2026). Le serveur
-     * applique la même borne (`MAX_PHOTOS`, `routes/chat.ts`).
+     * Combien de **vignettes** la bulle d'un envoi montre : six, le plus que
+     * MEMO demande pour une étape sur deux pages
+     * (`backend/src/services/photoBudget.ts`, Hugo, 01/10/2026).
+     *
+     * ⚠️ **Ce n'est pas une limite d'envoi** (Hugo, 05/11/2026 — « on ne peut
+     * pas ajouter plus de 6 photos »). Elle en servait pourtant : la
+     * photothèque s'arrêtait à six, et [ChatModel.sendPhotos] coupait le reste
+     * **en silence**. Un nombre de vignettes est une affaire de mise en page ;
+     * ce qu'on a le droit d'envoyer est une règle du serveur.
      */
     const val visiblePhotoCount = 6
+
+    /**
+     * Combien de photos un message peut porter — **la borne du serveur**,
+     * `MAX_PHOTOS_PER_STEP` de `backend/src/services/photoBudget.ts`. Les deux
+     * chiffres doivent rester égaux : au-delà, l'envoi part et se fait refuser.
+     */
+    const val maxPhotosPerMessage = 20
 }
 
 /**

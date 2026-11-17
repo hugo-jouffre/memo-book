@@ -1954,8 +1954,17 @@ public final class ChatModel {
         hideExhaustedNotice()
         let id = UUID().uuidString.lowercased()
 
+        // ⚠️ **Couper, mais le dire.** La borne vient du serveur
+        // (``ChatMetrics/maxPhotosPerMessage``) ; la photothèque s'y arrête
+        // déjà, mais un partage depuis une autre app peut en apporter
+        // davantage. Ce qui ne part pas doit se savoir : c'est exactement ce
+        // qui manquait quand six photos sur dix disparaissaient sans un mot.
+        if images.count > ChatMetrics.maxPhotosPerMessage {
+            errorMessage = ChatCopy.tooManyPhotos(kept: ChatMetrics.maxPhotosPerMessage, sent: images.count)
+        }
+
         var uploads: [ChatPhotoUpload] = []
-        for (index, data) in images.prefix(ChatMetrics.visiblePhotoCount).enumerated() {
+        for (index, data) in images.prefix(ChatMetrics.maxPhotosPerMessage).enumerated() {
             let photoId = "\(id)-\(index)"
             guard let url = try? ChatPhotoFile.save(data, id: photoId) else { continue }
             localPhotoUrls[photoId] = url
