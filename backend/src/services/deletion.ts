@@ -55,6 +55,7 @@ async function mediaOf(prisma: PrismaClient, memoIds: readonly string[]) {
       storageKey: true,
       originalStorageKey: true,
       renderStorageKey: true,
+      thumbStorageKey: true,
       cdnAssetId: true,
     },
   });
@@ -72,13 +73,17 @@ async function mediaOf(prisma: PrismaClient, memoIds: readonly string[]) {
     entryCount: entries.length,
     mediaIds,
     // L'original d'une photo agrandie est un fichier de plus, et il est à
-    // elle. Sa copie allégée pour le carnet aussi : c'est la même photo, en
-    // plus petit, et elle resterait sur S3 après le départ de son souvenir.
+    // elle. Sa copie allégée pour le carnet et sa vignette d'écran aussi :
+    // c'est la même photo, en plus petit, et elles resteraient sur S3 après le
+    // départ de son souvenir.
     storageKeys: [
       ...assets.flatMap((asset) =>
-        [asset.storageKey, asset.originalStorageKey, asset.renderStorageKey].filter(
-          (key): key is string => Boolean(key),
-        ),
+        [
+          asset.storageKey,
+          asset.originalStorageKey,
+          asset.renderStorageKey,
+          asset.thumbStorageKey,
+        ].filter((key): key is string => Boolean(key)),
       ),
       ...stickers.map((sticker) => sticker.storageKey),
     ],
@@ -319,6 +324,7 @@ export async function deleteEntryAndMedia(
             storageKey: true,
             originalStorageKey: true,
             renderStorageKey: true,
+            thumbStorageKey: true,
             cdnAssetId: true,
           },
         },
@@ -343,6 +349,7 @@ export async function deleteEntryAndMedia(
       entry.media.storageKey,
       entry.media.originalStorageKey,
       entry.media.renderStorageKey,
+      entry.media.thumbStorageKey,
     ].filter((key): key is string => Boolean(key));
     // Une clé qu'une autre ligne nomme encore reste en stockage.
     const stillNamed = await tx.mediaAsset.findMany({
@@ -351,15 +358,22 @@ export async function deleteEntryAndMedia(
           { storageKey: { in: keys } },
           { originalStorageKey: { in: keys } },
           { renderStorageKey: { in: keys } },
+          { thumbStorageKey: { in: keys } },
         ],
       },
-      select: { storageKey: true, originalStorageKey: true, renderStorageKey: true },
+      select: {
+        storageKey: true,
+        originalStorageKey: true,
+        renderStorageKey: true,
+        thumbStorageKey: true,
+      },
     });
     const named = new Set(
       stillNamed.flatMap((asset) => [
         asset.storageKey,
         asset.originalStorageKey,
         asset.renderStorageKey,
+        asset.thumbStorageKey,
       ]),
     );
     return {

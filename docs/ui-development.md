@@ -117,7 +117,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 ### Lot du 5 novembre — retours du Japon
 
 Les points envoyés par Hugo le 05/11/2026 depuis le Japon, **dans son ordre** :
-c'est celui dans lequel ils se traitent. Trente-trois au départ, dont huit
+c'est celui dans lequel ils se traitent. Trente-trois au départ, dont neuf
 réglés les 17 et 18/11 — les images absentes du PDF ([PR 188](https://github.com/hugo-jouffre/memo-book/pull/188)),
 le jour vide et les étapes sans lieu ([PR 211](https://github.com/hugo-jouffre/memo-book/pull/211),
 [212](https://github.com/hugo-jouffre/memo-book/pull/212)), le champ de saisie
@@ -125,8 +125,10 @@ le jour vide et les étapes sans lieu ([PR 211](https://github.com/hugo-jouffre/
 ([207](https://github.com/hugo-jouffre/memo-book/pull/207)), le plafond de 180 pages
 ([209](https://github.com/hugo-jouffre/memo-book/pull/209)) l'aperçu qui se
 recomposait sans raison (T258), les plats du PDF qui n'étaient pas ceux
-qu'on avait choisis (T259) et la ligne claire au bas de la couverture
-(T261) — et deux à moitié, dont seul le reste figure ici (T265, T267).
+qu'on avait choisis (T259), les images de la personnalisation des couvertures
+qui mettaient très longtemps à arriver (T260) et la ligne claire au bas de la
+couverture (T261) — et deux à moitié, dont seul le reste figure ici
+(T265, T267).
 
 ⚠️ **Ils n'étaient écrits nulle part** pendant douze jours : ni ici, ni dans un
 ticket, seulement dans le message de Hugo et dans les corps des PR qui en
@@ -135,7 +137,6 @@ pas dans ce fichier n'existe pas.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T260 | **Le chargement des images est très long dans la personnalisation des couvertures.** À mesurer avant de corriger : ce sont les photos du voyage qui alimentent les gabarits, et rien ne dit encore si le temps part dans le réseau, dans le décodage ou dans le rendu des sept plats | Couvertures |
 | T262 | **Un export pendant le voyage ne dit pas qu'il est partiel.** La couverture devrait porter le **numéro d'édition** (#1, #2…), le **pourcentage du trajet** déjà parcouru, et le **nom de l'étape qui regroupe** les étapes couvertes. Rien de tout ça n'existe : aucune notion d'édition dans le code (`bookComposer.ts`, gabarit `travel-journal`) | Aperçu PDF, impression |
 | T263 | **Chaque étape devrait porter sa date et sa température, avec une petite icône météo, sur l'accueil du voyage.** La rédaction relève déjà une icône (`weatherKey`, servie par `routes/serializers.ts`), mais **aucune température n'existe nulle part** dans le projet, et aucune vue iOS ne lit `weatherKey` hors de l'aperçu du carnet. Chaîne entière à faire : source de la température, colonne, sérialiseur, modèle Swift, vue | Accueil d'un voyage |
 | T264 | **La météo est mal placée dans l'aperçu et le PDF.** Elle ne s'imprime désormais que si le voyageur l'a dite dans son vocal (`structuring.ts` § météo), ce qui règle le « encore affichée » ; reste son emplacement dans la page, à reprendre avec le metteur en page | Aperçu PDF |
@@ -149,7 +150,7 @@ pas dans ce fichier n'existe pas.
 | T272 | **Proposer à Clara de continuer avec nous**, sur un ou plusieurs sujets : les posts Instagram, les articles de blog (« pas sûr… »), et l'offre de carnet template contre une commission sur les ventes, l'investissement initial étant de notre côté — trouver un imprimeur pour les couvertures personnalisées, faire designer puis imprimer cent carnets semblables et les vendre | Hors app |
 | T273 | **Vérifier qu'on peut envoyer des popups aux utilisateurs sans leur faire retélécharger l'app**, et comprendre comment on le fait. Commencer à recueillir leur avis dans l'app, **sans** proposer de note sur l'App Store pour le moment | Partout |
 | T274 | **Vérifier que tout est bien en production**, et que le compte TestFlight de Hugo l'est aussi | Hors app |
-| T275 | **L'envoi d'une photo traîne et annonce « hors ligne » alors que la connexion est bonne.** Le diagnostic est déjà écrit dans `ios/CLAUDE.md` § Hors ligne — « en ligne » ne veut pas dire « l'API répond », et un échec de transport renvoie le tour dans la file. Reste à savoir pourquoi l'envoi d'une photo y tombe si souvent : taille du fichier, délai d'attente, ou conversion JPEG | Conversation — photos |
+| T275 | **L'envoi d'une photo traîne et annonce « hors ligne » alors que la connexion est bonne.** Le diagnostic est déjà écrit dans `ios/CLAUDE.md` § Hors ligne — « en ligne » ne veut pas dire « l'API répond », et un échec de transport renvoie le tour dans la file. Reste à savoir pourquoi l'envoi d'une photo y tombe si souvent : taille du fichier, délai d'attente, ou conversion JPEG — et depuis T260 (17/11/2026) la route fabrique aussi la vignette d'écran, 47 ms par photo mesurées, à compter dans le budget | Conversation — photos |
 | T276 | **Les titres posés sur la 1re et la 4e de couverture ne fonctionnent pas.** Distinct de T259 : là ce sont les mots du voyageur, pas le gabarit. Depuis T259 (17/11/2026), le chemin serveur est vérifié de bout en bout — `PATCH /v1/trips/:id/covers` les garde et le payload de composition les porte (`test/pipeline.test.ts`) : ce qui reste est à chercher côté app | Couvertures |
 | T277 | **Un appui sur l'aperçu du PDF doit l'afficher en grand.** Aujourd'hui la vignette ne mène nulle part | Aperçu PDF |
 | T278 | **Les titres ne se distinguent pas assez du corps du texte** dans le carnet composé. Affaire de hiérarchie typographique dans le gabarit, pas de contenu | Impression, Aperçu PDF |

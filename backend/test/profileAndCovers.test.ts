@@ -220,6 +220,65 @@ describe("les couvertures d'un carnet", () => {
     expect(body.stats.find((stat) => stat.id === "stat-countries")).toMatchObject({ value: "1", label: "pays\nvisité" });
   });
 
+  /**
+   * **T260, 17/11/2026.** Ce carrousel propose *toutes* les photos du voyage
+   * comme image de plat, et il les servait en pleine résolution : 4,45 Mo par
+   * photo mesurés en production, jusqu'à 423 Mo pour parcourir le rail d'un
+   * voyage de 88 photos. Il sert donc la vignette de 900 px
+   * (`services/photoThumbnails.ts`), et retombe sur l'originale pour une photo
+   * qui n'en a pas encore — celles d'avant ce jour-là.
+   */
+  it("sert la vignette d'une photo du voyage, et l'originale à défaut", async () => {
+    const account = await registerAccount(harness.app);
+    const memo = await seedTrip(account.accountId);
+
+    const avecVignette = await harness.prisma.entry.create({
+      data: {
+        memo: { connect: { id: memo.id } },
+        kind: "photo",
+        status: "ready",
+        createdAt: new Date("2026-08-27T10:00:00Z"),
+        media: {
+          create: {
+            storageKey: "photo/entiere.jpg",
+            mimeType: "image/jpeg",
+            bytes: 4_450_000,
+            thumbStorageKey: "photo/vignette.jpg",
+          },
+        },
+      },
+    });
+    const sansVignette = await harness.prisma.entry.create({
+      data: {
+        memo: { connect: { id: memo.id } },
+        kind: "photo",
+        status: "ready",
+        createdAt: new Date("2026-08-28T10:00:00Z"),
+        media: {
+          create: { storageKey: "photo/ancienne.jpg", mimeType: "image/jpeg", bytes: 3_300_000 },
+        },
+      },
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: `/v1/trips/${memo.id}/covers`,
+      headers: { authorization: account.authorization },
+    });
+    expect(response.statusCode).toBe(200);
+    const photos = response.json<CoversBody>().photos;
+
+    // L'ordre des photos ne bouge pas : c'est celui du carrousel.
+    expect(photos.map((photo) => photo.id)).toEqual([
+      `entry-${avecVignette.id}`,
+      `entry-${sansVignette.id}`,
+    ]);
+    // Le stockage de test signe en `memory://<clé>` : l'adresse dit donc
+    // exactement quel fichier partirait à l'app.
+    expect(photos[0]?.url).toBe("memory://photo/vignette.jpg");
+    expect(photos[1]?.url).toBe("memory://photo/ancienne.jpg");
+  });
+
   it("enregistre un style, une photo importée, les textes et les chiffres — et refuse l'inconnu", async () => {
     const account = await registerAccount(harness.app);
     const memo = await seedTrip(account.accountId);

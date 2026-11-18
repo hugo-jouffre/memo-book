@@ -2,7 +2,14 @@ import { randomFillSync } from "node:crypto";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
-import { downscaleForRender, RENDER_MAX_BYTES, RENDER_MAX_SIDE } from "./photoDownscale.js";
+import {
+  downscaleForRender,
+  downscaleForScreen,
+  RENDER_MAX_BYTES,
+  RENDER_MAX_SIDE,
+  THUMB_MAX_BYTES,
+  THUMB_MAX_SIDE,
+} from "./photoDownscale.js";
 
 /**
  * **Une photo lourde**, comme celles qui sortent d'un iPhone.
@@ -87,5 +94,62 @@ describe("downscaleForRender", () => {
     randomFillSync(nImporteQuoi);
 
     expect(await downscaleForRender(nImporteQuoi)).toBeNull();
+  });
+});
+
+describe("downscaleForScreen", () => {
+  it("ramène une photo d'iPhone à la taille d'un plat, et bien plus légère", async () => {
+    const lourde = await grosJpeg(3000, 2000);
+
+    const vignette = await downscaleForScreen(lourde);
+
+    expect(vignette?.widthPx).toBe(THUMB_MAX_SIDE);
+    expect(vignette?.heightPx).toBe(600);
+    expect(vignette?.mimeType).toBe("image/jpeg");
+    // Le chiffre du ticket : une vignette pèse un ordre de grandeur de moins.
+    expect(vignette!.buffer.byteLength).toBeLessThan(lourde.byteLength / 10);
+  });
+
+  /**
+   * **Elle est plus petite que la copie du carnet, et c'est tout l'intérêt.**
+   * Les deux coexistent : celle-ci se regarde sur un téléphone, l'autre part à
+   * l'imprimeur. Si un jour elles se confondaient, le carnet sortirait flou —
+   * ce test est là pour que ça se voie ici d'abord.
+   */
+  it("est plus légère que la copie du carnet, qui garde sa définition", async () => {
+    const lourde = await grosJpeg(3000, 2000);
+
+    const vignette = await downscaleForScreen(lourde);
+    const carnet = await downscaleForRender(lourde);
+
+    expect(vignette!.widthPx).toBeLessThan(carnet!.widthPx);
+    expect(vignette!.buffer.byteLength).toBeLessThan(carnet!.buffer.byteLength);
+  });
+
+  it("laisse tranquille une photo qui est déjà une vignette", async () => {
+    const petite = await sharp({
+      create: { width: 400, height: 300, channels: 3, background: "#3fa7d6" },
+    })
+      .jpeg()
+      .toBuffer();
+
+    expect(petite.byteLength).toBeLessThan(THUMB_MAX_BYTES);
+    expect(await downscaleForScreen(petite)).toBeNull();
+  });
+
+  it("grave la rotation EXIF dans les pixels, comme la copie du carnet", async () => {
+    const portrait = await grosJpeg(3000, 2000, 6);
+
+    const vignette = await downscaleForScreen(portrait);
+
+    expect(vignette?.widthPx).toBe(600);
+    expect(vignette?.heightPx).toBe(THUMB_MAX_SIDE);
+  });
+
+  it("rend null sur des octets illisibles, sans jeter", async () => {
+    const nImporteQuoi = Buffer.alloc(THUMB_MAX_BYTES + 1);
+    randomFillSync(nImporteQuoi);
+
+    expect(await downscaleForScreen(nImporteQuoi)).toBeNull();
   });
 });
