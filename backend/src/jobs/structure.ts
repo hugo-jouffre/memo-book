@@ -91,7 +91,13 @@ export async function structureRender(
       include: {
         entries: {
           orderBy: { capturedAt: "asc" },
-          include: { media: true },
+          include: {
+            media: true,
+            // **L'étape à laquelle le souvenir appartient** (T267) : son lieu
+            // est le repli de l'en-tête quand le vocal n'en dit pas. Ce n'est
+            // pas une déduction, c'est le lieu de cette étape-là.
+            step: { select: { placeName: true, destinationName: true } },
+          },
         },
         // Les deux plats du carnet lisent le voyage : les étapes et les pays
         // traversés font les chiffres du dos, les photos importées font les
@@ -142,6 +148,9 @@ export async function structureRender(
         weatherKey: entry.weatherKey,
         capturedAt: entry.capturedAt,
         placeLabel: entry.placeLabel,
+        // Le lieu de l'étape qui porte ce souvenir, quand il y en a une
+        // (T267). `structuring.ts` s'en sert faute de mieux.
+        stepPlace: entry.step?.placeName?.trim() || entry.step?.destinationName?.trim() || null,
         photoUrl,
         // Ce qu'on a mesuré de la photo à son arrivée (T265) : c'est ce qui
         // départage les photos d'une étape quand la page n'en dessine qu'une
