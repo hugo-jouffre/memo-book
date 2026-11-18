@@ -917,9 +917,12 @@ li { margin: 0; }
    ============================================================================= */
 
 /* --- Couverture ------------------------------------------------------------- */
+/* Débordée du jeu de la page, comme la photo d'un plat : c'est cette
+   couverture-ci que Hugo regardait le 05/11/2026, avant que les gabarits
+   n'existent (T261, et le commentaire sur `.page--plat::before`). */
 .page--cover .mb-cover__photo {
   position: absolute;
-  inset: 0;
+  inset: 0 calc(-1 * var(--mb-page-slack)) calc(-1 * var(--mb-page-slack)) 0;
   z-index: 0;
 }
 
@@ -1025,9 +1028,61 @@ li { margin: 0; }
   background-color: var(--mb-plat-creme);
 }
 
-/* Un plat porte son propre aplat : ni teinte crème ni grain par-dessus. */
-.page--plat::before,
+/* Un plat porte son propre aplat : pas de grain par-dessus. */
 .page--plat::after { display: none; }
+
+/* **La ligne claire au bas de la couverture** (Hugo, 05/11/2026 ; T261).
+
+   La page est volontairement plus petite que sa feuille, d'un point en largeur
+   et en hauteur — voir `.page`, c'est ce qui protège du Chromium 97
+   d'APITemplate. Ce jeu se remplit de `--mb-sheet`, une couleur calibrée pour
+   disparaître **sur une page crème**. Un plat n'est pas crème : son aplat et
+   sa photo s'arrêtent un point avant le bord, et la feuille se voit dessous —
+   un filet en bas, et un autre à droite que personne n'avait signalé. Mesuré
+   sur le PDF rendu : les deux dernières lignes de pixels à #f6ece5 quand la
+   photo est à #dacdc5.
+
+   On ne touche pas au jeu, qui est là pour une bonne raison. C'est **ce qui se
+   peint** qui vient le couvrir : la teinte crème du plat cède sa place à
+   l'aplat de la famille, débordé d'un jeu vers la droite et vers le bas.
+   `background-color: inherit` reprend celui que la famille a posé sur la page,
+   plutôt que de redire sept couleurs ici. */
+.page--plat::before {
+  inset: 0 calc(-1 * var(--mb-page-slack)) calc(-1 * var(--mb-page-slack)) 0;
+  z-index: 0;
+  background-color: inherit;
+}
+
+/* Un plat et la couverture d'avant les gabarits se peignent jusqu'au bord de
+   la feuille : ni l'un ni l'autre ne rogne ses couches de fond. Les pages de
+   contenu, elles, gardent leur `overflow: hidden` — le ruban dépasse du bord
+   haut et doit y être coupé (voir `.mb-ribbon`). */
+.page--cover,
+.page--plat { overflow: visible; }
+
+/* La photo pleine page d'un plat, et le voile posé dessus, débordent du même
+   jeu : c'est le bord de la photo qu'on voit, pas l'aplat sous elle. Et un
+   voile qui s'arrêterait un point trop tôt laisserait une bande de photo non
+   assombrie — un filet clair, exactement celui qu'on retire.
+   Les décors — taches, sentiers, filet pointillé, contours — n'en ont pas
+   besoin : ils sont posés **sur** l'aplat, qui déborde déjà, et un point de
+   tache en moins ne se voit pas. */
+.page--plat .mb-plat__photo--fond,
+.page--plat .mb-plat__voile {
+  inset: 0 calc(-1 * var(--mb-page-slack)) calc(-1 * var(--mb-page-slack)) 0;
+}
+
+/* ⚠️ **`width` l'emporte sur `right`, et `height` sur `bottom`.** Le fond
+   d'un plat porte les deux classes (`mb-plat__photo mb-plat__photo--fond`),
+   et la première lui donne `width: 100%; height: 100%` : les débordements
+   ci-dessus ne faisaient alors que déplacer son origine, la boîte gardait la
+   taille de la page et le filet restait. Mesuré sur le plat « Par défaut » :
+   #dee4e1 sur un point contre #93ccd3 à l'intérieur. Il faut donc rendre la
+   taille aux `inset`. */
+.page--plat .mb-plat__photo--fond {
+  width: auto;
+  height: auto;
+}
 
 /* **Ce qui se lit passe devant les décors.** Un élément positionné se peint
    au-dessus de ce qui ne l'est pas, quel que soit l'ordre du balisage : les
