@@ -42,6 +42,20 @@ export interface StructuringEntry {
   weatherKey: string | null;
   capturedAt: Date;
   placeLabel: string | null;
+  /**
+   * **Le lieu de l'étape qui porte ce souvenir** (T267, 18/11/2026) — le
+   * repli de l'en-tête quand le vocal ne dit pas où l'on est.
+   *
+   * Ce n'est pas une déduction : depuis T227, un souvenir est rangé dans une
+   * étape, et cette étape a un lieu. L'en-tête d'une journée n'imprimait
+   * pourtant que `placeLabel`, relevé du vocal — absent, elle n'affichait
+   * qu'une date.
+   *
+   * Mesuré sur la production avant d'y toucher : **15 journées de carnet sur
+   * 35 (43 %) sans lieu**, dont **7** que l'étape rattrape. Les journées
+   * voisines, que le ticket proposait, n'en rattrapaient qu'**une**.
+   */
+  stepPlace?: string | null;
   /** URL publique de la photo, quand l'entrée en porte une. */
   photoUrl: string | null;
   /**
@@ -309,8 +323,15 @@ export class HeuristicStructurer implements Structurer {
         .filter((text): text is string => Boolean(text))
         .join(" ");
 
+      // **Ce que le voyageur a dit d'abord, l'étape ensuite** (T267). Et rien
+      // de plus : pas la ville du voyage, qui imprimerait « Tokyo » sur une
+      // journée passée à Kyoto — c'est très exactement la plainte de T280, et
+      // deux journées rattrapées ne valent pas ce risque. Sans lieu, l'en-tête
+      // n'en affiche pas, et MEMO le demandera (reste de T267).
       const place =
-        group.entries.find((entry) => entry.placeLabel)?.placeLabel ?? null;
+        group.entries.find((entry) => entry.placeLabel)?.placeLabel ??
+        group.entries.find((entry) => entry.stepPlace)?.stepPlace ??
+        null;
 
       // Titre, météo et encart viennent de la rédaction quand elle est passée.
       // Le repli déterministe ne réinvente que ce qui manque.
@@ -475,7 +496,10 @@ export class LlmStructurer implements Structurer {
     for (const [index, group] of groups.entries()) {
       lines.push("", `### Journée ${index + 1} — ${DATE_FORMATTER.format(group.date)}`);
       for (const entry of group.entries) {
-        if (entry.placeLabel) lines.push(`Lieu : ${entry.placeLabel}`);
+        // Le lieu dit, sinon celui de l'étape (T267) : sans ça le modèle
+        // écrirait une journée sans lieu là où le repli déterministe en a un.
+        const lieu = entry.placeLabel ?? entry.stepPlace ?? null;
+        if (lieu) lines.push(`Lieu : ${lieu}`);
         if (entry.title) lines.push(`Titre (à reprendre tel quel) : ${entry.title}`);
         if (entry.weatherKey) lines.push(`weather_key (déjà choisi) : ${entry.weatherKey}`);
         if (entry.funFact) {
