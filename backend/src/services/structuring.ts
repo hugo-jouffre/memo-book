@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { stringify as stringifyYaml } from "yaml";
 import type { Env } from "../env.js";
 import { escapeHtml } from "../lib/html.js";
+import { photosLesPlusNettes, type PhotoQuality } from "./photoPicking.js";
 import { loadLayoutKnowledgeBase, loadPayloadSchema } from "../lib/templates.js";
 import {
   EDITORIAL_LIMITS,
@@ -43,6 +44,14 @@ export interface StructuringEntry {
   placeLabel: string | null;
   /** URL publique de la photo, quand l'entrée en porte une. */
   photoUrl: string | null;
+  /**
+   * Ce qu'on a mesuré de la photo à son arrivée (T265) : sa netteté, et le
+   * verdict qui en découle. Absents d'une photo d'avant le 18/11/2026, ou
+   * d'un format que `jimp` n'a pas su décoder — `photosLesPlusNettes` range
+   * alors la photo entre les nettes et les refusées, sans la condamner.
+   */
+  photoSharpness?: number | null;
+  photoVerdict?: string | null;
 }
 
 /** Le quiz tel que le gabarit le lit (`day.quiz`, `index.html`). */
@@ -369,7 +378,7 @@ export class HeuristicStructurer implements Structurer {
       authors: input.authors ?? "",
       date_range: formatDateRange(groups),
       brand_name: "MemoBook",
-      days: completerEtapesImpaires(days),
+      days: completerEtapesImpaires(choisirLesMontrees(days, input.entries)),
     };
 
     if (input.subtitle) payload["book_subtitle"] = input.subtitle;
@@ -542,7 +551,10 @@ export class LlmStructurer implements Structurer {
 
       const result = validatePayload(payload);
       if (result.valid) {
-        return withToldQuizzesOnly(withToldWeatherOnly(payload as BookPayload, input.entries), input.entries);
+        return withBestPhotosFirst(
+          withToldQuizzesOnly(withToldWeatherOnly(payload as BookPayload, input.entries), input.entries),
+          input.entries,
+        );
       }
 
       if (attempt === 2) break;
@@ -558,6 +570,50 @@ export class LlmStructurer implements Structurer {
 
     return this.fallback.structure(input);
   }
+}
+
+/**
+ * **Les meilleures photos d'abord, dans chaque page** (T265, 18/11/2026).
+ *
+ * Chaque gabarit dessine un nombre fixe de photos et laisse les suivantes de
+ * côté (`PHOTOS_MONTREES`) : jusqu'ici, c'étaient **les premières arrivées**
+ * qui gagnaient, la floue comme la nette. On les réordonne pour que celles
+ * que la page montre soient les plus nettes — sans toucher à leur ordre
+ * d'apparition, qui reste celui du récit (`services/photoPicking.ts`).
+ *
+ * Posé en passe finale, comme `withToldWeatherOnly` : les deux structureurs y
+ * passent, celui du modèle comme le déterministe, et aucun n'a à y penser.
+ */
+export function choisirLesMontrees(
+  days: Record<string, unknown>[],
+  entries: readonly StructuringEntry[],
+): Record<string, unknown>[] {
+  const qualite = new Map<string, PhotoQuality>();
+  for (const entry of entries) {
+    if (!entry.photoUrl) continue;
+    qualite.set(entry.photoUrl, { sharpness: entry.photoSharpness, verdict: entry.photoVerdict });
+  }
+  if (qualite.size === 0) return days;
+
+  for (const day of days) {
+    const photos = day["photos"];
+    if (!Array.isArray(photos) || photos.length < 2) continue;
+    const layout = Object.keys(day).find((cle) => cle.startsWith("layout_") && day[cle] === true) ?? "";
+    day["photos"] = photosLesPlusNettes(photos, PHOTOS_MONTREES[layout] ?? 1, (photo) =>
+      typeof photo === "string" ? (qualite.get(photo) ?? {}) : {},
+    );
+  }
+  return days;
+}
+
+/** La même chose sur un payload déjà assemblé — le chemin du modèle. */
+export function withBestPhotosFirst(
+  payload: BookPayload,
+  entries: readonly StructuringEntry[],
+): BookPayload {
+  const days = (payload as unknown as { days?: unknown }).days;
+  if (Array.isArray(days)) choisirLesMontrees(days as Record<string, unknown>[], entries);
+  return payload;
 }
 
 /**

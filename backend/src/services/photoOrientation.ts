@@ -1,3 +1,5 @@
+import { analysePixels, type PhotoAnalysis } from "./photoAnalysis.js";
+
 /**
  * **Une photo est-elle au format paysage ?** — la mesure qui décide de la
  * couverture d'un voyage (Hugo, 15/10/2026).
@@ -43,6 +45,22 @@ export interface PhotoMeasurement {
    * en photos d'Instagram.
    */
   isLandscape: boolean;
+
+  /**
+   * **La netteté mesurée**, et le verdict qui en découle (T265, 18/11/2026).
+   *
+   * Tirés du **même décodage** que les dimensions : `jimp` a déjà le bitmap
+   * en main, et le calcul est une moyenne de variances sur neuf cases. Les
+   * obtenir ici ne coûte donc rien de plus qu'ici — les demander plus tard
+   * aurait voulu dire relire la photo depuis le stockage, une par une, au
+   * moment de composer.
+   *
+   * Ils servent à **choisir quelles photos le carnet montre** quand une étape
+   * en porte plus que sa mise en page n'en dessine
+   * (`services/photoPicking.ts`). Avant, c'étaient les premières arrivées.
+   */
+  sharpness: number;
+  verdict: "ok" | "upscale" | "downgrade" | "reject";
 }
 
 /**
@@ -56,6 +74,7 @@ export interface PhotoMeasurement {
 export async function measurePhoto(buffer: Buffer): Promise<PhotoMeasurement | null> {
   let width: number;
   let height: number;
+  let analyse: PhotoAnalysis;
   try {
     // Import paresseux, comme `photoAnalysis` : `jimp` est lourd à charger, et
     // la plupart des requêtes n'en ont pas besoin.
@@ -63,10 +82,18 @@ export async function measurePhoto(buffer: Buffer): Promise<PhotoMeasurement | n
     const image = await Jimp.fromBuffer(buffer);
     width = image.bitmap.width;
     height = image.bitmap.height;
+    // Le bitmap est là : la netteté se mesure dans la même passe (T265).
+    analyse = analysePixels(new Uint8Array(image.bitmap.data), width, height);
   } catch {
     return null;
   }
 
   if (!width || !height) return null;
-  return { widthPx: width, heightPx: height, isLandscape: width >= height };
+  return {
+    widthPx: width,
+    heightPx: height,
+    isLandscape: width >= height,
+    sharpness: analyse.detail,
+    verdict: analyse.verdict,
+  };
 }

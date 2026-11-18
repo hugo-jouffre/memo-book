@@ -32,6 +32,18 @@ export interface PhotoAnalysis {
   /** Résolution effective à la taille d'affichage prévue, en dpi. */
   dpi?: number;
   verdict: "ok" | "upscale" | "downgrade" | "reject";
+  /**
+   * **La netteté mesurée** : la variance de luminance moyenne des neuf cases
+   * (T265, 18/11/2026). Elle décidait déjà du verdict `reject`, mais restait
+   * à l'intérieur de cette fonction ; il fallait un **chiffre** pour classer
+   * des photos entre elles, pas seulement un oui ou un non.
+   *
+   * C'est un proxy grossier et il le reste : un ciel uni est « moins net »
+   * qu'un marché bondé sans être plus flou. Il ne sert donc qu'à départager
+   * des photos **du même souvenir**, prises au même endroit dans la même
+   * minute — là où il dit à peu près ce qu'on croit qu'il dit.
+   */
+  detail: number;
 }
 
 const GRID = 3;
@@ -137,6 +149,7 @@ export function analysePixels(
     height,
     ...(dpi === undefined ? {} : { dpi }),
     verdict,
+    detail: Math.round(overall * 100) / 100,
   };
 }
 

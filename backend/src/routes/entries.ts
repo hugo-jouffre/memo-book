@@ -22,6 +22,7 @@ import { deleteEntryAndMedia } from "../services/deletion.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { isRenderableImage, toRenderablePhoto } from "../services/photoFormat.js";
+import { measurePhoto } from "../services/photoOrientation.js";
 import { storeScreenThumbnail } from "../services/photoThumbnails.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeEntry } from "./serializers.js";
@@ -196,6 +197,13 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
       photo?.mimeType ?? mimeType,
     );
 
+    // **La mesure de la photo**, sur les octets encore en mémoire : ses
+    // dimensions, son sens, sa netteté (T263 pour le sens, T265 pour la
+    // netteté). Cette route ne mesurait rien du tout — une photo envoyée par
+    // elle n'était donc jamais couverture de voyage, et n'aurait pas eu de
+    // rang dans le choix des photos du carnet. `chat.ts` le faisait déjà.
+    const measure = photo ? await measurePhoto(photo.buffer) : null;
+
     // La vignette de l'écran des couvertures, sur les octets encore en
     // mémoire (T260) — voir `services/photoThumbnails.ts`.
     const thumbStorageKey = photo
@@ -212,6 +220,15 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
             status: isAudio ? "pending" : "ready",
             capturedAt,
             placeLabel: typeof rawPlaceLabel === "string" ? rawPlaceLabel : null,
+            ...(measure
+              ? {
+                  photoWidthPx: measure.widthPx,
+                  photoHeightPx: measure.heightPx,
+                  photoIsLandscape: measure.isLandscape,
+                  photoSharpness: measure.sharpness,
+                  photoVerdict: measure.verdict,
+                }
+              : {}),
             media: {
               create: {
                 storageKey: stored.storageKey,

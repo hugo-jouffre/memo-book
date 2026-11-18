@@ -63,7 +63,7 @@ describe("toRenderablePhoto", () => {
     expect(photo.filename).toBe("photo.jpg");
     // 40 × 30 : la photo convertie redevient candidate à la couverture, ce
     // qu'un HEIC n'était jamais puisque `measurePhoto` ne sait pas le lire.
-    await expect(measurePhoto(photo.buffer)).resolves.toEqual({
+    await expect(measurePhoto(photo.buffer)).resolves.toMatchObject({
       widthPx: 40,
       heightPx: 30,
       isLandscape: true,
