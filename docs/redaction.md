@@ -108,6 +108,48 @@ Clara, Tom).
 
 ## 4. Journal
 
+### 18/11/2026 — Le tiret qui faisait IA venait de la consigne
+
+Hugo, le 05/11 : « les transcriptions portent des tirets qui font très IA »
+(T266). Le coupable était une ligne de la consigne, § 8.5 Typographie :
+
+> Tiret cadratin (—) pour l'incise, pas le trait d'union.
+
+Écrite comme une règle de typographie correcte — et c'en est une, pour un
+livre composé. Mais le carnet n'est pas un livre composé : c'est quelqu'un qui
+raconte son voyage, et personne ne ponctue au tiret cadratin en racontant.
+
+**Mesuré sur la production avant de toucher à quoi que ce soit**, sur les 50
+souvenirs rédigés :
+
+| | |
+|---|---|
+| souvenirs portant au moins un tiret | **9, soit 18 %** |
+| tirets au total | 14, un pour **330 mots** |
+| tirets dans les transcriptions brutes | **0** |
+
+Ce dernier chiffre est celui qui tranche : aucun voyageur n'en dit un seul.
+Ils venaient tous de la consigne.
+
+**Ce qui a changé** : la règle dit maintenant l'inverse — deux virgules pour
+une incise, un point ou un deux-points pour une rupture, des parenthèses pour
+une parenthèse. Le tiret reste permis dans une réplique rapportée et dans un
+titre.
+
+**Ce qui n'a pas changé, et pourquoi.** La consigne contient 59 tirets dans sa
+propre prose, et on aurait pu croire qu'il fallait tous les retirer : le style
+d'un prompt s'imite. Vérification faite, **les exemples ✅ n'en portent aucun**
+— ils ponctuent déjà comme la nouvelle règle le demande. C'était la règle qui
+contredisait ses propres exemples. Une réécriture des 59 aurait été un gros
+diff illisible pour un gain supposé ; on la garde en réserve si le banc montre
+que le tiret revient.
+
+**Pas de filet déterministe non plus.** Remplacer les « — » dans le texte
+produit serait réécrire la sortie de l'écrivain à la regex : une incise
+demande deux virgules et une rupture un point, et un seul remplacement
+aveugle produirait une ponctuation fausse. On corrige la cause, pas le
+symptôme.
+
 ### 02/11/2026 — La page se lit avant le carnet, et part dans le JSON
 
 **Le constat** (Hugo). La rédaction de l'atelier ne tournait qu'à l'intérieur
