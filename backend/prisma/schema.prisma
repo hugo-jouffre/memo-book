@@ -1094,6 +1094,24 @@ model MemoStep {
   /// (« Ça me convient »), à l'échelle de l'étape.
   validatedAt DateTime?
 
+  /// **La température relevée pour cette étape**, en degrés Celsius (T263).
+  ///
+  /// Le repli de ce que le voyageur n'a pas dit : cherchée une fois chez
+  /// Visual Crossing à partir du nom du lieu et de la date de l'étape
+  /// (`services/weatherLookup.ts`), puis gardée — une température de 2026 ne
+  /// changera plus. La température **dite** dans un vocal l'emporte toujours
+  /// sur celle-ci (`entries.temperatureC`), parce qu'elle, c'est un souvenir.
+  temperatureC Int?
+
+  /// **Quand on a cherché**, même sans rien trouver.
+  ///
+  /// Nul veut dire « jamais cherché ». Renseigné avec `temperatureC` nulle
+  /// veut dire « cherché, rien trouvé » — un lieu que le service ne sait pas
+  /// placer, une date hors de son historique. Sans cette date, une telle
+  /// étape serait réinterrogée à chaque lecture du voyage, et le service a un
+  /// quota.
+  temperatureLookedUpAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1218,6 +1236,18 @@ model Entry {
   funFactTitle   String?
   /// `sun` | `sun-wind` | `cloud` | `rain` | `snow`.
   weatherKey     String?
+
+  /// **La température que le voyageur a dite**, en degrés Celsius (T263).
+  ///
+  /// Relevée du vocal par la rédaction, comme `weatherKey` juste au-dessus et
+  /// sous la même règle (T264, Hugo) : ce qui s'imprime est ce qui a été
+  /// raconté. « Il faisait 30 » donne 30 ; un souvenir qui n'en parle pas
+  /// reste nul, et c'est le cas courant.
+  ///
+  /// Entière : personne ne dit « il faisait 23,4 degrés ». Négative l'hiver.
+  /// Ce n'est **pas** la température relevée par un service — celle-là vit sur
+  /// l'étape (`memo_steps.temperatureC`), et la dite l'emporte toujours.
+  temperatureC   Int?
 
   /// Le quiz proposé pour ce souvenir. Il vit ici et non dans le payload du
   /// rendu, sinon il serait réécrit à chaque aperçu : c'est du texte que

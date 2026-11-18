@@ -319,6 +319,52 @@ struct TripStepCard: View {
         }
     }
 
+    /// `nil` quand l'étape n'a ni temps relevé ni température : la ligne ne
+    /// réserve alors aucune place (voir ``WeatherIcon``).
+    private var weather: WeatherIcon? {
+        WeatherIcon(weatherKey: step.weatherKey, temperatureC: step.temperatureC)
+    }
+
+    /// **Quand on y était, et ce que ça faisait** (T263, Hugo — « chaque
+    /// étape devrait porter sa date et sa température, avec une petite icône
+    /// météo »). Les deux vont ensemble : ils disent la même chose du séjour.
+    ///
+    /// ⚠️ **Empilés aux tailles accessibles**, comme tout ce que l'app pose
+    /// côte à côte (`ios/CLAUDE.md`). À AX3 la plage de dates se casse déjà
+    /// sur trois lignes, et la météo gardée à côté se retrouvait au milieu du
+    /// pavé, derrière un point qui ne séparait plus rien. Vu au simulateur,
+    /// pas déduit.
+    ///
+    /// Le point ne paraît donc qu'en ligne, et seulement entre deux choses à
+    /// séparer : une étape sans dates ne doit pas commencer par lui.
+    @ViewBuilder
+    private var dateAndWeather: some View {
+        let dates = step.dateRangeLabel
+
+        if dates != nil || weather != nil {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let dates { dateText(dates) }
+                    weather
+                }
+            } else {
+                HStack(spacing: MemoBookSpacing.xs / 2) {
+                    if let dates { dateText(dates) }
+                    if weather != nil, dates != nil {
+                        dateText("·").accessibilityHidden(true)
+                    }
+                    weather
+                }
+            }
+        }
+    }
+
+    private func dateText(_ value: String) -> some View {
+        Text(value)
+            .font(MemoBookFont.label)
+            .foregroundStyle(MemoBookColor.inkMuted)
+    }
+
     private var text: some View {
         VStack(alignment: .leading, spacing: 2) {
             // Deux écarts, et pas un seul : la pastille a besoin d'air
@@ -351,11 +397,7 @@ struct TripStepCard: View {
                 }
             }
 
-            if let dates = step.dateRangeLabel {
-                Text(dates)
-                    .font(MemoBookFont.label)
-                    .foregroundStyle(MemoBookColor.inkMuted)
-            }
+            dateAndWeather
 
             // ⚠️ **Plus de ligne « avec Fanny »** (Hugo, 25/10/2026 — « la
             // ville à la place du co-voyageur répété »). Les co-voyageurs d'un

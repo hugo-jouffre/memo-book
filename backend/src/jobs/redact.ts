@@ -13,6 +13,7 @@ import {
 import { describeTripContext, parseTripContext } from "../services/tripContext.js";
 import { askToSplit, confirmRedaction, firstNameOf } from "../services/conversationThread.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
+import { fillMissingStepTemperaturesQuietly } from "../services/weatherLookup.js";
 
 export interface RedactJob {
   entryId: string;
@@ -284,6 +285,10 @@ export async function redactEntry(
               ? (result.moments as unknown as Prisma.InputJsonArray)
               : Prisma.DbNull,
           weatherKey: result.weatherKey,
+          // La température **dite** (T263). Nulle le plus souvent : l'étape
+          // ira alors la chercher (`services/weatherLookup.ts`), et celle-ci
+          // l'emportera toujours sur celle-là.
+          temperatureC: result.temperatureC,
           funFact: result.funFact,
           funFactTitle: result.funFactTitle,
           // Écrit même quand le réglage Quiz est coupé, comme le fun fact :
@@ -334,6 +339,11 @@ export async function redactEntry(
       if (!asked) await confirmRedaction(prisma, entryId);
     }
     await refreshTripFactsQuietly(context, entry.memoId);
+    // **Après** le recalcul des étapes, et hors de sa transaction (T263) :
+    // c'est lui qui vient de leur donner leur lieu et leurs dates, et un
+    // appel réseau de huit secondes ferait expirer sa transaction de vingt.
+    // Ici on est dans un travail de fond : personne n'attend.
+    await fillMissingStepTemperaturesQuietly(context, entry.memoId);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     await prisma.entry.update({
