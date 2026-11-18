@@ -1,0 +1,15 @@
+-- **La vignette que l'app affiche.**
+--
+-- L'écran des couvertures propose toutes les photos du voyage comme image de
+-- plat, et les servait en pleine résolution. Mesuré le 17/11/2026 en
+-- production (T260) : 4,45 Mo par photo en moyenne, 17,9 Mpx — 68 Mo de
+-- bitmap décodé pour remplir un plat de 208 pt, et 423 Mo à télécharger pour
+-- parcourir le carrousel d'un voyage de 88 photos.
+--
+-- La colonne retient la clé d'une vignette à 900 px de grand côté, quelques
+-- dizaines de kilo-octets, fabriquée à l'arrivée de la photo (47 ms sur des
+-- octets déjà en mémoire) et resservie ensuite.
+--
+-- Nulle partout au départ : une photo déjà en stock garde son originale
+-- jusqu'à ce que `scripts/retro-vignettes.ts` lui en fabrique une.
+ALTER TABLE "media_assets" ADD COLUMN "thumbStorageKey" TEXT;

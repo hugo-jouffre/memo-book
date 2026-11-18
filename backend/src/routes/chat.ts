@@ -47,6 +47,7 @@ import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { MAX_PHOTOS_PER_STEP } from "../services/photoBudget.js";
 import { measurePhoto } from "../services/photoOrientation.js";
 import { isRenderableImage, toRenderablePhoto } from "../services/photoFormat.js";
+import { storeScreenThumbnail } from "../services/photoThumbnails.js";
 import { coverPhotoInclude } from "./tripPhotos.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { contextVoiceOf, isGathering, parseTripContext } from "../services/tripContext.js";
@@ -755,6 +756,14 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     // et une photo de photothèque n'était donc jamais couverture de voyage.
     const measures = await Promise.all(photos.map((photo) => measurePhoto(photo.buffer)));
 
+    // **La vignette que l'écran des couvertures affichera** (T260) : ici, sur
+    // les octets encore en mémoire, et non à l'ouverture de l'écran — qui
+    // aurait eu à en fabriquer quatre-vingt-huit d'un coup. Un échec ne
+    // retient pas la photo : l'app lira l'originale, comme avant.
+    const thumbnails = await Promise.all(
+      photos.map((photo) => storeScreenThumbnail(context, photo.buffer)),
+    );
+
     if (contextVoice || revisedEntryId) {
       const [object] = stored;
       if (!object) throw new Error("Aucun vocal enregistré.");
@@ -841,6 +850,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
                     mimeType: object.mimeType,
                     bytes: object.bytes,
                     durationSeconds: isAudio ? duration : null,
+                    thumbStorageKey: thumbnails[index] ?? null,
                   },
                 },
               },

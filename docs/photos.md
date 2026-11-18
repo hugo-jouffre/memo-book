@@ -193,6 +193,52 @@ Deux pièges tenus par les tests :
   sans ça, cette composition-là paie soixante-dix téléchargements dans sa
   propre fenêtre, ce qui est précisément ce qu'on évite.
 
+### Et le même poids, côté écran (17/11/2026, T260)
+
+Hugo : « le chargement des images est très long dans la personnalisation des
+couvertures ». Le ticket demandait de **mesurer avant de corriger**, parce que
+rien ne disait si le temps partait dans le réseau, dans le décodage ou dans le
+dessin des sept plats. Mesuré en production, et sur les octets :
+
+| | mesure |
+|---|---|
+| poids moyen d'une photo | **4,45 Mo** (107 photos, 477 Mo) |
+| taille moyenne | **17,9 Mpx**, soit 68 Mo de bitmap décodé |
+| pire voyage | 88 photos, **423 Mo** pour parcourir le rail |
+| décoder une photo entière | **35 ms** sur un Mac, 0,6 ms pour une vignette |
+| dessiner un plat | **3,4 ms** depuis un bitmap déjà décodé |
+
+Les trois hypothèses sont donc tranchées : **le réseau**, de deux ordres de
+grandeur devant le reste. Le décodage vient ensuite, et surtout par la mémoire
+qu'il prend — 68 Mo de bitmap pour remplir un plat de 208 pt, qui en demande
+un. Et le dessin des plats ne coûte rien : c'est l'hypothèse qu'on écarte.
+
+⚠️ **Le piège de la mesure.** `CGImageSourceCreateImageAtIndex` est paresseux :
+il rend en 0,2 ms une image dont aucun pixel n'est décodé, et la facture tombe
+au premier dessin. Mesurer sans `kCGImageSourceShouldCacheImmediately`, c'est
+mesurer l'ouverture du fichier et conclure que le décodage est gratuit.
+
+L'écran reçoit donc une **vignette 900 px** — le plat fait 208 pt, soit 624 px
+sur une dalle à 3× et 882 px de haut —, quelques dizaines de kilo-octets,
+retenue sur `media_assets.thumbStorageKey` (`services/photoThumbnails.ts`).
+
+Deux choix qui la distinguent de la copie du carnet :
+
+- elle se fabrique **à l'arrivée de la photo**, sur les octets encore en
+  mémoire : 47 ms noyés dans un envoi. L'inverse de la copie 2400 px, et pour
+  cette raison-là — une composition est un travail de fond, l'ouverture d'un
+  écran non. À la demande, l'écran aurait eu à en produire quatre-vingt-huit
+  pendant qu'on l'attend, soit quatre secondes ;
+- les photos **déjà en stock** n'en ont pas, et rien ne leur en fabrique :
+  `npm run photos:vignettes` rattrape, une fois. Sans vignette, l'écran sert
+  l'originale — comme avant, jamais en erreur.
+
+Ce qui n'est **pas** traité : les vignettes d'étapes et la photo d'accueil d'un
+voyage servent toujours l'originale (`displayablePhotoUrl`), et une photo
+importée pour une couverture arrive déjà à 1 600 px de l'app, soit quatre fois
+plus que nécessaire. La colonne est nommée pour eux ; le ticket parlait des
+couvertures.
+
 ## 0 ter. Le sticker découpé dans la photo — *implémenté* (12/11/2026)
 
 Hugo, 10/11/2026 : « stickers découpés depuis tes vraies photos de billets et

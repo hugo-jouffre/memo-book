@@ -786,6 +786,18 @@ struct CoverTemplate: View {
 
 /// Une photo de couverture : son image, sinon la trame du voyage. Une image
 /// qui ne charge plus redemande des liens neufs (T237).
+///
+/// ⚠️ **Le serveur sert ici une vignette de 900 px, pas la photo entière**
+/// (T260, 17/11/2026). Avant ça, le carrousel des photos tirait les originales
+/// d'un iPhone — 4,45 Mo et 17,9 Mpx en moyenne, soit 423 Mo pour parcourir le
+/// rail d'un voyage de 88 photos, et 68 Mo de bitmap décodé pour remplir un
+/// plat qui en demande un.
+///
+/// 900 px parce que **le plus large des plats de l'app fait 300 pt**
+/// (``CoversView``), soit 900 px sur une dalle à 3×. Un plat dessiné plus large
+/// que ça tirerait une image moins définie que son cadre : la borne est dans
+/// `services/photoDownscale.ts`, côté serveur, et les deux doivent bouger
+/// ensemble.
 struct CoverPhotoImage: View {
     let photo: CoverPhoto?
     let seed: String

@@ -2,6 +2,7 @@ import type { AppContext } from "../context.js";
 import { publicApiBaseUrl } from "./avatars.js";
 import { isRenderableImage, sniffImageFormat, toRenderablePhoto } from "./photoFormat.js";
 import { downscaleForRender, RENDER_MAX_BYTES } from "./photoDownscale.js";
+import { storeScreenThumbnail } from "./photoThumbnails.js";
 import { isSimulatedCdnUrl } from "./webflow.js";
 import { tripPhotoUrl } from "../routes/tripPhotos.js";
 
@@ -279,6 +280,11 @@ async function ensureRenderableFormat(
       // La copie allégée montrait les octets d'avant la conversion : elle ne
       // vaut plus rien, et la prochaine composition en refera une.
       renderStorageKey: null,
+      // La vignette, elle, se refait **tout de suite** : les octets lisibles
+      // sont là, et sans elle l'écran des couvertures retomberait sur la photo
+      // entière (T260). Un HEIC n'avait de toute façon pas de vignette — rien
+      // ne le décodait à l'arrivée avant le 11/11/2026.
+      thumbStorageKey: await storeScreenThumbnail(deps, converted.buffer),
     },
   });
 

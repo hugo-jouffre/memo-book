@@ -22,6 +22,7 @@ import { deleteEntryAndMedia } from "../services/deletion.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { isRenderableImage, toRenderablePhoto } from "../services/photoFormat.js";
+import { storeScreenThumbnail } from "../services/photoThumbnails.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeEntry } from "./serializers.js";
 
@@ -195,6 +196,12 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
       photo?.mimeType ?? mimeType,
     );
 
+    // La vignette de l'écran des couvertures, sur les octets encore en
+    // mémoire (T260) — voir `services/photoThumbnails.ts`.
+    const thumbStorageKey = photo
+      ? await storeScreenThumbnail(context, photo.buffer)
+      : null;
+
     const entry = await withDailyCredit(context.prisma, memoId, refusal, () =>
       context.prisma.$transaction(async (tx) => {
         await lockThread(tx, memoId);
@@ -211,6 +218,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
                 mimeType: stored.mimeType,
                 bytes: stored.bytes,
                 durationSeconds: durationMs === null ? null : durationMs / 1000,
+                thumbStorageKey,
               },
             },
           },

@@ -48,6 +48,30 @@ export const RENDER_JPEG_QUALITY = 82;
  */
 export const RENDER_MAX_BYTES = 900_000;
 
+/**
+ * Le plus grand côté d'une **vignette d'écran**, en pixels (T260).
+ *
+ * 900 : un plat de couverture fait 208 pt de large, soit 624 px sur une dalle
+ * à 3×, et 882 px de haut. 900 couvre donc le plus grand des deux côtés du
+ * plus grand usage de l'app — en dessous, une photo pleine page de plat
+ * commencerait à se voir.
+ *
+ * ⚠️ **Ce n'est pas la copie du carnet** (`RENDER_MAX_SIDE`, 2400 px). Celle-là
+ * part à l'imprimeur et doit tenir le papier ; celle-ci se regarde sur un
+ * téléphone et doit arriver vite. Mesuré le 17/11/2026 : 34 Ko contre 314, et
+ * 47 ms à fabriquer contre 246.
+ */
+export const THUMB_MAX_SIDE = 900;
+
+/** Qualité JPEG d'une vignette. Elle se regarde à 208 pt : 78 ne se voit pas. */
+export const THUMB_JPEG_QUALITY = 78;
+
+/**
+ * En dessous de ce poids, on sert l'originale : une photo de 80 Ko est déjà
+ * une vignette, et la réencoder ne ferait que lui enlever de la matière.
+ */
+export const THUMB_MAX_BYTES = 120_000;
+
 export interface DownscaledPhoto {
   buffer: Buffer;
   /** Le nom à donner au stockage — l'extension doit dire la vérité. */
@@ -81,25 +105,56 @@ export interface DownscaledPhoto {
  * n'ont rien à y faire.
  */
 export async function downscaleForRender(buffer: Buffer): Promise<DownscaledPhoto | null> {
-  if (buffer.byteLength <= RENDER_MAX_BYTES) return null;
+  return downscale(buffer, {
+    maxSide: RENDER_MAX_SIDE,
+    quality: RENDER_JPEG_QUALITY,
+    keepBelowBytes: RENDER_MAX_BYTES,
+    filename: "photo.jpg",
+  });
+}
+
+/**
+ * Rend la **vignette d'écran** d'une photo, ou `null` quand il n'y a rien à
+ * gagner (T260). Mêmes trois `null` que ci-dessus, et pour les mêmes raisons.
+ *
+ * C'est elle que l'app reçoit pour l'écran des couvertures ; l'originale reste
+ * en stock, et c'est toujours elle qui part au carnet.
+ */
+export async function downscaleForScreen(buffer: Buffer): Promise<DownscaledPhoto | null> {
+  return downscale(buffer, {
+    maxSide: THUMB_MAX_SIDE,
+    quality: THUMB_JPEG_QUALITY,
+    keepBelowBytes: THUMB_MAX_BYTES,
+    filename: "vignette.jpg",
+  });
+}
+
+interface DownscaleOptions {
+  maxSide: number;
+  quality: number;
+  /** En dessous de ce poids, l'originale fait déjà l'affaire. */
+  keepBelowBytes: number;
+  filename: string;
+}
+
+async function downscale(
+  buffer: Buffer,
+  { maxSide, quality, keepBelowBytes, filename }: DownscaleOptions,
+): Promise<DownscaledPhoto | null> {
+  if (buffer.byteLength <= keepBelowBytes) return null;
 
   try {
     const { data, info } = await sharp(buffer)
       .rotate()
-      .resize({
-        width: RENDER_MAX_SIDE,
-        height: RENDER_MAX_SIDE,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: RENDER_JPEG_QUALITY, mozjpeg: true })
+      .resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality, mozjpeg: true })
       .toBuffer({ resolveWithObject: true });
 
     if (data.byteLength >= buffer.byteLength) return null;
 
     return {
       buffer: data,
-      filename: "photo.jpg",
+      filename,
       mimeType: "image/jpeg",
       widthPx: info.width,
       heightPx: info.height,
