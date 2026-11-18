@@ -841,6 +841,11 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
                       photoWidthPx: measures[index].widthPx,
                       photoHeightPx: measures[index].heightPx,
                       photoIsLandscape: measures[index].isLandscape,
+                      // La netteté, tirée du même décodage (T265) : c'est
+                      // elle qui décidera quelles photos le carnet montre
+                      // quand l'étape en porte plus qu'il n'en dessine.
+                      photoSharpness: measures[index].sharpness,
+                      photoVerdict: measures[index].verdict,
                     }
                   : {}),
                 ...(stepId ? { step: { connect: { id: stepId } } } : {}),

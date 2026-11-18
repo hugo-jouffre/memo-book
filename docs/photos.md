@@ -347,6 +347,29 @@ Verdict en trois états, jamais un simple rejet :
 - **`reject`** — floue ou inexploitable. L'utilisateur est prévenu, la photo
   n'est jamais supprimée.
 
+### Ce qui est branché, et ce qui ne l'est pas (18/11/2026, T265)
+
+**La netteté est mesurée et écrite.** À l'arrivée d'une photo, dans le même
+décodage que ses dimensions (`services/photoOrientation.ts`) : la variance de
+détail moyenne des neuf cases, et le verdict qui en découle, sur
+`entries.photoSharpness` et `entries.photoVerdict`.
+
+> ⚠️ **Ces colonnes existaient depuis longtemps et restaient vides.**
+> `services/photoAnalysis.ts` savait les calculer, et n'était appelé par
+> personne : seul l'export de données les lisait, donc toujours nulles. Une
+> mesure qu'on n'écrit nulle part n'existe pas.
+
+**À quoi elle sert aujourd'hui.** À choisir quelles photos la page montre
+quand une étape en porte plus que son gabarit n'en dessine
+(`services/photoPicking.ts`). Avant, c'étaient **les premières arrivées** :
+la floue comme la nette. On choisit par la qualité, on montre dans l'ordre du
+récit — les deux ordres sont différents, et il faut les deux.
+
+**Ce qui n'est toujours pas branché** : l'exposition (la colonne existe, rien
+ne l'écrit), l'agrandissement sur verdict `upscale`, le déplacement vers une
+vignette sur `downgrade`, et l'avertissement à l'utilisateur sur `reject`. Le
+verdict ne sert, pour l'instant, qu'à ranger une photo en dernier.
+
 ## 2. Agrandissement
 
 À déclencher **uniquement** sur le verdict `upscale`, et jamais en aveugle : un

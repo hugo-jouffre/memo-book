@@ -143,6 +143,11 @@ export async function structureRender(
         capturedAt: entry.capturedAt,
         placeLabel: entry.placeLabel,
         photoUrl,
+        // Ce qu'on a mesuré de la photo à son arrivée (T265) : c'est ce qui
+        // départage les photos d'une étape quand la page n'en dessine qu'une
+        // partie. Nuls pour une photo d'avant le 18/11/2026.
+        photoSharpness: entry.photoSharpness,
+        photoVerdict: entry.photoVerdict,
       });
     }
 

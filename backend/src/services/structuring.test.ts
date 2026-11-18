@@ -9,6 +9,7 @@ import {
   quizForBook,
   type StructuringEntry,
   withToldQuizzesOnly,
+  withBestPhotosFirst,
   withToldWeatherOnly,
 } from "./structuring.js";
 
@@ -315,5 +316,47 @@ describe("quiz", () => {
     const days = payload["days"] as Record<string, unknown>[];
     expect(days[0]?.["quiz"]).toEqual(quiz);
     expect(days[1]).not.toHaveProperty("quiz");
+  });
+});
+
+/**
+ * **T265** — quand une page dessine moins de photos que l'étape n'en porte,
+ * ce sont les plus nettes qui restent, et non les premières arrivées.
+ */
+describe("withBestPhotosFirst", () => {
+  const photo = (url: string, sharpness: number | null, verdict?: string) =>
+    entry({ photoUrl: url, photoSharpness: sharpness, ...(verdict ? { photoVerdict: verdict } : {}) });
+
+  it("met en tête les plus nettes, sans casser l'ordre du récit", () => {
+    const payload = {
+      days: [{ layout_collage: true, photos: ["a.jpg", "b.jpg", "c.jpg", "d.jpg"] }],
+    } as never;
+
+    // `layout_collage` en dessine trois. La floue est « b ».
+    const sorti = withBestPhotosFirst(payload, [
+      photo("a.jpg", 150),
+      photo("b.jpg", 4),
+      photo("c.jpg", 200),
+      photo("d.jpg", 170),
+    ]) as unknown as { days: { photos: string[] }[] };
+
+    expect(sorti.days[0]!.photos).toEqual(["a.jpg", "c.jpg", "d.jpg", "b.jpg"]);
+  });
+
+  it("laisse une page tranquille quand elle montre tout", () => {
+    const payload = { days: [{ layout_split_left: true, photos: ["x.jpg", "y.jpg"] }] } as never;
+    const sorti = withBestPhotosFirst(payload, [photo("x.jpg", 2), photo("y.jpg", 900)]) as unknown as {
+      days: { photos: string[] }[];
+    };
+    // Deux photos, deux dessinées : rien à choisir, donc rien à bouger.
+    expect(sorti.days[0]!.photos).toEqual(["x.jpg", "y.jpg"]);
+  });
+
+  it("ne bouge rien quand aucune photo n'a été mesurée", () => {
+    const payload = { days: [{ layout_hero_top: true, photos: ["p.jpg", "q.jpg"] }] } as never;
+    const sorti = withBestPhotosFirst(payload, [photo("p.jpg", null), photo("q.jpg", null)]) as unknown as {
+      days: { photos: string[] }[];
+    };
+    expect(sorti.days[0]!.photos).toEqual(["p.jpg", "q.jpg"]);
   });
 });
