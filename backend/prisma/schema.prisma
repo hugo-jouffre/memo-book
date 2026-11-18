@@ -1529,6 +1529,25 @@ model MediaAsset {
   /// là ne montrerait pas la bonne image.
   renderStorageKey String?
 
+  /// **La vignette que l'app affiche** — 900 px de grand côté, quelques
+  /// dizaines de kilo-octets au lieu de quelques mégaoctets
+  /// (`services/photoDownscale.ts`).
+  ///
+  /// Elle existe pour l'écran des couvertures, qui propose **toutes** les
+  /// photos du voyage comme image de plat. Mesuré le 17/11/2026 en production
+  /// (T260) : 4,45 Mo par photo en moyenne, 17,9 Mpx — soit 68 Mo de bitmap
+  /// décodé pour remplir un plat de 208 pt, et 423 Mo à télécharger pour
+  /// parcourir le carrousel d'un voyage de 88 photos. La vignette fait 40 fois
+  /// moins lourd et se décode 58 fois plus vite.
+  ///
+  /// Fabriquée **à l'arrivée de la photo**, sur les octets encore en mémoire :
+  /// 47 ms, contre quatre secondes si l'écran devait en fabriquer 88 d'un
+  /// coup. Nulle pour une photo arrivée avant le 17/11/2026 que le rattrapage
+  /// n'a pas encore vue (`scripts/retro-vignettes.ts`) — l'app sert alors
+  /// l'originale, comme avant. Et **remise à nul dès que `storageKey`
+  /// change**, comme `renderStorageKey`.
+  thumbStorageKey String?
+
   createdAt DateTime @default(now())
 
   entries Entry[]

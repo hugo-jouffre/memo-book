@@ -19,6 +19,7 @@ import {
 } from "../services/coverCatalogue.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { toRenderablePhoto } from "../services/photoFormat.js";
+import { screenPhotoKey } from "../services/photoThumbnails.js";
 
 /**
  * Les deux plats du carnet : ce qu'on a choisi pour chacun, et de quoi choisir.
@@ -89,16 +90,28 @@ async function readCovers(context: AppContext, accountId: string, memoId: string
   const entryPhotos = await context.prisma.entry.findMany({
     where: { memoId, kind: "photo", mediaId: { not: null } },
     orderBy: { createdAt: "asc" },
-    select: { id: true, media: { select: { storageKey: true } } },
+    select: { id: true, media: { select: { storageKey: true, thumbStorageKey: true } } },
   });
 
+  // **La vignette, et non l'originale** (T260, 17/11/2026). Ce carrousel
+  // propose toutes les photos du voyage : en pleine résolution, c'étaient
+  // 4,45 Mo par photo et jusqu'à 423 Mo pour en parcourir un rail — la mesure
+  // est dans `services/photoThumbnails.ts`. Une photo sans vignette (arrivée
+  // avant ce jour-là, ou déjà légère) part en entier, comme avant.
+  //
+  // Signées, et non servies par l'API : le seau est privé, et une photo de
+  // souvenir n'a pas à devenir publique parce qu'on la regarde ici.
   const photos: { id: string; url: string | null }[] = [];
-  for (const entry of entryPhotos) {
+  const signatures = await Promise.all(
+    entryPhotos.map((entry) =>
+      entry.media
+        ? context.storage.signedReadUrl(screenPhotoKey(entry.media)).catch(() => null)
+        : Promise.resolve(null),
+    ),
+  );
+  for (const [index, entry] of entryPhotos.entries()) {
     if (!entry.media) continue;
-    photos.push({
-      id: `entry-${entry.id}`,
-      url: await context.storage.signedReadUrl(entry.media.storageKey).catch(() => null),
-    });
+    photos.push({ id: `entry-${entry.id}`, url: signatures[index] ?? null });
   }
   for (const photo of memo.coverPhotos) {
     photos.push({ id: photo.id, url: coverPhotoUrl(context.env, photo.storageKey) });
