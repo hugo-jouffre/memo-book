@@ -352,6 +352,13 @@ export interface RedactionResult {
   text: string;
   /** `null` sauf quand le vocal dit clairement le temps qu'il faisait. */
   weatherKey: "sun" | "sun-wind" | "cloud" | "rain" | "snow" | null;
+  /**
+   * La température **dite** par le voyageur, en degrés Celsius entiers, ou
+   * `null` — le cas courant (T263). Relevée, jamais déduite : ce qui n'est pas
+   * dit se cherche ailleurs (`services/weatherLookup.ts`), et ça ne regarde
+   * pas la rédaction.
+   */
+  temperatureC: number | null;
   funFact: string | null;
   funFactTitle: string | null;
   /** Le quiz de l'étape, ou `null` — le plus souvent. Voir `withinQuizLimits`. */
@@ -590,6 +597,14 @@ const REDACTION_SCHEMA = {
         "null dans tous les autres cas : rien ne se déduit du lieu, de la saison, d'une photo ni " +
         "d'un « coucher de soleil » — une météo supposée est une invention.",
     },
+    temperatureC: {
+      anyOf: [{ type: "integer" }, { type: "null" }],
+      description:
+        "La température en degrés Celsius, UNIQUEMENT si le voyageur la dit (« il faisait 30 », " +
+        "« moins 5 ce matin », « 86 degrés Fahrenheit » → convertis en Celsius). Entier, négatif " +
+        "l'hiver. null dans tous les autres cas : rien ne se déduit du lieu, de la saison ni du " +
+        "temps qu'il fait — une température supposée est une invention.",
+    },
     funFact: {
       anyOf: [{ type: "string" }, { type: "null" }],
       description:
@@ -807,6 +822,7 @@ const REDACTION_SCHEMA = {
     "title",
     "text",
     "weatherKey",
+    "temperatureC",
     "funFact",
     "funFactTitle",
     "quiz",
@@ -854,7 +870,22 @@ const RECIT_KEYS = [
   "moments",
 ] as const;
 
-const RELEVE_KEYS = ["coherenceSheet", "insights"] as const;
+/**
+ * ⚠️ **`temperatureC` est ici, et non avec le récit, à cause de la grammaire.**
+ *
+ * Sa place naturelle serait à côté de `weatherKey` : c'est le même genre de
+ * fait, relevé du même vocal. Mais c'est précisément ce schéma-là qui a fait
+ * dépasser la grammaire compilée le 04/11/2026, et la panne est totale et
+ * muette — toutes les rédactions refusées par un 400, pendant trois semaines,
+ * sans que rien ne le dise. On ne rajoute pas un champ dans ce bloc pour la
+ * commodité.
+ *
+ * Le relevé n'en compte que deux, et il voit la même chose : `buildRelevePrompt`
+ * reprend **tout** le prompt du récit, transcription comprise, avant d'y
+ * ajouter le texte écrit. Une température dite dans le vocal lui est donc
+ * accessible, même si le récit ne l'a pas reprise.
+ */
+const RELEVE_KEYS = ["coherenceSheet", "insights", "temperatureC"] as const;
 
 function sousSchema(keys: readonly string[]) {
   const properties = Object.fromEntries(
@@ -1189,12 +1220,15 @@ function buildRelevePrompt(input: RedactionInput, texte: string): string {
     texte,
     "",
     "## Ce qui t'est demandé maintenant",
-    "Tu n'écris plus : tu relèves. Rends seulement `coherenceSheet` et `insights`.",
+    "Tu n'écris plus : tu relèves. Rends seulement `coherenceSheet`, `insights` et `temperatureC`.",
     "- `coherenceSheet` : l'ancienne fiche, **plus** ce que cette étape ajoute. Ne retire aucune",
     "  entrée et ne change aucune graphie déjà fixée.",
     "- `insights` : ce que **cette étape** apporte aux statistiques du profil. Un relevé, pas un",
     "  total : ne reprends rien des étapes précédentes, et n'invente aucun chiffre. Ce que le",
     "  récit ne dit pas reste vide ou `null`.",
+    "- `temperatureC` : la température **dite** par le voyageur, en degrés Celsius entiers. Lis la",
+    "  transcription, pas le texte réécrit — elle a pu y disparaître. `null` si elle n'est pas dite,",
+    "  et c'est le cas courant : une température se relève, elle ne se devine pas.",
   ].join("\n");
 }
 
@@ -1389,6 +1423,9 @@ export class FakeRedactor implements Redactor {
       text: withPrecisions.slice(0, 420),
       // Le faux rédacteur ne lit pas le temps dans le vocal : il n'en met pas.
       weatherKey: null,
+      // Le faux rédacteur ne relève pas de température : les tests qui en
+      // veulent une la posent eux-mêmes, et l'étape ira la chercher ailleurs.
+      temperatureC: null,
       funFact: null,
       funFactTitle: null,
       // Ni fait du lieu ni mémoire du carnet : le faux rédacteur ne pose pas de quiz.

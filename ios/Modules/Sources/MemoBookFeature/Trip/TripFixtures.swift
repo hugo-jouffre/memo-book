@@ -56,6 +56,7 @@ extension TripDetail {
             }
 
         let transports: [TripTransport] = [.plane, .train, .walk]
+        let weathers: [String?] = ["sun", nil, nil]
         let start = trip.startDate ?? .fixture(26, 8, 2026)
         let companions = trip.companions.isEmpty
             ? [Companion(id: "c-mila", name: "Mila Fontaine")]
@@ -81,7 +82,15 @@ extension TripDetail {
                 validatedAt: index == 0 ? start.adding(days: 4) : nil,
                 // Deux souvenirs par étape — un vocal et ses photos : la croix
                 // du tiroir en efface deux (T235).
-                entryIds: ["\(trip.id)-step-\(index + 1)-voice", "\(trip.id)-step-\(index + 1)-photos"]
+                entryIds: ["\(trip.id)-step-\(index + 1)-voice", "\(trip.id)-step-\(index + 1)-photos"],
+                // **Les trois états de la météo se voient sans manipuler**
+                // (T263) : la première étape porte une icône et sa
+                // température, la deuxième une température seule — personne
+                // n'a dit le temps, mais on l'a cherchée —, la troisième rien
+                // du tout. C'est la troisième qui compte : la ligne ne doit
+                // pas réserver de place pour ce qui n'existe pas.
+                weatherKey: weathers[index % weathers.count],
+                temperatureC: index % 3 == 2 ? nil : 22 + index * 4
             )
         }
     }

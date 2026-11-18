@@ -169,3 +169,65 @@ describe("l'aperçu du carnet pendant une régénération", () => {
     expect(body.pdfUrl).toBe(pdfUrl);
   });
 });
+
+/**
+ * **T263** — « chaque étape devrait porter sa date et sa température, avec
+ * une petite icône météo ». La date était déjà servie ; voici les deux
+ * autres, et surtout la règle qui les départage.
+ */
+describe("le temps qu'il faisait, sur une étape", () => {
+  it("sert l'icône relevée du vocal et fait passer la température dite avant la cherchée", async () => {
+    const account = await registerAccount(harness.app);
+    const memoId = await createMemo(account.authorization);
+    await addTextEntry(memoId, account.authorization);
+    const step = await stepOfTheMemory(memoId);
+
+    // Le souvenir dit le temps et la température ; l'étape, elle, porte celle
+    // qu'on est allé chercher. C'est la dite qui doit sortir.
+    await harness.prisma.entry.updateMany({
+      where: { stepId: step.id },
+      data: { weatherKey: "rain", temperatureC: 12 },
+    });
+    await harness.prisma.memoStep.update({
+      where: { id: step.id },
+      data: { temperatureC: 25, temperatureLookedUpAt: new Date() },
+    });
+
+    const trip = await harness.app.inject({
+      method: "GET",
+      url: `/v1/trips/${memoId}`,
+      headers: { authorization: account.authorization },
+    });
+    expect(trip.statusCode).toBe(200);
+    const servi = trip.json<{ steps: { weatherKey: string | null; temperatureC: number | null }[] }>();
+
+    expect(servi.steps[0]).toMatchObject({ weatherKey: "rain", temperatureC: 12 });
+  });
+
+  it("retombe sur la température cherchée, et ne dit rien quand il n'y a rien", async () => {
+    const account = await registerAccount(harness.app);
+    const memoId = await createMemo(account.authorization);
+    await addTextEntry(memoId, account.authorization);
+    const step = await stepOfTheMemory(memoId);
+
+    const lire = async () => {
+      const trip = await harness.app.inject({
+        method: "GET",
+        url: `/v1/trips/${memoId}`,
+        headers: { authorization: account.authorization },
+      });
+      return trip.json<{ steps: { weatherKey: string | null; temperatureC: number | null }[] }>()
+        .steps[0]!;
+    };
+
+    // Rien de dit, rien de cherché : l'étape n'affiche rien de plus, et c'est
+    // le cas le plus courant.
+    expect(await lire()).toMatchObject({ weatherKey: null, temperatureC: null });
+
+    await harness.prisma.memoStep.update({
+      where: { id: step.id },
+      data: { temperatureC: 25, temperatureLookedUpAt: new Date() },
+    });
+    expect(await lire()).toMatchObject({ weatherKey: null, temperatureC: 25 });
+  });
+});
