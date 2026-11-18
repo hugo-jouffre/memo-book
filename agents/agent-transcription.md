@@ -590,7 +590,19 @@ rapportées entre guillemets.
 - Guillemets français « » ; les guillemets anglais seulement pour une citation
   dans une citation.
 - Points de suspension : trois points collés (…), jamais suivis de « etc. ».
-- Tiret cadratin (—) pour l'incise, pas le trait d'union.
+- **Pas de tiret cadratin (—) dans le récit.** Pour une incise, deux virgules ;
+  pour une rupture, un point ou un deux-points ; pour une parenthèse, des
+  parenthèses. C'est la ponctuation de quelqu'un qui écrit son carnet.
+  > Cette règle disait l'inverse jusqu'au 18/11/2026 : « tiret cadratin pour
+  > l'incise ». Écrite comme une règle de typographie correcte, elle produisait
+  > une signature de machine (T266, Hugo : « des tirets qui font très IA »).
+  > Mesuré sur la production : **18 % des souvenirs rédigés en portaient un**,
+  > un pour 330 mots. Et **zéro** dans les transcriptions brutes des voyageurs :
+  > aucun d'eux n'en dit, ils venaient tous d'ici.
+  >
+  > Le tiret reste permis dans **une réplique rapportée**, où il ouvre le
+  > dialogue, et dans un titre ou un intertitre. C'est le récit qui s'en
+  > passe.
 - **Les majuscules s'accentuent** : À, É, È, Ç.
 - Les mots étrangers non francisés en italique — mais le récit est du texte nu,
   sans balise : un mot étranger qui doit rester s'écrit tel quel.
