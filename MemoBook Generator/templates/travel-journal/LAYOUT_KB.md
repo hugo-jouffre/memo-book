@@ -1729,10 +1729,32 @@ géométrie — voir « Vérifier » ci-dessous.
 **Le jeu ne doit pas se voir.** Il laisse apparaître la feuille, donc la feuille
 porte la couleur du papier : `--mb-sheet`, la couleur *moyenne* de la page
 mesurée sur le rendu (#f5ede6 en `preview`, grain compris ; blanc en `print`).
-Mesurés à 600 dpi, le bas et le bord droit des pages sont uniformes. Le seul
-endroit où ces 0,35 mm se lisent : à droite et sous une image **pleine page**
-(couverture, quatrième avec photo), qui s'arrête un point avant le bord. C'est
-le prix du correctif, sans commune mesure avec quatorze feuilles blanches.
+Mesurés à 600 dpi, le bas et le bord droit des pages sont uniformes.
+
+> **Sauf sous une image pleine page — et ce n'est plus le prix à payer**
+> (T261, 18/11/2026). Ce paragraphe disait que les 0,35 mm se lisaient « à
+> droite et sous une image pleine page, qui s'arrête un point avant le bord »,
+> et appelait ça le prix du correctif. Hugo l'a vu le 05/11 : « une ligne
+> blanche horizontale en bas de la première de couverture ». Mesuré sur le PDF
+> rendu, le filet valait **115 niveaux d'écart** — #f6ece5 contre #837b76 sur
+> un plat « Par défaut ».
+>
+> On ne touche pas au jeu. Ce sont les **couches pleine page de la couverture**
+> qui débordent dedans : l'aplat du plat (`.page--plat::before`), sa photo, son
+> voile, et la photo de la couverture d'avant les gabarits — chacun d'un
+> `--mb-page-slack` vers la droite et vers le bas, la page cessant de les
+> rogner. Après : le bord droit est uniforme au pixel près, et le bas garde un
+> dégradé de 23 niveaux qui est **la photo elle-même** — `object-fit: cover`
+> recadre verticalement, et une boîte un point plus haute découvre un point de
+> photo qui était coupé. Vérifié en peignant le conteneur en magenta : rien
+> n'en transparaît, donc l'image remplit bien sa boîte.
+>
+> ⚠️ Deux pièges rencontrés en chemin. `width: 100%` **l'emporte sur** `right`,
+> et `height` sur `bottom` : le fond d'un plat porte `mb-plat__photo`, qui les
+> pose, et le débordement ne faisait que déplacer son origine — il faut rendre
+> la taille aux `inset` (`width: auto`). Et `style.css` **se termine par
+> `</style>`** : une règle ajoutée à la fin du fichier sort de la feuille et
+> s'imprime comme du texte en haut de la page.
 
 **Le jeu appartient à la marge, pas au texte.** `.page__content` rend le point à
 sa marge droite et basse : la colonne garde exactement ses 360 × 535 pt, à la
@@ -1941,3 +1963,18 @@ chacune de ses variantes, sur une page, avec sa fiche sous la barre — c'est l�
 quoi ressemble vraiment une ligne de ce tableau. Le payload est écrit aux plafonds mesurés :
 si une page déborde après un changement de CSS, c'est que le plafond a bougé et que
 `calibrate-lengths.ts` doit être relancé.
+
+`samples/plats.json` (T261, 18/11/2026) est `data.json` **plus un bloc
+`cover`** : il rend les deux plats choisis dans la personnalisation, et c'est le
+seul jeu qui les exerce — `data.json` n'en a pas, donc depuis T259 les quatorze
+plats n'étaient rendus par aucun échantillon.
+
+```bash
+npm run render:local -- --offline --data "../MemoBook Generator/templates/travel-journal/samples/plats.json"
+```
+
+⚠️ Il n'entre **pas** dans la non-régression visuelle, et ce n'est pas un
+oubli : `template.visual.test.ts` ne tourne que sous Linux — le rendu du texte
+diffère sur macOS — et un scénario sans référence versionnée écrit la sienne au
+premier passage, donc passe toujours. Ce serait une couverture de façade. Pour
+l'y faire entrer, il faut générer ses références sous Linux et les versionner.
