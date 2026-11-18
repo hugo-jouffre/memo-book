@@ -41,6 +41,7 @@ import {
   serializeAccountNotificationPreferences,
   type TripNotificationPreferences,
 } from "../services/notificationPreferences.js";
+import { stepWeatherOf } from "../services/stepWeather.js";
 import { purgeDateOf } from "../services/trash.js";
 
 /**
@@ -473,7 +474,15 @@ function justEndedSubscription(subscriptions: Subscription[], at: Date): Date | 
 // ---------------------------------------------------------------------------
 
 type StepWithMembers = MemoStep & {
-  entries?: { id: string; kind?: string; media?: { storageKey: string; cdnUrl: string | null } | null }[];
+  entries?: {
+    id: string;
+    kind?: string;
+    media?: { storageKey: string; cdnUrl: string | null } | null;
+    // Le temps qu'il faisait, relevé souvenir par souvenir par la rédaction :
+    // l'étape le déduit des siens (T263, `services/stepWeather.ts`).
+    weatherKey?: string | null;
+    temperatureC?: number | null;
+  }[];
 };
 
 export function serializeTripStep(
@@ -502,6 +511,11 @@ export function serializeTripStep(
       step.photoUrl ?? (publicBaseUrl ? displayablePhotoUrl(publicBaseUrl, firstPhoto?.media) : null),
     transport: step.transport,
     validatedAt: iso(step.validatedAt),
+    // **Le temps qu'il faisait** (T263). L'icône se déduit des souvenirs de
+    // l'étape, comme le fait déjà la mise en page du carnet ; la température
+    // est celle qu'on a dite, sinon celle qu'on a cherchée. Les trois peuvent
+    // être nulles, et la carte n'affiche alors rien de plus.
+    ...stepWeatherOf(step),
     // Les souvenirs que porte l'étape (T235) : un vocal, un texte, des photos.
     // La croix du tiroir de l'étape les efface un à un
     // (`DELETE /v1/entries/:id`) ; sans eux, elle ne paraît pas. Le dernier
