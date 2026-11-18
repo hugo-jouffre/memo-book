@@ -77,6 +77,16 @@ public struct RootView: View {
     /// La pile de navigation de l'app, une fois entré.
     @State private var path: [HomeRoute] = []
 
+    /// **Les visites délibérées d'un voyage** (T268) : deux en 24 h et l'app
+    /// s'ouvre dessus plutôt que sur l'accueil. Voir ``RecentTripVisits``,
+    /// qui porte la règle et le piège qu'elle évite.
+    private let visites = RecentTripVisits()
+
+    /// L'ouverture automatique n'a lieu **qu'une fois par lancement** : sans
+    /// ce drapeau, elle se rejouerait à chaque réapparition de l'accueil et
+    /// renverrait le voyageur sur son voyage dès qu'il en revient.
+    @State private var aRepriseLeVoyage = false
+
     /// Ce qui empêche d'aller là où on vient de demander à aller. Une alerte
     /// **sur l'accueil**, et non un écran poussé qui ne montrerait qu'une
     /// erreur : quand la destination n'existe pas, on ne quitte pas la page.
@@ -248,6 +258,21 @@ public struct RootView: View {
                         .environment(\.homeReloadRequest, homeReloadRequest)
                 }
                 .tint(MemoBookColor.action)
+                // **Revenir deux fois sur un voyage en 24 h ouvre dessus**
+                // (T268). Le voyage se pose **au-dessus** de l'accueil, qui
+                // reste la racine de la pile : la flèche de retour y ramène,
+                // et personne n'est piégé.
+                //
+                // Une fois par lancement (`aRepriseLeVoyage`), et seulement
+                // si la pile est vide : rouvrir l'app sur un écran plus
+                // profond — une conversation, un aperçu — ne doit pas être
+                // écrasé par ce raccourci.
+                .task {
+                    guard !aRepriseLeVoyage else { return }
+                    aRepriseLeVoyage = true
+                    guard path.isEmpty, let voyage = visites.voyageAReprendre() else { return }
+                    path = [.trip(id: voyage)]
+                }
                 // Le vocal en route vers la conversation ne vit que le temps
                 // de celle-ci : refermer le fil le jette.
                 .onChange(of: path) { _, routes in
@@ -593,6 +618,10 @@ public struct RootView: View {
         guard case .signedIn = stage, !OnboardingStorage.isPreviewingSignedIn else { return }
         guard !(await dependencies.api.hasStoredSession()) else { return }
         await dependencies.forgetAccountContent()
+        // Les visites de voyages aussi (T268) : elles appartiennent à ce
+        // compte, et la personne suivante sur ce téléphone n'a pas à ouvrir
+        // sur le voyage de la précédente.
+        visites.toutOublier()
         // L'abonnement de ce compte ne doit pas suivre le prochain — voir
         // ``SubscriptionSession/reset()``.
         subscription.reset()
@@ -615,6 +644,7 @@ public struct RootView: View {
             // dort sur le disque pour être relu hors ligne, il ne doit pas
             // attendre la personne suivante sur ce téléphone.
             await dependencies.forgetAccountContent()
+            visites.toutOublier()
             // Ce que la session savait de l'abonnement — un achat, une
             // résiliation, « déjà abonné » — appartient à ce compte. La
             // suppression du compte passe aussi par ici (03/10/2026).
@@ -734,6 +764,7 @@ public struct RootView: View {
             // n'en font qu'une, ce qui évite la page blanche qu'un `dismiss()`
             // suivi d'un empilement laissait derrière lui.
             if path.last == .tripCreation { path.removeLast() }
+            visites.noter(id)
             path.append(.trip(id: id))
         case .openGallery:
             path.append(.gallery)
@@ -803,6 +834,7 @@ public struct RootView: View {
                     "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à ouvrir."
                 return
             }
+            visites.noter(id)
             path.append(.trip(id: id))
         case .openGallery:
             path.append(.gallery)
