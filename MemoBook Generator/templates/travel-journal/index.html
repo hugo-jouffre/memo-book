@@ -644,10 +644,24 @@
             {% endif %}
           </div>
 
-          {# Le gîte et l'hôte passent avant la météo. « La météo n'est pas
-             importante, mieux vaut la carte, le nom de l'hôtel, l'hôte » : ce
-             sont eux qui rattachent un souvenir à un lieu, des années après. #}
-          {% if day.day_intro.stay or day.day_intro.host %}
+          {# **Le gîte, l'hôte et le temps qu'il faisait, sur une seule ligne**
+             (T264, 18/11/2026). « La météo n'est pas importante, mieux vaut la
+             carte, le nom de l'hôtel, l'hôte » : ce sont eux qui rattachent un
+             souvenir à un lieu, des années après. La météo les rejoint donc au
+             lieu de prendre une bande à elle.
+
+             ⚠️ **Et on n'imprime plus que le temps qu'il a fait.** La rangée
+             d'avant posait les cinq icônes, quatre estompées, la bonne dans une
+             pastille carotte : le geste d'un sélecteur, recopié tel quel dans
+             un livre. Sur une page imprimée, quatre icônes grises ne disent
+             rien — elles se lisent comme un formulaire qu'on aurait oublié de
+             remplir, et elles coûtaient une soixantaine de points de hauteur à
+             l'endroit même où le récit en manque.
+
+             Toute la ligne disparaît si les trois manquent, ce qui est le cas
+             courant : sans `weather_key`, le voyageur n'a pas dit le temps, et
+             rien ne s'invente (T264 § météo de `structuring.ts`). #}
+          {% if day.day_intro.stay or day.day_intro.host or day.day_intro.weather_key %}
             <div class="mb-stay">
               {% if day.day_intro.stay %}
                 <span class="mb-stay__item">
@@ -659,33 +673,20 @@
                   <span class="mb-stay__label">hôte</span>{{ day.day_intro.host }}
                 </span>
               {% endif %}
+              {# Cinq branches explicites plutôt qu'un `href` fabriqué depuis la
+                 clé : une clé inconnue ne doit pas produire un `use` qui pointe
+                 vers un symbole absent, et ce gabarit tourne sur deux moteurs. #}
+              {% if day.day_intro.weather_key %}
+                {% set weather = day.day_intro.weather_key %}
+                {# Tout sur une ligne, et ce n'est pas un hasard : un saut de
+                   ligne entre le libellé et l'icône devient une espace à
+                   l'impression, et l'icône décollait de son étiquette alors
+                   que « nuit » et « hôte » collent aux leurs. Ce gabarit
+                   n'emploie le contrôle d'espaces (`{%-`) nulle part ; on
+                   écrit donc long plutôt que d'en introduire ici. #}
+                <span class="mb-stay__item"><span class="mb-stay__label">temps</span>{% if weather == 'sun' %}<svg class="mb-stay__weather" viewBox="0 0 24 24"><use href="#mb-i-weather-sun" /></svg>{% endif %}{% if weather == 'sun-wind' %}<svg class="mb-stay__weather" viewBox="0 0 24 24"><use href="#mb-i-weather-sun-wind" /></svg>{% endif %}{% if weather == 'cloud' %}<svg class="mb-stay__weather" viewBox="0 0 24 24"><use href="#mb-i-weather-cloud" /></svg>{% endif %}{% if weather == 'rain' %}<svg class="mb-stay__weather" viewBox="0 0 24 24"><use href="#mb-i-weather-rain" /></svg>{% endif %}{% if weather == 'snow' %}<svg class="mb-stay__weather" viewBox="0 0 24 24"><use href="#mb-i-weather-snow" /></svg>{% endif %}</span>
+              {% endif %}
             </div>
-          {% endif %}
-
-          {# Rangée météo : une seule icône active, les autres estompées.
-             Seulement si le voyageur a dit le temps dans son vocal — sans
-             `weather_key`, la rangée disparaît au lieu d'afficher un temps
-             inventé. C'est le cas normal. #}
-          {% if day.day_intro.weather_key %}
-          <div class="mb-weather">
-            <span class="mb-weather__caption">Météo</span>
-            {% set weather = day.day_intro.weather_key %}
-            <span class="mb-weather__item{% if weather == 'sun' %} is-active{% endif %}">
-              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-sun" /></svg>
-            </span>
-            <span class="mb-weather__item{% if weather == 'sun-wind' %} is-active{% endif %}">
-              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-sun-wind" /></svg>
-            </span>
-            <span class="mb-weather__item{% if weather == 'cloud' %} is-active{% endif %}">
-              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-cloud" /></svg>
-            </span>
-            <span class="mb-weather__item{% if weather == 'rain' %} is-active{% endif %}">
-              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-rain" /></svg>
-            </span>
-            <span class="mb-weather__item{% if weather == 'snow' %} is-active{% endif %}">
-              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-snow" /></svg>
-            </span>
-          </div>
           {% endif %}
         {% endif %}
 
