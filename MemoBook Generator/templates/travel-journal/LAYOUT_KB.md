@@ -447,7 +447,7 @@ au voyageur et le nombre posé dans le carnet est un bug.
 | `body_html` | requis | Récit. `<p>` par idée, `<ul>/<li>` pour les listes. Pas de `<h1>`/`<h2>` |
 | `day_intro` | optionnel | Affiche le bandeau : `{ day_number, location, date, stay, host, weather_key }` |
 | `stay`, `host` | optionnels | Nom du gîte, prénom des hôtes. **À préférer à la météo** |
-| `weather_key` | optionnel, 5 valeurs | Icône mise en avant. **Seulement si le vocal dit clairement le temps** ; sans le champ, la rangée disparaît |
+| `weather_key` | optionnel, 5 valeurs | L'icône du temps, dans la ligne du gîte (T264). **Seulement si le vocal dit clairement le temps** ; sans le champ, rien ne paraît |
 | `tag` | optionnel | Étiquette manuscrite (« Top départ »). **Trois mots max**, sinon elle déborde. **Jamais le lieu** : il est déjà dans le bandeau. Sans humeur à y mettre, on l'omet |
 | `fun_facts[]` | optionnel | **Seul le premier est affiché.** Dosage : voir plus bas |
 | `fun_facts_title` | optionnel | Titre de la carte. Défaut « Fun fact » ; aussi « Infos », « Culture générale » |
@@ -1097,10 +1097,23 @@ météo n'est pas importante, ils préfèrent la carte, le nom de l'hôtel et l'
 | « coucher de soleil », « on a bronzé », « à la plage » | **aucune** — ce sont des activités, pas une météo dite |
 | un temps qui ne se range dans aucune valeur, ou deux temps sans dominante | **aucune** — dans le doute, on omet |
 
-Quand la météo est dite, le bandeau affiche les cinq icônes ; celle qui
-correspond passe en pastille carotte, les quatre autres restent estompées à
-30 %. **Il n'y a rien d'autre à envoyer** — ni emoji, ni couleur, ni
-température.
+Quand la météo est dite, elle rejoint la ligne du gîte — « nuit », « hôte »,
+« temps » — avec **la seule icône du temps qu'il a fait**, à la taille et à
+l'encre du texte qui l'entoure. **Il n'y a rien d'autre à envoyer** : ni emoji,
+ni couleur, ni température.
+
+> **Avant le 18/11/2026, une bande à elle** (T264) : les cinq icônes côte à
+> côte, la bonne dans une pastille carotte de 26 pt, les quatre autres
+> estompées à 30 %. C'était le dessin d'un **sélecteur**, recopié tel quel dans
+> un livre — et sur du papier, quatre icônes grises ne disent rien : elles se
+> lisent comme un formulaire qu'on aurait oublié de remplir. La bande coûtait
+> en plus une soixantaine de points de hauteur à l'endroit précis où le récit
+> en manque, pour la donnée que le panel juge **la moins importante** des
+> trois. D'où la fusion : la hiérarchie du contenu se lit maintenant dans le
+> dessin aussi.
+>
+> ⚠️ La ligne paraît désormais dès que **l'un** des trois existe — `stay`,
+> `host` ou `weather_key` —, là où elle attendait un gîte ou un hôte.
 
 **Qui la relève.** L'Agent Transcription, à la rédaction de chaque étape : il
 lit le vocal et rend `weatherKey`, `null` le plus souvent. La mise en page la

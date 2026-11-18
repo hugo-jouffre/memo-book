@@ -405,14 +405,24 @@ SVG dans `MemoBookDesign/Resources/MemoBookAssets.xcassets`, avec
 `preserves-vector-representation`. On y accède par `Image(brand: "NomAsset")`.
 Retirer `preserveAspectRatio="none"` des exports Figma, sinon Xcode déforme.
 
-Le catalogue n'est **jamais rempli à la main** : deux scripts l'alimentent depuis
+Le catalogue n'est **jamais rempli à la main** : des scripts l'alimentent depuis
 `assets/`, et ils sont idempotents.
 
 ```bash
 python3 ios/Tools/import-brand-icons.py     # assets/icons/brand-icons
 python3 ios/Tools/import-lucide-icons.py    # assets/icons/lucide-icons
 python3 ios/Tools/import-brand-logos.py     # assets/logos
+python3 ios/Tools/import-weather-icons.py   # assets/icons/manifest.json, les cinq météo
 ```
+
+⚠️ **Celui des cinq icônes météo lit le manifeste, pas un dossier** (T263,
+18/11/2026). C'est le **même fichier** que `npm run icons:build` côté carnet :
+le gabarit embarque ces SVG sous `mb-i-weather-…`, l'app sous
+`IconWeather…`, et le jour où l'un des cinq change de dessin, les deux
+suivent ensemble. Un temps qu'il fait ne doit pas se dessiner d'une façon à
+l'écran et d'une autre à l'impression. Le nom d'asset se **calcule** depuis la
+clé que la rédaction relève (`sun-wind` → `IconWeatherSunWind`), des deux
+côtés : il n'y a pas de table à tenir d'accord.
 
 Les icônes de marque viennent par **paires** : `Printer.svg` donne
 `IconPrinter`, monochrome et destiné à `renderingMode(.template)` ;

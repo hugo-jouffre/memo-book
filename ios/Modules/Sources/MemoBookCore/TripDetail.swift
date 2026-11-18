@@ -108,6 +108,24 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
     /// dit pas encore : la carte ne propose rien.
     public let storyCount: Int?
 
+    /// **Le temps qu'il faisait**, tel que la rédaction l'a relevé des
+    /// souvenirs de l'étape : `sun`, `sun-wind`, `cloud`, `rain`, `snow`
+    /// (T263). `nil` quand personne ne l'a dit — le cas courant, et rien ne
+    /// se devine : une météo supposée est une invention.
+    ///
+    /// La chaîne et non une énumération : un temps ajouté côté serveur ne
+    /// doit pas faire échouer le décodage de **tout** l'écran. ``WeatherIcon``
+    /// ignore une clé qu'il ne connaît pas.
+    public let weatherKey: String?
+
+    /// **La température de l'étape**, en degrés Celsius entiers (T263).
+    ///
+    /// Celle que le voyageur a dite si elle existe, sinon celle qu'on est
+    /// allé chercher — le serveur a déjà tranché, l'app ne fait qu'afficher.
+    /// `nil` quand on n'a ni l'une ni l'autre, et la carte n'affiche alors
+    /// rien de plus.
+    public let temperatureC: Int?
+
     public init(
         id: String,
         number: Int,
@@ -120,7 +138,9 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
         transport: TripTransport? = nil,
         validatedAt: Date? = nil,
         entryIds: [String]? = nil,
-        storyCount: Int? = nil
+        storyCount: Int? = nil,
+        weatherKey: String? = nil,
+        temperatureC: Int? = nil
     ) {
         self.id = id
         self.number = number
@@ -134,6 +154,8 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
         self.validatedAt = validatedAt
         self.entryIds = entryIds
         self.storyCount = storyCount
+        self.weatherKey = weatherKey
+        self.temperatureC = temperatureC
     }
 
     /// La croix du tiroir s'offre : on sait quels souvenirs effacer.

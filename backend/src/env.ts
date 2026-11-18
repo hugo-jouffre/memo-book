@@ -148,6 +148,36 @@ const schema = z.object({
   ),
 
   /**
+   * L'historique météo qui donne la température d'une étape quand le voyageur
+   * ne l'a pas dite (T263, `services/weatherLookup.ts`).
+   *
+   * **Visual Crossing** et non Open-Meteo, pour une raison de licence : le
+   * palier gratuit d'Open-Meteo est réservé à l'usage **non commercial**, et
+   * son premier palier payant exclut justement l'API historique. Celui de
+   * Visual Crossing autorise le commercial — 30 000 relevés par mois, là où
+   * nous en demandons un par étape, une fois.
+   *
+   * Et un seul service suffit : il **géocode le nom du lieu lui-même**
+   * (`/timeline/Tokyo,Japan/2026-08-02`), ce qui nous épargne un géocodeur —
+   * aucune coordonnée n'existe en base.
+   */
+  VISUAL_CROSSING_URL: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z
+      .string()
+      .url()
+      .default("https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline"),
+  ),
+
+  /**
+   * La clé du compte Visual Crossing. **Absente, on ne cherche rien** : les
+   * températures dites dans les vocaux s'affichent quand même, et les autres
+   * étapes n'en portent pas. C'est le même parti pris que les rues
+   * d'OpenStreetMap — une carte sobre plutôt qu'un carnet qui n'arrive pas.
+   */
+  VISUAL_CROSSING_API_KEY: z.string().optional(),
+
+  /**
    * La racine des liens de prévisualisation publics, **forcée**. Vide — le
    * défaut depuis le 07/10/2026 — : l'hôte public de l'API, qui sert la page
    * `/c/<jeton>` (`routes/sharePage.ts`, `services/shareLink.ts`).

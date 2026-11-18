@@ -148,7 +148,17 @@ export async function loadTripDetail(context: AppContext, accountId: string, mem
         orderBy: { number: "asc" },
         include: {
           entries: {
-            select: { id: true, kind: true, media: { select: { storageKey: true, cdnUrl: true } } },
+            // `weatherKey` et `temperatureC` : le temps qu'il faisait, relevé
+            // souvenir par souvenir, dont l'étape tire le sien (T263,
+            // `services/stepWeather.ts`). Dans l'ordre du récit — c'est le
+            // premier qui a parlé du temps qui l'emporte.
+            select: {
+              id: true,
+              kind: true,
+              weatherKey: true,
+              temperatureC: true,
+              media: { select: { storageKey: true, cdnUrl: true } },
+            },
             orderBy: [{ capturedAt: "asc" }, { createdAt: "asc" }],
           },
         },

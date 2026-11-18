@@ -463,14 +463,16 @@ li { margin: 0; }
 /* Bandeau seul — ni nuit, ni hôte, ni météo, ni étiquette dessous : une ligne
    de réglure entre la pointe du ruban et le titre. Sans elle, la première
    ligne du récit collait au bandeau (retour de Hugo, 07/10), depuis que la
-   météo inventée et la pastille du lieu ont disparu. Les rangées « nuit » ou
-   « météo » font déjà cet écart quand elles sont là ; c'est pourquoi la marge
-   ne s'ajoute pas à elles — et pourquoi le barème, calibré avec une rangée
-   « nuit », reste juste. Un multiple de `--mb-line`, pour la réglure. */
+   météo inventée et la pastille du lieu ont disparu. La ligne « nuit / hôte /
+   temps » fait déjà cet écart quand elle est là ; c'est pourquoi la marge ne
+   s'ajoute pas à elle — et pourquoi le barème, calibré avec cette ligne,
+   reste juste. Un multiple de `--mb-line`, pour la réglure.
+
+   Depuis T264 (18/11/2026) il n'y a plus qu'une ligne : la météo a rejoint le
+   gîte au lieu d'en prendre une seconde. */
 .mb-header--seul { margin-bottom: var(--mb-line); }
 
-.mb-stay,
-.mb-weather { flex: 0 0 auto; }
+.mb-stay { flex: 0 0 auto; }
 
 .mb-ribbon {
   position: relative;
@@ -605,57 +607,28 @@ li { margin: 0; }
   vertical-align: 1.5pt;
 }
 
-/* --- Rangée météo ---------------------------------------------------------- */
-.mb-weather {
-  display: flex;
-  align-items: center;
-  gap: 7pt;
-  margin: 4pt 0 0 100pt;
-}
+/* --- Le temps qu'il faisait, dans la ligne du gîte ------------------------
+   T264 (18/11/2026). Avant, une bande à elle : les cinq icônes, quatre
+   estompées, la bonne dans une pastille carotte de 26 pt. C'était le dessin
+   d'un sélecteur, recopié dans un livre — sur du papier, quatre icônes grises
+   se lisent comme un formulaire non rempli. Et la bande coûtait une
+   soixantaine de points là où le récit en manque.
 
-.mb-weather__caption {
-  font-family: var(--mb-font-display);
-  font-weight: 900;
-  font-size: 12pt;
-  line-height: 1;
-  letter-spacing: 0.01em;
-  color: var(--mb-black);
-  transform: rotate(-1deg);
-}
-
-/* Pastille de sélection : disque carotte plein, cerné d'un halo de la même
-   teinte à 23 %. L'icône passe en blanc pour rester lisible sur le disque. */
-.mb-weather__item {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26pt;
-  height: 26pt;
-  border-radius: 50%;
-}
-
-.mb-weather__item.is-active {
-  background-color: var(--mb-carrot);
-  box-shadow: 0 0 0 3pt rgba(248, 96, 21, 0.23);
-}
-
-.mb-weather__icon {
-  width: 19pt;
-  height: 19pt;
-  opacity: 0.3;                    /* l'icône du jour repasse à 1 */
-  color: var(--mb-black);
-}
-
-.mb-weather__item.is-active .mb-weather__icon {
-  opacity: 1;
-  color: #ffffff;
+   Il ne reste que le temps qu'il a fait, à la taille du texte qui l'entoure
+   et de son encre : la météo passe après le gîte et l'hôte, son dessin doit
+   le dire aussi. */
+.mb-stay__weather {
+  width: 12.5pt;
+  height: 12.5pt;
+  color: var(--mb-ink);
+  vertical-align: -1.5pt;
 }
 
 /* --- Étiquette de section (« Top départ », « Paliton Beach ») -------------- */
 .mb-tag {
   position: relative;
   display: inline-block;
-  margin-top: 8pt;             /* dégage la rangée météo, qui la précède */
+  margin-top: 8pt;             /* dégage la ligne du gîte, qui la précède */
   padding: 9pt 16pt;
   transform: rotate(2.9deg);
 }
