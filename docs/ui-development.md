@@ -117,7 +117,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 ### Lot du 5 novembre — retours du Japon
 
 Les points envoyés par Hugo le 05/11/2026 depuis le Japon, **dans son ordre** :
-c'est celui dans lequel ils se traitent. Trente-trois au départ, dont neuf
+c'est celui dans lequel ils se traitent. Trente-trois au départ, dont dix
 réglés les 17 et 18/11 — les images absentes du PDF ([PR 188](https://github.com/hugo-jouffre/memo-book/pull/188)),
 le jour vide et les étapes sans lieu ([PR 211](https://github.com/hugo-jouffre/memo-book/pull/211),
 [212](https://github.com/hugo-jouffre/memo-book/pull/212)), le champ de saisie
@@ -127,7 +127,8 @@ le jour vide et les étapes sans lieu ([PR 211](https://github.com/hugo-jouffre/
 recomposait sans raison (T258), les plats du PDF qui n'étaient pas ceux
 qu'on avait choisis (T259), les images de la personnalisation des couvertures
 qui mettaient très longtemps à arriver (T260) et la ligne claire au bas de la
-couverture (T261) — et deux à moitié, dont seul le reste figure ici
+couverture (T261) et la météo qui prenait une bande entière pour cinq icônes
+dont quatre grises (T264) — et deux à moitié, dont seul le reste figure ici
 (T265, T267).
 
 ⚠️ **Ils n'étaient écrits nulle part** pendant douze jours : ni ici, ni dans un
@@ -139,7 +140,6 @@ pas dans ce fichier n'existe pas.
 |---|---|---|
 | T262 | **Un export pendant le voyage ne dit pas qu'il est partiel.** La couverture devrait porter le **numéro d'édition** (#1, #2…), le **pourcentage du trajet** déjà parcouru, et le **nom de l'étape qui regroupe** les étapes couvertes. Rien de tout ça n'existe : aucune notion d'édition dans le code (`bookComposer.ts`, gabarit `travel-journal`) | Aperçu PDF, impression |
 | T263 | **Chaque étape devrait porter sa date et sa température, avec une petite icône météo, sur l'accueil du voyage.** La rédaction relève déjà une icône (`weatherKey`, servie par `routes/serializers.ts`), mais **aucune température n'existe nulle part** dans le projet, et aucune vue iOS ne lit `weatherKey` hors de l'aperçu du carnet. Chaîne entière à faire : source de la température, colonne, sérialiseur, modèle Swift, vue | Accueil d'un voyage |
-| T264 | **La météo est mal placée dans l'aperçu et le PDF.** Elle ne s'imprime désormais que si le voyageur l'a dite dans son vocal (`structuring.ts` § météo), ce qui règle le « encore affichée » ; reste son emplacement dans la page, à reprendre avec le metteur en page | Aperçu PDF |
 | T265 | **Reste de la limite de photos** ([PR 206](https://github.com/hugo-jouffre/memo-book/pull/206) a fait 6 → 20, et le surplus s'annonce). La demande allait plus loin : **sans limite**, l'envoi découpé en plusieurs messages côté app ou la borne serveur relevée ; et surtout, quand il y en a trop, une **sélection par l'IA** sur l'esthétique, la netteté et la pertinence par rapport aux textes, avec un avertissement si le nombre de pages change. Chantier à lui seul | Conversation, mise en page |
 | T266 | **Les transcriptions demandent beaucoup d'améliorations, et portent des « – » qui font très IA.** Deux sujets dans un : la qualité du texte rendu, et ce tiret cadratin que le modèle place et qu'aucun voyageur n'écrit. Le second se traite dans la consigne de rédaction | Conversation — fiche de transcription, impression |
 | T267 | **Reste des en-têtes sans lieu** (la cause — crédit épuisé puis plafond de jetons — est corrigée par les [PR 211](https://github.com/hugo-jouffre/memo-book/pull/211) et [212](https://github.com/hugo-jouffre/memo-book/pull/212)). Ce qui manque : **déduire** le lieu quand il est déductible des étapes voisines, et à défaut **le faire demander par MEMO** dans le fil plutôt que d'imprimer une date seule | Conversation, impression |
