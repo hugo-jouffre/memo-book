@@ -360,3 +360,40 @@ describe("withBestPhotosFirst", () => {
     expect(sorti.days[0]!.photos).toEqual(["p.jpg", "q.jpg"]);
   });
 });
+
+/**
+ * **T267** — l'en-tête d'une journée n'imprimait que le lieu relevé du vocal.
+ * Absent, elle n'affichait qu'une date. L'étape qui porte le souvenir en a un,
+ * et ce n'est pas une déduction : c'est le lieu de cette étape-là.
+ */
+describe("le lieu de l'en-tête, quand le vocal n'en dit pas", () => {
+  const structurer = new HeuristicStructurer();
+  const jour = (overrides: Partial<StructuringEntry>) =>
+    entry({ capturedAt: new Date("2026-04-12T09:00:00Z"), ...overrides });
+
+  const enTete = async (entries: StructuringEntry[]) => {
+    const payload = (await structurer.structure({
+      entries,
+      title: "Voyage",
+      authors: "Max",
+    } as never)) as unknown as { days: { day_intro?: { location?: string } }[] };
+    return payload.days[0]?.day_intro?.location;
+  };
+
+  it("prend le lieu dit par le voyageur", async () => {
+    expect(await enTete([jour({ placeLabel: "Naxos", stepPlace: "Paros" })])).toBe("Naxos");
+  });
+
+  it("retombe sur le lieu de l'étape quand le vocal n'en dit pas", async () => {
+    expect(await enTete([jour({ placeLabel: null, stepPlace: "Paros" })])).toBe("Paros");
+  });
+
+  /**
+   * On ne descend pas jusqu'à la ville du voyage : elle imprimerait « Tokyo »
+   * sur une journée passée à Kyoto, ce qui est la plainte de T280. Sans lieu,
+   * l'en-tête n'en affiche pas — et MEMO le demandera.
+   */
+  it("n'invente rien quand ni l'un ni l'autre n'existe", async () => {
+    expect(await enTete([jour({ placeLabel: null, stepPlace: null })])).toBe("");
+  });
+});
