@@ -172,6 +172,39 @@ public actor PreviewChatBox {
         }
     }
 
+    /// Les deux étoiles, dans le bac à sable (T270) : une par étape, une par
+    /// voyage — la même règle que le serveur, posée sur les bulles.
+    public func elect(stepCover entryId: String?, inStep stepId: String, tripId: String) {
+        updatePhotos(of: tripId) { message, photo in
+            guard message.stepId == stepId else { return photo }
+            var marked = photo
+            marked.isStepCover = photo.id == entryId
+            return marked
+        }
+    }
+
+    public func elect(tripCover entryId: String?, tripId: String) {
+        updatePhotos(of: tripId) { _, photo in
+            var marked = photo
+            marked.isTripCover = photo.id == entryId
+            return marked
+        }
+    }
+
+    private func updatePhotos(
+        of tripId: String,
+        _ change: (ChatMessage, PhotoAttachment) -> PhotoAttachment,
+    ) {
+        var thread = thread(for: tripId)
+        thread.messages = thread.messages.map { message in
+            guard case .photos(let attachments) = message.body else { return message }
+            var updated = message
+            updated.body = .photos(attachments.map { change(message, $0) })
+            return updated
+        }
+        threads[tripId] = thread
+    }
+
     /// **Les bulles d'un souvenir supprimé**, dans le bac à sable : la bulle
     /// du voyageur et sa fiche. Une bulle de photos perd la photo effacée, et
     /// ne s'en va que vidée — la même règle que `forgetBubblesOf` côté

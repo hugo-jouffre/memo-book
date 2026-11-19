@@ -233,7 +233,12 @@ struct ChatMessageRow: View {
             )
 
         case .photos(let attachments):
-            ChatPhotosBubble(attachments: attachments, author: message.author, model: model)
+            ChatPhotosBubble(
+                attachments: attachments,
+                author: message.author,
+                messageId: message.id,
+                model: model
+            )
         }
     }
 
@@ -528,6 +533,8 @@ private struct ChatActionButton: View {
 struct ChatPhotosBubble: View {
     let attachments: [PhotoAttachment]
     let author: ChatAuthor
+    /// La bulle, pour que la visionneuse sache de quelle étape il s'agit (T270).
+    var messageId: String?
     /// C'est le modèle qui charge les photos — voir ``ChatModel/loadImage(_:)``.
     let model: ChatModel
 
@@ -569,9 +576,11 @@ struct ChatPhotosBubble: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ChatCopy.Voice.photos(count: attachments.count))
+        // VoiceOver ne voit pas l'étoile : elle se dit.
+        .accessibilityValue(ChatCoverStars.spokenValue(of: attachments))
         .accessibilityAddTraits(.isButton)
         .accessibilityHint(ChatCopy.PhotoViewer.hint)
-        .accessibilityAction { model.viewPhotos(attachments, at: 0) }
+        .accessibilityAction { model.viewPhotos(attachments, at: 0, from: messageId) }
     }
 
     /// Une vignette : le fichier local tant qu'il est là, sinon le média du
@@ -599,8 +608,14 @@ struct ChatPhotosBubble: View {
                 }
             }
             .clipShape(.rect(cornerRadius: MemoBookSpacing.snug))
+            // **Les étoiles, en haut à droite** (T270) : celle de l'étape,
+            // celle du voyage, ou les deux — une photo peut être les deux.
+            .overlay(alignment: .topTrailing) {
+                ChatCoverStars(photo: attachment)
+                    .padding(MemoBookSpacing.xs / 2)
+            }
             .contentShape(.rect(cornerRadius: MemoBookSpacing.snug))
-            .onTapGesture { model.viewPhotos(attachments, at: index) }
+            .onTapGesture { model.viewPhotos(attachments, at: index, from: messageId) }
             .task(id: url) {
                 if let url { model.loadImage(url) }
             }

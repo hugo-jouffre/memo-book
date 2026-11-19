@@ -253,6 +253,15 @@ public struct ChatTransport: Sendable {
     /// ça que la confirmation le dit.
     public var deleteMemory: @Sendable (_ entryId: String) async throws -> Void
 
+    /// **« Définir comme photo principale de l'étape »** — l'étoile verte
+    /// (T270), `PUT /v1/trips/:id/steps/:stepId/cover-photo`. `nil` défait le
+    /// choix : l'étape reprend son élection automatique.
+    public var electStepCover: @Sendable (_ stepId: String, _ entryId: String?) async throws -> Void
+
+    /// **« Définir comme photo principale du voyage »** — l'étoile lime
+    /// (T270), `PUT /v1/trips/:id/cover-photo`.
+    public var electTripCover: @Sendable (_ entryId: String?) async throws -> Void
+
     /// **« Déplacer dans une autre étape »** (T270) —
     /// `POST /v1/trips/:id/chat/:messageId/step`. Le sujet est la bulle : des
     /// photos envoyées ensemble s'en vont ensemble. Un souvenir seulement,
@@ -283,6 +292,12 @@ public struct ChatTransport: Sendable {
         moveMessage: @escaping @Sendable (String, String) async throws -> Void = { _, _ in
             throw APIError.server(statusCode: 0, code: nil, message: "Déplacement indisponible ici.")
         },
+        electStepCover: @escaping @Sendable (String, String?) async throws -> Void = { _, _ in
+            throw APIError.server(statusCode: 0, code: nil, message: "Choix indisponible ici.")
+        },
+        electTripCover: @escaping @Sendable (String?) async throws -> Void = { _ in
+            throw APIError.server(statusCode: 0, code: nil, message: "Choix indisponible ici.")
+        },
         media: @escaping @Sendable (URL) async throws -> Data,
         waiting: @escaping @Sendable () async -> [OutgoingTurn] = { [] },
         deliveries: @escaping @Sendable () async -> AsyncStream<ChatTurnDelivery> = { AsyncStream { $0.finish() } },
@@ -304,6 +319,8 @@ public struct ChatTransport: Sendable {
         self.reanalyse = reanalyse
         self.deleteMemory = deleteMemory
         self.moveMessage = moveMessage
+        self.electStepCover = electStepCover
+        self.electTripCover = electTripCover
     }
 
     // MARK: - Le vrai serveur
@@ -327,6 +344,12 @@ public struct ChatTransport: Sendable {
             deleteMemory: { entryId in try await api.deleteEntry(id: entryId) },
             moveMessage: { messageId, stepId in
                 try await api.moveChatMessage(tripId: tripId, messageId: messageId, toStepId: stepId)
+            },
+            electStepCover: { stepId, entryId in
+                try await api.setStepCoverPhoto(tripId: tripId, stepId: stepId, entryId: entryId)
+            },
+            electTripCover: { entryId in
+                try await api.setTripCoverPhoto(tripId: tripId, entryId: entryId)
             },
             media: { url in
                 // `/v1/entries/<id>/media` pour un souvenir,

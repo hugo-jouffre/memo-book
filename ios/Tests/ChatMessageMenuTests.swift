@@ -19,6 +19,9 @@ final class ChatMessageMenuTests: XCTestCase {
         private(set) var deleted: [String] = []
         var failsMoving: (any Error)?
         var failsDeleting: (any Error)?
+        private(set) var electedStepCovers: [(stepId: String, entryId: String?)] = []
+        private(set) var electedTripCovers: [String?] = []
+        var failsElecting: (any Error)?
 
         init(thread: ChatThread) { self.thread = thread }
 
@@ -32,6 +35,40 @@ final class ChatMessageMenuTests: XCTestCase {
             deleted.append(entryId)
         }
 
+        // Le double **garde** l'élection, comme le serveur : le modèle relit
+        // le fil juste après, et un double qui l'oublierait rendrait l'étoile
+        // au premier rechargement — le test ne prouverait plus rien.
+        func electStepCover(_ stepId: String, _ entryId: String?) throws {
+            if let failsElecting { throw failsElecting }
+            electedStepCovers.append((stepId, entryId))
+            mark { message, photo in
+                guard message.stepId == stepId else { return photo }
+                var marked = photo
+                marked.isStepCover = photo.id == entryId
+                return marked
+            }
+        }
+
+        func electTripCover(_ entryId: String?) throws {
+            if let failsElecting { throw failsElecting }
+            electedTripCovers.append(entryId)
+            mark { _, photo in
+                var marked = photo
+                marked.isTripCover = photo.id == entryId
+                return marked
+            }
+        }
+
+        private func mark(_ change: (ChatMessage, PhotoAttachment) -> PhotoAttachment) {
+            thread.messages = thread.messages.map { message in
+                guard case .photos(let attachments) = message.body else { return message }
+                var updated = message
+                updated.body = .photos(attachments.map { change(message, $0) })
+                return updated
+            }
+        }
+
+        func failElecting(with error: any Error) { failsElecting = error }
         func failMoving(with error: any Error) { failsMoving = error }
         func failDeleting(with error: any Error) { failsDeleting = error }
     }
@@ -44,6 +81,8 @@ final class ChatMessageMenuTests: XCTestCase {
             editTranscript: { _, _ in throw APIError.server(statusCode: 0, code: nil, message: "non") },
             deleteMemory: { entryId in try await script.delete(entryId) },
             moveMessage: { messageId, stepId in try await script.move(messageId, stepId) },
+            electStepCover: { stepId, entryId in try await script.electStepCover(stepId, entryId) },
+            electTripCover: { entryId in try await script.electTripCover(entryId) },
             media: { _ in Data() }
         )
     }
@@ -271,6 +310,87 @@ final class ChatMessageMenuTests: XCTestCase {
         model.share(model.messages[0])
 
         XCTAssertEqual(model.shared?.text, "Quel beau programme !")
+    }
+
+    // MARK: - Les deux photos principales
+
+    /// L'étoile se pose **avant** la réponse du serveur : une étoile qui
+    /// arriverait après l'aller-retour se lirait comme un geste raté.
+    func testLEtoileDeLEtapeSePoseAvantLaReponse() async throws {
+        let script = Script(thread: thread(messages: [photos()]))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        let photo = try XCTUnwrap(attachments(of: model.messages[0]).first)
+
+        model.electStepCover(photo, in: model.messages[0])
+
+        XCTAssertTrue(attachments(of: model.messages[0])[0].isStepCover)
+        try await until("le serveur a reçu l'élection") { await script.electedStepCovers.count == 1 }
+        let elected = await script.electedStepCovers[0]
+        XCTAssertEqual(elected.stepId, "step-1")
+        XCTAssertEqual(elected.entryId, "photo-1")
+    }
+
+    /// Une étoile par étape : élire la seconde photo enlève l'étoile de la
+    /// première, et dans le même mouvement.
+    func testUneSeuleEtoileParEtape() async throws {
+        let script = Script(thread: thread(messages: [photos()]))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        model.electStepCover(attachments(of: model.messages[0])[0], in: model.messages[0])
+
+        model.electStepCover(attachments(of: model.messages[0])[1], in: model.messages[0])
+
+        XCTAssertEqual(attachments(of: model.messages[0]).map(\.isStepCover), [false, true])
+    }
+
+    /// Le même geste sur une photo déjà élue la défait — c'est `nil` qui part.
+    func testLEtoileSeDefaitParLeMemeGeste() async throws {
+        let script = Script(thread: thread(messages: [photos()]))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        model.electTripCover(attachments(of: model.messages[0])[0])
+        try await until("la première élection est partie") { await script.electedTripCovers.count == 1 }
+
+        model.electTripCover(attachments(of: model.messages[0])[0])
+
+        XCTAssertFalse(attachments(of: model.messages[0])[0].isTripCover)
+        try await until("le retrait est parti") { await script.electedTripCovers.count == 2 }
+        let sent = await script.electedTripCovers
+        XCTAssertEqual(sent, ["photo-1", nil])
+    }
+
+    /// L'étoile du voyage ne connaît pas les étapes : une seule dans tout le
+    /// fil, d'une bulle à l'autre.
+    func testUneSeuleEtoileDeVoyageDansToutLeFil() async throws {
+        let ailleurs = photos("autre-bulle", ids: ["photo-3"], stepId: "step-2")
+        let script = Script(thread: thread(messages: [photos(), ailleurs]))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        model.electTripCover(attachments(of: model.messages[0])[0])
+
+        model.electTripCover(attachments(of: model.messages[1])[0])
+
+        XCTAssertEqual(attachments(of: model.messages[0]).map(\.isTripCover), [false, false])
+        XCTAssertEqual(attachments(of: model.messages[1]).map(\.isTripCover), [true])
+    }
+
+    func testUneElectionRefuseeEnleveLEtoile() async throws {
+        let script = Script(thread: thread(messages: [photos()]))
+        await script.failElecting(with: APIError.server(statusCode: 500, code: nil, message: "Rien n'a été enregistré."))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        model.electTripCover(attachments(of: model.messages[0])[0])
+        XCTAssertTrue(attachments(of: model.messages[0])[0].isTripCover, "Posée d'abord.")
+
+        try await until("l'échec est dit") { model.errorMessage != nil }
+        XCTAssertFalse(attachments(of: model.messages[0])[0].isTripCover, "Puis reprise.")
+    }
+
+    private func attachments(of message: ChatMessage) -> [PhotoAttachment] {
+        guard case .photos(let attachments) = message.body else { return [] }
+        return attachments
     }
 
     private func until(

@@ -188,6 +188,16 @@ export interface SerializeMessageOptions {
    * (`resolveCallToAction`).
    */
   viewerIsUnlimited: boolean;
+  /**
+   * **Les photos élues** (T270) : celle du voyage, et celles des étapes. La
+   * bulle les marque d'une étoile, et le menu propose de défaire le choix au
+   * lieu de le refaire.
+   *
+   * Deux ensembles et non deux identifiants : une même photo peut être la
+   * principale de son étape **et** celle du voyage, et les deux étoiles se
+   * dessinent alors ensemble.
+   */
+  cover?: { tripEntryId: string | null; stepEntryIds: ReadonlySet<string> };
 }
 
 /**
@@ -218,7 +228,12 @@ export function stepNumbersOf(
   return numbers;
 }
 
-function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbers?: ReadonlyMap<string, number>) {
+function serializeBody(
+  message: ChatMessageRow,
+  publicBaseUrl: string,
+  stepNumbers?: ReadonlyMap<string, number>,
+  cover?: SerializeMessageOptions["cover"],
+) {
   switch (message.kind) {
     case "text":
       return { kind: "text" as const, text: message.text ?? "" };
@@ -251,6 +266,10 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbe
         photos: entryIdsOf(message.payload, message.entryId).map((entryId) => ({
           id: entryId,
           remoteUrl: mediaUrlOf(publicBaseUrl, entryId),
+          // Les deux étoiles (T270). Absentes d'un serveur qui ne les connaît
+          // pas : une app d'avant ignore les clés qu'elle ne lit pas.
+          isTripCover: cover?.tripEntryId === entryId,
+          isStepCover: cover?.stepEntryIds.has(entryId) ?? false,
         })),
       };
 
@@ -311,7 +330,7 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbe
  */
 export function serializeChatMessage(message: ChatMessageRow, options: SerializeMessageOptions) {
   if (!isVisibleTo(message, options.viewerIsUnlimited)) return null;
-  const body = serializeBody(message, options.publicBaseUrl, options.stepNumbers);
+  const body = serializeBody(message, options.publicBaseUrl, options.stepNumbers, options.cover);
   if (!body) return null;
 
   const isOtherTraveller =
@@ -381,7 +400,21 @@ export type MemoForChat = Memo & {
    * demande pas : l'en-tête retombe alors sur sa montagne.
    */
   entries?: { media: { storageKey: string; cdnUrl: string | null } | null }[];
+  /** **La photo élue** du voyage, telle que `coverPhotoInclude` la charge. */
+  coverEntry?: { id: string; media: { storageKey: string; cdnUrl: string | null } | null } | null;
 };
+
+/**
+ * **Les deux étoiles d'un carnet** (T270) : la photo principale du voyage, et
+ * celles des étapes. Lues une fois par réponse, puis posées sur chaque photo —
+ * voir ``SerializeMessageOptions.cover``.
+ */
+function coverOf(memo: MemoForChat): SerializeMessageOptions["cover"] {
+  return {
+    tripEntryId: memo.coverEntryId,
+    stepEntryIds: new Set(memo.steps.flatMap((step) => (step.coverEntryId ? [step.coverEntryId] : []))),
+  };
+}
 
 export interface SerializeThreadOptions {
   memo: MemoForChat;
@@ -520,6 +553,7 @@ export function serializeChatThread(options: SerializeThreadOptions) {
     publicBaseUrl: options.publicBaseUrl,
     stepNumbers: stepNumbersOf(options.messages),
     viewerIsUnlimited: options.dailyCredit.isUnlimited,
+    cover: coverOf(options.memo),
   };
 
   const messages = options.messages
@@ -629,6 +663,7 @@ export function serializeChatUpdate(options: {
     publicBaseUrl: options.publicBaseUrl,
     stepNumbers: stepNumbersOf(options.allMessages),
     viewerIsUnlimited: options.dailyCredit.isUnlimited,
+    cover: coverOf(options.memo),
   };
   const pageCount =
     options.memo.pageCount > 0 ? options.memo.pageCount : options.memoryCount * 2;

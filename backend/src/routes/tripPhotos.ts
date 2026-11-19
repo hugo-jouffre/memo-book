@@ -67,6 +67,12 @@ export const coverPhotoInclude = {
     take: 1,
     select: { media: { select: { storageKey: true, cdnUrl: true } } },
   },
+  /**
+   * **La photo que le voyageur a élue** (T270, l'étoile lime). Elle passe
+   * devant l'élection automatique ci-dessus — mais derrière
+   * `memos.coverPhotoUrl`, la couverture composée dans l'atelier.
+   */
+  coverEntry: { select: { id: true, media: { select: { storageKey: true, cdnUrl: true } } } },
 } as const;
 
 const TRIP_PHOTO_FILENAME = /^[0-9a-f-]{36}\.(jpg|jpeg|png|heic|heif|webp)$/i;

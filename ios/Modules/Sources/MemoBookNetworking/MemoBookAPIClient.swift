@@ -622,6 +622,41 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    /// Le corps des deux élections (T270). `entryId` nul défait le choix — et
+    /// il doit donc **partir dans le JSON**, pas en être absent : c'est la
+    /// différence entre « enlève l'étoile » et « ne touche à rien ».
+    private struct CoverPhotoChoice: Encodable {
+        let entryId: String?
+
+        // ⚠️ Écrit **à la main** : l'encodeur synthétisé emploie
+        // `encodeIfPresent` pour un optionnel, et `nil` ne partirait pas du
+        // tout. Le serveur, lui, attend la clé avec `null` dedans — il
+        // refuserait (400) une requête sans elle, et « enlever l'étoile »
+        // n'aurait jamais marché.
+        private enum CodingKeys: String, CodingKey { case entryId }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(entryId, forKey: .entryId)
+        }
+    }
+
+    public func setStepCoverPhoto(tripId: String, stepId: String, entryId: String?) async throws -> TripDetail {
+        try await send(
+            method: "PUT",
+            path: "/v1/trips/\(tripId)/steps/\(stepId)/cover-photo",
+            encodableBody: CoverPhotoChoice(entryId: entryId)
+        )
+    }
+
+    public func setTripCoverPhoto(tripId: String, entryId: String?) async throws -> TripDetail {
+        try await send(
+            method: "PUT",
+            path: "/v1/trips/\(tripId)/cover-photo",
+            encodableBody: CoverPhotoChoice(entryId: entryId)
+        )
+    }
+
     public func entryMedia(id: String) async throws -> Data {
         let request = try makeRequest(method: "GET", path: "/v1/entries/\(id)/media")
         return try await performRaw(request, credential: .session)

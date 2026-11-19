@@ -304,6 +304,20 @@ public protocol MemoBookAPI: Sendable {
     /// son étape d'origine au prochain recalcul.
     func moveChatMessage(tripId: String, messageId: String, toStepId: String) async throws
 
+    /// **« Définir comme photo principale de l'étape »** — l'étoile verte
+    /// (T270). `entryId` nul défait le choix : l'étape reprend son élection
+    /// automatique (sa première photo).
+    ///
+    /// La photo doit être **de cette étape** ; le serveur refuse sinon (400).
+    /// Rend le voyage entier, comme « Valider cette étape » : on modifie une
+    /// chose, on relit tout.
+    func setStepCoverPhoto(tripId: String, stepId: String, entryId: String?) async throws -> TripDetail
+
+    /// **« Définir comme photo principale du voyage »** — l'étoile lime
+    /// (T270). Elle ne touche pas la couverture composée dans l'atelier, qui
+    /// passe devant.
+    func setTripCoverPhoto(tripId: String, entryId: String?) async throws -> TripDetail
+
     /// Le fichier d'un souvenir — un vocal à réécouter, une photo —, servi
     /// avec la session : une URL nue ne suffirait pas.
     func entryMedia(id: String) async throws -> Data

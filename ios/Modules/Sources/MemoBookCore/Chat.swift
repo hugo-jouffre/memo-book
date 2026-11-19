@@ -341,16 +341,50 @@ public struct PhotoAttachment: Codable, Sendable, Hashable, Identifiable {
     public let remoteUrl: URL?
     public var localUrl: URL?
 
-    public init(id: String, remoteUrl: URL? = nil, localUrl: URL? = nil) {
+    /// **La photo principale de son étape** — l'étoile verte (T270). Elle sert
+    /// à la carte de l'étape, aux propositions de couverture et à la mise en
+    /// page.
+    ///
+    /// Modifiable, comme ``localUrl`` : l'étoile se pose sous le doigt pendant
+    /// que le serveur enregistre, et une étoile qui arriverait une demi-seconde
+    /// plus tard se lirait comme un geste raté.
+    public var isStepCover: Bool
+
+    /// **La photo principale du voyage** — l'étoile lime (T270) : l'accueil de
+    /// l'app, l'accueil du voyage, le haut du chat, les couvertures, la mise
+    /// en page.
+    public var isTripCover: Bool
+
+    public init(
+        id: String,
+        remoteUrl: URL? = nil,
+        localUrl: URL? = nil,
+        isStepCover: Bool = false,
+        isTripCover: Bool = false
+    ) {
         self.id = id
         self.remoteUrl = remoteUrl
         self.localUrl = localUrl
+        self.isStepCover = isStepCover
+        self.isTripCover = isTripCover
     }
 
     public var displayUrl: URL? { localUrl ?? remoteUrl }
 
     private enum CodingKeys: String, CodingKey {
-        case id, remoteUrl
+        case id, remoteUrl, isStepCover, isTripCover
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Faux d'un serveur qui ne connaît pas encore les étoiles : une photo
+        // sans étoile est le cas courant, et c'est le bon repli.
+        self.init(
+            id: try container.decode(String.self, forKey: .id),
+            remoteUrl: try container.decodeIfPresent(URL.self, forKey: .remoteUrl),
+            isStepCover: try container.decodeIfPresent(Bool.self, forKey: .isStepCover) ?? false,
+            isTripCover: try container.decodeIfPresent(Bool.self, forKey: .isTripCover) ?? false
+        )
     }
 }
 

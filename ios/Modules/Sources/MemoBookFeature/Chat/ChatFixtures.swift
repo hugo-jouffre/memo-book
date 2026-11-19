@@ -238,6 +238,25 @@ extension ChatThread {
                     stepId: step.id
                 )
             )
+            // **Deux photos par étape** (T270) : sans bulle de photos dans le
+            // jeu d'essai, ni « Déplacer dans une autre étape » ni les deux
+            // étoiles ne se regardent sans serveur. Elles n'ont pas
+            // d'adresse : la trame de `TripCoverPlaceholder` les dessine,
+            // comme pour une photo qui n'est pas encore arrivée.
+            messages.append(
+                ChatMessage(
+                    id: "photos-\(step.id)",
+                    author: .traveller,
+                    body: .photos([
+                        PhotoAttachment(id: "\(step.id)-photo-1", isStepCover: index == 0),
+                        PhotoAttachment(id: "\(step.id)-photo-2"),
+                    ]),
+                    sentAt: day,
+                    stepId: step.id,
+                    disposition: .memory,
+                    entryId: "\(step.id)-photo-1"
+                )
+            )
             messages.append(
                 ChatMessage(
                     id: "memo-\(step.id)-after",

@@ -550,7 +550,18 @@ function stepFields(group: StepGroup, step: ExistingStep | undefined) {
   );
   // Comment on est arrivé : le premier transport que ses souvenirs nomment.
   const transport = group.entries.flatMap((entry) => entry.insights.transports)[0];
-  const photo = group.entries.find((entry) => entry.kind === "photo" && entry.cdnUrl);
+  // **La vignette : celle qu'on a élue d'abord** (T270, l'étoile verte), sinon
+  // la première photo de l'étape. L'élection vit sur l'étape
+  // (`memo_steps.coverEntryId`) et non ici : `photoUrl` est recalculée à
+  // chaque passage, une élection écrite dedans s'effacerait toute seule.
+  //
+  // La photo élue partie dans une autre étape ne se trouve plus parmi celles
+  // du groupe : l'élection automatique reprend, et la colonne attend son
+  // retour. C'est plus doux que de vider l'étoile dès qu'une photo bouge.
+  const elected = step?.coverEntryId
+    ? group.entries.find((entry) => entry.id === step.coverEntryId && entry.cdnUrl)
+    : undefined;
+  const photo = elected ?? group.entries.find((entry) => entry.kind === "photo" && entry.cdnUrl);
 
   const majorityPlace = mostCommon(
     group.entries.flatMap((entry) => {
