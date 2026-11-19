@@ -403,12 +403,78 @@ export interface SerializeThreadOptions {
 }
 
 /**
+ * Ce que ``currentSuggestionIds`` lit d'un message — **audité champ par champ
+ * le 19/11/2026**. Elle prenait le fil entier (`ChatMessageRow[]`) sans dire
+ * ce qu'elle en tirait, et c'est elle qui décide des puces affichées sous la
+ * conversation : se tromper ici met de mauvais boutons sous la main du
+ * voyageur.
+ *
+ * Elle lit quatre choses, et rien d'autre : l'auteur, la sorte de bulle, la
+ * présence et la relecture du souvenir d'une fiche, et les puces posées sous
+ * une bulle de MEMO. Ni le texte, ni le média, ni le compte de celui qui a
+ * parlé. Elle dépend en revanche de **l'ordre** : le fil lui arrive trié par
+ * `seq` croissant.
+ *
+ * C'est ce qui permet de relire le fil entier sans rien rattacher — voir
+ * `loadOutline` dans `routes/chat.ts`.
+ */
+export interface SuggestionsRow {
+  author: ChatMessageRow["author"];
+  kind: ChatMessageRow["kind"];
+  /**
+   * Le souvenir de cette bulle, **s'il existe encore**. La clé est posée
+   * `SetNull` : supprimer un souvenir laisse `entryId` nul, et `entryId` non
+   * nul vaut donc « le souvenir est là » (deux fiches sans souvenir en
+   * production le 19/11/2026 — la fiche disparaît de la réponse, et les puces
+   * l'enjambent).
+   */
+  entryId: string | null;
+  /** Ce souvenir a-t-il été relu ? Faux quand il n'y en a pas. */
+  isEntryValidated: boolean;
+  /**
+   * Les puces posées sous cette bulle — `payload.suggestions`, et rien d'autre
+   * du payload.
+   *
+   * Renseigné pour les bulles **où une puce peut vivre** : une bulle texte de
+   * MEMO. Vide partout ailleurs, parce que ``currentSuggestionIds`` ne le lit
+   * nulle part ailleurs — elle rend la main dès une bulle du voyageur et
+   * enjambe les autres sortes de bulles. (Vérifié aussi sur la production :
+   * aucune autre bulle ne porte `payload.suggestions`.)
+   */
+  suggestionIds: readonly string[];
+}
+
+/**
+ * Ce que la réponse du fil demande au fil **entier** : de quoi numéroter les
+ * fiches (``stepNumbersOf``) et de quoi choisir les puces
+ * (``currentSuggestionIds``). Rien de plus — c'est la liste qui rend le
+ * sondage léger.
+ */
+export type ThreadOutlineRow = Pick<ChatMessageRow, "id" | "seq"> & SuggestionsRow;
+
+/**
+ * La même lecture, d'une bulle déjà rattachée : à l'ouverture, le fil rendu
+ * *est* le fil entier, et il n'y a rien à relire. Les deux chemins passent par
+ * le même type, et un test tient qu'ils donnent les mêmes puces
+ * (`test/chat.test.ts`, « sonde sans rien rattacher »).
+ */
+export function suggestionsRowOf(message: ChatMessageRow): SuggestionsRow {
+  return {
+    author: message.author,
+    kind: message.kind,
+    entryId: message.entryId,
+    isEntryValidated: message.entry !== null && message.entry.validatedAt !== null,
+    suggestionIds: suggestionIdsOf(message.payload),
+  };
+}
+
+/**
  * Les puces à proposer : celles de la dernière bulle de MEMO ; sous une fiche
  * qui clôt le fil (un souvenir reconstruit), le trio de validation tant
  * qu'elle n'est pas relue, puis de quoi continuer ; rien pendant un tour en vol.
  */
 export function currentSuggestionIds(
-  messages: ChatMessageRow[],
+  messages: readonly SuggestionsRow[],
   turn: ChatTurnStatus,
   tripContext: TripContext | null,
 ): string[] {
@@ -427,19 +493,20 @@ export function currentSuggestionIds(
   // ressortir « Plus tard », qui ne referme pas le contexte.
   if (isGathering(tripContext)) {
     const last = [...messages].reverse().find((message) => message.author === "memo" && message.kind === "text");
-    return last ? suggestionIdsOf(last.payload) : [];
+    return last ? [...last.suggestionIds] : [];
   }
 
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]!;
     if (message.author === "traveller") return [...SUGGESTION_SETS.neutral];
     if (message.kind === "transcript") {
-      if (!message.entry) continue;
-      return message.entry.validatedAt ? [...SUGGESTION_SETS.afterAccept] : [...SUGGESTION_SETS.trio];
+      // Un souvenir supprimé : sa fiche n'est plus dans la réponse, les puces
+      // l'enjambent comme le sérialiseur.
+      if (message.entryId === null) continue;
+      return message.isEntryValidated ? [...SUGGESTION_SETS.afterAccept] : [...SUGGESTION_SETS.trio];
     }
     if (message.kind !== "text") continue;
-    const ids = suggestionIdsOf(message.payload);
-    if (ids.length > 0) return ids;
+    if (message.suggestionIds.length > 0) return [...message.suggestionIds];
   }
   return [...SUGGESTION_SETS.neutral];
 }
@@ -509,7 +576,9 @@ export function serializeChatThread(options: SerializeThreadOptions) {
       memberCount,
     },
     messages,
-    suggestions: serializeChatSuggestions(currentSuggestionIds(options.messages, options.turn, tripContext)),
+    suggestions: serializeChatSuggestions(
+      currentSuggestionIds(options.messages.map(suggestionsRowOf), options.turn, tripContext),
+    ),
     tripContext: serializeTripContext(tripContext),
     turn: options.turn,
     canClear: memo.ownerAccountId === viewer.id,
@@ -523,7 +592,13 @@ export function serializeChatThread(options: SerializeThreadOptions) {
 /** La suite du fil depuis `since` — ce que l'app sonde tant qu'un tour est en vol. */
 export function serializeChatUpdate(options: {
   memo: MemoForChat;
-  allMessages: ChatMessageRow[];
+  /**
+   * Le fil entier, en version légère : la numérotation des fiches et les puces
+   * se calculent sur **tout** le fil, jamais sur une page de messages. Rien
+   * n'y est rattaché — voir ``ThreadOutlineRow``.
+   */
+  allMessages: readonly ThreadOutlineRow[];
+  /** Les messages à rendre, eux, sont hydratés. */
   changed: ChatMessageRow[];
   viewer: Pick<Account, "id">;
   memoryCount: number;

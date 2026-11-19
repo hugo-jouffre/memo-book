@@ -17,6 +17,7 @@ import {
   SPLIT_NOT_FOUND,
   SPLIT_REFUSED,
   splitAccepted,
+  SUGGESTION_SETS,
   SUGGESTIONS,
   tooShort,
   PHOTOS_VALIDATED,
@@ -1403,6 +1404,102 @@ describe("le sondage et le plafond", () => {
     const cards = afterEdit.messages.filter((message) => message.body.kind === "transcript");
     expect(cards).toHaveLength(1);
     expect(cards[0]?.body.kind === "transcript" && cards[0].body.transcript.text).toBe("Ma version, au mot près.");
+  });
+
+  /**
+   * **Le sondage ne rattache plus tout l'historique** (19/11/2026) : il relit
+   * le fil entier en version légère et n'hydrate que les messages qu'il rend.
+   * Deux choses se calculent encore sur le fil entier — le numéro d'étape des
+   * fiches et les puces — et ce test les tient : un sondage doit rendre
+   * exactement ce qu'une ouverture rendrait au même instant.
+   */
+  it("sonde sans rien rattacher : mêmes puces et mêmes numéros d'étape qu'à l'ouverture", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await tellFromHome(memo.id, "La pluie sur les pavés du Trastevere.", "2026-09-21T09:00:00.000Z");
+    await readThread(memo.id);
+    const repere = (await readThread(memo.id)).now;
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await tellFromHome(memo.id, "Le marché de Campo de' Fiori à midi.", "2026-09-22T09:00:00.000Z");
+
+    const ouverture = await readThread(memo.id);
+    const sondage = await readThread(memo.id, owner.authorization, repere);
+
+    // La deuxième fiche est l'étape 2, et le sondage le sait aussi — c'est ce
+    // que le fil entier sert à calculer.
+    const titre = (thread: ChatThreadJson, index: number) => {
+      const cards = thread.messages.filter((message) => message.body.kind === "transcript");
+      const body = cards[index]?.body;
+      return body?.kind === "transcript" ? body.transcript.title : null;
+    };
+    expect(titre(ouverture, 1)).toBe("Retranscription étape 2");
+    expect(titre(sondage, 0)).toBe("Retranscription étape 2");
+
+    // Les puces aussi : la fiche clôt le fil, le trio de validation suit.
+    expect(ouverture.suggestions.map((suggestion) => suggestion.id)).toEqual([...SUGGESTION_SETS.trio]);
+    expect(sondage.suggestions).toEqual(ouverture.suggestions);
+
+    // Et une fois la fiche relue, les deux basculent ensemble.
+    const entry = await harness.prisma.entry.findFirstOrThrow({
+      where: { memoId: memo.id },
+      orderBy: { capturedAt: "desc" },
+    });
+    const avantValidation = (await readThread(memo.id)).now;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await harness.prisma.entry.update({ where: { id: entry.id }, data: { validatedAt: new Date() } });
+
+    const relue = await readThread(memo.id);
+    const sondageRelu = await readThread(memo.id, owner.authorization, avantValidation);
+    expect(relue.suggestions.map((suggestion) => suggestion.id)).toEqual([...SUGGESTION_SETS.afterAccept]);
+    expect(sondageRelu.suggestions).toEqual(relue.suggestions);
+    // La fiche revient sans qu'aucun message n'ait été écrit : c'est
+    // `entries.updatedAt` qui la ramène. Et il ramène **les deux bulles du
+    // souvenir** — celle du voyageur et la fiche de MEMO —, parce que toutes
+    // deux portent son `entryId` ; l'app remplace par identifiant, une bulle
+    // inchangée de plus ne coûte donc rien.
+    //
+    // ⚠️ Ce n'est pas la lecture légère qui l'introduit : ce même test échoue
+    // à l'identique sur le code d'avant (vérifié le 19/11/2026 en rejouant la
+    // route de `main`). La promesse de la PR est que la réponse ne bouge pas,
+    // et c'est **ça** qu'il faut tenir — d'où la paire, et son origine.
+    const paire = await harness.prisma.chatMessage.findMany({
+      where: { entryId: entry.id },
+      orderBy: { seq: "asc" },
+      select: { id: true },
+    });
+    expect(sondageRelu.messages.map((message) => message.body.kind)).toEqual(["text", "transcript"]);
+    expect(sondageRelu.messages.map((message) => message.id)).toEqual(paire.map((row) => row.id));
+  });
+
+  /**
+   * Le même garde-fou, mais pour les puces qui viennent du `payload` d'une
+   * bulle de MEMO : c'est le champ que le sondage ne lit plus de la même
+   * façon que l'ouverture, et celui où une divergence serait invisible.
+   */
+  it("sonde les mêmes puces que l'ouverture quand elles viennent d'une bulle de MEMO", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const avant = await readThread(memo.id);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await say(memo.id, "Une longue journée de marche dans les ruelles, pour commencer le voyage.");
+
+    const ouverture = await readThread(memo.id);
+    const sondage = await readThread(memo.id, owner.authorization, avant.now);
+    expect(ouverture.suggestions.length).toBeGreaterThan(0);
+    expect(sondage.suggestions).toEqual(ouverture.suggestions);
+
+    // Et pendant le contexte du voyage, où les puces sont celles de la
+    // dernière bulle de MEMO et rien d'autre.
+    await harness.prisma.memo.update({
+      where: { id: memo.id },
+      data: { tripContext: { status: "gathering", awaiting: "travellerCount", companions: [] } },
+    });
+    const repere = (await readThread(memo.id)).now;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await say(memo.id, "On est quatre, avec Fanny et les enfants.");
+
+    const contexte = await readThread(memo.id);
+    const sondageContexte = await readThread(memo.id, owner.authorization, repere);
+    expect(sondageContexte.suggestions).toEqual(contexte.suggestions);
   });
 
   it("ferme la porte à un script, pas à un voyageur : 150 tours par jour", async () => {

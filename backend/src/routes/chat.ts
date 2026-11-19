@@ -55,8 +55,10 @@ import {
   serializeChatReceipt,
   serializeChatThread,
   serializeChatUpdate,
+  suggestionIdsOf,
   type ChatTurnStatus,
   type MemoForChat,
+  type ThreadOutlineRow,
 } from "./chatSerializers.js";
 
 /**
@@ -141,6 +143,129 @@ async function loadMessages(context: AppContext, memoId: string): Promise<ChatMe
   });
 }
 
+/** Le fil entier sans rien rattacher, et de quoi dire ce qu'un sondage doit rendre. */
+interface ThreadOutline {
+  rows: ThreadOutlineRow[];
+  /**
+   * Les messages à rendre pour un sondage depuis `since` : ceux écrits depuis,
+   * et les fiches dont le souvenir a bougé — une transcription qui arrive
+   * n'écrit aucun message, c'est `entries.updatedAt` qui la fait revenir.
+   *
+   * **Le prédicat est celui d'avant, au caractère près.** Il ne se calcule
+   * plus sur le fil rattaché, mais sur cette lecture légère : c'est tout ce
+   * qui change. Et il se calcule sur **les mêmes lignes** que la numérotation
+   * des fiches et les puces, donc un message rendu a toujours son numéro
+   * d'étape — ce qu'une seconde requête, lue à un autre instant, ne
+   * garantirait pas.
+   */
+  changedSince(since: Date): string[];
+}
+
+/**
+ * Le fil entier **sans rien rattacher** : juste de quoi numéroter les fiches
+ * (``stepNumbersOf``), choisir les puces (``currentSuggestionIds``) et dire ce
+ * qui a changé.
+ *
+ * **Trois petites lectures en parallèle plutôt qu'une grosse.** Mesuré le
+ * 19/11/2026 depuis le worker de production, sur « 100 jours de miel »
+ * (200 messages), un même passage :
+ *
+ * - tout rattacher, ce que faisait la route : **1245 ms** ;
+ * - les colonnes du fil, payload compris : **1075 ms** — le payload porte la
+ *   forme d'onde des vocaux (`levels`), 166 Ko à lui seul pour 17 Ko utiles ;
+ * - les mêmes colonnes sans le payload : **175 ms**… et c'est le plancher :
+ *   chaque aller-retour vers la base en coûte 175 (Supabase, depuis Railway).
+ *
+ * D'où la forme : le payload ne se lit que là où une puce peut vivre — une
+ * bulle texte de MEMO —, et ce que la réponse sait des souvenirs (relu ?
+ * modifié ?) se lit d'un coup sur `entries`, au lieu de rattacher un souvenir
+ * à chacun des 200 messages.
+ *
+ * ⚠️ **Les absolus bougent beaucoup** : la même lecture « tout rattacher » a
+ * donné 725, 1245, 2264 et 2814 ms sur quatre passages dans l'heure — c'est
+ * tout l'historique qui passe sur le fil, et il passe quand il peut. Le
+ * sondage qui ne rapporte rien, lui, a donné 350, 353 et 354 ms : il ne
+ * dépend plus du poids du fil, et c'est ça qu'on est venu chercher.
+ */
+async function loadOutline(context: AppContext, memoId: string): Promise<ThreadOutline> {
+  const [messages, withSuggestions, entries] = await Promise.all([
+    context.prisma.chatMessage.findMany({
+      where: { memoId },
+      select: { id: true, seq: true, author: true, kind: true, entryId: true, createdAt: true },
+      orderBy: { seq: "asc" },
+    }),
+    context.prisma.chatMessage.findMany({
+      where: { memoId, author: "memo", kind: "text" },
+      select: { id: true, payload: true },
+    }),
+    context.prisma.entry.findMany({
+      where: { memoId },
+      select: { id: true, validatedAt: true, updatedAt: true },
+    }),
+  ]);
+
+  const suggestions = new Map(withSuggestions.map((row) => [row.id, suggestionIdsOf(row.payload)]));
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  // `entryId` non nul vaut « le souvenir est là » : la clé est posée
+  // `SetNull`. La ligne ne manquerait que si un souvenir disparaissait entre
+  // les deux lectures — il se lirait alors comme non relu, le temps d'un
+  // sondage.
+  const entryOf = (entryId: string | null) => (entryId !== null ? entryById.get(entryId) : undefined);
+
+  return {
+    rows: messages.map((message) => {
+      const entry = entryOf(message.entryId);
+      return {
+        id: message.id,
+        seq: message.seq,
+        author: message.author,
+        kind: message.kind,
+        entryId: message.entryId,
+        isEntryValidated: entry !== undefined && entry.validatedAt !== null,
+        suggestionIds: suggestions.get(message.id) ?? [],
+      };
+    }),
+    changedSince: (since) =>
+      messages
+        .filter((message) => {
+          const entry = entryOf(message.entryId);
+          return (
+            message.createdAt.getTime() > since.getTime() ||
+            (entry !== undefined && entry.updatedAt.getTime() > since.getTime())
+          );
+        })
+        .map((message) => message.id),
+  };
+}
+
+/**
+ * **Hydrater seulement ce qui est rendu.** Les deux formes de la réponse ne
+ * demandent pas les mêmes lectures : à l'ouverture, le fil rendu *est* le fil
+ * entier, et une seule lecture suffit — c'est celle d'avant. En sondage, la
+ * réponse ne rend presque jamais le moindre message : elle relit alors le fil
+ * entier sans rien rattacher (``loadOutline``) et n'hydrate que les messages
+ * changés — aucune lecture de plus quand il n'y en a pas, ce qui est le cas
+ * le plus courant.
+ */
+type ThreadReads =
+  | { kind: "thread"; messages: ChatMessageRow[] }
+  | { kind: "update"; outline: readonly ThreadOutlineRow[]; changed: ChatMessageRow[] };
+
+async function loadThreadReads(
+  context: AppContext,
+  memoId: string,
+  since: Date | null,
+): Promise<ThreadReads> {
+  if (!since) return { kind: "thread", messages: await loadMessages(context, memoId) };
+  const outline = await loadOutline(context, memoId);
+  return {
+    kind: "update",
+    outline: outline.rows,
+    changed: await loadRows(context, outline.changedSince(since)),
+  };
+}
+
+/** Des bulles précises, rattachées pour être rendues : un reçu de `POST`, un sondage. */
 async function loadRows(context: AppContext, ids: string[]): Promise<ChatMessageRow[]> {
   if (ids.length === 0) return [];
   const rows = await context.prisma.chatMessage.findMany({
@@ -366,6 +491,13 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
    * **La reconstruction se fait ici**, à chaque lecture : tout souvenir sans
    * message devient une bulle, l'ouverture d'abord si le fil est vide. Un
    * voyage raconté depuis l'accueil retrouve ses vocaux dans son fil.
+   *
+   * **Et elle n'hydrate que ce qu'elle rend** — ``loadThreadReads``. La
+   * réponse a besoin du fil entier pour deux choses seulement (numéroter les
+   * fiches, choisir les puces) ; rattacher le souvenir, son média et le compte
+   * de chaque message ne concerne que les bulles réellement rendues. Un
+   * sondage, qui ne rapporte presque jamais rien, ne paie donc plus
+   * l'hydratation de tout l'historique.
    */
   app.get("/v1/trips/:id/chat", async (request) => {
     const { id: memoId } = idParams.parse(request.params);
@@ -399,8 +531,9 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       await materializeEntriesWithoutMessages(tx, memo);
     });
 
-    const [messages, viewer, turn, memoryCount, readyRender, isUnlimited] = await Promise.all([
-      loadMessages(context, memoId),
+    const since = query.since ? new Date(query.since) : null;
+    const [reads, viewer, turn, memoryCount, readyRender, isUnlimited] = await Promise.all([
+      loadThreadReads(context, memoId, since),
       loadViewer(context, accountId),
       turnStatusOf(context, memoId, now),
       memoryCountOf(context, memoId),
@@ -411,17 +544,11 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     // compte d'abord.
     const dailyCredit = await readDailyCredit(context.prisma, { memoId, viewer, isUnlimited, now });
 
-    if (query.since) {
-      const since = new Date(query.since);
-      const changed = messages.filter(
-        (message) =>
-          message.createdAt.getTime() > since.getTime() ||
-          (message.entry !== null && message.entry.updatedAt.getTime() > since.getTime()),
-      );
+    if (reads.kind === "update") {
       return serializeChatUpdate({
         memo,
-        allMessages: messages,
-        changed,
+        allMessages: reads.outline,
+        changed: reads.changed,
         viewer,
         memoryCount,
         hasReadyRender: readyRender,
@@ -434,7 +561,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
 
     return serializeChatThread({
       memo,
-      messages,
+      messages: reads.messages,
       viewer,
       activeStep: activeStepOf(memo.steps, now),
       memoryCount,
