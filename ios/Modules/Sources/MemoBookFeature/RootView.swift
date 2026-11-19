@@ -87,6 +87,11 @@ public struct RootView: View {
     /// renverrait le voyageur sur son voyage dès qu'il en revient.
     @State private var aRepriseLeVoyage = false
 
+    /// **La demande d'avis** (T273) : la campagne vient du serveur, et elle
+    /// ne se demande qu'une fois par lancement — la demander compte comme un
+    /// affichage. Tenu ici parce que la modale appartient à l'accueil.
+    @State private var avis: FeedbackModel?
+
     /// Ce qui empêche d'aller là où on vient de demander à aller. Une alerte
     /// **sur l'accueil**, et non un écran poussé qui ne montrerait qu'une
     /// erreur : quand la destination n'existe pas, on ne quitte pas la page.
@@ -272,6 +277,29 @@ public struct RootView: View {
                     aRepriseLeVoyage = true
                     guard path.isEmpty, let voyage = visites.voyageAReprendre() else { return }
                     path = [.trip(id: voyage)]
+                }
+                // **La demande d'avis** (T273), sur l'accueil et une seule
+                // fois par lancement : la demander compte comme un affichage
+                // côté serveur, et c'est ce compteur qui borne le nombre de
+                // fois qu'on dérange quelqu'un.
+                //
+                // Après la reprise du voyage, pas avant : une modale posée
+                // sur l'accueil qu'on quitte dans la seconde se serait
+                // montrée pour rien.
+                .task {
+                    let model = avis ?? dependencies.feedbackModel()
+                    avis = model
+                    await model.askOnce()
+                }
+                .sheet(
+                    item: Binding(
+                        get: { avis?.campaign },
+                        // Refermée d'un glissé comme par la croix : dans les
+                        // deux cas, le serveur apprend qu'on l'a écartée.
+                        set: { if $0 == nil { avis?.dismiss() } }
+                    )
+                ) { campaign in
+                    if let avis { FeedbackSheet(campaign: campaign, model: avis) }
                 }
                 // Le vocal en route vers la conversation ne vit que le temps
                 // de celle-ci : refermer le fil le jette.
