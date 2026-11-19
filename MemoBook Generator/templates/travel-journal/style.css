@@ -427,7 +427,8 @@ li { margin: 0; }
    titre n'avait donc que sa taille pour se distinguer, et 15 pt contre 12
    font un rapport de 1,25 — sous le pas d'une gamme typographique, où un cran
    se lit à partir de ~1,33 (Hugo, 05/11/2026 : « les titres ne se distinguent
-   pas assez du corps du texte »). Il passe à 1,45.
+   pas assez du corps du texte »). Il passe à **1,35**, et ce chiffre a un
+   plafond : la largeur de la colonne.
 
    La taille est le SEUL levier, et ce n'est pas faute d'avoir essayé les
    autres :
@@ -445,8 +446,27 @@ li { margin: 0; }
    - **L'encre est déjà prise.** Le noir distingue l'intro des journées
      (`--black-title` contre `--ink-title`) : y passer les titres de journée
      effacerait cette distinction-là.
-   - **L'approche ne peut pas s'élargir.** Le titre doit tenir sur UNE ligne,
-     sinon le bloc ne pèse plus deux interlignes et la réglure dérive. */
+   - **La largeur est le vrai plafond.** Mesuré sur les références visuelles —
+     et il faut les mesurer **là**, car le rendu de macOS est plus étroit que
+     celui de l'image Playwright, qui est aussi le moteur d'APITemplate. Le
+     rapport au-delà duquel chaque titre passe à la ligne :
+
+     | titre | rapport maximal |
+     |---|---|
+     | « Direction les Philippines » | 2,37 |
+     | « Jour 3 – Guatapé en couleurs » | 2,21 |
+     | « Jour 2 – Monserrate et vues sur la ville » | 1,46 |
+     | « 36 heures plus tard, me voilà aux Philippines » | **1,37** |
+
+     1,45 faisait donc passer les deux derniers à la ligne. 1,35 les garde
+     tous sur une, et reste au-dessus du cran de 1,33.
+
+   Un titre plus long passera quand même à la ligne, et ce n'est pas grave :
+   le bloc pèse alors TROIS interlignes au lieu de deux — un compte entier, la
+   réglure ne dérive pas. Il perd seulement une ligne de récit. La vraie
+   réponse à ces titres-là est en amont : la rédaction en demande « trois à
+   six mots », et « 36 heures plus tard, me voilà aux Philippines » en fait
+   huit. */
 .mb-note__title {
   display: block;
   margin: 0;
@@ -458,7 +478,7 @@ li { margin: 0; }
      `page--ample`, et le rapport tient sur les trois densités. En dur à 15 pt,
      il valait 1,36 fois le corps serré et 1,15 fois le corps ample — le cran
      se refermait précisément là où la page est déjà dense. */
-  --mb-note-title-size: calc(var(--mb-body-size) * 1.45);
+  --mb-note-title-size: calc(var(--mb-body-size) * 1.35);
   font-size: var(--mb-note-title-size);
   line-height: var(--mb-line);     /* un interligne pile, comme le corps */
   letter-spacing: 0.01em;
