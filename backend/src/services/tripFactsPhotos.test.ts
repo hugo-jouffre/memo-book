@@ -17,7 +17,13 @@ const BASE = "https://api.memo-book.com";
 const UUID = "0b3f7c2e-9a41-4d8b-bc10-5e6f7a8b9c0d";
 
 /** Un souvenir, daté à la minute près pour que l'ordre se lise d'un coup d'œil. */
-function entry(id: string, kind: "audio" | "text" | "photo", minute: number, stepId: string | null = null) {
+function entry(
+  id: string,
+  kind: "audio" | "text" | "photo",
+  minute: number,
+  stepId: string | null = null,
+  pinnedStepId: string | null = null,
+) {
   const at = new Date(Date.UTC(2026, 9, 29, 10, minute));
   return {
     id,
@@ -28,6 +34,7 @@ function entry(id: string, kind: "audio" | "text" | "photo", minute: number, ste
     insights: EMPTY_INSIGHTS,
     cdnUrl: null,
     continuesPrevious: false,
+    pinnedStepId,
   };
 }
 

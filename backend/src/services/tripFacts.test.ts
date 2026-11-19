@@ -17,7 +17,10 @@ import { EMPTY_INSIGHTS } from "./redaction.js";
 let clock = 0;
 
 /** Un souvenir raconté, dans l'ordre où il a été vécu. */
-function story(id: string, options: { continues?: boolean; place?: string } = {}) {
+function story(
+  id: string,
+  options: { continues?: boolean; place?: string; pinnedStepId?: string; stepId?: string } = {},
+) {
   clock += 1;
   const at = new Date(Date.UTC(2026, 0, 1, clock));
   return {
@@ -25,10 +28,11 @@ function story(id: string, options: { continues?: boolean; place?: string } = {}
     kind: "audio" as const,
     capturedAt: at,
     createdAt: at,
-    stepId: null,
+    stepId: options.stepId ?? null,
     insights: { ...EMPTY_INSIGHTS, ...(options.place ? { currentPlace: options.place } : {}) },
     cdnUrl: null,
     continuesPrevious: options.continues ?? false,
+    pinnedStepId: options.pinnedStepId ?? null,
   };
 }
 
@@ -45,6 +49,7 @@ function photo(id: string) {
     insights: EMPTY_INSIGHTS,
     cdnUrl: null,
     continuesPrevious: false,
+    pinnedStepId: null,
   };
 }
 
@@ -102,5 +107,51 @@ describe("sauf quand un récit prolonge le précédent (28/10/2026)", () => {
   it("une photo rejoint l'étape réunie, pas une étape à elle", () => {
     const groups = groupIntoSteps([story("un"), story("deux", { continues: true }), photo("p")]);
     expect(shape(groups)).toEqual([["un", "deux", "p"]]);
+  });
+});
+
+/**
+ * **Un récit déplacé à la main** — « Déplacer dans une autre étape » (T270).
+ *
+ * `entries.pinnedStepId` passe devant tout le reste : la date, le lieu, et
+ * « ça prolonge le précédent ». Sans ça, le découpage rendrait le récit à son
+ * étape d'origine au premier recalcul, **sans rien dire** — c'est pour ça que
+ * la première moitié de T270 ne déplaçait que des photos.
+ */
+describe("un récit déplacé à la main", () => {
+  it("rejoint le groupe de l'étape où on l'a mis", () => {
+    const cible = story("cible", { stepId: "etape-2" });
+    const groups = groupIntoSteps([story("un"), cible, story("venu", { pinnedStepId: "etape-2" })]);
+
+    expect(shape(groups)).toEqual([["un"], ["cible", "venu"]]);
+  });
+
+  it("n'ouvre pas son étape à lui, même s'il a été vécu ailleurs", () => {
+    const cible = story("cible", { stepId: "etape-2" });
+    // Le récit déplacé est le **premier** vécu : sans l'épingle, il ouvrirait
+    // la première étape.
+    const groups = groupIntoSteps([story("venu", { pinnedStepId: "etape-2" }), cible]);
+
+    expect(shape(groups)).toEqual([["cible", "venu"]]);
+  });
+
+  it("ouvre l'étape visée quand plus aucun récit ne la porte", () => {
+    // L'étape d'arrivée n'a que des photos : le récit qui arrive l'ouvre au
+    // lieu de disparaître.
+    const groups = groupIntoSteps([story("ailleurs"), story("venu", { pinnedStepId: "etape-photos" })]);
+
+    expect(shape(groups)).toEqual([["ailleurs"], ["venu"]]);
+    expect(groups[1]?.stepId).toBe("etape-photos");
+  });
+
+  it("l'épingle passe devant « ça prolonge le précédent »", () => {
+    const cible = story("cible", { stepId: "etape-2" });
+    const groups = groupIntoSteps([
+      story("un"),
+      cible,
+      story("venu", { continues: true, pinnedStepId: "etape-2" }),
+    ]);
+
+    expect(shape(groups)).toEqual([["un"], ["cible", "venu"]]);
   });
 });

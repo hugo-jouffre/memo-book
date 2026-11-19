@@ -567,18 +567,31 @@ l'utilisateur connaît de ses autres messageries. Les mêmes gestes passent par 
 |---|---|---|
 | Copier | Celles qui ont un texte — un message, une réponse de MEMO, une fiche | Le presse-papiers, comme la commande à côté de la bulle |
 | Partager | Un texte, ou des photos | La feuille du système. Les photos partent **à leur taille d'écran**, pas en vignette du fil |
-| Déplacer dans une autre étape | **Des photos seulement**, arrivées, et s'il existe une autre étape | `POST /v1/trips/:id/chat/:messageId/step` |
+| Déplacer dans une autre étape | Un souvenir qu'on a dit soi-même — récit, vocal, photos —, arrivé, et s'il existe une autre étape | `POST /v1/trips/:id/chat/:messageId/step` |
 | Supprimer | Une bulle qui **est** un souvenir, arrivée | `DELETE /v1/entries/:id`, après confirmation |
 
-⚠️ **« Déplacer » ne vaut que pour les photos, et ce n'est pas une facilité.**
+⚠️ **Deux épingles, parce qu'il y a deux façons d'appartenir à une étape.**
 L'étape d'un récit se *calcule* — sa date, son lieu, le fait qu'il prolonge le
 précédent (`services/tripFacts.ts`) —, et le prochain recalcul la reprendrait :
 écrire l'étape à la main sur un récit serait un déplacement qui se défait tout
-seul, sans rien dire. Une photo, elle, a déjà son épingle : l'étape de **sa
-bulle** (`pinnedSteps`), que le découpage respecte. Déplacer un récit demande
-une colonne qui porte le geste, comme `entries.separatedByTraveller` pour
-« Séparer ces récits » — c'est le second temps de T270, avec les deux « photo
-principale » (étape et voyage), qui sont des colonnes avant d'être des étoiles.
+seul, sans rien dire. Une photo, elle, a toujours eu son épingle : l'étape de
+**sa bulle** (`pinnedSteps`), que le découpage respecte.
+
+D'où `entries.pinnedStepId` (19/11/2026), qui porte le geste pour un récit et
+passe devant tout le découpage, `continuesPreviousStep` compris — la main
+l'emporte sur la machine, comme `separatedByTraveller` pour « Séparer ces
+récits ». Le récit déplacé **rejoint le groupe** de son étape d'arrivée au lieu
+d'ouvrir la sienne ; si plus aucun récit ne porte cette étape (elle n'avait que
+des photos), il l'ouvre pour elle, et lui donne son lieu.
+
+**Ce qui ne se déplace pas** : la fiche de MEMO, qui parle du souvenir sans
+être la bulle qui l'a apporté ; une **précision** — « en fait c'était mardi » —,
+qui vise la fiche d'un autre souvenir ; une puce ; le contexte du voyage. Un
+texte envoyé dans le fil est d'ailleurs classé précision le plus souvent : le
+menu ne le propose donc pas.
+
+Restent les deux « photo principale » (étape et voyage), qui sont des colonnes
+avant d'être des étoiles — le dernier tiers de T270.
 
 **Le sujet est la bulle, pas la photo.** Six photos envoyées ensemble partagent
 un message, et c'est lui qui porte l'étape : elles partent ensemble, et la

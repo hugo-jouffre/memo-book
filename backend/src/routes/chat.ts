@@ -1131,22 +1131,25 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
   });
 
   /**
-   * **« Déplacer dans une autre étape »** — l'appui long sur une bulle de
-   * photos (T270).
+   * **« Déplacer dans une autre étape »** — l'appui long sur une bulle (T270).
    *
    * Le sujet est **la bulle**, pas la photo : six photos envoyées ensemble
    * partagent un message, et c'est ce message qui porte l'étape choisie. On
    * appuie sur une bulle, elle part entière.
    *
-   * ⚠️ **Les photos seulement, et ce n'est pas une facilité.** L'étape d'un
-   * récit se *calcule* — sa date, son lieu, le fait qu'il prolonge le
-   * précédent (`services/tripFacts.ts`) —, et le prochain recalcul la
-   * reprendrait : écrire `entries.stepId` à la main sur un récit serait un
-   * déplacement qui se défait tout seul, sans rien dire. Une photo, elle, a
-   * déjà son épingle : `pinnedSteps` fait passer l'étape de sa bulle devant le
-   * découpage. Déplacer un récit demande une colonne qui porte le geste,
-   * comme `entries.separatedByTraveller` pour « Séparer ces récits » — c'est
-   * le second temps de T270.
+   * **Deux épingles, parce qu'il y a deux façons d'appartenir à une étape** :
+   *
+   * - une **photo** suit l'étape de sa bulle (`chat_messages.stepId`), que
+   *   `pinnedSteps` fait déjà passer devant le découpage ;
+   * - un **récit** reçoit `entries.pinnedStepId` (19/11/2026). Sans cette
+   *   colonne, écrire `entries.stepId` à la main se déferait au prochain
+   *   recalcul **sans rien dire** : l'étape d'un récit se *calcule* — sa date,
+   *   son lieu, le récit qu'il prolonge (`services/tripFacts.ts`). La main
+   *   l'emporte sur la machine, comme `separatedByTraveller` sur
+   *   `continuesPreviousStep`.
+   *
+   * Ce qui n'est pas un souvenir ne se déplace pas : une bulle de MEMO, une
+   * puce, une précision n'ont pas d'étape à eux.
    *
    * Un co-voyageur déplace comme le propriétaire : il raconte comme lui.
    */
@@ -1161,11 +1164,26 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
 
     const message = await context.prisma.chatMessage.findFirst({
       where: { id: messageId, memoId },
-      select: { id: true, author: true, kind: true, entryId: true, payload: true },
+      select: { id: true, author: true, kind: true, entryId: true, payload: true, disposition: true },
     });
     if (!message) throw HttpError.notFound("Message introuvable.");
-    if (message.author !== "traveller" || message.kind !== "photos") {
-      throw HttpError.badRequest("Seules des photos se déplacent d'une étape à l'autre.");
+    const isPhotos = message.kind === "photos";
+    // Un récit : la bulle du voyageur qui porte son souvenir. Une précision,
+    // une puce, un vocal du contexte du voyage n'en portent pas.
+    // Un récit : la bulle porte **son** souvenir. `disposition` nulle compte
+    // comme un récit — un texte libre n'en reçoit une qu'une fois classé par
+    // le job (`chat.ts`, création de la bulle) —, mais une précision, une
+    // puce ou le contexte du voyage sont nommément écartés : ils pointent
+    // vers la fiche d'un autre souvenir sans en être un.
+    const isStory =
+      (message.kind === "voice" || message.kind === "text") &&
+      message.entryId !== null &&
+      message.disposition !== "context" &&
+      message.disposition !== "command" &&
+      message.disposition !== "trip_context" &&
+      contextVoiceOf(message.payload) === null;
+    if (message.author !== "traveller" || !(isPhotos || isStory)) {
+      throw HttpError.badRequest("Seul un souvenir se déplace d'une étape à l'autre.");
     }
 
     const step = await context.prisma.memoStep.findFirst({
@@ -1185,12 +1203,19 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
 
     await context.prisma.$transaction(async (tx) => {
       await lockThread(tx, memoId);
-      // L'épingle, qui tiendra au recalcul…
+      // L'épingle d'une photo : l'étape de sa bulle.
       await tx.chatMessage.update({ where: { id: message.id }, data: { stepId } });
-      // …et l'étape du souvenir lui-même, pour que la réponse suivante le
-      // range au bon endroit sans attendre le recalcul.
       if (ids.size > 0) {
-        await tx.entry.updateMany({ where: { id: { in: [...ids] }, memoId }, data: { stepId } });
+        await tx.entry.updateMany({
+          where: { id: { in: [...ids] }, memoId },
+          data: {
+            // L'étape du souvenir, pour que la réponse suivante le range au
+            // bon endroit sans attendre le recalcul…
+            stepId,
+            // …et, pour un récit, l'épingle qui tiendra **au** recalcul.
+            ...(isStory ? { pinnedStepId: stepId } : {}),
+          },
+        });
       }
     });
 
