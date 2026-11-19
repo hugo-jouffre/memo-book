@@ -1452,8 +1452,23 @@ describe("le sondage et le plafond", () => {
     const sondageRelu = await readThread(memo.id, owner.authorization, avantValidation);
     expect(relue.suggestions.map((suggestion) => suggestion.id)).toEqual([...SUGGESTION_SETS.afterAccept]);
     expect(sondageRelu.suggestions).toEqual(relue.suggestions);
-    // La fiche revient sans qu'aucun message n'ait été écrit : `entries.updatedAt`.
-    expect(sondageRelu.messages.map((message) => message.body.kind)).toEqual(["transcript"]);
+    // La fiche revient sans qu'aucun message n'ait été écrit : c'est
+    // `entries.updatedAt` qui la ramène. Et il ramène **les deux bulles du
+    // souvenir** — celle du voyageur et la fiche de MEMO —, parce que toutes
+    // deux portent son `entryId` ; l'app remplace par identifiant, une bulle
+    // inchangée de plus ne coûte donc rien.
+    //
+    // ⚠️ Ce n'est pas la lecture légère qui l'introduit : ce même test échoue
+    // à l'identique sur le code d'avant (vérifié le 19/11/2026 en rejouant la
+    // route de `main`). La promesse de la PR est que la réponse ne bouge pas,
+    // et c'est **ça** qu'il faut tenir — d'où la paire, et son origine.
+    const paire = await harness.prisma.chatMessage.findMany({
+      where: { entryId: entry.id },
+      orderBy: { seq: "asc" },
+      select: { id: true },
+    });
+    expect(sondageRelu.messages.map((message) => message.body.kind)).toEqual(["text", "transcript"]);
+    expect(sondageRelu.messages.map((message) => message.id)).toEqual(paire.map((row) => row.id));
   });
 
   /**
