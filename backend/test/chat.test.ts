@@ -1819,18 +1819,47 @@ describe("le menu d'une bulle", () => {
   });
 
   /**
-   * **Un récit ne se déplace pas encore**, et le refus est explicite : son
-   * étape se calcule (date, lieu, `continuesPrevious`), et une étape écrite à
-   * la main se déferait au prochain recalcul. Le second temps de T270 lui
-   * donnera une colonne, comme `separatedByTraveller`.
+   * **Un récit se déplace aussi** (19/11/2026) — et c'est `entries.pinnedStepId`
+   * qui le permet. Le test ne prouve rien tant qu'il n'a pas relancé
+   * `refreshTripFacts` : sans l'épingle, le découpage rendrait le récit à son
+   * étape d'origine, d'après sa date et son lieu, sans rien dire.
    */
-  it("refuse de déplacer un récit", async () => {
-    const { memo, target } = await seedTwoStepTrip();
-    const { id } = await say(memo.id, "Et le soir, une terrasse place Navone.");
+  it("déplace un récit, et l'épingle tient au recalcul", async () => {
+    const { memo, target, messageId: photosId } = await seedTwoStepTrip();
+
+    // Le récit de la **première** étape : la bulle du voyageur que la lecture
+    // du fil a reposée depuis son souvenir. Pas un texte envoyé ici — celui-là
+    // serait classé « précision » et viserait la fiche d'un autre souvenir.
+    const thread = await readThread(memo.id);
+    const story = thread.messages.find(
+      (message) => message.author === "traveller" && message.body.kind === "text" && message.id !== photosId,
+    );
+    expect(story).toBeDefined();
+    const id = story!.id;
 
     const response = await move(memo.id, id, target.id);
+    expect(response.statusCode).toBe(204);
+
+    await refreshTripFacts(harness.prisma, memo.id);
+
+    const message = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+    const entry = await harness.prisma.entry.findUniqueOrThrow({
+      where: { id: message.entryId ?? "" },
+    });
+    expect(entry.pinnedStepId).toBe(target.id);
+    expect(entry.stepId).toBe(target.id);
+  });
+
+  /** Une bulle de MEMO n'est pas un souvenir : elle n'a pas d'étape à elle. */
+  it("refuse de déplacer ce qui n'est pas un souvenir", async () => {
+    const { memo, target } = await seedTwoStepTrip();
+    const thread = await readThread(memo.id);
+    const fromMemo = thread.messages.find((message) => message.author === "memo");
+    expect(fromMemo).toBeDefined();
+
+    const response = await move(memo.id, fromMemo!.id, target.id);
     expect(response.statusCode).toBe(400);
-    expect(response.json<{ message: string }>().message).toContain("photos");
+    expect(response.json<{ message: string }>().message).toContain("souvenir");
   });
 
   it("refuse une étape qui n'est pas celle de ce voyage", async () => {

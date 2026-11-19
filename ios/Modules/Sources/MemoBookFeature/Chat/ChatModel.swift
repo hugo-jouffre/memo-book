@@ -2038,15 +2038,17 @@ public final class ChatModel {
 
     /// « Déplacer dans une autre étape » se propose-t-il ?
     ///
-    /// Les photos seulement, et le serveur le tient aussi : l'étape d'un récit
-    /// se calcule — sa date, son lieu, le récit qu'il prolonge — et une étape
-    /// écrite à la main se déferait au recalcul suivant. Le second temps de
-    /// T270 lui donnera une colonne qui porte le geste.
+    /// **Ce qu'on a dit soi-même, et qui est un souvenir** : un récit, un
+    /// vocal, des photos. Pas la fiche de MEMO, qui parle du souvenir sans
+    /// être la bulle qui l'a apporté — le serveur la refuserait. Pas une
+    /// précision non plus : « en fait c'était mardi » vise la fiche d'un autre
+    /// souvenir, elle n'a pas d'étape à elle (``memories(of:)`` les écarte).
     ///
     /// Et il faut une **autre** étape où aller : un voyage d'une seule étape
     /// n'offre pas un menu qui ne mène qu'à elle-même.
     public func canMove(_ message: ChatMessage) -> Bool {
-        guard case .photos = message.body, message.delivery == .sent else { return false }
+        guard message.author.isTraveller, message.delivery == .sent else { return false }
+        guard !memories(of: message).isEmpty else { return false }
         return !destinations(for: message).isEmpty
     }
 

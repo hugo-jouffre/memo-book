@@ -137,14 +137,36 @@ final class ChatMessageMenuTests: XCTestCase {
         XCTAssertEqual(model.memories(of: model.messages[0]), ["entry-1"])
     }
 
-    /// Un récit ne se déplace pas : son étape se calcule, et le serveur le
-    /// refuse. Le menu ne le propose donc pas.
-    func testSeulesLesPhotosSeDeplacent() async {
-        let model = ChatModel(transport: transport(Script(thread: thread(messages: [saidText(), photos()]))))
+    /// Un souvenir se déplace — récit comme photos. Une précision, non : elle
+    /// vise la fiche d'un autre souvenir et n'a pas d'étape à elle, ce que le
+    /// serveur refuse aussi.
+    func testUnSouvenirSeDeplaceMaisPasUnePrecision() async {
+        let messages = [saidText(), photos(), saidText("bulle-precision", disposition: .context)]
+        let model = ChatModel(transport: transport(Script(thread: thread(messages: messages))))
         await model.load()
 
-        XCTAssertFalse(model.canMove(model.messages[0]), "Un récit, non.")
-        XCTAssertTrue(model.canMove(model.messages[1]), "Des photos, oui.")
+        XCTAssertTrue(model.canMove(model.messages[0]), "Un récit, oui.")
+        XCTAssertTrue(model.canMove(model.messages[1]), "Des photos, aussi.")
+        XCTAssertFalse(model.canMove(model.messages[2]), "Une précision, non.")
+    }
+
+    /// La fiche de MEMO parle du souvenir sans être la bulle qui l'a apporté :
+    /// elle se supprime, elle ne se déplace pas — le serveur n'accepte que
+    /// les bulles du voyageur.
+    func testLaFicheNeSeDeplacePas() async {
+        let card = ChatMessage(
+            id: "fiche-1",
+            author: .memo,
+            body: .transcript(TranscriptCard(title: "Retranscription étape 1", capturedAt: .now, text: "Le Janicule.", entryId: "entry-1", phase: .ready)),
+            sentAt: .now,
+            stepId: "step-1",
+            seq: 2
+        )
+        let model = ChatModel(transport: transport(Script(thread: thread(messages: [card]))))
+        await model.load()
+
+        XCTAssertTrue(model.canDelete(model.messages[0]))
+        XCTAssertFalse(model.canMove(model.messages[0]))
     }
 
     /// Un voyage d'une seule étape n'offre pas un déplacement qui ne mène

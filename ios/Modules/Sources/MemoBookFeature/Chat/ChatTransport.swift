@@ -255,7 +255,8 @@ public struct ChatTransport: Sendable {
 
     /// **« Déplacer dans une autre étape »** (T270) —
     /// `POST /v1/trips/:id/chat/:messageId/step`. Le sujet est la bulle : des
-    /// photos envoyées ensemble s'en vont ensemble.
+    /// photos envoyées ensemble s'en vont ensemble. Un souvenir seulement,
+    /// récit compris depuis le 19/11/2026 (`entries.pinnedStepId`).
     public var moveMessage: @Sendable (_ messageId: String, _ stepId: String) async throws -> Void
 
     public init(

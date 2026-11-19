@@ -73,6 +73,13 @@ interface FactEntry {
    * les a séparés depuis la carte (`separatedByTraveller`), qui passe devant.
    */
   continuesPrevious: boolean;
+
+  /**
+   * **L'étape où le voyageur a mis ce récit lui-même** (T270) — « Déplacer
+   * dans une autre étape ». Nulle d'ordinaire ; renseignée, elle passe devant
+   * tout le découpage, `continuesPrevious` compris.
+   */
+  pinnedStepId: string | null;
 }
 
 /** Un groupe de souvenirs qui deviendra une étape. */
@@ -179,10 +186,18 @@ export function groupIntoSteps(
   const stories: StepGroup[] = [];
   const storyOf = new Map<string, StepGroup>();
   const photos: FactEntry[] = [];
+  // Les récits que le voyageur a déplacés lui-même. Mis de côté au premier
+  // passage : leur étape d'arrivée n'existe peut-être pas encore comme
+  // groupe, et ils ne doivent surtout pas ouvrir la leur.
+  const moved: FactEntry[] = [];
 
   for (const entry of entries) {
     if (entry.kind === "photo") {
       photos.push(entry);
+      continue;
+    }
+    if (entry.pinnedStepId) {
+      moved.push(entry);
       continue;
     }
     // Prolonger le précédent, c'est le rejoindre : son groupe grandit, et
@@ -200,8 +215,31 @@ export function groupIntoSteps(
     storyOf.set(entry.id, group);
   }
 
-  // Une étape choisie qui n'a plus son récit (effacé) garde ses photos.
+  // Une étape choisie qui n'a plus son récit (effacé) garde ses photos — et
+  // elle accueille aussi les récits qu'on y a déplacés.
   const pinnedOnly = new Map<string, StepGroup>();
+
+  // **Les récits déplacés à la main** (T270) : ils rejoignent le groupe de
+  // leur étape d'arrivée, exactement comme une photo épinglée. Si plus aucun
+  // récit ne porte cette étape, elle s'ouvre pour eux — sans quoi déplacer le
+  // dernier récit d'une étape vers une étape de photos la ferait disparaître
+  // sous les doigts.
+  for (const entry of moved) {
+    const pin = entry.pinnedStepId!;
+    const story = stories.find((group) => group.entries[0]?.stepId === pin);
+    if (story) {
+      story.entries.push(entry);
+      storyOf.set(entry.id, story);
+      continue;
+    }
+    const group = pinnedOnly.get(pin) ?? { place: null, entries: [], stepId: pin, pinned: true };
+    group.entries.push(entry);
+    // Le lieu du groupe est celui du premier récit qui l'ouvre : une étape
+    // faite de photos n'en avait pas, celui qui arrive le lui donne.
+    group.place ??= placeOf(entry);
+    pinnedOnly.set(pin, group);
+    storyOf.set(entry.id, group);
+  }
   const loose: FactEntry[] = [];
 
   for (const photo of photos) {
@@ -322,6 +360,7 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
           insights: true,
           continuesPreviousStep: true,
           separatedByTraveller: true,
+          pinnedStepId: true,
           media: { select: { cdnUrl: true } },
         },
       });
@@ -335,6 +374,7 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
         cdnUrl: row.media?.cdnUrl ?? null,
         // La main l'emporte sur la machine, comme partout ici.
         continuesPrevious: row.continuesPreviousStep && !row.separatedByTraveller,
+        pinnedStepId: row.pinnedStepId,
       }));
 
       const before = [...memo.steps].sort((a, b) => b.number - a.number)[0] ?? null;

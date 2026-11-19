@@ -1115,8 +1115,12 @@ model MemoStep {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries      Entry[]
+  entries      Entry[]       @relation("EntryStep")
   chatMessages ChatMessage[]
+
+  /// Les récits que le voyageur a **mis ici lui-même** — « Déplacer dans une
+  /// autre étape » (T270). Voir `Entry.pinnedStepId`.
+  pinnedEntries Entry[] @relation("EntryPinnedStep")
 
   @@unique([memoId, number])
   @@index([memoId, startDate])
@@ -1355,7 +1359,26 @@ model Entry {
   /// sont pas posées : le regroupement par journée reste alors celui de
   /// `capturedAt`.
   stepId String?
-  step   MemoStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  step   MemoStep? @relation("EntryStep", fields: [stepId], references: [id], onDelete: SetNull)
+
+  /// **L'étape où le voyageur a mis ce souvenir lui-même** (T270) —
+  /// « Déplacer dans une autre étape », depuis le menu d'un appui long.
+  ///
+  /// Nulle d'ordinaire, et c'est le cas courant : l'étape d'un récit se
+  /// **calcule** (`services/tripFacts.ts` — sa date, son lieu, le récit qu'il
+  /// prolonge). Renseignée, elle passe devant le découpage, comme
+  /// `separatedByTraveller` passe devant `continuesPreviousStep` : la main
+  /// l'emporte sur la machine.
+  ///
+  /// Sans cette colonne, écrire `stepId` à la main se déferait au prochain
+  /// recalcul, **sans rien dire** — c'est précisément pourquoi la première
+  /// moitié de T270 (PR 229) ne déplaçait que des photos, qui ont leur
+  /// épingle à elles (l'étape de leur bulle, `pinnedSteps`).
+  ///
+  /// `SetNull` : l'étape effacée, le souvenir retourne au découpage plutôt
+  /// que de partir avec elle.
+  pinnedStepId String?
+  pinnedStep   MemoStep? @relation("EntryPinnedStep", fields: [pinnedStepId], references: [id], onDelete: SetNull)
 
   /// Les tours de conversation qui parlent de ce souvenir : celui qui l'a
   /// créé, ses précisions, et sa fiche. Voir `ChatMessage.entryId`.
@@ -1370,6 +1393,7 @@ model Entry {
   // ouverture.
   @@index([memoId, photoIsLandscape, capturedAt])
   @@index([stepId])
+  @@index([pinnedStepId])
   @@map("entries")
 }
 
