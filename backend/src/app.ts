@@ -27,6 +27,7 @@ import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
 import { registerAvatarRoutes, registerProfileRoutes } from "./routes/profile.js";
 import { registerStepRoutes } from "./routes/steps.js";
 import { registerSupportRoutes } from "./routes/support.js";
+import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { configureAvatarUrls } from "./services/avatars.js";
 import { isValidTimeZone } from "./services/localCalendar.js";
 import { registerRenderRoutes } from "./routes/renders.js";
@@ -212,6 +213,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerPaymentMethodRoutes(accountRoutes, context);
     registerNotificationRoutes(accountRoutes, context);
     registerSupportRoutes(accountRoutes, context);
+    registerFeedbackRoutes(accountRoutes, context);
   });
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.

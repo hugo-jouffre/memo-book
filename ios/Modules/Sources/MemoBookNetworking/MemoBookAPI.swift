@@ -124,6 +124,18 @@ public protocol MemoBookAPI: Sendable {
     /// sont fermées ; la sienne reste.
     func changePassword(current: String, new: String) async throws
 
+    /// **La demande d'avis à montrer**, s'il y en a une pour ce compte —
+    /// `GET /v1/feedback-campaign` (T273). `nil` est la réponse la plus
+    /// fréquente, et c'est bien.
+    ///
+    /// ⚠️ La lire **compte comme un affichage** côté serveur : ne l'appeler
+    /// que là où la modale paraîtra vraiment.
+    func feedbackCampaign() async throws -> FeedbackCampaign?
+
+    /// Ce qu'on a fait de la modale — répondu, ou fermé —
+    /// `POST /v1/feedback-campaigns/:id/response`.
+    func sendFeedbackResponse(campaignId: String, response: FeedbackResponse) async throws
+
     /// Écrit à l'équipe — `POST /v1/support/messages` (T226). Ne rend rien
     /// d'utile à l'écran : « envoyé » se dit **après** la réponse.
     /// `429 support_rate_limited` au-delà de vingt messages en 24 h.
