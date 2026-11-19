@@ -502,6 +502,12 @@ public actor PreviewAPI: MemoBookAPI {
     public func deleteEntry(id: String) async throws {
         try SandboxNetwork.failIfOffline()
         deletedEntryIds.insert(id)
+        // **Et les bulles qui le montraient** (T270), comme le serveur
+        // (`services/deletion.ts`, `forgetBubblesOf`) : sans ça, « Supprimer »
+        // dans le menu d'un appui long faisait disparaître la bulle, puis la
+        // relecture du fil la ramenait — un geste qui a l'air cassé dans le
+        // bac à sable alors qu'il marche en vrai.
+        await chat.forget(entryId: id)
     }
 
     public func addTextEntry(memoId: String, entry: NewTextEntry) async throws -> Entry {

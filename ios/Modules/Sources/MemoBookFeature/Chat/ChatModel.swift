@@ -1995,6 +1995,154 @@ public final class ChatModel {
         composer = .writing
     }
 
+    // MARK: - L'appui long sur une bulle (T270)
+
+    /// Ce qu'un appui long propose de partager, tant que la feuille du système
+    /// est ouverte. `nil` : rien d'ouvert.
+    public var shared: ChatSharing?
+
+    /// Les souvenirs que porte une bulle, dans l'ordre où elle les montre.
+    ///
+    /// Un, d'ordinaire — un texte, un vocal, la fiche qui en parle. Autant que
+    /// de photos pour une bulle de photos : chaque image est un souvenir à
+    /// elle (`docs/conversation.md` § 4), et c'est la bulle qui les réunit.
+    /// Vide pour ce qui n'est pas un souvenir : l'ouverture de MEMO, sa
+    /// réponse, une question sur l'abonnement.
+    public func memories(of message: ChatMessage) -> [String] {
+        switch message.body {
+        case .photos(let attachments):
+            return attachments.map(\.id)
+        case .transcript(let card):
+            return [card.entryId].compactMap(\.self)
+        case .text, .voice:
+            // Un vocal du contexte du voyage, ou une correction dictée, vise
+            // une fiche sans être elle : le serveur refuserait de le supprimer
+            // comme un souvenir, et il a raison. On ne le propose donc pas.
+            //
+            // `nil` compte comme un souvenir, comme dans
+            // ``ChatThread/storyMessage(about:)`` : un serveur d'avant ne
+            // servait pas cette clé, et ses bulles sont bien des souvenirs.
+            guard message.author.isTraveller else { return [] }
+            guard message.disposition == .memory || message.disposition == nil else { return [] }
+            return [message.entryId].compactMap(\.self)
+        }
+    }
+
+    /// « Supprimer » se propose-t-il ? Seulement sur une bulle qui **est** un
+    /// souvenir, et seulement quand elle est arrivée chez nous : une bulle qui
+    /// attend le réseau se retire par « Supprimer » de sa mention, qui parle à
+    /// la file et non au serveur (``discardWaitingTurn(_:)``).
+    public func canDelete(_ message: ChatMessage) -> Bool {
+        message.delivery == .sent && !memories(of: message).isEmpty
+    }
+
+    /// « Déplacer dans une autre étape » se propose-t-il ?
+    ///
+    /// Les photos seulement, et le serveur le tient aussi : l'étape d'un récit
+    /// se calcule — sa date, son lieu, le récit qu'il prolonge — et une étape
+    /// écrite à la main se déferait au recalcul suivant. Le second temps de
+    /// T270 lui donnera une colonne qui porte le geste.
+    ///
+    /// Et il faut une **autre** étape où aller : un voyage d'une seule étape
+    /// n'offre pas un menu qui ne mène qu'à elle-même.
+    public func canMove(_ message: ChatMessage) -> Bool {
+        guard case .photos = message.body, message.delivery == .sent else { return false }
+        return !destinations(for: message).isEmpty
+    }
+
+    /// Les étapes où cette bulle peut aller : celles du voyage, sauf la sienne.
+    public func destinations(for message: ChatMessage) -> [ChatContextStep] {
+        (thread?.context.steps ?? []).filter { $0.id != message.stepId }
+    }
+
+    /// **Déplace la bulle, et la montre déplacée tout de suite.** Le serveur
+    /// pose l'épingle qui tiendra au recalcul ; ici, la bulle change d'étape
+    /// sans attendre la relecture, pour que le menu ne paraisse pas sans effet.
+    ///
+    /// Un échec remet l'étape d'avant et le dit : mieux vaut une bulle qui
+    /// revient en place avec un bandeau qu'une bulle déplacée pour de faux.
+    public func move(_ message: ChatMessage, toStepId stepId: String) {
+        guard let index = thread?.messages.firstIndex(where: { $0.id == message.id }) else { return }
+        let before = thread?.messages[index].stepId
+        thread?.messages[index].stepId = stepId
+
+        Task { [weak self, transport, id = message.id] in
+            do {
+                try await transport.moveMessage(id, stepId)
+                // Le découpage a peut-être bougé derrière (une étape vidée
+                // disparaît) : on relit le fil plutôt que de deviner.
+                await self?.load()
+            } catch {
+                guard let self else { return }
+                if let index = self.thread?.messages.firstIndex(where: { $0.id == id }) {
+                    self.thread?.messages[index].stepId = before
+                }
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// **Supprime le souvenir d'une bulle** — et la bulle avec, puisque c'est
+    /// lui qu'elle montrait. Le serveur efface aussi le fichier et la fiche
+    /// (`services/deletion.ts`) ; la vue confirme avant d'appeler, parce que
+    /// le souvenir quitte aussi le carnet.
+    ///
+    /// La bulle part de l'écran tout de suite : attendre la réponse laisserait
+    /// une bulle qu'on vient de supprimer sous le doigt. Un échec la remet,
+    /// avec le bandeau.
+    public func delete(_ message: ChatMessage) {
+        let ids = memories(of: message)
+        guard !ids.isEmpty, let thread else { return }
+        guard let index = thread.messages.firstIndex(where: { $0.id == message.id }) else { return }
+        let removed = thread.messages[index]
+        self.thread?.messages.remove(at: index)
+
+        Task { [weak self, transport] in
+            do {
+                for id in ids { try await transport.deleteMemory(id) }
+                await self?.load()
+            } catch {
+                guard let self else { return }
+                // Remise à sa place, et non à la fin : un souvenir réapparu
+                // trois bulles plus bas se lirait comme un nouveau message.
+                //
+                // ⚠️ Le rang se lit **avant** l'insertion, et non dans ses
+                // arguments : `thread?.messages.insert(…, at: thread?.messages.count)`
+                // lit et modifie `thread` dans la même expression, ce que
+                // Swift refuse à l'exécution (« Fatal access conflict »).
+                let count = self.thread?.messages.count ?? 0
+                if self.thread?.messages.contains(where: { $0.id == removed.id }) == false {
+                    self.thread?.messages.insert(removed, at: min(index, count))
+                }
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// **« Partager »** : le texte d'une bulle, ou ses photos. C'est la feuille
+    /// du système qui s'ouvre — elle seule connaît les apps installées, les
+    /// appareils AirDrop à portée et les habitudes de l'utilisateur.
+    ///
+    /// Les photos partent **à leur taille d'écran** et non en vignette du fil :
+    /// on partage une photo pour qu'elle soit regardée ailleurs.
+    public func share(_ message: ChatMessage) {
+        if case .photos(let attachments) = message.body {
+            let urls = attachments.compactMap(\.displayUrl)
+            guard !urls.isEmpty else { return }
+            Task { [weak self] in
+                var images: [UIImage] = []
+                for url in urls {
+                    if let image = await self?.fullScreenImage(url) { images.append(image) }
+                }
+                guard let self, !images.isEmpty else { return }
+                self.shared = ChatSharing(images: images)
+            }
+            return
+        }
+        guard let text = message.spokenText, !text.isEmpty else { return }
+        shared = ChatSharing(text: text)
+    }
+
     // MARK: - Le bouton sous une bulle de MEMO
 
     /// Le bouton d'une bulle se montre-t-il ? Jamais pour un genre que cette

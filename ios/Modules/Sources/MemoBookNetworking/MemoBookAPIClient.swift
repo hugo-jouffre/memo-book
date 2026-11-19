@@ -614,6 +614,14 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await sendIgnoringResponse(method: "DELETE", path: "/v1/trips/\(tripId)/chat")
     }
 
+    public func moveChatMessage(tripId: String, messageId: String, toStepId: String) async throws {
+        try await sendIgnoringResponse(
+            method: "POST",
+            path: "/v1/trips/\(tripId)/chat/\(messageId)/step",
+            body: ["stepId": toStepId]
+        )
+    }
+
     public func entryMedia(id: String) async throws -> Data {
         let request = try makeRequest(method: "GET", path: "/v1/entries/\(id)/media")
         return try await performRaw(request, credential: .session)

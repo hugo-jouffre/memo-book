@@ -107,6 +107,8 @@ interface ChatThreadJson {
     travellerAvatarUrl: string | null;
     memberCount: number;
     prompt: string | null;
+    /** Les étapes du voyage, pour « Déplacer dans une autre étape » (T270). */
+    steps: { id: string; number: number; placeName: string | null }[];
   };
   messages: ChatMessageJson[];
   suggestions: { id: string; label: string; symbol: string | null; intent: string }[];
@@ -1743,5 +1745,170 @@ describe("l'étape manquante", () => {
 
     const thread = await readThread(memo.id);
     expect(memoBubbles(thread).at(-1)?.callToAction?.id).toBeUndefined();
+  });
+});
+
+/**
+ * **L'appui long sur une bulle** — T270. Le menu lui-même est de l'app ;
+ * côté serveur, deux gestes seulement : déplacer une bulle de photos dans une
+ * autre étape, et supprimer un souvenir sans laisser sa bulle vide derrière.
+ */
+describe("le menu d'une bulle", () => {
+  /** Le voyage, ses deux étapes (deux récits, deux jours), et une bulle de photos. */
+  async function seedTwoStepTrip() {
+    const memo = await seedTrip(owner.accountId);
+    await tellFromHome(memo.id, "La pluie sur les pavés du Trastevere.", "2026-09-21T09:00:00.000Z");
+    await tellFromHome(memo.id, "Le Panthéon, enfin, et sans la queue.", "2026-09-24T09:00:00.000Z");
+    await readThread(memo.id);
+    const messageId = await sendPhotos(memo.id, 2);
+    await refreshTripFacts(harness.prisma, memo.id);
+
+    const steps = await harness.prisma.memoStep.findMany({
+      where: { memoId: memo.id },
+      orderBy: { number: "asc" },
+    });
+    expect(steps.length).toBeGreaterThanOrEqual(2);
+    const message = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id: messageId } });
+    // L'étape d'arrivée est celle où les photos ne sont pas : c'est tout ce
+    // que le test demande, et ça ne dépend donc pas du découpage.
+    const target = steps.find((step) => step.id !== message.stepId);
+    expect(target).toBeDefined();
+    return { memo, messageId, target: target!, steps };
+  }
+
+  async function move(memoId: string, messageId: string, stepId: string, authorization = owner.authorization) {
+    return harness.app.inject({
+      method: "POST",
+      url: `/v1/trips/${memoId}/chat/${messageId}/step`,
+      headers: { authorization },
+      payload: { stepId },
+    });
+  }
+
+  /**
+   * ⚠️ **Le vrai test est le recalcul qui suit.** Écrire l'étape sur le
+   * souvenir ne suffirait pas : le découpage la reprendrait d'après la date et
+   * le lieu de la photo. C'est l'épingle posée sur la **bulle** que
+   * `pinnedSteps` fait passer devant — et c'est elle qu'on vérifie en
+   * relançant `refreshTripFacts` après coup.
+   */
+  it("déplace une bulle de photos, et l'épingle tient au recalcul", async () => {
+    const { memo, messageId, target } = await seedTwoStepTrip();
+
+    const response = await move(memo.id, messageId, target.id);
+    expect(response.statusCode).toBe(204);
+
+    await refreshTripFacts(harness.prisma, memo.id);
+
+    const moved = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id: messageId } });
+    expect(moved.stepId).toBe(target.id);
+    const photos = await harness.prisma.entry.findMany({ where: { memoId: memo.id, kind: "photo" } });
+    expect(photos).toHaveLength(2);
+    expect(photos.map((photo) => photo.stepId)).toEqual([target.id, target.id]);
+  });
+
+  /** Les deux photos d'une bulle s'en vont ensemble : on appuie sur la bulle. */
+  it("emmène toutes les photos de la bulle", async () => {
+    const { memo, messageId, target } = await seedTwoStepTrip();
+    await move(memo.id, messageId, target.id);
+
+    const thread = await readThread(memo.id);
+    const bubble = thread.messages.find((message) => message.id === messageId);
+    expect(bubble?.stepId).toBe(target.id);
+    expect(bubble?.body.kind === "photos" && bubble.body.photos).toHaveLength(2);
+  });
+
+  /**
+   * **Un récit ne se déplace pas encore**, et le refus est explicite : son
+   * étape se calcule (date, lieu, `continuesPrevious`), et une étape écrite à
+   * la main se déferait au prochain recalcul. Le second temps de T270 lui
+   * donnera une colonne, comme `separatedByTraveller`.
+   */
+  it("refuse de déplacer un récit", async () => {
+    const { memo, target } = await seedTwoStepTrip();
+    const { id } = await say(memo.id, "Et le soir, une terrasse place Navone.");
+
+    const response = await move(memo.id, id, target.id);
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ message: string }>().message).toContain("photos");
+  });
+
+  it("refuse une étape qui n'est pas celle de ce voyage", async () => {
+    const { memo, messageId } = await seedTwoStepTrip();
+    const ailleurs = await seedTrip(owner.accountId);
+    const step = await harness.prisma.memoStep.create({
+      data: { memoId: ailleurs.id, number: 1, placeName: "Naples" },
+    });
+
+    expect((await move(memo.id, messageId, step.id)).statusCode).toBe(404);
+    // Et la bulle n'a pas bougé.
+    const message = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id: messageId } });
+    expect(message.stepId).not.toBe(step.id);
+  });
+
+  it("sert les étapes du voyage avec le fil, pour la liste du menu", async () => {
+    const { memo, steps } = await seedTwoStepTrip();
+
+    const thread = await readThread(memo.id);
+    expect(thread.context.steps.map((step) => step.id)).toEqual(steps.map((step) => step.id));
+    expect(thread.context.steps.map((step) => step.number)).toEqual(steps.map((step) => step.number));
+  });
+
+  /**
+   * ⚠️ Sans le ménage de `forgetBubblesOf`, la bulle restait dans le fil
+   * **vidée de ce qu'elle montrait** : des adresses de photos sans réponse.
+   * La fiche, elle, disparaissait déjà seule — c'est ce qui masquait le reste.
+   */
+  it("retire d'une bulle la photo supprimée, et la bulle quand il n'en reste aucune", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await readThread(memo.id);
+    const messageId = await sendPhotos(memo.id, 3);
+
+    const avant = await readThread(memo.id);
+    const bubble = avant.messages.find((message) => message.id === messageId);
+    const photos = bubble?.body.kind === "photos" ? bubble.body.photos.map((photo) => photo.id) : [];
+    expect(photos).toHaveLength(3);
+
+    const effacer = async (entryId: string) => {
+      const response = await harness.app.inject({
+        method: "DELETE",
+        url: `/v1/entries/${entryId}`,
+        headers: { authorization: owner.authorization },
+      });
+      expect(response.statusCode).toBe(204);
+    };
+
+    // La première part : la bulle garde les deux autres, et change de première.
+    await effacer(photos[0]!);
+    const apresUne = await readThread(memo.id);
+    const restante = apresUne.messages.find((message) => message.id === messageId);
+    expect(restante?.body.kind === "photos" && restante.body.photos.map((photo) => photo.id)).toEqual([
+      photos[1],
+      photos[2],
+    ]);
+    expect(restante?.entryId).toBe(photos[1]);
+
+    // Les deux autres parties, la bulle n'a plus rien à montrer.
+    await effacer(photos[1]!);
+    await effacer(photos[2]!);
+    const apresToutes = await readThread(memo.id);
+    expect(apresToutes.messages.some((message) => message.id === messageId)).toBe(false);
+  });
+
+  it("efface la bulle d'un récit supprimé, et sa fiche", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const { id: bubbleId } = await say(memo.id, "On a marché jusqu'au Janicule pour voir le coucher.");
+
+    const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id } });
+    const response = await harness.app.inject({
+      method: "DELETE",
+      url: `/v1/entries/${entry.id}`,
+      headers: { authorization: owner.authorization },
+    });
+    expect(response.statusCode).toBe(204);
+
+    const thread = await readThread(memo.id);
+    expect(thread.messages.some((message) => message.id === bubbleId)).toBe(false);
+    expect(thread.messages.some((message) => message.body.kind === "transcript")).toBe(false);
   });
 });

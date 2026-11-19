@@ -474,7 +474,12 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
     ///
     /// `nil` pour ce qui ne parle d'aucune étape en particulier : l'ouverture de
     /// MEMO, une question sur l'abonnement.
-    public let stepId: String?
+    ///
+    /// Modifiable comme ``body`` et ``delivery``, et pour la même raison : le
+    /// geste « Déplacer dans une autre étape » (T270) le change sur le
+    /// téléphone pendant que le serveur fait de même, pour que la bulle ne
+    /// paraisse pas revenir en arrière avant la relecture du fil.
+    public var stepId: String?
 
     /// Le prénom de **l'autre** voyageur qui a dit cette bulle, dans un fil à
     /// plusieurs. Le serveur a déjà décidé : `nil` pour soi-même, pour MEMO, et
@@ -858,6 +863,15 @@ public struct ChatContext: Codable, Sendable, Hashable {
     /// d'essai qui ne le dit pas décode `1`.
     public let memberCount: Int
 
+    /// **Les étapes du voyage, dans l'ordre** — pour « Déplacer dans une autre
+    /// étape », l'appui long sur une bulle de photos (T270).
+    ///
+    /// Le strict nécessaire pour nommer une ligne de menu et l'envoyer. Vide
+    /// d'un serveur qui ne les sert pas encore, et d'un voyage qui n'a pas
+    /// encore d'étape : le menu n'offre alors pas de déplacement, ce qui est
+    /// juste — il n'y a nulle part où aller.
+    public let steps: [ChatContextStep]
+
     public init(
         tripId: String,
         tripTitle: String? = nil,
@@ -868,7 +882,8 @@ public struct ChatContext: Codable, Sendable, Hashable {
         stepNumber: Int? = nil,
         stepId: String? = nil,
         prompt: String? = nil,
-        memberCount: Int = 1
+        memberCount: Int = 1,
+        steps: [ChatContextStep] = []
     ) {
         self.tripId = tripId
         self.tripTitle = tripTitle
@@ -880,11 +895,12 @@ public struct ChatContext: Codable, Sendable, Hashable {
         self.stepId = stepId
         self.prompt = prompt
         self.memberCount = memberCount
+        self.steps = steps
     }
 
     private enum CodingKeys: String, CodingKey {
         case tripId, tripTitle, travellerFirstName, travellerInitials, travellerAvatarUrl
-        case placeName, stepNumber, stepId, prompt, memberCount
+        case placeName, stepNumber, stepId, prompt, memberCount, steps
     }
 
     public init(from decoder: any Decoder) throws {
@@ -899,8 +915,36 @@ public struct ChatContext: Codable, Sendable, Hashable {
             stepNumber: try container.decodeIfPresent(Int.self, forKey: .stepNumber),
             stepId: try container.decodeIfPresent(String.self, forKey: .stepId),
             prompt: try container.decodeIfPresent(String.self, forKey: .prompt),
-            memberCount: try container.decodeIfPresent(Int.self, forKey: .memberCount) ?? 1
+            memberCount: try container.decodeIfPresent(Int.self, forKey: .memberCount) ?? 1,
+            steps: try container.decodeIfPresent([ChatContextStep].self, forKey: .steps) ?? []
         )
+    }
+}
+
+/// Une étape, telle que le menu d'une bulle en a besoin : de quoi nommer sa
+/// ligne et l'envoyer. Rien de plus — l'écran du voyage sert les étapes
+/// entières (``TripStep``), et le fil n'a pas à les porter deux fois.
+public struct ChatContextStep: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+
+    /// Son rang dans le voyage. C'est lui qui la nomme tant qu'elle n'a pas de
+    /// lieu — comme sur l'écran du voyage.
+    public let number: Int
+
+    /// Le lieu tel qu'on le dirait : « Trastevere ».
+    public let placeName: String?
+
+    public init(id: String, number: Int, placeName: String? = nil) {
+        self.id = id
+        self.number = number
+        self.placeName = placeName
+    }
+
+    /// « Étape 3 · Trastevere », ou « Étape 3 » tant que l'étape n'a pas de
+    /// lieu. Le même ordre que la carte de l'étape, qui dit le numéro d'abord.
+    public var label: String {
+        guard let placeName, !placeName.isEmpty else { return "Étape \(number)" }
+        return "Étape \(number) · \(placeName)"
     }
 }
 

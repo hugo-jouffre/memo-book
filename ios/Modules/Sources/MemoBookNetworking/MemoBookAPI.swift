@@ -294,6 +294,15 @@ public protocol MemoBookAPI: Sendable {
     /// « Supprimer la conversation » — propriétaire seul, garde l'ouverture.
     func clearChat(tripId: String) async throws
 
+    /// **« Déplacer dans une autre étape »** — l'appui long sur une bulle de
+    /// photos (T270). Le sujet est la **bulle** : des photos envoyées ensemble
+    /// partagent leur étape, et partent ensemble.
+    ///
+    /// Les photos seulement : l'étape d'un récit se calcule, et un
+    /// déplacement écrit à la main se déferait au prochain recalcul. Le
+    /// serveur refuse le reste (400).
+    func moveChatMessage(tripId: String, messageId: String, toStepId: String) async throws
+
     /// Le fichier d'un souvenir — un vocal à réécouter, une photo —, servi
     /// avec la session : une URL nue ne suffirait pas.
     func entryMedia(id: String) async throws -> Data
