@@ -421,7 +421,32 @@ li { margin: 0; }
 .mb-note strong { font-weight: 400; text-decoration: underline; }
 
 /* Titre manuscrit de section : « Intro », « 36 heures plus tard… ».
-   Deux interlignes pile, pour ne pas rompre la réglure. */
+   Deux interlignes pile, pour ne pas rompre la réglure.
+
+   Le titre et le récit sont de la même main : même police, même encre. Le
+   titre n'avait donc que sa taille pour se distinguer, et 15 pt contre 12
+   font un rapport de 1,25 — sous le pas d'une gamme typographique, où un cran
+   se lit à partir de ~1,33 (Hugo, 05/11/2026 : « les titres ne se distinguent
+   pas assez du corps du texte »). Il passe à 1,45.
+
+   La taille est le SEUL levier, et ce n'est pas faute d'avoir essayé les
+   autres :
+
+   - **La graisse n'existe pas.** Gloria Hallelujah n'a qu'un seul fût (400).
+     `font-weight: 700` et `-webkit-text-stroke` font donc épaissir le tracé
+     par le moteur — et Chromium, pour écrire un glyphe qu'aucune police ne
+     porte, le sort du jeu de caractères et l'écrit en POLICE DE TYPE 3 : un
+     flux de dessin par lettre. Mesuré sur le carnet d'exemple : 20 polices de
+     type 3 au départ, 22 avec l'une ou l'autre, +36 flux et +115 ko. C'est la
+     même famille de construction exotique que les masques et les dégradés qui
+     ont déjà coûté deux correctifs à la réglure (voir `.mb-note__rules`) ;
+     sur le texte le plus important de la page, le pari ne vaut pas le cran de
+     graisse. Avec la taille seule, le PDF n'en gagne aucune (19).
+   - **L'encre est déjà prise.** Le noir distingue l'intro des journées
+     (`--black-title` contre `--ink-title`) : y passer les titres de journée
+     effacerait cette distinction-là.
+   - **L'approche ne peut pas s'élargir.** Le titre doit tenir sur UNE ligne,
+     sinon le bloc ne pèse plus deux interlignes et la réglure dérive. */
 .mb-note__title {
   display: block;
   margin: 0;
@@ -429,14 +454,26 @@ li { margin: 0; }
      l'emplacement laissé libre entre le titre et le récit. */
   margin-bottom: var(--mb-line);
   font-family: var(--mb-font-title);
-  font-size: 15pt;
+  /* Mesuré sur le récit, pas en absolu : le titre suit alors `page--serre` et
+     `page--ample`, et le rapport tient sur les trois densités. En dur à 15 pt,
+     il valait 1,36 fois le corps serré et 1,15 fois le corps ample — le cran
+     se refermait précisément là où la page est déjà dense. */
+  --mb-note-title-size: calc(var(--mb-body-size) * 1.45);
+  font-size: var(--mb-note-title-size);
   line-height: var(--mb-line);     /* un interligne pile, comme le corps */
   letter-spacing: 0.01em;
-  /* À 15 pt, la ligne de base de Gloria Hallelujah tombe 0,7 pt sous la
-     réglure remontée (voir `--mb-rule-lift`) : on remonte le titre pour qu'il
-     s'y pose comme le récit. Hansley, plus courte de descente, n'en aura plus
-     besoin quand elle sera déposée — à remesurer ce jour-là. */
-  top: -1.2pt;
+  /* Deux corps différents dans une même boîte de ligne ne posent pas leur
+     ligne de base au même endroit. L'interligne étant fixe, elle descend de
+     (corps_titre − corps_récit) × (ascente − descente) / 2, soit × 0,415 avec
+     les métriques de Gloria Hallelujah (1,41 et 0,58, voir `--mb-rule-lift`).
+     On remonte le titre d'autant, pour qu'il se pose sur la réglure comme le
+     récit — les jambages la croisent, comme à la main.
+     En dur à −1,2 pt, la correction ne valait qu'au corps de 12 pt ; elle
+     manquait 0,4 pt sur une page serrée comme sur une page ample, et il
+     aurait fallu la remesurer à chaque changement de taille.
+     Hansley, plus courte de descente, demandera une autre constante que 0,415
+     quand elle sera déposée — à remesurer ce jour-là. */
+  top: calc((var(--mb-body-size) - var(--mb-note-title-size)) * 0.415);
 }
 
 .mb-note--ink-title .mb-note__title { color: var(--mb-ink); }
@@ -599,7 +636,6 @@ li { margin: 0; }
   background-color: var(--mb-label-solid);
   border-radius: 3pt;
   font-family: var(--mb-font-display);
-  font-weight: 700;
   font-size: 6.5pt;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -693,7 +729,6 @@ li { margin: 0; }
   padding: 5pt 4pt;
   border: 0.7pt dashed var(--mb-black);
   font-family: var(--mb-font-display);
-  font-weight: 700;
   font-size: 10.5pt;
   line-height: 1.15;
   letter-spacing: 0.01em;
@@ -1985,7 +2020,6 @@ li { margin: 0; }
   border-radius: 7pt;
   box-shadow: 0 0 0 2.2pt #ffffff, var(--mb-photo-shadow);
   font-family: var(--mb-font-display);
-  font-weight: 700;
   font-size: 14pt;
   line-height: 1.1;
   text-align: center;
@@ -2178,7 +2212,6 @@ li { margin: 0; }
   display: block;
   margin-bottom: 6pt;
   font-family: var(--mb-font-display);
-  font-weight: 700;
   font-size: 9.5pt;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2208,7 +2241,6 @@ li { margin: 0; }
   display: block;
   margin-bottom: 5pt;
   font-family: var(--mb-font-display);
-  font-weight: 700;
   font-size: 9.5pt;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2530,7 +2562,6 @@ body.sans-decor .mb-suite__trace { display: none; }
   right: 0;
   margin: 0;
   font-family: var(--mb-font-display);
-  font-weight: 700;
   font-size: 23pt;
   line-height: 1.22;
   text-align: center;
@@ -2599,7 +2630,6 @@ body.sans-decor .mb-suite__trace { display: none; }
 .mb-suite__tampon text {
   fill: #3f8f7c;
   font-family: var(--mb-font-display);
-  font-weight: 700;
   letter-spacing: 0.08em;
 }
 .mb-suite__tampon-arc { font-size: 10.5px; }
