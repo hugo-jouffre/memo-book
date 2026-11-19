@@ -571,6 +571,24 @@ paresseux : `AppDependencies.ensureRegistered()` est appelé par le modèle qui 
 a besoin, et son échec est l'erreur de cet écran-là (un `ErrorBanner` en ligne),
 jamais un mur devant l'app.
 
+## L'app s'ouvre sur le voyage où l'on revient
+
+**Deux visites délibérées en 24 h, et le lancement suivant ouvre le voyage**
+plutôt que l'accueil (T268, 18/11/2026). La règle vit dans
+`MemoBookCore/TripVisits.swift` — sans dépendance, donc testée — et sa trace
+dans `MemoBookFeature/RecentTripVisits.swift`, sur `UserDefaults`.
+
+⚠️ **Une ouverture automatique ne compte jamais comme une visite.** Sans cette
+règle, la trace s'auto-entretient : l'app ouvre le voyage, l'ouverture compte,
+la condition reste vraie, et l'accueil devient inatteignable au lancement —
+pour toujours. Seul un geste depuis l'accueil appelle `noter(_:)`.
+
+Deux garde-fous de plus : le voyage se pose **au-dessus** de l'accueil dans la
+pile, donc la flèche de retour y ramène ; et la reprise n'a lieu qu'une fois
+par lancement, sur une pile vide — rouvrir l'app sur une conversation ne doit
+pas être écrasé par ce raccourci. Les visites s'effacent à la déconnexion, avec
+le reste du contenu du compte.
+
 ## Le cache local, et ce qu'il change à l'écran
 
 **Six écrans s'ouvrent sur ce qu'on avait** : l'accueil, le profil, ses
