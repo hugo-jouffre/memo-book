@@ -221,18 +221,32 @@ public final class CoversModel {
         save(.stats(ids))
     }
 
+    /// Envoie un geste au serveur — un style, une photo, les textes, les
+    /// chiffres.
+    ///
+    /// ⚠️ **Les enregistrements se suivent, ils ne s'annulent pas** (T276,
+    /// 19/11/2026). Chaque appel annulait le précédent, et l'annulé repartait
+    /// **sans rien dire** : valider un titre puis toucher au style — ce que
+    /// fait le parcours des couvertures, où « Valider » referme la feuille des
+    /// textes sur le carrousel — envoyait le style et perdait le titre. C'est
+    /// très exactement « les titres ne fonctionnent pas ».
+    ///
+    /// L'annulation venait d'un réflexe de recherche — le dernier geste
+    /// remplace le précédent —, mais ici les gestes ne se remplacent pas : ils
+    /// portent chacun **leur** champ, et le serveur ne touche qu'à celui-là.
+    /// Ils se mettent donc en file, dans l'ordre où on les a faits, et la
+    /// dernière réponse fait foi.
     private func save(_ edit: BookCoverEdit) {
         guard let persist else { return }
 
-        pendingSave?.cancel()
+        let previous = pendingSave
         pendingSave = Task {
+            await previous?.value
             do {
                 let updated = try await persist(tripId, edit)
-                guard !Task.isCancelled else { return }
                 covers = updated
                 errorMessage = nil
             } catch {
-                guard !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
                 await reload()
             }

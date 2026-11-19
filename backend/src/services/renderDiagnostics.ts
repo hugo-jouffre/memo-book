@@ -88,3 +88,96 @@ export function photosDiagnostic(env: DiagnosticEnv): PhotosDiagnostic {
 
   return { renderer, photoBaseUrl: url, photoBaseUrlFrom: from, problems };
 }
+
+/**
+ * **Ce qui casse en silence** — l'état de la chaîne, lisible d'un `curl`
+ * (T274, 19/11/2026).
+ *
+ * Deux fois en un mois, la composition des carnets s'est arrêtée sans que rien
+ * ne le dise : fin octobre le crédit Anthropic était épuisé, le 17/11 c'est
+ * celui d'OpenAI — « You have no credits remaining ». `/health` répondait
+ * `ok` les deux fois, parce qu'il ne regarde que la base, la file et le
+ * schéma : tout ce qui **tient le service debout**, rien de ce qu'il
+ * **produit**.
+ *
+ * Ces trois chiffres ne coûtent rien (deux `count` et une lecture), ne font
+ * **pas** tomber `/health` — un rendu raté ne doit pas bloquer un
+ * déploiement ni tuer le service — et répondent à la seule question qu'on se
+ * pose en revenant d'un week-end : est-ce que les carnets sortent encore ?
+ */
+export interface PipelineDiagnostic {
+  /** Rendus échoués dans les 24 dernières heures. */
+  rendersFailedLastDay: number;
+  /** Le dernier échec, s'il y en a eu un : c'est lui qui nomme la cause. */
+  lastRenderError: { at: string; message: string } | null;
+  /**
+   * Récits (jamais les photos : elles n'ont rien à rédiger) en attente de
+   * rédaction depuis **plus d'une heure**. Une rédaction fraîche est normale ;
+   * une qui dure est un souvenir qui n'entrera jamais dans un carnet, et qui
+   * bloque sa composition.
+   */
+  memoriesAwaitingRedaction: number;
+}
+
+interface PipelineReader {
+  render: {
+    count(args: unknown): Promise<number>;
+    findFirst(args: unknown): Promise<{ createdAt: Date; error: string | null } | null>;
+  };
+  entry: { count(args: unknown): Promise<number> };
+}
+
+/**
+ * Le diagnostic est **gardé une minute** : `/health` est interrogé par Railway
+ * à chaque battement, et trois requêtes par battement finiraient par peser sur
+ * une table qui grossit.
+ */
+let cached: { at: number; value: PipelineDiagnostic } | null = null;
+const CACHE_MS = 60_000;
+
+export async function pipelineDiagnostic(
+  prisma: PipelineReader,
+  now: Date = new Date(),
+): Promise<PipelineDiagnostic> {
+  if (cached && now.getTime() - cached.at < CACHE_MS) return cached.value;
+
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const anHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+  const [rendersFailedLastDay, lastFailure, memoriesAwaitingRedaction] = await Promise.all([
+    prisma.render.count({ where: { status: "failed", createdAt: { gte: since } } }),
+    prisma.render.findFirst({
+      where: { status: "failed" },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true, error: true },
+    }),
+    prisma.entry.count({
+      where: {
+        redactionStatus: "pending",
+        kind: { not: "photo" },
+        createdAt: { lt: anHourAgo },
+      },
+    }),
+  ]);
+
+  const value: PipelineDiagnostic = {
+    rendersFailedLastDay,
+    lastRenderError: lastFailure
+      ? {
+          at: lastFailure.createdAt.toISOString(),
+          // Tronqué : certaines erreurs de fournisseur tiennent sur dix lignes,
+          // et c'est la première qui nomme la cause.
+          message: (lastFailure.error ?? "").slice(0, 300),
+        }
+      : null,
+    memoriesAwaitingRedaction,
+  };
+
+  cached = { at: now.getTime(), value };
+  return value;
+}
+
+/** Pour les tests : le diagnostic suivant sera recalculé. */
+export function forgetPipelineDiagnostic(): void {
+  cached = null;
+}

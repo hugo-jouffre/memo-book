@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
-import { photosDiagnostic } from "../services/renderDiagnostics.js";
+import { photosDiagnostic, pipelineDiagnostic } from "../services/renderDiagnostics.js";
 
 /**
  * Readiness réelle : on interroge la base et la file, on ne se contente pas de
@@ -50,6 +50,13 @@ export function registerHealthRoutes(app: FastifyInstance, context: AppContext):
       // **ce service** : le worker, qui compose vraiment, annonce le sien au
       // démarrage dans ses logs — ses variables peuvent différer.
       photos: photosDiagnostic(context.env),
+      // **Ce qui casse en silence** (T274) : les carnets sortent-ils encore ?
+      // Deux fois en un mois, la composition s'est arrêtée faute de crédit
+      // chez un fournisseur, et `/health` répondait `ok` — il ne regardait que
+      // ce qui tient le service debout, rien de ce qu'il produit. Ces chiffres
+      // ne font **pas** tomber la sonde : un rendu raté ne doit bloquer ni un
+      // déploiement ni le trafic.
+      pipeline: database ? await pipelineDiagnostic(context.prisma) : null,
     });
   });
 }
