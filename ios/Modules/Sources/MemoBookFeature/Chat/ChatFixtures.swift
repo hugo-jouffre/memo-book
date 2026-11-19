@@ -47,7 +47,14 @@ extension ChatThread {
                 placeName: current?.placeName,
                 stepNumber: current?.number,
                 stepId: current?.id,
-                prompt: detail.prompt
+                prompt: detail.prompt,
+                // **Les étapes du voyage** (T270), pour que « Déplacer dans
+                // une autre étape » ait où aller dans le bac à sable : sans
+                // elles, le menu d'un appui long n'offrirait pas le geste, et
+                // on ne pourrait pas le regarder sans serveur.
+                steps: detail.steps.map {
+                    ChatContextStep(id: $0.id, number: $0.number, placeName: $0.placeName)
+                }
             )
         )
 
@@ -187,7 +194,14 @@ extension ChatThread {
                     author: .traveller,
                     body: .voice(note),
                     sentAt: day,
-                    stepId: step.id
+                    stepId: step.id,
+                    // **Le souvenir de ce vocal** — le même que celui de sa
+                    // fiche. Sans lui, « Supprimer » ne paraît pas dans le
+                    // menu de l'appui long (T270) : le geste efface un
+                    // souvenir, pas une bulle, et une bulle qui n'en porte
+                    // aucun n'a rien à effacer.
+                    disposition: .memory,
+                    entryId: "\(step.id)-entry"
                 )
             )
             messages.append(

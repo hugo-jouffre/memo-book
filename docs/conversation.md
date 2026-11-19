@@ -550,6 +550,55 @@ n'a donc rien à remonter — « Ignorer » reste local, comme pour tous les bou
 caché qui daterait un souvenir d'il y a une semaine serait pire que pas de
 fonctionnalité du tout.
 
+## 6 ter. L'appui long sur une bulle
+
+**Le menu contextuel natif iOS** (T270, Hugo, 05/11/2026). Quatre gestes, et
+jamais plus : **copier**, **partager**, **déplacer dans une autre étape**,
+**supprimer**. Ce qui ne s'applique pas à une bulle n'y figure pas — un menu de
+quatre lignes dont deux ne font rien apprend à ne plus être ouvert.
+
+Celui du système, et non le nôtre : l'appui long, l'aperçu de la bulle qui se
+soulève, le placement du menu selon la place restante sont le geste que
+l'utilisateur connaît de ses autres messageries. Les mêmes gestes passent par le
+**rotor d'actions** de VoiceOver, où « Déplacer » s'aplatit en une action par
+étape d'arrivée — un sous-menu ne s'y ouvre pas.
+
+| Geste | Sur quelles bulles | Quoi |
+|---|---|---|
+| Copier | Celles qui ont un texte — un message, une réponse de MEMO, une fiche | Le presse-papiers, comme la commande à côté de la bulle |
+| Partager | Un texte, ou des photos | La feuille du système. Les photos partent **à leur taille d'écran**, pas en vignette du fil |
+| Déplacer dans une autre étape | **Des photos seulement**, arrivées, et s'il existe une autre étape | `POST /v1/trips/:id/chat/:messageId/step` |
+| Supprimer | Une bulle qui **est** un souvenir, arrivée | `DELETE /v1/entries/:id`, après confirmation |
+
+⚠️ **« Déplacer » ne vaut que pour les photos, et ce n'est pas une facilité.**
+L'étape d'un récit se *calcule* — sa date, son lieu, le fait qu'il prolonge le
+précédent (`services/tripFacts.ts`) —, et le prochain recalcul la reprendrait :
+écrire l'étape à la main sur un récit serait un déplacement qui se défait tout
+seul, sans rien dire. Une photo, elle, a déjà son épingle : l'étape de **sa
+bulle** (`pinnedSteps`), que le découpage respecte. Déplacer un récit demande
+une colonne qui porte le geste, comme `entries.separatedByTraveller` pour
+« Séparer ces récits » — c'est le second temps de T270, avec les deux « photo
+principale » (étape et voyage), qui sont des colonnes avant d'être des étoiles.
+
+**Le sujet est la bulle, pas la photo.** Six photos envoyées ensemble partagent
+un message, et c'est lui qui porte l'étape : elles partent ensemble, et la
+confirmation de « Supprimer » le dit au pluriel.
+
+⚠️ **Supprimer un souvenir efface les bulles qui le montraient** — et il a
+fallu l'écrire (`services/deletion.ts`, `forgetBubblesOf`).
+`chat_messages.entryId` est en `SetNull` : sans cette passe, la bulle restait
+dans le fil **vidée de ce qu'elle montrait** — un vocal de 0 seconde au bouton
+de lecture mort, des photos aux adresses sans réponse. La fiche, elle,
+disparaissait déjà seule (le sérialiseur la redessine depuis le souvenir), et
+c'est précisément ce qui masquait le reste. Un vocal qui porte son **propre**
+fichier reste : une correction dictée vise la fiche sans être elle. Le ménage
+vaut pour les deux chemins qui effacent un souvenir — la croix du tiroir d'une
+étape (T235) laissait les mêmes débris.
+
+**Et ce n'est pas le « Supprimer » d'une bulle qui attend** (§ 6 bis) : celui-là
+retire un envoi du téléphone, celui-ci retire un souvenir du carnet, pour tous
+les voyageurs. Deux confirmations, deux phrases.
+
 ## 7. Supprimer la conversation
 
 Depuis les réglages du voyage, **le propriétaire seul**. Supprimer veut dire
@@ -655,6 +704,8 @@ attend donc son voyage au lieu d'être refusé — et perdu.
 | Valider | `POST /v1/entries/:id/validate` | `validatedAt` ; rend `{ entry }` |
 | Corriger | `PATCH /v1/entries/:id` (existe) | `editedText` |
 | Supprimer | `DELETE /v1/trips/:id/chat` | Propriétaire seul, 403 sinon |
+| Supprimer un souvenir | `DELETE /v1/entries/:id` (existe) | Le souvenir, son fichier, **et les bulles qui le montraient** (§ 6 ter) |
+| Déplacer une bulle | `POST /v1/trips/:id/chat/:messageId/step` | Des photos seulement ; épingle l'étape sur la bulle, que `pinnedSteps` fait passer devant le découpage (§ 6 ter) |
 | Répondre | job `memobook.converse` | `AnthropicResponder` (Sonnet 5, prompt = `agents/agent-conversation.md`, sortie JSON contrainte : bulles, classement, puces, relance, rose/épine/graine, `callToActionId`) → repli `HeuristicResponder` sans clé Anthropic → `FakeResponder` sous `PIPELINE_MODE=fake`, en CI et dans les tests |
 | Le crédit du jour | `backend/src/services/dailyCredit.ts`, table `trip_daily_usage` | Décompté sous le verrou du voyage ; servi en `dailyCredit` ; refus `429 daily_credit_exhausted` (§ 6 bis) |
 | Un bouton | `payload.callToAction = { id }` → `message.callToAction` | Catalogue `callsToAction.ts`, résolu pour chaque lecteur (§ 6 bis) |

@@ -599,6 +599,40 @@ public enum ChatCopy {
         public static let hint = "Le retire de ton téléphone sans l’envoyer"
     }
 
+    /// **Le menu d'un appui long sur une bulle** (T270) — `ChatMessageMenu`.
+    ///
+    /// Des verbes à l'infinitif, comme tout menu du système : c'est une liste
+    /// de gestes possibles, pas une phrase qu'on adresse à quelqu'un. D'où le
+    /// seul endroit de l'app où le tutoiement ne s'entend pas — la
+    /// confirmation, elle, parle bien au voyageur.
+    public enum Menu {
+        public static let copy = "Copier"
+        public static let share = "Partager"
+        public static let move = "Déplacer dans une autre étape"
+        public static let delete = "Supprimer"
+
+        /// L'action du rotor VoiceOver, où « Déplacer » n'a pas de sous-menu :
+        /// « Déplacer dans Étape 2 · Trastevere ».
+        public static func moveTo(_ step: String) -> String { "Déplacer dans \(step)" }
+
+        /// La confirmation. Elle dit ce qu'on perd — le carnet, pas seulement
+        /// le fil : c'est la différence avec « Supprimer » sous une bulle qui
+        /// n'est pas encore partie (``DiscardWaiting``), qui ne retire qu'un
+        /// envoi du téléphone.
+        public static let deleteTitle = "Supprimer ce souvenir ?"
+        public static let deletePhotosTitle = "Supprimer ces photos ?"
+        public static let deleteBody =
+            "Il quitte la conversation et ton carnet, pour tous les voyageurs. C’est sans retour."
+        public static let deletePhotosBody =
+            "Elles quittent la conversation et ton carnet, pour tous les voyageurs. C’est sans retour."
+        public static let deleteConfirm = "Supprimer"
+        public static let deleteKeep = "Annuler"
+
+        /// Ce que VoiceOver dit d'une bulle qui a un menu, en plus de son
+        /// contenu : l'appui long ne s'annonce pas tout seul.
+        public static let hint = "Appui long pour copier, partager ou supprimer"
+    }
+
     // MARK: - Ce que VoiceOver annonce
     //
     // Tout élément interactif sans libellé visible en porte un, en français et

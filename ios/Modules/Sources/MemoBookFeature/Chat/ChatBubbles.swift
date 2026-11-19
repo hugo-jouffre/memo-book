@@ -26,6 +26,11 @@ struct ChatMessageRow: View {
     /// confirmation est ouverte.
     @State private var confirmsDiscard = false
 
+    /// « Supprimer » a été touché **dans le menu de l'appui long** (T270) : la
+    /// confirmation est ouverte. Une autre que celle du dessus, et qui ne dit
+    /// pas la même chose — ici le souvenir quitte aussi le carnet.
+    @State private var confirmsDeletion = false
+
     var body: some View {
         VStack(alignment: alignment, spacing: MemoBookSpacing.xs / 2) {
             authorCaption
@@ -126,6 +131,53 @@ struct ChatMessageRow: View {
             .opacity(isWaiting ? 0.6 : 1)
             .animation(.smooth(duration: 0.3), value: message.delivery)
             .accessibilityHint(waitingHint)
+            // **L'appui long** (T270) : le menu du système sur la bulle, et
+            // non sur la rangée — les deux commandes à côté ont déjà leur
+            // geste, et un menu posé par-dessus volerait leur appui.
+            .contextMenu { ChatMessageMenu(message: message, model: model, onShare: share, onDelete: askDeletion) }
+            .accessibilityActions {
+                ChatMessageMenu.accessibilityActions(
+                    for: message,
+                    model: model,
+                    onShare: share,
+                    onDelete: askDeletion
+                )
+            }
+            .confirmationDialog(
+                deletionTitle,
+                isPresented: $confirmsDeletion,
+                titleVisibility: .visible
+            ) {
+                Button(ChatCopy.Menu.deleteConfirm, role: .destructive) { model.delete(message) }
+                Button(ChatCopy.Menu.deleteKeep, role: .cancel) {}
+            } message: {
+                Text(deletionBody)
+            }
+    }
+
+    private func share() {
+        model.share(message)
+    }
+
+    /// Le menu ne supprime jamais directement : le souvenir quitte le carnet,
+    /// et pour tout le monde.
+    private func askDeletion() {
+        confirmsDeletion = true
+    }
+
+    /// Une photo, des photos, un souvenir : la confirmation nomme ce qui part.
+    private var deletionTitle: String {
+        if case .photos(let attachments) = message.body, attachments.count > 1 {
+            return ChatCopy.Menu.deletePhotosTitle
+        }
+        return ChatCopy.Menu.deleteTitle
+    }
+
+    private var deletionBody: String {
+        if case .photos(let attachments) = message.body, attachments.count > 1 {
+            return ChatCopy.Menu.deletePhotosBody
+        }
+        return ChatCopy.Menu.deleteBody
     }
 
     /// La bulle n'est pas encore chez le serveur : en route, attendant demain

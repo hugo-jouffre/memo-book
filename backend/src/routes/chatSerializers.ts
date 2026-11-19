@@ -574,6 +574,20 @@ export function serializeChatThread(options: SerializeThreadOptions) {
       stepId: null,
       prompt: memo.prompt,
       memberCount,
+      // **Les étapes du voyage, pour « Déplacer dans une autre étape »**
+      // (T270) : l'appui long sur une bulle de photos ouvre la liste, il lui
+      // faut donc les étapes sous la main. Le strict nécessaire — de quoi
+      // nommer une ligne et l'envoyer — et non les étapes du voyage entières,
+      // que l'écran du voyage sert déjà.
+      //
+      // Servi avec le fil seulement, jamais avec un sondage : la liste change
+      // quand le carnet gagne une étape, pas toutes les deux secondes. Le fil
+      // se relit à chaque ouverture, et c'est là qu'on appuie longuement.
+      steps: memo.steps.map((step) => ({
+        id: step.id,
+        number: step.number,
+        placeName: step.placeName,
+      })),
     },
     messages,
     suggestions: serializeChatSuggestions(

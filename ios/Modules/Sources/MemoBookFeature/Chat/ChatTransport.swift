@@ -247,6 +247,17 @@ public struct ChatTransport: Sendable {
     /// choix de garder la littérale tombe, puisqu'on redemande une rédaction.
     public var reanalyse: @Sendable (_ entryId: String) async throws -> Entry
 
+    /// **« Supprimer »**, dans le menu d'un appui long (T270) —
+    /// `DELETE /v1/entries/:id`. Le souvenir quitte le fil **et le carnet** :
+    /// c'est le même geste que la croix du tiroir d'une étape, et c'est pour
+    /// ça que la confirmation le dit.
+    public var deleteMemory: @Sendable (_ entryId: String) async throws -> Void
+
+    /// **« Déplacer dans une autre étape »** (T270) —
+    /// `POST /v1/trips/:id/chat/:messageId/step`. Le sujet est la bulle : des
+    /// photos envoyées ensemble s'en vont ensemble.
+    public var moveMessage: @Sendable (_ messageId: String, _ stepId: String) async throws -> Void
+
     public init(
         load: @escaping @Sendable () async throws -> ChatThread,
         poll: @escaping @Sendable (Date) async throws -> ChatThreadUpdate,
@@ -260,6 +271,16 @@ public struct ChatTransport: Sendable {
         },
         reanalyse: @escaping @Sendable (String) async throws -> Entry = { _ in
             throw APIError.server(statusCode: 0, code: nil, message: "Analyse indisponible ici.")
+        },
+        // Les deux gestes du menu d'un appui long ne mènent nulle part par
+        // défaut, pour la même raison que les deux de la fiche : un transport
+        // qui ne les porte pas les refuse, au lieu de laisser croire que la
+        // bulle est partie.
+        deleteMemory: @escaping @Sendable (String) async throws -> Void = { _ in
+            throw APIError.server(statusCode: 0, code: nil, message: "Suppression indisponible ici.")
+        },
+        moveMessage: @escaping @Sendable (String, String) async throws -> Void = { _, _ in
+            throw APIError.server(statusCode: 0, code: nil, message: "Déplacement indisponible ici.")
         },
         media: @escaping @Sendable (URL) async throws -> Data,
         waiting: @escaping @Sendable () async -> [OutgoingTurn] = { [] },
@@ -280,6 +301,8 @@ public struct ChatTransport: Sendable {
         self.remember = remember
         self.keepTranscript = keepTranscript
         self.reanalyse = reanalyse
+        self.deleteMemory = deleteMemory
+        self.moveMessage = moveMessage
     }
 
     // MARK: - Le vrai serveur
@@ -300,6 +323,10 @@ public struct ChatTransport: Sendable {
                 try await api.updateEntry(id: entryId, edit: EntryEdit.keepsTranscript(keeps))
             },
             reanalyse: { entryId in try await api.retryRedaction(entryId: entryId) },
+            deleteMemory: { entryId in try await api.deleteEntry(id: entryId) },
+            moveMessage: { messageId, stepId in
+                try await api.moveChatMessage(tripId: tripId, messageId: messageId, toStepId: stepId)
+            },
             media: { url in
                 // `/v1/entries/<id>/media` pour un souvenir,
                 // `/v1/chat-messages/<id>/media` pour un vocal du contexte du

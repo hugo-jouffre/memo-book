@@ -306,6 +306,12 @@ public struct ChatView: View {
         .fullScreenCover(item: $model.viewedPhotos) { viewing in
             ChatPhotoViewer(viewing: viewing, model: model) { model.viewedPhotos = nil }
         }
+        // « Partager », depuis le menu d'un appui long (T270) : la feuille du
+        // système, présentée par l'écran — une feuille présentée par chaque
+        // bulle disparaîtrait avec elle au premier défilement.
+        .sheet(item: $model.shared) { sharing in
+            ChatShareSheet(sharing: sharing)
+        }
         .fullScreenCover(isPresented: $showsPaywall) {
             PaywallView(
                 subscription: .offer,

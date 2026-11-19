@@ -43,6 +43,7 @@ import {
 } from "../services/conversationThread.js";
 import { ORAL_CORRECTION_TOPIC } from "../services/redaction.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { loadVisibleMemo } from "./memos.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { MAX_PHOTOS_PER_STEP } from "../services/photoBudget.js";
 import { measurePhoto } from "../services/photoOrientation.js";
@@ -79,6 +80,12 @@ const threadQuery = z.object({
   /** Le curseur du sondage : le `now` de la lecture précédente, en temps serveur. */
   since: z.string().datetime({ offset: true }).optional(),
 });
+
+/** « Déplacer dans une autre étape » : le voyage, et la bulle qui s'en va. */
+const moveParams = z.object({ id: z.string().uuid(), messageId: z.string().uuid() });
+
+/** L'étape d'arrivée. Jamais nulle : on déplace **vers** une étape. */
+const moveBody = z.object({ stepId: z.string().uuid() });
 
 /**
  * Un texte, ou une puce. `id` est **fourni par l'app** et devient l'identifiant
@@ -1119,6 +1126,77 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       });
       await ensureOpening(tx, memoId, context.responder);
     });
+
+    return reply.code(204).send();
+  });
+
+  /**
+   * **« Déplacer dans une autre étape »** — l'appui long sur une bulle de
+   * photos (T270).
+   *
+   * Le sujet est **la bulle**, pas la photo : six photos envoyées ensemble
+   * partagent un message, et c'est ce message qui porte l'étape choisie. On
+   * appuie sur une bulle, elle part entière.
+   *
+   * ⚠️ **Les photos seulement, et ce n'est pas une facilité.** L'étape d'un
+   * récit se *calcule* — sa date, son lieu, le fait qu'il prolonge le
+   * précédent (`services/tripFacts.ts`) —, et le prochain recalcul la
+   * reprendrait : écrire `entries.stepId` à la main sur un récit serait un
+   * déplacement qui se défait tout seul, sans rien dire. Une photo, elle, a
+   * déjà son épingle : `pinnedSteps` fait passer l'étape de sa bulle devant le
+   * découpage. Déplacer un récit demande une colonne qui porte le geste,
+   * comme `entries.separatedByTraveller` pour « Séparer ces récits » — c'est
+   * le second temps de T270.
+   *
+   * Un co-voyageur déplace comme le propriétaire : il raconte comme lui.
+   */
+  app.post("/v1/trips/:id/chat/:messageId/step", async (request, reply) => {
+    const { id: memoId, messageId } = moveParams.parse(request.params);
+    const { stepId } = moveBody.parse(request.body ?? {});
+    // La visibilité du carnet d'abord : quelqu'un qui n'y participe pas
+    // reçoit un 404 sans qu'on lui dise si ce message existe. `loadVisibleMemo`
+    // et non `loadChatMemo` : ce geste n'a besoin ni des membres, ni des
+    // étapes, ni de la photo élue.
+    await loadVisibleMemo(context, request, memoId);
+
+    const message = await context.prisma.chatMessage.findFirst({
+      where: { id: messageId, memoId },
+      select: { id: true, author: true, kind: true, entryId: true, payload: true },
+    });
+    if (!message) throw HttpError.notFound("Message introuvable.");
+    if (message.author !== "traveller" || message.kind !== "photos") {
+      throw HttpError.badRequest("Seules des photos se déplacent d'une étape à l'autre.");
+    }
+
+    const step = await context.prisma.memoStep.findFirst({
+      where: { id: stepId, memoId },
+      select: { id: true },
+    });
+    if (!step) throw HttpError.notFound("Étape introuvable.");
+
+    // Une bulle de photos porte la première par `entryId`, les autres par
+    // `payload.entryIds` — voir `materializeEntriesWithoutMessages`.
+    const ids = new Set<string>();
+    if (message.entryId) ids.add(message.entryId);
+    const payload = message.payload as { entryIds?: unknown } | null;
+    if (payload && Array.isArray(payload.entryIds)) {
+      for (const id of payload.entryIds) if (typeof id === "string") ids.add(id);
+    }
+
+    await context.prisma.$transaction(async (tx) => {
+      await lockThread(tx, memoId);
+      // L'épingle, qui tiendra au recalcul…
+      await tx.chatMessage.update({ where: { id: message.id }, data: { stepId } });
+      // …et l'étape du souvenir lui-même, pour que la réponse suivante le
+      // range au bon endroit sans attendre le recalcul.
+      if (ids.size > 0) {
+        await tx.entry.updateMany({ where: { id: { in: [...ids] }, memoId }, data: { stepId } });
+      }
+    });
+
+    // Le découpage se refait derrière : l'étape qui perd sa dernière photo
+    // disparaît (T235), les numéros suivent.
+    await refreshTripFactsQuietly(context, memoId);
 
     return reply.code(204).send();
   });

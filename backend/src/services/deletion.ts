@@ -3,6 +3,7 @@ import type { AppContext } from "../context.js";
 import type { EraseTraceJob } from "../jobs/eraseTrace.js";
 import { JOB_NAMES } from "../jobs/queue.js";
 import { FAKE_PDF_BASE_URL } from "./apitemplate.js";
+import { contextVoiceOf } from "./tripContext.js";
 
 /**
  * Supprimer pour de bon : un carnet, ou un compte entier.
@@ -306,8 +307,80 @@ export async function deleteAccountAndData(
  *  - un fichier encore nommé par une autre ligne `media_assets` (un original
  *    partagé) ne part pas.
  *
+ * **Et les bulles que ce souvenir portait s'en vont avec lui** (T270,
+ * 19/11/2026) — voir ``forgetBubblesOf``.
+ *
  * Rend `false` quand le souvenir n'existe plus.
  */
+/**
+ * **Les bulles d'un souvenir s'en vont avec lui** (T270, 19/11/2026).
+ *
+ * `chat_messages.entryId` est en `SetNull` : sans cette passe, supprimer un
+ * souvenir laissait sa bulle dans le fil, **vidée de ce qu'elle montrait** —
+ * un vocal de 0 seconde avec un bouton de lecture mort, une bulle de photos
+ * aux adresses sans réponse. La fiche, elle, disparaissait déjà toute seule
+ * (le sérialiseur la redessine depuis le souvenir, et rend `null` sans lui) :
+ * c'est précisément ce qui a longtemps masqué le reste.
+ *
+ * Ce qui part, et ce qui reste :
+ *
+ * - **la fiche et la bulle du voyageur** partent : leur contenu *est* ce
+ *   souvenir ;
+ * - **un vocal qui porte son propre fichier reste** — une correction dictée,
+ *   le contexte du voyage (`payload.contextVoice`) : il vise la fiche sans
+ *   être elle, et il se réécoute encore ;
+ * - **une bulle de photos ne part que vidée** : six photos envoyées ensemble
+ *   partagent une bulle (`payload.entryIds`), en effacer une laisse les cinq
+ *   autres. La bulle change de première photo si c'était celle-là.
+ *
+ * Vaut pour les deux chemins qui effacent un souvenir, et c'est voulu : la
+ * croix du tiroir d'une étape (T235) laissait les mêmes débris dans le fil que
+ * l'appui long.
+ */
+async function forgetBubblesOf(
+  tx: Prisma.TransactionClient,
+  memoId: string,
+  entryId: string,
+): Promise<void> {
+  const carried = await tx.chatMessage.findMany({
+    where: { memoId, OR: [{ entryId }, { kind: "photos" }] },
+    select: { id: true, kind: true, entryId: true, payload: true },
+  });
+
+  const gone: string[] = [];
+
+  for (const message of carried) {
+    if (message.kind === "photos") {
+      const payload = (message.payload ?? null) as { entryIds?: unknown } | null;
+      const listed = Array.isArray(payload?.entryIds)
+        ? payload.entryIds.filter((id): id is string => typeof id === "string")
+        : [];
+      if (message.entryId !== entryId && !listed.includes(entryId)) continue;
+
+      const kept = listed.filter((id) => id !== entryId);
+      const first = kept[0];
+      if (first === undefined) {
+        gone.push(message.id);
+        continue;
+      }
+      await tx.chatMessage.update({
+        where: { id: message.id },
+        data: {
+          ...(message.entryId === entryId ? { entryId: first } : {}),
+          payload: { ...(payload ?? {}), entryIds: kept },
+        },
+      });
+      continue;
+    }
+
+    if (message.entryId !== entryId) continue;
+    if (message.kind === "voice" && contextVoiceOf(message.payload)) continue;
+    gone.push(message.id);
+  }
+
+  if (gone.length > 0) await tx.chatMessage.deleteMany({ where: { id: { in: gone } } });
+}
+
 export async function deleteEntryAndMedia(
   context: AppContext,
   entryId: string,
@@ -318,6 +391,7 @@ export async function deleteEntryAndMedia(
     const entry = await tx.entry.findUnique({
       where: { id: entryId },
       select: {
+        memoId: true,
         mediaId: true,
         media: {
           select: {
@@ -337,6 +411,7 @@ export async function deleteEntryAndMedia(
 
     const duSticker = entry.sticker ? [entry.sticker.storageKey] : [];
 
+    await forgetBubblesOf(tx, entry.memoId, entryId);
     await tx.entry.delete({ where: { id: entryId } });
     if (!entry.mediaId || !entry.media) return { storageKeys: duSticker, cdnAssetId: null };
 

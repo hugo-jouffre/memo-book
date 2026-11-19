@@ -172,6 +172,42 @@ public actor PreviewChatBox {
         }
     }
 
+    /// **Les bulles d'un souvenir supprimé**, dans le bac à sable : la bulle
+    /// du voyageur et sa fiche. Une bulle de photos perd la photo effacée, et
+    /// ne s'en va que vidée — la même règle que `forgetBubblesOf` côté
+    /// serveur, en trois lignes parce que le bac à sable n'a pas de payload.
+    public func forget(entryId: String) {
+        for (tripId, var thread) in threads {
+            thread.messages = thread.messages.compactMap { message in
+                switch message.body {
+                case .photos(let attachments):
+                    let kept = attachments.filter { $0.id != entryId }
+                    if kept.count == attachments.count { return message }
+                    guard !kept.isEmpty else { return nil }
+                    var lightened = message
+                    lightened.body = .photos(kept)
+                    return lightened
+                case .transcript(let card):
+                    return card.entryId == entryId ? nil : message
+                case .text, .voice:
+                    return message.entryId == entryId ? nil : message
+                }
+            }
+            threads[tripId] = thread
+        }
+    }
+
+    /// « Déplacer dans une autre étape », dans le bac à sable : la bulle
+    /// change d'étape et rien d'autre. Le serveur, lui, déplace aussi les
+    /// souvenirs et refait le découpage — ce que le bac à sable n'a pas à
+    /// rejouer, puisqu'il n'a pas d'étapes à recalculer.
+    public func move(messageId: String, toStepId: String, tripId: String) {
+        var thread = thread(for: tripId)
+        guard let index = thread.messages.firstIndex(where: { $0.id == messageId }) else { return }
+        thread.messages[index].stepId = toStepId
+        threads[tripId] = thread
+    }
+
     public func clear(tripId: String) {
         var thread = thread(for: tripId).cleared()
         let now = Date.now
@@ -295,6 +331,10 @@ extension PreviewAPI {
 
     public func clearChat(tripId: String) async throws {
         await chat.clear(tripId: tripId)
+    }
+
+    public func moveChatMessage(tripId: String, messageId: String, toStepId: String) async throws {
+        await chat.move(messageId: messageId, toStepId: toStepId, tripId: tripId)
     }
 
     public func entryMedia(id: String) async throws -> Data {
