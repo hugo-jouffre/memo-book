@@ -550,6 +550,19 @@ struct BookSheetView: View {
                 .padding(MemoBookSpacing.xs)
             }
         }
+        // **La page elle-même ouvre le plein écran** (T277, Hugo, 05/11/2026 —
+        // « un appui sur l'aperçu du PDF doit l'afficher en grand ; la vignette
+        // ne mène nulle part »). Le bouton du coin reste : c'est lui qui
+        // **montre** que le geste existe, et c'est lui que VoiceOver annonce.
+        // Le toucher de la page, lui, est celui qu'on essaie d'instinct.
+        //
+        // Le geste vit **sous** les boutons posés dessus — « Configurer mes
+        // couvertures », l'invitation du voile — qui gardent le leur : un
+        // bouton l'emporte toujours sur le toucher de ce qui le porte. Et il
+        // ne paraît pas du tout sans `onExpand` : la feuille du paywall n'a
+        // pas de plein écran où aller.
+        .contentShape(.rect(cornerRadius: MemoBookSpacing.pageCornerRadius))
+        .onTapGesture { onExpand?() }
         .animation(.easeInOut(duration: 0.2), value: model.coverCallToAction)
         .task(id: model.sheetIndex) {
             // La page voisine est rendue pendant qu'on lit celle-ci : tourner
