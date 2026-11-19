@@ -5,6 +5,7 @@ import { currentBookFingerprint } from "../src/services/bookFingerprint.js";
 import { sniffImageFormat } from "../src/services/photoFormat.js";
 import { FakeTranscriber } from "../src/services/transcription.js";
 import { validatePayload } from "../src/services/payloadValidator.js";
+import { forgetPipelineDiagnostic } from "../src/services/renderDiagnostics.js";
 import {
   createHarness,
   multipartBody,
@@ -611,6 +612,74 @@ describe("santé du service", () => {
       checks: { database: "ok", queue: "ok", schema: "ok" },
       pipelineMode: "fake",
     });
+  });
+
+  /**
+   * ⚠️ **Deux fois en un mois, la chaîne s'est arrêtée sans que rien ne le
+   * dise** — crédit épuisé chez un fournisseur, `/health` toujours `ok`
+   * (T274). La sonde regarde désormais aussi ce que le service **produit**.
+   */
+  it("dit ce qui casse en silence : rendus ratés et récits en attente", async () => {
+    const me = await registerAccount(harness.app, "sante@memobook.app");
+    const memo = await harness.prisma.memo.create({
+      data: { ownerAccountId: me.accountId, title: "Rome", accessCode: "SAN001" },
+    });
+    await harness.prisma.render.create({
+      data: {
+        memoId: memo.id,
+        status: "failed",
+        error: "429 You have no credits remaining.",
+      },
+    });
+    // Un récit qui attend depuis deux heures : celui d'il y a cinq minutes
+    // est normal, et ne doit pas compter.
+    await harness.prisma.entry.create({
+      data: {
+        memoId: memo.id,
+        kind: "text",
+        transcript: "Une journée entière à marcher.",
+        capturedAt: new Date(),
+        redactionStatus: "pending",
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      },
+    });
+    await harness.prisma.entry.create({
+      data: {
+        memoId: memo.id,
+        kind: "text",
+        transcript: "Et le soir, une terrasse.",
+        capturedAt: new Date(),
+        redactionStatus: "pending",
+      },
+    });
+    // Une photo n'a rien à rédiger : elle ne compte jamais.
+    await harness.prisma.entry.create({
+      data: {
+        memoId: memo.id,
+        kind: "photo",
+        capturedAt: new Date(),
+        redactionStatus: "pending",
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      },
+    });
+    forgetPipelineDiagnostic();
+
+    const response = await harness.app.inject({ method: "GET", url: "/health" });
+
+    // Un rendu raté ne fait pas tomber la sonde.
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      status: string;
+      pipeline: {
+        rendersFailedLastDay: number;
+        lastRenderError: { message: string } | null;
+        memoriesAwaitingRedaction: number;
+      };
+    }>();
+    expect(body.status).toBe("ok");
+    expect(body.pipeline.rendersFailedLastDay).toBe(1);
+    expect(body.pipeline.lastRenderError?.message).toContain("no credits remaining");
+    expect(body.pipeline.memoriesAwaitingRedaction).toBe(1);
   });
 
   it("refuse le trafic quand la base n'a pas le schéma du code", async () => {
