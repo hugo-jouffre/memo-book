@@ -272,21 +272,28 @@ public struct RootView: View {
                 // si la pile est vide : rouvrir l'app sur un écran plus
                 // profond — une conversation, un aperçu — ne doit pas être
                 // écrasé par ce raccourci.
+                // **Deux gestes d'ouverture, dans cet ordre** : reprendre le
+                // voyage où l'on revient, puis — seulement si on est resté sur
+                // l'accueil — demander l'avis. Une seule `task` pour les deux,
+                // parce que l'ordre compte et que deux `task` concurrentes ne
+                // le garantissent pas.
                 .task {
-                    guard !aRepriseLeVoyage else { return }
-                    aRepriseLeVoyage = true
-                    guard path.isEmpty, let voyage = visites.voyageAReprendre() else { return }
-                    path = [.trip(id: voyage)]
-                }
-                // **La demande d'avis** (T273), sur l'accueil et une seule
-                // fois par lancement : la demander compte comme un affichage
-                // côté serveur, et c'est ce compteur qui borne le nombre de
-                // fois qu'on dérange quelqu'un.
-                //
-                // Après la reprise du voyage, pas avant : une modale posée
-                // sur l'accueil qu'on quitte dans la seconde se serait
-                // montrée pour rien.
-                .task {
+                    // **Revenir deux fois sur un voyage en 24 h ouvre dessus**
+                    // (T268), une fois par lancement et sur une pile vide.
+                    if !aRepriseLeVoyage {
+                        aRepriseLeVoyage = true
+                        if path.isEmpty, let voyage = visites.voyageAReprendre() {
+                            path = [.trip(id: voyage)]
+                        }
+                    }
+
+                    // **La demande d'avis** (T273) : sur l'accueil, et nulle
+                    // part ailleurs. La demander compte comme un affichage
+                    // côté serveur — c'est ce compteur qui borne le nombre de
+                    // fois qu'on dérange quelqu'un —, et une modale qui
+                    // s'ouvre par-dessus la composition d'un carnet ou le
+                    // voyage qu'on vient de rouvrir arrive au pire moment.
+                    guard path.isEmpty else { return }
                     let model = avis ?? dependencies.feedbackModel()
                     avis = model
                     await model.askOnce()
