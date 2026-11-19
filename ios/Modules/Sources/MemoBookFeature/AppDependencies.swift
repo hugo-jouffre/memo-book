@@ -366,6 +366,21 @@ public final class AppDependencies {
     /// seconde fonction, corriger son numéro de téléphone ne changeait rien
     /// ailleurs que sur l'écran, jusqu'au prochain chargement qui le remettait
     /// comme avant.
+    /// **La demande d'avis** (T273) : la campagne vient du serveur, l'app ne
+    /// dessine que les formes qu'elle connaît.
+    ///
+    /// La version de l'app part avec la réponse — un avis se lit autrement
+    /// selon ce que la personne avait sous les yeux.
+    public func feedbackModel() -> FeedbackModel {
+        FeedbackModel(
+            load: { [api] in try await api.feedbackCampaign() },
+            submit: { [api] id, response in
+                try await api.sendFeedbackResponse(campaignId: id, response: response)
+            },
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        )
+    }
+
     public func profileModel() -> ProfileModel {
         ProfileModel(
             source: cachedSource(.profile) { [api] in try await api.profile() },

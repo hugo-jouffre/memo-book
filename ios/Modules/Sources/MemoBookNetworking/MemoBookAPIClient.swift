@@ -610,6 +610,20 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "POST", path: "/v1/entries/\(id)/validate")
     }
 
+    public func feedbackCampaign() async throws -> FeedbackCampaign? {
+        struct Envelope: Decodable { let campaign: FeedbackCampaign? }
+        let envelope: Envelope = try await send(method: "GET", path: "/v1/feedback-campaign")
+        return envelope.campaign
+    }
+
+    public func sendFeedbackResponse(campaignId: String, response: FeedbackResponse) async throws {
+        try await sendIgnoringResponse(
+            method: "POST",
+            path: "/v1/feedback-campaigns/\(campaignId)/response",
+            encodableBody: response
+        )
+    }
+
     public func clearChat(tripId: String) async throws {
         try await sendIgnoringResponse(method: "DELETE", path: "/v1/trips/\(tripId)/chat")
     }
@@ -1085,6 +1099,20 @@ public actor MemoBookAPIClient: MemoBookAPI {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(encodableBody)
         return try await perform(request, credential: credential)
+    }
+
+    /// La même chose avec un corps **typé** : un dictionnaire de chaînes ne
+    /// sait pas porter une liste de réponses.
+    private func sendIgnoringResponse(
+        method: String,
+        path: String,
+        encodableBody: some Encodable,
+        credential: Credential = .session
+    ) async throws {
+        var request = try makeRequest(method: method, path: path, credential: credential)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(encodableBody)
+        _ = try await performRaw(request, credential: credential)
     }
 
     private func sendIgnoringResponse(

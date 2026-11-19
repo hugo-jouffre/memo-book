@@ -66,6 +66,8 @@ public actor PreviewAPI: MemoBookAPI {
     /// Les souvenirs effacés par la croix d'une étape : l'étape qui n'en a
     /// plus disparaît du voyage, comme le serveur la retirera (T235).
     private var deletedEntryIds: Set<String> = []
+    /// Les campagnes d'avis auxquelles le bac à sable a déjà répondu.
+    private var answeredFeedbackCampaigns: Set<String> = []
 
     /// Les fils de conversation du double, un par voyage — voir `PreviewChat.swift`.
     let chat = PreviewChatBox()
@@ -513,6 +515,21 @@ public actor PreviewAPI: MemoBookAPI {
     /// et rien ne le rend. Les écrans qui comptent sont ceux qu'on regarde,
     /// pas la mécanique des trente jours — elle se vérifie en test.
     public func restoreMemo(id: String) async throws {}
+
+    /// **La demande d'avis, dans le bac à sable** (T273) : une campagne
+    /// écrite ici, pour que la modale se regarde sans serveur. Fermée ou
+    /// envoyée, elle ne revient pas — comme en vrai.
+    public func feedbackCampaign() async throws -> FeedbackCampaign? {
+        try SandboxNetwork.failIfOffline()
+        guard !answeredFeedbackCampaigns.contains(FeedbackCampaign.fixture.id) else { return nil }
+        return FeedbackCampaign.fixture
+    }
+
+    public func sendFeedbackResponse(campaignId: String, response: FeedbackResponse) async throws {
+        try SandboxNetwork.failIfOffline()
+        _ = response
+        answeredFeedbackCampaigns.insert(campaignId)
+    }
 
     public func deleteEntry(id: String) async throws {
         try SandboxNetwork.failIfOffline()
