@@ -5,6 +5,7 @@ import type { Env } from "../env.js";
 import { logModelUsage } from "./modelUsage.js";
 import { loadWritingRules } from "../lib/templates.js";
 import { EDITORIAL_LIMITS, STEP_SIZES } from "./payloadValidator.js";
+import { localDate, type LocalDate } from "./localCalendar.js";
 
 /**
  * Passe de rédaction — étape 2 du pipeline, entre la transcription et la mise
@@ -402,11 +403,45 @@ export interface RedactionResult {
    *
    * Ce n'est **qu'une proposition** : MEMO la pose dans le fil, et rien n'est
    * découpé avant que le voyageur réponde.
+   *
+   * **Chaque part dit aussi QUAND elle a été vécue**, quand le récit le dit
+   * (Hugo, 05/11/2026 — « les souvenirs ne sont pas toujours dans l'ordre
+   * chronologique et gardent l'ordre du vocal »). Les parts, elles, restent
+   * dans l'ordre du récit : c'est ce qui permet de vérifier qu'elles citent
+   * sans se chevaucher. C'est `entrySplit.ts` qui les date, et le carnet les
+   * range ensuite par `capturedAt` comme tous les souvenirs.
    */
-  moments: { title: string; transcript: string }[];
+  moments: RedactedMoment[];
 
   /** Modèle qui a produit le texte, tracé sur l'entrée. */
   model: string;
+}
+
+/**
+ * **Le moment de la journée**, quand le récit le dit — « le matin », « le
+ * soir ». Grossier exprès : personne ne dit 9 h 14, et prétendre le savoir
+ * mettrait des souvenirs dans un ordre que le voyageur n'a jamais donné.
+ */
+export const PARTS_OF_DAY = ["matin", "midi", "apres-midi", "soir", "nuit"] as const;
+export type PartOfDay = (typeof PARTS_OF_DAY)[number];
+
+/** L'heure que chaque moment de la journée vaut, dans le fuseau du voyage. */
+export const PART_OF_DAY_HOURS: Record<PartOfDay, number> = {
+  matin: 9,
+  midi: 12,
+  "apres-midi": 15,
+  soir: 20,
+  nuit: 23,
+};
+
+/** Une part d'un récit découpé : ce qu'elle raconte, et quand ça a eu lieu. */
+export interface RedactedMoment {
+  title: string;
+  transcript: string;
+  /** Le jour vécu, `AAAA-MM-JJ`, quand le récit le dit. `null` sinon. */
+  day: LocalDate | null;
+  /** Le moment de cette journée, quand le récit le dit. `null` sinon. */
+  partOfDay: PartOfDay | null;
 }
 
 /** Au-delà, ce n'est plus un récit à découper : c'est un carnet entier. */
@@ -425,8 +460,18 @@ export const MAX_MOMENTS = 4;
  *
  * Rend un tableau vide dès qu'un doute subsiste : ne rien proposer est
  * toujours mieux que proposer de couper au mauvais endroit.
+ *
+ * **La date, elle, ne fait pas tomber la proposition.** Un jour illisible ou
+ * hors du voyage redevient `null` pour cette part seule : le découpage reste
+ * bon, la part garde simplement sa place dans l'ordre du récit. Refuser la
+ * coupe entière parce qu'une date est fautive reviendrait à perdre le
+ * découpage pour sauver un détail.
  */
-export function parseMoments(value: unknown, transcript: string | null): RedactionResult["moments"] {
+export function parseMoments(
+  value: unknown,
+  transcript: string | null,
+  trip?: { startDate: Date | null; endDate: Date | null },
+): RedactionResult["moments"] {
   if (!Array.isArray(value) || value.length < 2 || value.length > MAX_MOMENTS) return [];
   const haystack = normalizeForMatching(transcript ?? "");
   if (!haystack) return [];
@@ -440,9 +485,45 @@ export function parseMoments(value: unknown, transcript: string | null): Redacti
     const cleanPart = part.trim();
     if (!cleanTitle || !cleanPart) return [];
     if (!haystack.includes(normalizeForMatching(cleanPart))) return [];
-    moments.push({ title: cleanTitle, transcript: cleanPart });
+    moments.push({
+      title: cleanTitle,
+      transcript: cleanPart,
+      day: parseMomentDay((item as { day?: unknown }).day, trip),
+      partOfDay: parsePartOfDay((item as { partOfDay?: unknown }).partOfDay),
+    });
   }
   return moments;
+}
+
+/** `AAAA-MM-JJ`, et rien d'autre. */
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Le jour d'un moment, relu **contre la fenêtre du voyage**.
+ *
+ * Un modèle à qui l'on demande de situer « hier » rend parfois l'année en
+ * cours là où le voyage est l'an dernier, ou une date qu'il a déduite d'un
+ * jour de semaine. Hors de la fenêtre, on préfère ne rien savoir : la part
+ * garde alors sa place dans l'ordre du récit, qui est au moins ce que le
+ * voyageur a dit. Sans fenêtre connue, on accepte un jour bien formé.
+ */
+export function parseMomentDay(
+  value: unknown,
+  trip?: { startDate: Date | null; endDate: Date | null },
+): LocalDate | null {
+  if (typeof value !== "string") return null;
+  const day = value.trim();
+  if (!ISO_DAY.test(day) || Number.isNaN(Date.parse(`${day}T12:00:00Z`))) return null;
+  if (trip?.startDate && day < localDate(trip.startDate, "UTC")) return null;
+  if (trip?.endDate && day > localDate(trip.endDate, "UTC")) return null;
+  return day;
+}
+
+/** Le moment de la journée, ou `null` dès que ce n'en est pas un. */
+export function parsePartOfDay(value: unknown): PartOfDay | null {
+  if (typeof value !== "string") return null;
+  const found = PARTS_OF_DAY.find((part) => part === value.trim().toLowerCase());
+  return found ?? null;
 }
 
 /**
@@ -802,7 +883,8 @@ const REDACTION_SCHEMA = {
         "jour ou de lieu fait un moment ; un détail ajouté après coup, non. Chaque part cite " +
         "**mot pour mot** sa tranche de la transcription, sans un mot ajouté, retiré ni " +
         "remplacé : tu découpes, tu ne réécris pas. Les parts se suivent dans l'ordre du récit " +
-        "et ne se chevauchent pas.",
+        "et ne se chevauchent pas — même quand le récit n'est pas dans l'ordre : c'est `day` et " +
+        "`partOfDay` qui disent quand chaque moment a été vécu, pas leur place dans la liste.",
       items: {
         type: "object",
         properties: {
@@ -811,8 +893,24 @@ const REDACTION_SCHEMA = {
             type: "string",
             description: "La tranche de la transcription qui raconte ce moment, citée mot pour mot.",
           },
+          day: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+            description:
+              "Le jour que ce moment raconte, au format AAAA-MM-JJ, UNIQUEMENT si le récit le " +
+              "situe — « hier », « le premier jour », « mardi », « le lendemain » — et que les " +
+              "dates du voyage et celle de ce souvenir te permettent de le poser sans deviner. " +
+              "null dès qu'il y a le moindre doute, et c'est le cas le plus fréquent : un " +
+              "voyageur qui raconte sa journée ne la date pas.",
+          },
+          partOfDay: {
+            anyOf: [{ type: "string", enum: [...PARTS_OF_DAY] }, { type: "null" }],
+            description:
+              "Le moment de la journée, UNIQUEMENT si le récit le dit — « au réveil », « à " +
+              "midi », « en fin d'après-midi », « le soir », « dans la nuit ». null sinon. " +
+              "Ne le déduis jamais de ce qui est raconté : un musée n'est pas le matin.",
+          },
         },
-        required: ["title", "transcript"],
+        required: ["title", "transcript", "day", "partOfDay"],
         additionalProperties: false,
       },
     },
@@ -1375,8 +1473,13 @@ export class AnthropicRedactor implements Redactor {
       quiz: withinQuizLimits(parsed.quiz),
       doubts: parseDoubts(parsed.doubts),
       // Relus **contre la transcription** : une part que personne n'a dite
-      // découperait le souvenir sur des mots inventés.
-      moments: parseMoments(parsed.moments, input.entry.transcript),
+      // découperait le souvenir sur des mots inventés. Et contre la fenêtre
+      // du voyage : un jour hors d'elle redevient `null` plutôt que de ranger
+      // un souvenir ailleurs qu'au voyage.
+      moments: parseMoments(parsed.moments, input.entry.transcript, {
+        startDate: input.memo.startDate ?? null,
+        endDate: input.memo.endDate ?? null,
+      }),
       model: this.model,
     };
   }

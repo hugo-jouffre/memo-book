@@ -588,7 +588,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     const outcome = await prisma.$transaction(async (tx) => {
       await lockThread(tx, memo.id);
       const target = await splitTargetOf(tx, memo.id, message.seq);
-      return target ? await splitEntryIntoMoments(tx, target) : null;
+      return target ? await splitEntryIntoMoments(tx, target, timeZone) : null;
     });
 
     // Rien à faire quand il n'y a pas eu de découpage : la réponse scriptée

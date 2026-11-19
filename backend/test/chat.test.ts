@@ -1008,6 +1008,66 @@ describe("découper un récit en plusieurs étapes (Hugo, 28/10/2026)", () => {
     expect(await readSteps(memo.id)).toHaveLength(2);
   });
 
+  /**
+   * **T279** (Hugo, 05/11/2026) : « les souvenirs ne sont pas toujours dans
+   * l'ordre chronologique et gardent l'ordre du vocal, qui peut être très
+   * désordonné ».
+   *
+   * Ici le vocal revient en arrière : le Colisée est raconté en premier mais
+   * vécu le second. Avant, les parts se décalaient d'une seconde dans l'ordre
+   * du récit, et le carnet imprimait ce désordre.
+   */
+  it("range les parts par ce qu'elles racontent, pas par l'ordre du vocal", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, RECIT);
+    const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id } });
+    await harness.prisma.entry.update({
+      where: { id: entry.id },
+      data: {
+        transcript: RECIT,
+        splitSuggestion: [
+          {
+            title: "Le Colisée bondé",
+            transcript: "Jeudi on a marché jusqu'au Colisée, il y avait un monde fou.",
+            day: "2026-04-09",
+            partOfDay: null,
+          },
+          {
+            title: "La route du sud",
+            transcript: "Le lendemain on a pris la route du sud, direction Naples.",
+            day: "2026-04-08",
+            partOfDay: null,
+          },
+        ],
+      },
+    });
+    await harness.prisma.chatMessage.create({
+      data: {
+        memoId: memo.id,
+        author: "memo",
+        kind: "text",
+        text: "Tu m'as raconté 2 moments d'un coup. Tu préfères ?",
+        model: "scripted",
+        payload: { suggestions: ["split", "keep"], asksSplitFor: entry.id },
+      },
+    });
+
+    await say(memo.id, SUGGESTIONS.split.label, { suggestionId: "split" });
+
+    const parJour = await harness.prisma.entry.findMany({
+      where: { memoId: memo.id },
+      orderBy: { capturedAt: "asc" },
+    });
+    expect(parJour).toHaveLength(2);
+    // Le 8 d'abord, bien qu'il ait été raconté en second.
+    expect(parJour[0]?.transcript).toContain("Naples");
+    expect(parJour[1]?.transcript).toContain("Colisée");
+    expect(parJour.map((row) => row.capturedAt.toISOString().slice(0, 10))).toEqual([
+      "2026-04-08",
+      "2026-04-09",
+    ]);
+  });
+
   it("ne découpe rien tant qu'on n'a pas répondu", async () => {
     const memo = await seedTrip(owner.accountId);
     await toldWithSuggestion(memo.id);

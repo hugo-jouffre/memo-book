@@ -550,6 +550,38 @@ n'a donc rien à remonter — « Ignorer » reste local, comme pour tous les bou
 caché qui daterait un souvenir d'il y a une semaine serait pire que pas de
 fonctionnalité du tout.
 
+### Plusieurs moments dans un seul vocal
+
+**Le problème** : quelqu'un qui rattrape trois jours les raconte d'un coup, et
+rien ne dit au carnet d'en faire trois étapes. L'écrivain les entend donc et
+les propose (`moments`), MEMO demande « je les sépare ? », et **rien n'est
+découpé avant la réponse** — deux cartes qui apparaissent sans prévenir se
+lisent comme un bug. Chaque part cite sa tranche **mot pour mot** : c'est ce
+qui rend la proposition vérifiable.
+
+**Et depuis le 20/11/2026, chaque part dit quand elle a été vécue.** Hugo, le
+05/11 : « les souvenirs ne sont pas toujours dans l'ordre chronologique et
+gardent l'ordre du vocal, qui peut être très désordonné » (T279). C'était
+exact, et ce n'était pas le modèle : les parts se décalaient d'une seconde
+chacune, ce qui ne dit que l'ordre du récit, et **on ne demandait à personne**
+quand chaque moment avait eu lieu.
+
+| Ce que la part porte | Ce qu'elle devient |
+|---|---|
+| Un jour (`day`) | Midi de ce jour-là, dans le fuseau du voyage — comme une journée racontée après coup |
+| Un moment de journée (`partOfDay`) | 9 h, 12 h, 15 h, 20 h ou 23 h, le jour qu'elle dit ou, à défaut, celui de la part précédente |
+| Rien | La part suit la précédente d'une seconde : l'ordre du récit, faute de mieux |
+
+Les deux champs valent `null` le plus souvent — un voyageur qui raconte sa
+journée ne la date pas — et sans eux le découpage date exactement comme avant.
+Un jour hors de la fenêtre du voyage, ou mal formé, redevient `null` **sans
+faire tomber le découpage** : perdre la coupe pour sauver une date serait un
+mauvais échange. Le détail est dans [`redaction.md`](redaction.md) § 4.
+
+⚠️ Les parts restent **dans l'ordre du récit**, y compris quand le récit ne
+l'est pas : c'est la citation mot pour mot, et sa vérification, qui en
+dépendent. C'est `capturedAt` qui range le carnet, pas la liste.
+
 ## 6 ter. L'appui long sur une bulle
 
 **Le menu contextuel natif iOS** (T270, Hugo, 05/11/2026). Quatre gestes, et
