@@ -322,7 +322,25 @@ export function localMidnightAfter(day: LocalDate, timeZone: string): Date {
  * `localDate()` qui regroupe les souvenirs par journée partout ailleurs.
  */
 export function localNoonOn(day: LocalDate, timeZone: string): Date {
-  const naive = Date.parse(`${day}T12:00:00Z`);
+  return localTimeOn(day, 12, timeZone);
+}
+
+/**
+ * Une **heure donnée** d'une journée, dans ce fuseau.
+ *
+ * Même recalage que `localNoonOn`, dont elle porte maintenant le calcul : une
+ * estimation, puis une seconde passe pour un changement d'heure qui tomberait
+ * entre les deux.
+ *
+ * Elle sert aux moments d'un récit découpé, qui portent un matin ou un soir
+ * et non une heure (`entrySplit.ts`). Loin de midi, le choix de l'heure
+ * décide aussi de la journée que `localDate()` lira : 23 h dans un fuseau à
+ * l'est bascule au lendemain pour qui relit depuis Paris. C'est voulu — le
+ * voyageur a dit « la nuit », et une nuit déborde.
+ */
+export function localTimeOn(day: LocalDate, hour: number, timeZone: string): Date {
+  const padded = String(Math.max(0, Math.min(23, Math.trunc(hour)))).padStart(2, "0");
+  const naive = Date.parse(`${day}T${padded}:00:00Z`);
   const first = naive - utcOffsetMs(naive, timeZone);
   return new Date(naive - utcOffsetMs(first, timeZone));
 }

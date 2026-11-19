@@ -179,13 +179,46 @@ describe("parseMoments", () => {
     { title: "La route du sud", transcript: "Le lendemain on a pris la route du sud, direction Naples." },
   ];
 
+  /** Ce que `parseMoments` rend d'une part qui ne se situe pas dans le temps. */
+  const sansDate = (moment: { title: string; transcript: string }) => ({
+    ...moment,
+    day: null,
+    partOfDay: null,
+  });
+
   it("garde une proposition qui cite la transcription", () => {
-    expect(parseMoments(moments, transcript)).toEqual(moments);
+    expect(parseMoments(moments, transcript)).toEqual(moments.map(sansDate));
   });
 
   it("refuse une part que personne n'a dite", () => {
     const invented = [moments[0], { title: "Inventé", transcript: "On a dormi sur la plage de Positano." }];
     expect(parseMoments(invented, transcript)).toEqual([]);
+  });
+
+  it("garde le jour et le moment de journée que chaque part porte", () => {
+    const situes = [
+      { ...moments[0]!, day: "2026-04-09", partOfDay: "matin" },
+      { ...moments[1]!, day: "2026-04-10", partOfDay: "apres-midi" },
+    ];
+    expect(parseMoments(situes, transcript)).toEqual(situes);
+  });
+
+  it("efface un jour hors du voyage sans jeter le découpage", () => {
+    const trip = { startDate: new Date("2026-04-08T00:00:00Z"), endDate: new Date("2026-04-12T00:00:00Z") };
+    // L'erreur classique du modèle : l'année en cours pour un voyage passé.
+    const derive = [{ ...moments[0]!, day: "2027-04-09" }, { ...moments[1]!, day: "2026-04-10" }];
+    const lus = parseMoments(derive, transcript, trip);
+    expect(lus).toHaveLength(2);
+    expect(lus[0]!.day).toBeNull();
+    expect(lus[1]!.day).toBe("2026-04-10");
+  });
+
+  it("efface un jour mal formé et un moment de journée inconnu", () => {
+    const bancal = [
+      { ...moments[0]!, day: "9 avril", partOfDay: "au réveil" },
+      { ...moments[1]!, day: 20_260_410, partOfDay: null },
+    ];
+    expect(parseMoments(bancal, transcript)).toEqual(moments.map(sansDate));
   });
 
   it("tolère la ponctuation et les espaces d'une citation recollée", () => {

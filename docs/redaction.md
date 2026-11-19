@@ -26,7 +26,9 @@ les trois dernières étapes écrites, tous les titres et encarts déjà employ�
 **Ce qu'il rend** : sa lecture du vocal (`understanding` — le cœur de l'étape,
 le ton, ce que veut dire chaque passage oral), le titre, le récit, la météo
 — seulement si le vocal la dit clairement, `null` sinon —, l'encart éventuel, la fiche de cohérence mise à jour, le relevé pour les
-statistiques, et ses doutes.
+statistiques, ses doutes, et les **moments distincts** d'un récit qui en
+contient plusieurs — chacun citant sa tranche mot pour mot, et disant **quand**
+il a été vécu quand le récit le dit (§ 4, 20/11/2026).
 
 ## 2. Où changer quoi
 
@@ -107,6 +109,56 @@ mesurerait plus rien. On illustre avec des voyages inventés (Lisbonne, l'Algarv
 Clara, Tom).
 
 ## 4. Journal
+
+### 20/11/2026 — On lui demandait les moments, jamais quand ils avaient eu lieu
+
+Hugo, le 05/11 : « les souvenirs ne sont pas toujours dans l'ordre
+chronologique et gardent l'ordre du vocal, qui peut être très désordonné »
+(T279). Et la question qui allait avec : est-ce le modèle ?
+
+**Non — et il n'avait rien à se reprocher.** Tout le back-end range les
+souvenirs par `capturedAt`, et quand un vocal contient plusieurs moments,
+c'est `entrySplit.ts` qui les date : une seconde de décalage par part, c'est-à-dire
+l'ordre du récit. Son propre commentaire le disait déjà :
+
+> Une minute aurait prétendu savoir quand chaque moment a été vécu — on ne le
+> sait pas.
+
+C'était vrai : on ne le savait pas, parce qu'on ne le demandait à personne.
+L'écrivain **trouvait** les moments ; il n'a jamais eu à dire **quand**. Un
+voyageur qui rattrape trois jours ne les raconte pas forcément dans l'ordre —
+« hier on a fait ça… ah, et avant-hier » —, et le carnet imprimait le vocal.
+
+**Ce qui change.** Chaque part de `moments` porte deux champs de plus :
+
+| Champ | Ce qu'il vaut | Quand |
+|---|---|---|
+| `day` | `AAAA-MM-JJ` | Uniquement si le récit situe le moment, et que les dates du voyage permettent de le poser sans deviner |
+| `partOfDay` | `matin`, `midi`, `apres-midi`, `soir`, `nuit` | Uniquement si le récit le dit — jamais déduit de ce qui est raconté : un musée n'est pas le matin |
+
+Les deux valent `null` le plus souvent, et c'est voulu : un voyageur qui
+raconte sa journée ne la date pas.
+
+**Les parts, elles, restent dans l'ordre du récit.** C'est ce qui permet de
+vérifier qu'elles citent sans se chevaucher — la garantie qui empêche un
+découpage d'inventer. Le rangement vient des deux champs, pas de la liste.
+
+**Trois gardes-fous**, parce qu'un modèle qui situe une date se trompe
+autrement qu'un modèle qui écrit :
+
+- un jour **hors de la fenêtre du voyage** redevient `null` (l'erreur
+  classique : l'année en cours pour un voyage passé) ;
+- un jour mal formé ou un moment de journée inconnu redeviennent `null` ;
+- et dans les trois cas **le découpage survit** : la part garde sa place dans
+  l'ordre du récit. Perdre la coupe pour sauver une date serait un mauvais
+  échange.
+
+Sans aucune date ni moment de journée, le découpage date exactement comme
+avant. Le reste est dans `momentInstants` (`backend/src/services/entrySplit.ts`).
+
+**Reste à mesurer** : le banc n'a pas encore tourné sur ces deux champs. On ne
+sait donc pas encore à quelle fréquence l'écrivain ose situer un moment, ni
+combien de fois il se trompe en le faisant.
 
 ### 18/11/2026 — Le tiret qui faisait IA venait de la consigne
 
