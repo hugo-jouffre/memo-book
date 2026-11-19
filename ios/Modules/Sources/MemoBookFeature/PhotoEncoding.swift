@@ -25,18 +25,35 @@ enum PhotoEncoding {
     /// arrivent dans la même matière.
     static let quality: CGFloat = 0.85
 
-    /// Les octets d'une photo, en JPEG — ou `nil` si ces octets ne sont pas
-    /// une image lisible.
+    /// **Le plus grand côté d'une photo envoyée dans la conversation** (T275,
+    /// 19/11/2026).
     ///
-    /// Un JPEG revient **inchangé** : le réencoder perdrait de la matière pour
-    /// rien.
+    /// 2400 px, parce que c'est **exactement ce que le serveur garde** :
+    /// `RENDER_MAX_SIDE` réduit chaque photo à 2400 px pour le carnet
+    /// (`services/photoDownscale.ts`), où une pleine page A4 est encore tirée
+    /// à 290 dpi. Tout ce qu'on envoyait au-delà était donc payé par le
+    /// voyageur — en temps, en données — pour être jeté à l'arrivée.
+    ///
+    /// Une photo d'iPhone 17 pèse 3 à 6 Mo ; réduite, elle en pèse moins de
+    /// 1. Quatre photos passaient de ~20 Mo à ~3 : c'est la différence entre
+    /// un envoi qui aboutit et un envoi qui dépasse les 60 secondes du client
+    /// et retombe dans la file en annonçant « hors ligne ».
+    static let maxSide = 2_400
+
+    /// Les octets d'une photo, en JPEG et **à la taille du carnet** — ou `nil`
+    /// si ces octets ne sont pas une image lisible.
+    ///
+    /// Un JPEG déjà assez petit revient **inchangé** : le réencoder perdrait
+    /// de la matière pour rien.
     ///
     /// ⚠️ `UIImage(data:)?.jpegData(…)` serait le chemin court, et il est
     /// faux : il perd le drapeau EXIF d'orientation, et une photo prise à la
     /// verticale repart couchée. `CGImageDestinationAddImageFromSource` recopie
     /// les métadonnées de la source, orientation comprise.
-    static func jpeg(from data: Data, quality: CGFloat = quality) -> Data? {
+    static func jpeg(from data: Data, quality: CGFloat = quality, maxSide: Int = maxSide) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+
+        if let reduced = reduced(source, to: maxSide, quality: quality) { return reduced }
 
         let jpeg = UTType.jpeg.identifier as CFString
         if CGImageSourceGetType(source) == jpeg { return data }
@@ -50,6 +67,55 @@ enum PhotoEncoding {
             destination,
             source,
             0,
+            [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
+        )
+
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return output as Data
+    }
+
+    /// La même photo, **ramenée à `maxSide`** — ou `nil` si elle y tient déjà,
+    /// et c'est alors au chemin d'origine de la rendre telle quelle.
+    ///
+    /// ImageIO réduit **et redresse** en une passe
+    /// (`kCGImageSourceCreateThumbnailWithTransform`) : le drapeau EXIF est
+    /// appliqué aux pixels au lieu d'être recopié. Une photo réduite n'a donc
+    /// plus d'orientation à porter — ce qui est la même image, et une
+    /// ambiguïté de moins pour tout ce qui la lit ensuite.
+    ///
+    /// ⚠️ Et c'est pour ça qu'on ne réduit **que** ce qui dépasse : une photo
+    /// déjà petite doit revenir intacte, drapeau compris — voir
+    /// `PhotoEncodingTests`.
+    private static func reduced(_ source: CGImageSource, to maxSide: Int, quality: CGFloat) -> Data? {
+        guard
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+            let width = properties[kCGImagePropertyPixelWidth] as? Int,
+            let height = properties[kCGImagePropertyPixelHeight] as? Int,
+            max(width, height) > maxSide,
+            let thumbnail = CGImageSourceCreateThumbnailAtIndex(
+                source,
+                0,
+                [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: maxSide,
+                ] as CFDictionary
+            )
+        else { return nil }
+
+        let output = NSMutableData()
+        guard
+            let destination = CGImageDestinationCreateWithData(
+                output,
+                UTType.jpeg.identifier as CFString,
+                1,
+                nil
+            )
+        else { return nil }
+
+        CGImageDestinationAddImage(
+            destination,
+            thumbnail,
             [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
         )
 
