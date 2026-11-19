@@ -605,6 +605,23 @@ model Memo {
   /// Photo de couverture (URL CDN publique).
   coverPhotoUrl String?
 
+  /// **La photo principale du voyage**, élue par le voyageur (T270) — l'étoile
+  /// lime d'un appui long sur une photo du fil.
+  ///
+  /// Un souvenir et non une adresse : une URL de CDN change, le souvenir non.
+  /// Elle sert partout où le voyage se montre — l'accueil de l'app, l'accueil
+  /// du voyage, le haut du chat, les propositions de couverture, la mise en
+  /// page.
+  ///
+  /// ⚠️ **``coverPhotoUrl`` passe devant**, et c'est voulu : celle-là est la
+  /// photo *téléversée* pour la couverture, depuis l'atelier. Élire une photo
+  /// du fil ne doit pas effacer en silence une couverture qu'on a composée.
+  ///
+  /// `SetNull` : la photo effacée, le voyage retourne à son élection
+  /// automatique (la plus récente en paysage) plutôt que de n'avoir plus rien.
+  coverEntryId String?
+  coverEntry   Entry?  @relation("MemoCoverEntry", fields: [coverEntryId], references: [id], onDelete: SetNull)
+
   /// Style de carnet retenu (voir `agents/carnet-styles/`).
   styleKey String?
 
@@ -1084,7 +1101,25 @@ model MemoStep {
   endDate   DateTime?
 
   /// La vignette de l'étape (URL CDN publique).
+  ///
+  /// **Calculée** par `refreshTripFacts` à chaque passage, depuis les photos
+  /// de l'étape : ce n'est pas un choix, c'est un cache. Le choix, lui, est
+  /// ``coverEntryId``, et c'est lui que le calcul respecte.
   photoUrl String?
+
+  /// **La photo principale de l'étape**, élue par le voyageur (T270) —
+  /// l'étoile verte d'un appui long sur une photo du fil.
+  ///
+  /// Elle sert à la carte de l'étape sur l'accueil du voyage, aux
+  /// propositions de couverture et à la mise en page : `refreshTripFacts` la
+  /// recopie dans ``photoUrl``, et tout ce qui lit la vignette la suit sans
+  /// rien savoir d'elle.
+  ///
+  /// La photo partie dans une autre étape ne vide pas la colonne : le calcul
+  /// ne la trouve plus parmi les photos de l'étape et reprend son élection
+  /// automatique. Elle revient, l'étoile reparaît.
+  coverEntryId String?
+  coverEntry   Entry?  @relation("StepCoverEntry", fields: [coverEntryId], references: [id], onDelete: SetNull)
 
   /// Comment on est arrivé jusqu'ici.
   transport TripTransport?
@@ -1379,6 +1414,11 @@ model Entry {
   /// que de partir avec elle.
   pinnedStepId String?
   pinnedStep   MemoStep? @relation("EntryPinnedStep", fields: [pinnedStepId], references: [id], onDelete: SetNull)
+
+  /// Les voyages et les étapes dont cette photo est la principale (T270).
+  /// Au plus un de chaque, mais Prisma veut la liste.
+  coverOfMemos Memo[]     @relation("MemoCoverEntry")
+  coverOfSteps MemoStep[] @relation("StepCoverEntry")
 
   /// Les tours de conversation qui parlent de ce souvenir : celui qui l'a
   /// créé, ses précisions, et sa fiche. Voir `ChatMessage.entryId`.

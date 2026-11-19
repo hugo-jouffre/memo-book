@@ -19,15 +19,26 @@ struct ChatPhotoViewer: View {
     let model: ChatModel
     let onClose: () -> Void
 
+    /// La bulle d'où viennent ces photos — pour savoir de **quelle étape** il
+    /// s'agit quand on élit la photo principale (T270). `nil` : le menu des
+    /// étoiles ne paraît pas, faute de savoir où ranger le choix.
+    let message: ChatMessage?
+
     @State private var selection: Int
     /// Le glissé vers le bas en cours, pour suivre le doigt avant de refermer.
     @State private var dismissOffset: CGFloat = 0
     @State private var isZoomed = false
 
-    init(viewing: ChatPhotoViewing, model: ChatModel, onClose: @escaping () -> Void) {
+    init(
+        viewing: ChatPhotoViewing,
+        model: ChatModel,
+        onClose: @escaping () -> Void,
+        message: ChatMessage? = nil
+    ) {
         self.viewing = viewing
         self.model = model
         self.onClose = onClose
+        self.message = message
         _selection = State(initialValue: viewing.index)
     }
 
@@ -75,10 +86,50 @@ struct ChatPhotoViewer: View {
                     .padding(.vertical, MemoBookSpacing.xs)
                     .background(MemoBookColor.ink.opacity(0.4), in: .capsule)
             }
+
+            // **Les deux étoiles, ici aussi** (T270). C'est même leur place
+            // naturelle : une bulle de quatre photos ne sait pas de laquelle
+            // on parle, celle qu'on regarde en plein écran, si.
+            if let elected {
+                Menu {
+                    if let message, message.stepId != nil {
+                        Button(elected.isStepCover ? ChatCopy.Menu.unsetStepCover : ChatCopy.Menu.stepCover) {
+                            model.electStepCover(elected, in: message)
+                        }
+                    }
+                    Button(elected.isTripCover ? ChatCopy.Menu.unsetTripCover : ChatCopy.Menu.tripCover) {
+                        model.electTripCover(elected)
+                    }
+                } label: {
+                    Image(systemName: starSymbol)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(MemoBookColor.paper)
+                        .frame(width: 44, height: 44)
+                        .background(MemoBookColor.ink.opacity(0.4), in: .circle)
+                }
+                .accessibilityLabel(ChatCopy.PhotoViewer.chooseCover)
+            }
         }
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         .padding(.top, MemoBookSpacing.xs)
         .opacity(dismissOffset == 0 ? 1 : 0)
+    }
+
+    /// La photo qu'on regarde, **relue sur la bulle vivante** : celles de
+    /// ``viewing`` sont figées à l'ouverture, et l'étoile qu'on vient de poser
+    /// n'y serait pas.
+    private var elected: PhotoAttachment? {
+        guard let message, viewing.attachments.indices.contains(selection) else { return nil }
+        guard case .photos(let live) = message.body else { return nil }
+        let id = viewing.attachments[selection].id
+        return live.first { $0.id == id }
+    }
+
+    /// L'étoile pleine dès que cette photo en porte une : le bouton dit déjà
+    /// où on en est, avant d'ouvrir le menu.
+    private var starSymbol: String {
+        let photo = elected
+        return photo?.isStepCover == true || photo?.isTripCover == true ? "star.fill" : "star"
     }
 
     /// Vers le bas, la photo suit le doigt ; lâchée assez loin, elle se referme.

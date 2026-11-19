@@ -12,6 +12,7 @@ import { photoStickersOf, settlePhotoStickers } from "../services/photoStickers.
 import { JOB_NAMES } from "./queue.js";
 import { finalTextOf } from "./redact.js";
 import type { RenderJob } from "./render.js";
+import { isSimulatedCdnUrl } from "../services/webflow.js";
 
 export interface StructureJob {
   renderId: string;
@@ -104,6 +105,9 @@ export async function structureRender(
         // couvertures (`services/bookCovers.ts`).
         steps: { select: { destinationCountryCode: true, transport: true } },
         coverPhotos: { select: { id: true, storageKey: true }, orderBy: { createdAt: "asc" } },
+        // **La photo principale du voyage** (T270, l'étoile lime) : elle sert
+        // de couverture quand l'atelier n'en a pas composé une.
+        coverEntry: { select: { media: { select: { cdnUrl: true } } } },
       },
     });
 
@@ -191,12 +195,18 @@ export async function structureRender(
       );
     }
 
+    const electedCoverUrl = (cdnUrl: string | null | undefined) =>
+      cdnUrl && !isSimulatedCdnUrl(cdnUrl) ? cdnUrl : null;
+
     const compose = await structurer.structure({
       title: memo.title,
       subtitle: memo.subtitle,
       authors: memo.authors,
       theme: memo.theme,
-      coverPhotoUrl: memo.coverPhotoUrl,
+      // La couverture composée dans l'atelier d'abord, la photo élue ensuite.
+      // ⚠️ Une adresse de CDN **simulée** ne vaut rien ici : elle ne répond
+      // pas, et la couverture arriverait vide (`services/webflow.ts`).
+      coverPhotoUrl: memo.coverPhotoUrl ?? electedCoverUrl(memo.coverEntry?.media?.cdnUrl),
       entries: structuringEntries,
       tripContext: parseTripContext(memo.tripContext),
     });

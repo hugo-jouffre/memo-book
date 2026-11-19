@@ -82,6 +82,8 @@ type MemoForTrip = Memo & {
   members?: (MemoMember & { account?: Account | null })[];
   /** La dernière photo racontée — la photo du voyage à défaut d'une photo choisie. */
   entries?: { media: { storageKey: string; cdnUrl: string | null } | null }[];
+  /** **La photo élue** par le voyageur (T270) — `coverPhotoInclude`. */
+  coverEntry?: { id: string; media: { storageKey: string; cdnUrl: string | null } | null } | null;
 };
 
 /** Le nom affiché prime sur celui du compte : quelqu'un peut vouloir apparaître autrement sur un voyage donné. */
@@ -200,9 +202,14 @@ export function serializeTrip(
     //
     // Déduite, pas stockée : `coverPhotoUrl` reste la photo choisie, celle
     // que le carnet imprime.
+    // La couverture composée dans l'atelier d'abord ; **la photo élue**
+    // ensuite (T270, l'étoile lime) ; l'élection automatique en dernier.
     coverPhotoUrl:
       memo.coverPhotoUrl ??
-      (options.publicBaseUrl ? displayablePhotoUrl(options.publicBaseUrl, memo.entries?.[0]?.media) : null),
+      (options.publicBaseUrl
+        ? (displayablePhotoUrl(options.publicBaseUrl, memo.coverEntry?.media) ??
+          displayablePhotoUrl(options.publicBaseUrl, memo.entries?.[0]?.media))
+        : null),
     stats: {
       dayCount: memo.dayCount,
       distanceKilometres: memo.distanceKilometres,

@@ -304,7 +304,14 @@ public struct ChatView: View {
         // micro pâli —, sans attendre que le serveur le redise.
         .onAppear { model.subscription = subscriptionSession }
         .fullScreenCover(item: $model.viewedPhotos) { viewing in
-            ChatPhotoViewer(viewing: viewing, model: model) { model.viewedPhotos = nil }
+            ChatPhotoViewer(
+                viewing: viewing,
+                model: model,
+                onClose: { model.viewedPhotos = nil },
+                // La bulle **vivante** : l'étoile posée pendant qu'on regarde
+                // doit se voir sans refermer la photo.
+                message: model.message(viewing.messageId)
+            )
         }
         // « Partager », depuis le menu d'un appui long (T270) : la feuille du
         // système, présentée par l'écran — une feuille présentée par chaque

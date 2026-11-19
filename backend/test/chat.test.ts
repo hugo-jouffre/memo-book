@@ -73,7 +73,10 @@ interface ChatMessageJson {
   body:
     | { kind: "text"; text: string }
     | { kind: "voice"; voice: { id: string; duration: number; levels: number[]; remoteUrl: string | null } }
-    | { kind: "photos"; photos: { id: string; remoteUrl: string }[] }
+    | {
+        kind: "photos";
+        photos: { id: string; remoteUrl: string; isStepCover: boolean; isTripCover: boolean }[];
+      }
     | {
         kind: "transcript";
         transcript: {
@@ -1939,5 +1942,147 @@ describe("le menu d'une bulle", () => {
     const thread = await readThread(memo.id);
     expect(thread.messages.some((message) => message.id === bubbleId)).toBe(false);
     expect(thread.messages.some((message) => message.body.kind === "transcript")).toBe(false);
+  });
+});
+
+/**
+ * **Les deux photos principales** — T270, les étoiles verte et lime.
+ *
+ * Ce qui se teste ici n'est pas l'étoile (elle est dessinée dans l'app) mais
+ * ce qu'elle change : la vignette de l'étape, la photo du voyage, et ce que le
+ * fil dit de chaque photo.
+ */
+describe("les deux photos principales", () => {
+  /** Un voyage, une étape, deux photos dont on connaît les identifiants. */
+  async function seedPhotographedTrip() {
+    const memo = await seedTrip(owner.accountId);
+    await tellFromHome(memo.id, "La pluie sur les pavés du Trastevere.", "2026-09-21T09:00:00.000Z");
+    await readThread(memo.id);
+    const messageId = await sendPhotos(memo.id, 2);
+    await refreshTripFacts(harness.prisma, memo.id);
+
+    const photos = await harness.prisma.entry.findMany({
+      where: { memoId: memo.id, kind: "photo" },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, mediaId: true, stepId: true },
+    });
+    expect(photos).toHaveLength(2);
+    // La vignette d'une étape se lit sur le CDN : sans adresse, aucune photo
+    // ne peut l'être, élue ou non.
+    for (const [index, photo] of photos.entries()) {
+      await harness.prisma.mediaAsset.update({
+        where: { id: photo.mediaId ?? "" },
+        data: { cdnUrl: `https://cdn.test/photo-${index}.jpg` },
+      });
+    }
+    const step = await harness.prisma.memoStep.findFirstOrThrow({ where: { memoId: memo.id } });
+    return { memo, messageId, photos, step };
+  }
+
+  const electStep = (memoId: string, stepId: string, entryId: string | null) =>
+    harness.app.inject({
+      method: "PUT",
+      url: `/v1/trips/${memoId}/steps/${stepId}/cover-photo`,
+      headers: { authorization: owner.authorization },
+      payload: { entryId },
+    });
+
+  const electTrip = (memoId: string, entryId: string | null) =>
+    harness.app.inject({
+      method: "PUT",
+      url: `/v1/trips/${memoId}/cover-photo`,
+      headers: { authorization: owner.authorization },
+      payload: { entryId },
+    });
+
+  /**
+   * ⚠️ Le choix se range dans `coverEntryId`, **pas** dans `photoUrl` :
+   * celle-là est recalculée à chaque passage de `refreshTripFacts`. Le test
+   * relance donc le calcul, sans quoi il ne prouverait rien.
+   */
+  it("l'étoile de l'étape décide de sa vignette, et le calcul la respecte", async () => {
+    const { memo, photos, step } = await seedPhotographedTrip();
+    const seconde = photos[1]!;
+
+    const response = await electStep(memo.id, step.id, seconde.id);
+    expect(response.statusCode).toBe(200);
+
+    await refreshTripFacts(harness.prisma, memo.id);
+
+    const after = await harness.prisma.memoStep.findUniqueOrThrow({ where: { id: step.id } });
+    expect(after.coverEntryId).toBe(seconde.id);
+    expect(after.photoUrl).toBe("https://cdn.test/photo-1.jpg");
+  });
+
+  it("l'étoile se défait, et l'étape reprend son élection automatique", async () => {
+    const { memo, photos, step } = await seedPhotographedTrip();
+    await electStep(memo.id, step.id, photos[1]!.id);
+    await refreshTripFacts(harness.prisma, memo.id);
+
+    expect((await electStep(memo.id, step.id, null)).statusCode).toBe(200);
+    await refreshTripFacts(harness.prisma, memo.id);
+
+    const after = await harness.prisma.memoStep.findUniqueOrThrow({ where: { id: step.id } });
+    expect(after.coverEntryId).toBeNull();
+    expect(after.photoUrl).toBe("https://cdn.test/photo-0.jpg");
+  });
+
+  it("refuse une photo qui n'est pas dans cette étape", async () => {
+    const { memo, step } = await seedPhotographedTrip();
+    const ailleurs = await seedTrip(owner.accountId);
+    await readThread(ailleurs.id);
+    await sendPhotos(ailleurs.id, 1);
+    const autre = await harness.prisma.entry.findFirstOrThrow({
+      where: { memoId: ailleurs.id, kind: "photo" },
+    });
+
+    // Photo d'un autre voyage : introuvable, et on ne dit pas qu'elle existe.
+    expect((await electStep(memo.id, step.id, autre.id)).statusCode).toBe(404);
+  });
+
+  /**
+   * La couverture composée dans l'atelier passe devant l'étoile : élire une
+   * photo du fil ne doit pas effacer en silence ce qu'on a composé.
+   */
+  it("l'étoile du voyage donne sa photo, derrière la couverture de l'atelier", async () => {
+    const { memo, photos } = await seedPhotographedTrip();
+
+    expect((await electTrip(memo.id, photos[1]!.id)).statusCode).toBe(200);
+    const elue = await harness.app.inject({
+      method: "GET",
+      url: `/v1/trips/${memo.id}`,
+      headers: { authorization: owner.authorization },
+    });
+    expect(elue.json<{ trip: { coverPhotoUrl: string | null } }>().trip.coverPhotoUrl).toBe(
+      "https://cdn.test/photo-1.jpg",
+    );
+
+    await harness.prisma.memo.update({
+      where: { id: memo.id },
+      data: { coverPhotoUrl: "https://cdn.test/atelier.jpg" },
+    });
+    const composee = await harness.app.inject({
+      method: "GET",
+      url: `/v1/trips/${memo.id}`,
+      headers: { authorization: owner.authorization },
+    });
+    expect(composee.json<{ trip: { coverPhotoUrl: string | null } }>().trip.coverPhotoUrl).toBe(
+      "https://cdn.test/atelier.jpg",
+    );
+  });
+
+  it("le fil dit quelle photo porte quelle étoile", async () => {
+    const { memo, messageId, photos, step } = await seedPhotographedTrip();
+    await electStep(memo.id, step.id, photos[0]!.id);
+    await electTrip(memo.id, photos[0]!.id);
+
+    const thread = await readThread(memo.id);
+    const bubble = thread.messages.find((message) => message.id === messageId);
+    expect(bubble?.body.kind).toBe("photos");
+    if (bubble?.body.kind !== "photos") return;
+    expect(bubble.body.photos.map((photo) => [photo.isStepCover, photo.isTripCover])).toEqual([
+      [true, true],
+      [false, false],
+    ]);
   });
 });

@@ -66,6 +66,13 @@ public enum ChatComposerMode: Sendable, Hashable {
 public struct ChatPhotoViewing: Identifiable, Equatable, Sendable {
     public let attachments: [PhotoAttachment]
     public let index: Int
+
+    /// La bulle d'où elles viennent, pour retrouver **son étape** quand on
+    /// élit une photo principale (T270). Les photos, elles, se relisent sur la
+    /// bulle vivante : une étoile posée pendant qu'on regarde doit se voir,
+    /// et celles d'ici sont figées à l'ouverture.
+    public var messageId: String?
+
     public var id: String { attachments.map(\.id).joined(separator: "|") + "#\(index)" }
 }
 
@@ -1877,9 +1884,16 @@ public final class ChatModel {
     public var viewedPhotos: ChatPhotoViewing?
 
     /// Ouvre les photos d'une bulle, sur celle qu'on a touchée.
-    public func viewPhotos(_ attachments: [PhotoAttachment], at index: Int) {
+    public func viewPhotos(_ attachments: [PhotoAttachment], at index: Int, from messageId: String? = nil) {
         guard attachments.indices.contains(index) else { return }
-        viewedPhotos = ChatPhotoViewing(attachments: attachments, index: index)
+        viewedPhotos = ChatPhotoViewing(attachments: attachments, index: index, messageId: messageId)
+    }
+
+    /// Une bulle du fil par son identifiant — la visionneuse s'en sert pour
+    /// relire les photos **telles qu'elles sont maintenant**.
+    public func message(_ id: String?) -> ChatMessage? {
+        guard let id else { return nil }
+        return messages.first { $0.id == id }
     }
 
     /// La photo **à sa taille d'écran**, et non la vignette du fil : relue par
@@ -2116,6 +2130,82 @@ public final class ChatModel {
                 if self.thread?.messages.contains(where: { $0.id == removed.id }) == false {
                     self.thread?.messages.insert(removed, at: min(index, count))
                 }
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// **« Définir comme photo principale de l'étape »** — l'étoile verte
+    /// (T270), et le même geste pour la défaire.
+    ///
+    /// L'étoile se pose **tout de suite**, et celle de l'ancienne élue s'en va
+    /// dans le même mouvement : une étoile qui arriverait après l'aller-retour
+    /// se lirait comme un geste raté. Un échec remet le fil comme il était et
+    /// le dit.
+    public func electStepCover(_ photo: PhotoAttachment, in message: ChatMessage) {
+        guard let stepId = message.stepId else { return }
+        // ⚠️ Le fil d'avant se garde **avant** de poser l'étoile : pris après,
+        // il rendrait l'étoile au lieu de l'enlever quand l'appel échoue.
+        let before = thread?.messages
+        let elected = !photo.isStepCover
+        apply(stepCover: elected ? photo.id : nil, inStep: stepId)
+        send(elected ? photo.id : nil, restoring: before) { [transport] entryId in
+            try await transport.electStepCover(stepId, entryId)
+        }
+    }
+
+    /// **« Définir comme photo principale du voyage »** — l'étoile lime.
+    public func electTripCover(_ photo: PhotoAttachment) {
+        let before = thread?.messages
+        let elected = !photo.isTripCover
+        apply(tripCover: elected ? photo.id : nil)
+        send(elected ? photo.id : nil, restoring: before) { [transport] entryId in
+            try await transport.electTripCover(entryId)
+        }
+    }
+
+    /// L'étoile verte du fil : une par étape, et aucune si `entryId` est nul.
+    private func apply(stepCover entryId: String?, inStep stepId: String) {
+        updatePhotos { message, photo in
+            guard message.stepId == stepId else { return }
+            photo.isStepCover = photo.id == entryId
+        }
+    }
+
+    /// L'étoile lime : une par voyage.
+    private func apply(tripCover entryId: String?) {
+        updatePhotos { _, photo in photo.isTripCover = photo.id == entryId }
+    }
+
+    /// Parcourt les photos du fil et laisse `change` les retoucher. Ne réécrit
+    /// que les bulles qui bougent : `@Observable` prévient à chaque écriture,
+    /// et le fil se redessinerait en entier pour une étoile.
+    private func updatePhotos(_ change: (ChatMessage, inout PhotoAttachment) -> Void) {
+        guard let thread else { return }
+        for index in thread.messages.indices {
+            let message = thread.messages[index]
+            guard case .photos(let attachments) = message.body else { continue }
+            var updated = attachments
+            for photoIndex in updated.indices { change(message, &updated[photoIndex]) }
+            if updated != attachments { self.thread?.messages[index].body = .photos(updated) }
+        }
+    }
+
+    /// Envoie une élection, et remet le fil tel qu'il était si elle échoue.
+    private func send(
+        _ entryId: String?,
+        restoring before: [ChatMessage]?,
+        _ call: @escaping (String?) async throws -> Void
+    ) {
+        Task { [weak self] in
+            do {
+                try await call(entryId)
+                // Le voyage a changé d'image : l'accueil et l'en-tête du fil
+                // la lisent, on relit donc le fil pour les mettre d'accord.
+                await self?.load()
+            } catch {
+                guard let self else { return }
+                if let before { self.thread?.messages = before }
                 self.errorMessage = error.localizedDescription
             }
         }

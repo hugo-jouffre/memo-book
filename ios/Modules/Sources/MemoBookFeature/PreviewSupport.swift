@@ -254,6 +254,21 @@ public actor PreviewAPI: MemoBookAPI {
         )
     }
 
+    /// **Les deux étoiles, dans le bac à sable** (T270) : le choix se garde
+    /// sur le fil — c'est là qu'on le voit —, et le voyage se relit tel quel.
+    /// Le jeu d'essai n'a pas de vignette d'étape à changer.
+    public func setStepCoverPhoto(tripId: String, stepId: String, entryId: String?) async throws -> TripDetail {
+        try SandboxNetwork.failIfOffline()
+        await chat.elect(stepCover: entryId, inStep: stepId, tripId: tripId)
+        return try await tripDetail(id: tripId)
+    }
+
+    public func setTripCoverPhoto(tripId: String, entryId: String?) async throws -> TripDetail {
+        try SandboxNetwork.failIfOffline()
+        await chat.elect(tripCover: entryId, tripId: tripId)
+        return try await tripDetail(id: tripId)
+    }
+
     /// Séparer, dans le double : les récits d'une étape en ouvrent chacun une.
     /// Le jeu d'essai n'en réunit aucune, donc rien ne bouge.
     public func separateStep(tripId: String, stepId: String) async throws -> TripDetail {

@@ -569,6 +569,8 @@ l'utilisateur connaît de ses autres messageries. Les mêmes gestes passent par 
 | Partager | Un texte, ou des photos | La feuille du système. Les photos partent **à leur taille d'écran**, pas en vignette du fil |
 | Déplacer dans une autre étape | Un souvenir qu'on a dit soi-même — récit, vocal, photos —, arrivé, et s'il existe une autre étape | `POST /v1/trips/:id/chat/:messageId/step` |
 | Supprimer | Une bulle qui **est** un souvenir, arrivée | `DELETE /v1/entries/:id`, après confirmation |
+| Photo principale de l'étape | Une photo — la bulle quand elle n'en porte qu'une, sinon celle qu'on regarde en plein écran | `PUT /v1/trips/:id/steps/:stepId/cover-photo` |
+| Photo principale du voyage | Idem | `PUT /v1/trips/:id/cover-photo` |
 
 ⚠️ **Deux épingles, parce qu'il y a deux façons d'appartenir à une étape.**
 L'étape d'un récit se *calcule* — sa date, son lieu, le fait qu'il prolonge le
@@ -590,8 +592,39 @@ qui vise la fiche d'un autre souvenir ; une puce ; le contexte du voyage. Un
 texte envoyé dans le fil est d'ailleurs classé précision le plus souvent : le
 menu ne le propose donc pas.
 
-Restent les deux « photo principale » (étape et voyage), qui sont des colonnes
-avant d'être des étoiles — le dernier tiers de T270.
+### Les deux photos principales
+
+**L'étoile verte** dit que cette photo est la principale de son **étape** : la
+carte de l'étape sur l'accueil du voyage, les propositions de couverture, la
+mise en page. **L'étoile lime, cerclée de vert**, dit qu'elle est celle du
+**voyage** : l'accueil de l'app, l'accueil du voyage, le haut du chat, les
+couvertures, la mise en page. Une photo peut porter les deux.
+
+Le geste est sur **une photo**, pas sur la bulle : dans le menu d'un appui long
+quand la bulle n'en porte qu'une, et sinon sur la photo ouverte en plein écran,
+où il n'y a aucun doute sur laquelle. Le même geste défait l'élection.
+
+⚠️ **Deux colonnes, et pas `photoUrl`.** `memo_steps.photoUrl` est **calculée**
+par `refreshTripFacts` à chaque passage : une élection écrite dedans se serait
+effacée toute seule, comme l'étape d'un récit. Le choix vit dans
+`memo_steps.coverEntryId` et `memos.coverEntryId`, et c'est le calcul qui le
+respecte — il recopie la photo élue dans `photoUrl`, et tout ce qui lit la
+vignette suit sans rien savoir de l'étoile.
+
+La photo élue partie dans une autre étape ne vide pas la colonne : le calcul ne
+la trouve plus parmi les photos de l'étape et reprend son élection automatique.
+Elle revient, l'étoile reparaît.
+
+⚠️ **La couverture composée dans l'atelier passe devant l'étoile lime.** Élire
+une photo du fil ne doit pas effacer en silence une couverture qu'on a faite
+(`memos.coverPhotoUrl`). L'ordre est : la couverture composée, puis la photo
+élue, puis l'élection automatique (la plus récente en paysage).
+
+⚠️ **Le lime, ici, n'est pas l'abonnement.** La règle de la marque veut que le
+lime ne dise que l'abonnement (T7) ; T270 le demande nommément pour cette
+étoile. C'est la première exception, et elle tient à ce que l'étoile n'est pas
+un bouton : elle ne propose rien, elle marque. À confirmer par Hugo — une
+ligne suffit à la défaire.
 
 **Le sujet est la bulle, pas la photo.** Six photos envoyées ensemble partagent
 un message, et c'est lui qui porte l'étape : elles partent ensemble, et la

@@ -248,6 +248,11 @@ police ou marge codée en dur ailleurs.
   jour » des réglages du voyage), « S’abonner » et « Découvrir l'abonnement »,
   la pastille « Abonné(e) » — et rien qui verrouille : plus de micro ni de CTA
   fermés au lime.
+  ⚠️ **Une exception depuis T270** (19/11/2026) : l'étoile de la photo
+  principale du **voyage** est lime, cerclée de vert — le ticket la demande
+  nommément. Elle échappe à la règle parce qu'elle **ne propose rien** : ce
+  n'est pas un bouton, c'est une marque sur une photo. Le reste tient, et une
+  ligne suffit à la défaire si Hugo préfère le vert.
 - Une icône de contenu du jeu de marque se dessine à `MemoBookSpacing.contentIcon`
   (2 rem), pas à 24 : les glyphes n'occupent qu'une part de leur boîte, et à 24 pt
   ils faisaient 9 à 12 pt d'encre. La flèche de retour (`navigationIcon`), le

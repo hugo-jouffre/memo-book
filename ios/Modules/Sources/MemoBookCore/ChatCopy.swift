@@ -611,6 +611,19 @@ public enum ChatCopy {
         public static let move = "Déplacer dans une autre étape"
         public static let delete = "Supprimer"
 
+        /// Les deux étoiles (T270). « Principale » et non « de couverture » :
+        /// la photo sert à la carte de l'étape et à la mise en page autant
+        /// qu'aux couvertures, et le mot doit valoir pour les trois.
+        public static let stepCover = "Photo principale de l’étape"
+        public static let unsetStepCover = "Ne plus être la photo de l’étape"
+        public static let tripCover = "Photo principale du voyage"
+        public static let unsetTripCover = "Ne plus être la photo du voyage"
+
+        /// Ce que VoiceOver dit d'une bulle dont une photo porte une étoile.
+        public static let spokenStepCover = "Photo principale de l’étape"
+        public static let spokenTripCover = "Photo principale du voyage"
+        public static let spokenBothCovers = "Photo principale de l’étape et du voyage"
+
         /// L'action du rotor VoiceOver, où « Déplacer » n'a pas de sous-menu :
         /// « Déplacer dans Étape 2 · Trastevere ».
         public static func moveTo(_ step: String) -> String { "Déplacer dans \(step)" }
@@ -642,6 +655,8 @@ public enum ChatCopy {
     public enum PhotoViewer {
         public static let close = "Fermer la photo"
         public static let photo = "Photo envoyée dans le fil"
+        /// Le bouton étoile de la visionneuse (T270).
+        public static let chooseCover = "Choisir cette photo comme principale"
         public static let hint = "Ouvre les photos en plein écran"
         /// « 2 / 5 » — la photo regardée, parmi celles de la bulle.
         public static func position(_ index: Int, of count: Int) -> String { "\(index) / \(count)" }

@@ -50,9 +50,34 @@ struct ChatMessageMenu: View {
                 }
             }
         }
+        // **Les deux étoiles** (T270), sur une bulle qui ne porte **qu'une**
+        // photo : sur une bulle qui en porte quatre, « cette photo » ne veut
+        // rien dire. Pour les autres, c'est la photo ouverte en plein écran
+        // qui porte le geste — là, il n'y a aucun doute sur laquelle.
+        if let only = singlePhoto {
+            // L'étape seulement si la bulle en a une : une photo qui n'est
+            // rangée nulle part n'a pas d'étape à illustrer, et une ligne de
+            // menu qui ne fait rien est pire que pas de ligne.
+            if message.stepId != nil {
+                Button(only.isStepCover ? ChatCopy.Menu.unsetStepCover : ChatCopy.Menu.stepCover) {
+                    model.electStepCover(only, in: message)
+                }
+            }
+            Button(only.isTripCover ? ChatCopy.Menu.unsetTripCover : ChatCopy.Menu.tripCover) {
+                model.electTripCover(only)
+            }
+        }
         if model.canDelete(message) {
             Button(ChatCopy.Menu.delete, role: .destructive, action: onDelete)
         }
+    }
+
+    /// La photo de cette bulle, **s'il n'y en a qu'une** — et si elle est
+    /// arrivée chez nous : une photo qui attend le réseau n'a pas de souvenir
+    /// à élire.
+    private var singlePhoto: PhotoAttachment? {
+        guard message.delivery == .sent, case .photos(let attachments) = message.body else { return nil }
+        return attachments.count == 1 ? attachments.first : nil
     }
 
     /// Ce qui se partage : un texte, ou des photos. Un vocal non — partager un
@@ -82,9 +107,26 @@ struct ChatMessageMenu: View {
                 Button(ChatCopy.Menu.moveTo(step.label)) { model.move(message, toStepId: step.id) }
             }
         }
+        if let only = singlePhotoOf(message) {
+            if message.stepId != nil {
+                Button(only.isStepCover ? ChatCopy.Menu.unsetStepCover : ChatCopy.Menu.stepCover) {
+                    model.electStepCover(only, in: message)
+                }
+            }
+            Button(only.isTripCover ? ChatCopy.Menu.unsetTripCover : ChatCopy.Menu.tripCover) {
+                model.electTripCover(only)
+            }
+        }
         if model.canDelete(message) {
             Button(ChatCopy.Menu.delete, action: onDelete)
         }
+    }
+
+    /// La même règle que ``singlePhoto``, pour le rotor VoiceOver — qui passe
+    /// par une fonction statique et n'a donc pas la vue sous la main.
+    private static func singlePhotoOf(_ message: ChatMessage) -> PhotoAttachment? {
+        guard message.delivery == .sent, case .photos(let attachments) = message.body else { return nil }
+        return attachments.count == 1 ? attachments.first : nil
     }
 }
 
