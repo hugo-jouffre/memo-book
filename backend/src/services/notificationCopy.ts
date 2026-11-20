@@ -139,15 +139,27 @@ export function renewalReminderText(input: { renewsOn: LocalDate; daysBefore: nu
  * **Relance d'écriture** — le carnet d'un voyage en cours se tait. La relance
  * du voyage (`memos.prompt`, « Comment ça se passe à Trastevere ? ») quand
  * elle existe : elle est écrite à partir de ce qui a déjà été raconté.
+ *
+ * ⚠️ **C'est la seule qui parle du présent** (T281, Hugo, 05/11/2026 — « les
+ * notifications annoncent encore l'ancien lieu, on est encore à Tokyo alors
+ * qu'on a bougé »). Elle demande « et la suite, à … ? » : le lieu doit être
+ * celui de la **dernière étape**, pas la destination figée à la création du
+ * voyage. Les trois autres notifications parlent du voyage entier — « ton
+ * voyage à Tokyo se termine aujourd'hui » reste juste depuis Kyoto — et
+ * gardent `city`.
+ *
+ * Sans étape — avant le départ, avant le premier récit —, on retombe sur la
+ * destination : c'est tout ce qu'on sait, et c'est encore vrai.
  */
 export function writingReminderText(input: {
-  trip: { city: string | null; title: string };
+  trip: { city: string | null; currentPlace?: string | null; title: string };
   prompt: string | null;
   hasStories: boolean;
 }): NotificationText {
-  const place = placeOf(input.trip);
+  const trip = { title: input.trip.title, city: input.trip.currentPlace?.trim() || input.trip.city };
+  const place = placeOf(trip);
   return {
-    title: input.hasStories ? `Et la suite, ${atPlace(input.trip)} ?` : `Ton carnet ${atPlace(input.trip)} t’attend`,
+    title: input.hasStories ? `Et la suite, ${atPlace(trip)} ?` : `Ton carnet ${atPlace(trip)} t’attend`,
     body:
       input.prompt?.trim() ||
       (input.hasStories
