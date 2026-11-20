@@ -37,6 +37,27 @@ profil (`accounts.notifyRenewalReminder`, `notifySchoolHolidays`,
 même pas candidate. L'e-mail de fin de voyage n'en dépend pas : c'est l'argent
 du voyageur, pas une relance.
 
+### Le lieu qu'une notification nomme (T281, 20/11/2026)
+
+**Trois des quatre parlent du voyage entier, une seule parle du présent.**
+
+| Notification | Le lieu qu'elle nomme | Pourquoi |
+|---|---|---|
+| Fin du voyage | `memos.destinationCity` | « Ton voyage à Tokyo se termine aujourd'hui » reste juste depuis Kyoto |
+| Carnet terminé, pas commandé | `memos.destinationCity` | Le carnet est celui du voyage, pas d'une étape |
+| L'an dernier à la même époque | `memos.destinationCity` | Elle parle d'un voyage passé, en bloc |
+| **Relance d'écriture** | **la dernière étape** | Elle demande « et la suite, à … ? » : c'est maintenant |
+
+`memos.destinationCity` est **figée à la création du voyage**. La relance
+disait donc « et la suite, à Tokyo ? » à quelqu'un parti depuis trois jours
+pour Kyoto (Hugo, 05/11/2026 : « on est encore à Tokyo alors qu'on a bougé »).
+
+Elle lit maintenant `PlannerTrip.currentPlace` — le `placeName` de la dernière
+étape, celle du plus grand numéro, exactement comme `writePrompt` choisit
+l'étape dont il écrit la relance (`services/tripFacts.ts`). Sans étape — avant
+le départ, avant le premier récit — elle retombe sur la destination : c'est
+tout ce qu'on sait, et c'est encore vrai.
+
 Les textes sont dans `backend/src/services/notificationCopy.ts`. **Aucun ne vient
 d'une maquette** : la feuille donne l'objectif et le ton, pas les mots. Clara
 doit les relire (T242).

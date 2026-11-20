@@ -15,6 +15,7 @@ function trip(overrides: Partial<PlannerTrip> = {}): PlannerTrip {
     id: "rome",
     title: "Rome 2026",
     city: "Rome",
+    currentPlace: null,
     startsOn: "2026-10-01",
     endsOn: "2026-10-12",
     createdOn: "2026-09-28",
@@ -340,6 +341,28 @@ describe("la relance d'écriture", () => {
   it("va chercher un carnet encore vide, à compter du départ", () => {
     const empty = account({ trips: [trip({ storyCount: 0, lastStoryOn: null })] });
     const due = planNotifications(empty, [], "2026-10-03").find((n) => n.kind === "writing_reminder");
+    expect(due?.title).toBe("Ton carnet à Rome t’attend");
+  });
+
+  /**
+   * **T281** (Hugo, 05/11/2026) : « les notifications annoncent encore
+   * l'ancien lieu — on est encore à Tokyo alors qu'on a bougé ».
+   *
+   * `memos.destinationCity` est figée à la création du voyage. La relance
+   * est la seule notification qui parle du **présent** : elle suit donc la
+   * dernière étape.
+   */
+  it("demande des nouvelles de là où l'on est, pas de la destination de départ", () => {
+    const parti = account({ trips: [trip({ currentPlace: "Kyoto" })] });
+    const due = planNotifications(parti, [], "2026-10-05").find((n) => n.kind === "writing_reminder");
+    expect(due?.title).toBe("Et la suite, à Kyoto ?");
+    expect(due?.title).not.toContain("Rome");
+  });
+
+  it("retombe sur la destination tant qu'aucune étape ne dit où l'on est", () => {
+    // Avant le départ, avant le premier récit : c'est tout ce qu'on sait.
+    const neuf = account({ trips: [trip({ storyCount: 0, lastStoryOn: null, currentPlace: null })] });
+    const due = planNotifications(neuf, [], "2026-10-03").find((n) => n.kind === "writing_reminder");
     expect(due?.title).toBe("Ton carnet à Rome t’attend");
   });
 

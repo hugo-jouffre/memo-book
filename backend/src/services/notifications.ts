@@ -265,6 +265,14 @@ export async function loadPlannerAccount(
         },
       },
       orders: { where: { status: { in: [...PLACED_ORDER] } }, select: { id: true }, take: 1 },
+      // **La dernière étape, pour savoir où l'on est** (T281, 20/11/2026).
+      // `memos.destinationCity` est la destination du voyage, figée à sa
+      // création : la relance d'écriture disait « et la suite, à Tokyo ? » à
+      // quelqu'un parti depuis trois jours pour Kyoto. Les étapes sont
+      // numérotées dans l'ordre du voyage par `tripFacts`, la dernière est
+      // donc la plus récente — c'est déjà ainsi que `writePrompt` choisit
+      // celle dont il écrit la relance.
+      steps: { orderBy: { number: "desc" }, take: 1, select: { placeName: true } },
     },
   });
   const memoIds = memos.map((memo) => memo.id);
@@ -373,6 +381,8 @@ export async function loadPlannerAccount(
     id: memo.id,
     title: memo.title,
     city: memo.destinationCity,
+    // Là où l'on en est, quand une étape le dit. Nul avant la première.
+    currentPlace: memo.steps[0]?.placeName?.trim() || null,
     startsOn: memo.startDate ? tripDate(memo.startDate) : null,
     endsOn: memo.endDate ? tripDate(memo.endDate) : null,
     createdOn: localDate(memo.createdAt, timeZone),
