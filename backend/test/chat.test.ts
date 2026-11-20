@@ -269,11 +269,24 @@ async function sendVoice(memoId: string, id = randomUUID()) {
  * brin de ficelle, pas sur le code. Petites (120 × 90) pour rester rapides, et
  * **paysage**, qui est le cas dont ces tests parlent.
  */
-async function multipartPhotos(id: string, count: number, content?: Buffer) {
+async function multipartPhotos(
+  id: string,
+  count: number,
+  content?: Buffer,
+  /** Ce que chaque photo sait d'elle-même, dans l'ordre des fichiers (T280). */
+  metas?: { capturedAt?: string; capturedPlaceName?: string }[],
+) {
   const boundary = `----memobookphotos${Date.now()}`;
   const parts: Buffer[] = [
     Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="id"\r\n\r\n${id}\r\n`),
   ];
+  if (metas) {
+    parts.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="photos"\r\n\r\n${JSON.stringify(metas)}\r\n`,
+      ),
+    );
+  }
   for (let index = 0; index < count; index += 1) {
     const image =
       content ??
@@ -595,9 +608,14 @@ describe("parler à MEMO", () => {
   });
 });
 
-async function sendPhotos(memoId: string, count: number, content?: Buffer) {
+async function sendPhotos(
+  memoId: string,
+  count: number,
+  content?: Buffer,
+  metas?: { capturedAt?: string; capturedPlaceName?: string }[],
+) {
   const id = randomUUID();
-  const { payload, contentType } = await multipartPhotos(id, count, content);
+  const { payload, contentType } = await multipartPhotos(id, count, content, metas);
   const response = await harness.app.inject({
     method: "POST",
     url: `/v1/trips/${memoId}/chat`,
@@ -2144,5 +2162,62 @@ describe("les deux photos principales", () => {
       [true, true],
       [false, false],
     ]);
+  });
+});
+
+/**
+ * **Ce qu'une photo sait d'elle-même** (T280, 20/11/2026).
+ *
+ * Un envoi porte jusqu'à quatre photos et n'avait qu'**une** date pour toutes.
+ * Chacune porte maintenant la sienne, et le lieu lu sur elle — géocodé sur le
+ * téléphone, aucune coordonnée ne sort de l'appareil.
+ */
+describe("le lieu et le jour que chaque photo porte", () => {
+  it("garde la date de chaque photo, et non celle de l'envoi", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await sendPhotos(memo.id, 2, undefined, [
+      { capturedAt: "2026-04-08T10:00:00.000Z", capturedPlaceName: "Kanazawa" },
+      { capturedAt: "2026-04-11T10:00:00.000Z", capturedPlaceName: "Takayama" },
+    ]);
+
+    const photos = await harness.prisma.entry.findMany({
+      where: { memoId: memo.id, kind: "photo" },
+      orderBy: { capturedAt: "asc" },
+      select: { capturedAt: true, capturedPlaceName: true },
+    });
+    expect(photos.map((row) => row.capturedAt.toISOString().slice(0, 10))).toEqual([
+      "2026-04-08",
+      "2026-04-11",
+    ]);
+    expect(photos.map((row) => row.capturedPlaceName)).toEqual(["Kanazawa", "Takayama"]);
+  });
+
+  it("sans le champ, l'envoi date comme avant — une app plus ancienne ne casse rien", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await sendPhotos(memo.id, 2);
+
+    const photos = await harness.prisma.entry.findMany({
+      where: { memoId: memo.id, kind: "photo" },
+      select: { capturedAt: true, capturedPlaceName: true },
+    });
+    expect(photos).toHaveLength(2);
+    expect(new Set(photos.map((row) => row.capturedAt.getTime())).size).toBe(1);
+    expect(photos.every((row) => row.capturedPlaceName === null)).toBe(true);
+  });
+
+  it("une entrée fautive laisse sa photo sans rien, et les autres passent", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await sendPhotos(memo.id, 2, undefined, [
+      { capturedAt: "pas une date", capturedPlaceName: "   " },
+      { capturedAt: "2026-04-11T10:00:00.000Z", capturedPlaceName: "Takayama" },
+    ]);
+
+    const photos = await harness.prisma.entry.findMany({
+      where: { memoId: memo.id, kind: "photo" },
+      select: { capturedPlaceName: true },
+    });
+    // Les deux sont créées dans la même transaction : leur ordre de retour
+    // n'est pas garanti, et ce n'est pas lui que le test regarde.
+    expect(photos.map((row) => row.capturedPlaceName).sort()).toEqual(["Takayama", null]);
   });
 });

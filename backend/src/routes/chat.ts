@@ -385,6 +385,62 @@ function parseLevels(raw: unknown): number[] {
   }
 }
 
+/** Ce qu'une photo sait d'elle-même, lu sur l'appareil qui l'envoie. */
+export interface PhotoMeta {
+  /** Sa date de prise de vue, quand la photothèque la connaît. */
+  capturedAt: Date | null;
+  /** Où elle a été prise, nom lisible — géocodé **sur le téléphone**. */
+  capturedPlaceName: string | null;
+}
+
+/** Au-delà, ce n'est pas un nom de lieu : c'est une phrase. */
+const MAX_PLACE_NAME = 120;
+
+/**
+ * **Ce que chaque photo d'un envoi dit d'elle-même** (T280, 20/11/2026).
+ *
+ * Un envoi porte jusqu'à `MAX_PHOTOS` photos et n'avait qu'**une** date pour
+ * toutes : quatre photos de quatre journées différentes arrivaient le même
+ * jour, et le carnet les rangeait ensemble. Le champ `photos` les décrit une
+ * par une, dans l'ordre des fichiers — un tableau JSON, parce qu'un champ
+ * multipart répété se lit différemment d'une pile à l'autre.
+ *
+ * Relu de façon défensive, et **jamais bloquant** : un tableau illisible, trop
+ * court, ou dont une entrée est fautive laisse simplement la photo sans rien,
+ * et l'envoi retombe sur la date du tour. Une photo refusée pour une date mal
+ * écrite serait un souvenir perdu.
+ *
+ * Une app d'avant ce champ n'envoie rien, et rien ne change pour elle.
+ */
+export function parsePhotoMetas(raw: unknown, count: number): PhotoMeta[] {
+  const vide: PhotoMeta = { capturedAt: null, capturedPlaceName: null };
+  const metas = Array.from({ length: count }, () => ({ ...vide }));
+  if (typeof raw !== "string" || raw.length === 0) return metas;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return metas;
+  }
+  if (!Array.isArray(parsed)) return metas;
+
+  for (const [index, item] of parsed.slice(0, count).entries()) {
+    if (!item || typeof item !== "object") continue;
+    const { capturedAt, capturedPlaceName } = item as {
+      capturedAt?: unknown;
+      capturedPlaceName?: unknown;
+    };
+    const date = typeof capturedAt === "string" ? new Date(capturedAt) : null;
+    const place = typeof capturedPlaceName === "string" ? capturedPlaceName.trim() : "";
+    metas[index] = {
+      capturedAt: date && !Number.isNaN(date.getTime()) ? date : null,
+      capturedPlaceName: place ? place.slice(0, MAX_PLACE_NAME) : null,
+    };
+  }
+  return metas;
+}
+
 function fieldOf(fields: Record<string, { value?: unknown } | undefined>, name: string): string | null {
   const value = fields[name]?.value;
   return typeof value === "string" && value.length > 0 ? value : null;
@@ -819,6 +875,8 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     const durationMs = isAudio ? measureVoiceMs(files[0]!.buffer) : null;
     const duration = durationMs === null ? null : durationMs / 1000;
     const placeLabel = fieldOf(fields, "placeLabel");
+    // Ce que chaque photo dit d'elle-même, aligné sur l'ordre des fichiers.
+    const photoMetas = parsePhotoMetas(fields["photos"]?.value, files.length);
     const rawStepId = fieldOf(fields, "stepId");
     const stepId = rawStepId && z.string().uuid().safeParse(rawStepId).success ? rawStepId : null;
     const levels = parseLevels(fields["levels"]?.value);
@@ -968,8 +1026,12 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
                 memo: { connect: { id: memoId } },
                 kind: isAudio ? "audio" : "photo",
                 status: isAudio ? "pending" : "ready",
-                capturedAt,
+                // La date de la photo l'emporte sur celle du tour : quatre
+                // photos de quatre journées arrivent dans le même envoi, et
+                // c'est leur jour de prise de vue qui les range (T280).
+                capturedAt: photoMetas[index]?.capturedAt ?? capturedAt,
                 placeLabel,
+                capturedPlaceName: photoMetas[index]?.capturedPlaceName ?? null,
                 ...(measures[index]
                   ? {
                       photoWidthPx: measures[index].widthPx,

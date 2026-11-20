@@ -239,6 +239,87 @@ importée pour une couverture arrive déjà à 1 600 px de l'app, soit quatre fo
 plus que nécessaire. La colonne est nommée pour eux ; le ticket parlait des
 couvertures.
 
+## 0 quater. Le lieu que la photo connaît — *implémenté côté serveur* (20/11/2026, T280)
+
+**Une photo ne disait rien d'elle-même**, et ça décidait du nom des étapes.
+
+Mesuré sur un vrai carnet (`UNBV73`, 108 souvenirs, 20 étapes) :
+
+| nature | total | avec un lieu |
+|---|---|---|
+| photo | **88** (81 %) | **0** |
+| audio | 18 | 16 |
+| texte | 2 | 1 |
+
+Résultat : les 20 étapes avaient chacune **un seul** porteur de lieu, jamais
+deux. Une étape de 69 souvenirs était nommée par **une** réponse de modèle.
+
+### Pourquoi `placeLabel` ne servait à rien
+
+Le champ existait déjà, et il était trompeur : l'app y envoie
+`thread.context.placeName`, **le lieu que le carnet croit déjà**. Un écho. Sur
+le carnet réel, les étapes 10 à 18 — Kiso, Matsumoto, Kanazawa, Takayama —
+portaient toutes `placeLabel: Tokyo`, là où la rédaction, en lisant les mots,
+les avait nommées correctement. Un lieu faux se recopiait sur tout ce qui
+suivait.
+
+Il reste : c'est un contexte utile à la rédaction (« tu es à Tokyo »). Mais il
+ne nomme aucune étape, et le commentaire de la colonne le dit maintenant.
+
+### Ce qui arrive, et d'où
+
+`entries.capturedPlaceName` : **où la photo a été prise**, nom lisible. Lu sur
+la photo (`PHAsset.location`) et transformé en nom **sur le téléphone** —
+aucune coordonnée ne sort de l'appareil, et le serveur n'a pas de géocodeur.
+
+Deux chemins d'arrivée, parce qu'il y en a deux :
+
+| Route | Forme | Pourquoi |
+|---|---|---|
+| `POST /v1/memos/:id/entries` | champ `capturedPlaceName` | un fichier, un champ |
+| `POST /v1/trips/:id/chat` | champ `photos`, un tableau JSON aligné sur l'ordre des fichiers | jusqu'à quatre photos par envoi, et un champ multipart répété se lit différemment d'une pile à l'autre |
+
+Le tableau porte aussi `capturedAt` **par photo** : un envoi n'avait qu'une
+date pour toutes, et quatre photos de quatre journées arrivaient le même jour.
+
+Tout est relu de façon défensive et **jamais bloquant** : un tableau illisible,
+trop court, ou dont une entrée est fautive laisse la photo sans rien et retombe
+sur la date du tour. Une app d'avant ce champ n'envoie rien, et rien ne change
+pour elle.
+
+### Ce que le carnet en fait
+
+Trois règles dans `services/tripFacts.ts`, et la première compte autant que les
+deux autres :
+
+1. **Les mots d'abord, toujours.** Un récit dit où il se passe ; une photo ne
+   connaît que l'endroit où l'obturateur a cliqué — le quai de gare entre deux
+   villes, l'avion. Dès qu'un récit de l'étape nomme un lieu, c'est lui.
+2. **Les photos nomment l'étape que personne ne nomme.** Trois étapes sur vingt
+   s'affichaient « sans lieu » sur le carnet réel.
+3. **Le lieu rattrape le pari sur les dates.** Quand une étape couvre le jour
+   de la prise, elle garde la photo même si celle-ci dit une autre ville : une
+   excursion à la journée se photographie ailleurs que là où le récit se passe.
+   Mais quand **aucune** ne couvre ce jour-là, l'ancienne règle prenait « la
+   plus proche, d'un côté ou de l'autre » — un pur pari. C'est de là que venait
+   le ticket : étape Shanghai le 24, étape Tokyo le 26, une photo du 25 à
+   égalité des deux, et la première restait.
+
+### Ce qui reste
+
+**L'app n'envoie encore rien** : la moitié iOS — lire `PHAsset.location`,
+géocoder, poster — est à venir. Le serveur sait l'accueillir, les colonnes sont
+là, et rien ne change tant que l'app se tait.
+
+Deux choses que ce lot ne fait pas :
+
+- **une photo n'ouvre toujours pas d'étape.** Elle en nomme une, elle en
+  rejoint une ; elle n'en crée pas. Une suite de photos à Kanazawa sans aucun
+  récit reste donc attachée à l'étape voisine ;
+- **l'autorisation est déjà là** — `PhotoFlow` demande `PHPhotoLibrary` en
+  `.readWrite` depuis toujours. Aucune nouvelle permission, et surtout **pas**
+  `CoreLocation` : géocoder une coordonnée qu'on a déjà n'en demande aucune.
+
 ## 0 ter. Le sticker découpé dans la photo — *implémenté* (12/11/2026)
 
 Hugo, 10/11/2026 : « stickers découpés depuis tes vraies photos de billets et

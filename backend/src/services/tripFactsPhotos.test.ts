@@ -35,6 +35,7 @@ function entry(
     cdnUrl: null,
     continuesPrevious: false,
     pinnedStepId,
+    capturedPlaceName: null,
   };
 }
 

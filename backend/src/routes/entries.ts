@@ -150,6 +150,14 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
     const fields = file.fields as Record<string, { value?: unknown } | undefined>;
     const rawCapturedAt = fields["capturedAt"]?.value;
     const rawPlaceLabel = fields["placeLabel"]?.value;
+    // Le lieu que la photo porte elle-même, géocodé sur le téléphone (T280).
+    // Cette route-ci n'envoie qu'un fichier : un champ simple suffit, là où le
+    // fil en reçoit plusieurs et passe par `photos` (`routes/chat.ts`).
+    const rawCapturedPlaceName = fields["capturedPlaceName"]?.value;
+    const capturedPlaceName =
+      typeof rawCapturedPlaceName === "string" && rawCapturedPlaceName.trim()
+        ? rawCapturedPlaceName.trim().slice(0, 120)
+        : null;
 
     const capturedAt =
       typeof rawCapturedAt === "string" && rawCapturedAt.length > 0
@@ -220,6 +228,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
             status: isAudio ? "pending" : "ready",
             capturedAt,
             placeLabel: typeof rawPlaceLabel === "string" ? rawPlaceLabel : null,
+            capturedPlaceName,
             ...(measure
               ? {
                   photoWidthPx: measure.widthPx,
