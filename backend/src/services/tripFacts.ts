@@ -80,10 +80,17 @@ interface FactEntry {
    * tout le découpage, `continuesPrevious` compris.
    */
   pinnedStepId: string | null;
+
+  /**
+   * **Où une photo a été prise**, nom lisible, lu sur la photo elle-même et
+   * géocodé sur le téléphone (T280). Nul pour un récit — un récit dit son lieu
+   * en mots, et c'est la rédaction qui le relève.
+   */
+  capturedPlaceName: string | null;
 }
 
 /** Un groupe de souvenirs qui deviendra une étape. */
-interface StepGroup {
+export interface StepGroup {
   place: string | null;
   entries: FactEntry[];
   /** L'étape existante qu'il reprend, s'il y en a une. */
@@ -108,8 +115,22 @@ function mostCommon<T>(values: T[], key: (value: T) => string): T | null {
   return best?.value ?? null;
 }
 
-/** Le lieu qu'un souvenir raconte : celui que la rédaction a relevé. */
+/**
+ * **Le lieu d'un souvenir**, et dans cet ordre : ce que la rédaction a relevé
+ * dans les mots, puis ce que la photo sait d'elle-même.
+ *
+ * Les mots d'abord, toujours (T280, 20/11/2026) : la rédaction a lu le récit,
+ * tandis qu'une photo ne connaît que l'endroit où l'obturateur a cliqué — le
+ * quai de gare entre deux villes, l'avion. Mais avant elle, **une photo ne
+ * disait rien du tout** : 88 souvenirs sur 108 d'un vrai carnet étaient muets,
+ * et le lieu d'une étape ne tenait qu'à un seul récit.
+ */
 function placeOf(entry: FactEntry): string | null {
+  return entry.insights.currentPlace?.trim() || entry.capturedPlaceName?.trim() || null;
+}
+
+/** Le lieu qu'un **récit** dit, en mots — sans ce que les photos savent. */
+function storyPlaceOf(entry: FactEntry): string | null {
   return entry.insights.currentPlace?.trim() || null;
 }
 
@@ -296,8 +317,12 @@ function stepCovering(stories: StepGroup[], photo: FactEntry): StepGroup | undef
     return { from: Math.min(...times), to: Math.max(...times) };
   };
 
+  // Ce que la photo sait d'elle-même, quand elle le sait (T280).
+  const here = photo.capturedPlaceName?.trim() ? placeKey(photo.capturedPlaceName.trim()) : null;
+
   let covering: { group: StepGroup; width: number } | null = null;
   let nearest: { group: StepGroup; distance: number } | null = null;
+  let nearestHere: { group: StepGroup; distance: number } | null = null;
 
   for (const group of stories) {
     const { from, to } = span(group);
@@ -312,9 +337,27 @@ function stepCovering(stories: StepGroup[], photo: FactEntry): StepGroup | undef
     // Strictement plus proche : à égalité, la première reste — l'ordre du
     // voyage départage, comme avant.
     if (!nearest || distance < nearest.distance) nearest = { group, distance };
+    // Et, parmi celles qui portent **le lieu de la photo**, la plus proche
+    // aussi : c'est elle qui l'emporte quand aucune ne couvre la date.
+    if (here && group.place && placeKey(group.place) === here) {
+      if (!nearestHere || distance < nearestHere.distance) nearestHere = { group, distance };
+    }
   }
 
-  return covering?.group ?? nearest?.group;
+  // **La date d'abord, le lieu en secours** (T280, 20/11/2026).
+  //
+  // Quand une étape couvre le jour de la prise, elle gagne même si la photo
+  // dit une autre ville : une excursion à la journée est photographiée
+  // ailleurs que là où le récit se passe, et déménager ces photos éparpillerait
+  // la journée.
+  //
+  // Mais quand **aucune** ne couvre ce jour-là, l'ancienne règle prenait la
+  // plus proche « d'un côté ou de l'autre » — un pur pari sur les dates. C'est
+  // de là que venait « Shanghai alors qu'on est à Tokyo » : étape Shanghai le
+  // 24, étape Tokyo le 26, une photo du 25 à égalité des deux, et la première
+  // restait. La photo sait maintenant qu'elle est à Tokyo, et c'est une
+  // meilleure raison qu'un jour d'écart.
+  return covering?.group ?? nearestHere?.group ?? nearest?.group;
 }
 
 /**
@@ -361,6 +404,7 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
           continuesPreviousStep: true,
           separatedByTraveller: true,
           pinnedStepId: true,
+          capturedPlaceName: true,
           media: { select: { cdnUrl: true } },
         },
       });
@@ -375,6 +419,7 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
         // La main l'emporte sur la machine, comme partout ici.
         continuesPrevious: row.continuesPreviousStep && !row.separatedByTraveller,
         pinnedStepId: row.pinnedStepId,
+        capturedPlaceName: row.capturedPlaceName,
       }));
 
       const before = [...memo.steps].sort((a, b) => b.number - a.number)[0] ?? null;
@@ -542,7 +587,7 @@ async function writeSteps(
 }
 
 /** Ce qu'une étape dit d'elle-même, tiré de ses souvenirs. */
-function stepFields(group: StepGroup, step: ExistingStep | undefined) {
+export function stepFields(group: StepGroup, step: ExistingStep | undefined) {
   const times = group.entries.map((entry) => entry.capturedAt.getTime());
   const country = mostCommon(
     group.entries.flatMap((entry) => entry.insights.countries.slice(0, 1)),
@@ -563,9 +608,25 @@ function stepFields(group: StepGroup, step: ExistingStep | undefined) {
     : undefined;
   const photo = elected ?? group.entries.find((entry) => entry.kind === "photo" && entry.cdnUrl);
 
-  const majorityPlace = mostCommon(
+  // **Les mots d'abord, les photos ensuite** (T280, 20/11/2026).
+  //
+  // Un récit dit où il se passe ; une photo ne connaît que l'endroit où
+  // l'obturateur a cliqué — le quai de gare entre deux villes, l'avion. Dès
+  // qu'un récit de l'étape nomme un lieu, c'est lui.
+  //
+  // Mais une étape sans aucun récit qui parle n'avait **rien** : sur un vrai
+  // carnet, 88 souvenirs sur 108 étaient des photos muettes, et trois étapes
+  // sur vingt s'affichaient sans lieu. Ce sont elles que les photos nomment.
+  const storyPlace = mostCommon(
     group.entries.flatMap((entry) => {
-      const place = placeOf(entry);
+      const place = storyPlaceOf(entry);
+      return place ? [place] : [];
+    }),
+    placeKey,
+  );
+  const photoPlace = mostCommon(
+    group.entries.flatMap((entry) => {
+      const place = entry.kind === "photo" ? entry.capturedPlaceName?.trim() : null;
       return place ? [place] : [];
     }),
     placeKey,
@@ -574,7 +635,10 @@ function stepFields(group: StepGroup, step: ExistingStep | undefined) {
   return {
     // Une étape choisie par le voyageur garde son nom ; les autres prennent
     // celui de leur lieu. Ce que la rédaction ne sait pas, on ne l'efface pas.
-    placeName: (group.pinned ? (step?.placeName ?? majorityPlace) : (group.place ?? step?.placeName)) ?? null,
+    placeName:
+      (group.pinned
+        ? (step?.placeName ?? storyPlace ?? photoPlace)
+        : (group.place ?? storyPlace ?? photoPlace ?? step?.placeName)) ?? null,
     destinationName: country?.name ?? step?.destinationName ?? null,
     destinationCountryCode: country?.code ?? step?.destinationCountryCode ?? null,
     startDate: new Date(Math.min(...times)),

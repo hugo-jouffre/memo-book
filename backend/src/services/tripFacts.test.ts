@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupIntoSteps } from "./tripFacts.js";
+import { groupIntoSteps, stepFields } from "./tripFacts.js";
 import { EMPTY_INSIGHTS } from "./redaction.js";
 
 /**
@@ -33,11 +33,18 @@ function story(
     cdnUrl: null,
     continuesPrevious: options.continues ?? false,
     pinnedStepId: options.pinnedStepId ?? null,
+    capturedPlaceName: null,
   };
 }
 
-/** Une photo, prise après les récits déjà posés. */
-function photo(id: string) {
+/**
+ * Une photo, prise après les récits déjà posés.
+ *
+ * `place` est ce que la photo sait d'elle-même (`PHAsset.location`, géocodé
+ * sur le téléphone) : nul pour une photo sans position, et c'était le cas de
+ * **toutes** avant le 20/11/2026.
+ */
+function photo(id: string, place?: string) {
   clock += 1;
   const at = new Date(Date.UTC(2026, 0, 1, clock));
   return {
@@ -50,6 +57,7 @@ function photo(id: string) {
     cdnUrl: null,
     continuesPrevious: false,
     pinnedStepId: null,
+    capturedPlaceName: place ?? null,
   };
 }
 
@@ -153,5 +161,73 @@ describe("un récit déplacé à la main", () => {
     ]);
 
     expect(shape(groups)).toEqual([["un"], ["cible", "venu"]]);
+  });
+});
+
+/**
+ * **Ce qu'une photo sait d'elle-même** (T280, 20/11/2026).
+ *
+ * Avant, une photo ne disait rien : sur un vrai carnet, 88 souvenirs sur 108
+ * étaient muets, et le lieu d'une étape ne tenait qu'à **un seul** récit.
+ * Elle porte maintenant l'endroit où elle a été prise, lu sur elle et géocodé
+ * sur le téléphone.
+ */
+describe("le lieu que la photo connaît", () => {
+  it("range la photo du jour d'entre-deux là où elle a été prise", () => {
+    // Le cas du ticket, exactement : « Shanghai alors qu'on est à Tokyo ».
+    // Étape Shanghai, puis la photo, puis étape Tokyo — la photo est à un
+    // cheveu des deux, et l'ancienne règle gardait la première.
+    const depart = story("shanghai", { place: "Shanghai" });
+    const vol = photo("photo-du-vol", "Tokyo");
+    const arrivee = story("tokyo", { place: "Tokyo" });
+
+    expect(shape(groupIntoSteps([depart, vol, arrivee]))).toEqual([["shanghai"], ["tokyo", "photo-du-vol"]]);
+  });
+
+  it("sans rien savoir, la photo retombe sur la plus proche, comme avant", () => {
+    const depart = story("shanghai", { place: "Shanghai" });
+    const muette = photo("photo-muette");
+    const arrivee = story("tokyo", { place: "Tokyo" });
+
+    expect(shape(groupIntoSteps([depart, muette, arrivee]))).toEqual([["shanghai", "photo-muette"], ["tokyo"]]);
+  });
+
+  it("ne déménage pas l'excursion : une étape qui couvre le jour garde ses photos", () => {
+    // Journée à Nikko, photographiée au passage depuis le train à Tokyo. La
+    // date couvre, donc elle reste avec son récit : éparpiller une journée
+    // vaudrait moins qu'un nom de ville exact sur une photo.
+    const matin = story("nikko-matin", { place: "Nikko" });
+    const soir = story("nikko-soir", { place: "Nikko", continues: true });
+    const train = photo("photo-du-train", "Tokyo");
+
+    const groupes = groupIntoSteps([matin, soir, train]);
+    expect(shape(groupes)).toEqual([["nikko-matin", "nikko-soir", "photo-du-train"]]);
+  });
+});
+
+describe("qui nomme une étape", () => {
+  const nomme = (entries: Parameters<typeof groupIntoSteps>[0]) =>
+    groupIntoSteps(entries).map((group) => stepFields(group, undefined).placeName);
+
+  it("le récit l'emporte sur les photos, toujours", () => {
+    const recit = story("nikko", { place: "Nikko" });
+    const une = photo("une", "Tokyo");
+    const deux = photo("deux", "Tokyo");
+    const trois = photo("trois", "Tokyo");
+
+    expect(nomme([recit, une, deux, trois])).toEqual(["Nikko"]);
+  });
+
+  it("les photos nomment l'étape qu'aucun récit ne nomme", () => {
+    // Trois étapes sur vingt s'affichaient « sans lieu » sur le carnet réel.
+    const muet = story("recit-sans-lieu");
+    const une = photo("une", "Kanazawa");
+    const deux = photo("deux", "Kanazawa");
+
+    expect(nomme([muet, une, deux])).toEqual(["Kanazawa"]);
+  });
+
+  it("sans photo qui sache, l'étape reste sans lieu — on n'invente pas", () => {
+    expect(nomme([story("muet"), photo("photo-muette")])).toEqual([null]);
   });
 });

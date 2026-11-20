@@ -1258,15 +1258,15 @@ model Entry {
 
   /// Texte corrigé au clavier par l'utilisateur dans l'app. Dès qu'il existe,
   /// il fait autorité : la mise en page le reprend **au mot près**.
-  editedText String?
-  editedAt   DateTime?
+  editedText               String?
+  editedAt                 DateTime?
   /// Les caractères de correction au clavier **déjà offerts** à cette fiche,
   /// cumulés : 200 au plus (`CORRECTION_FREE_CHARACTERS`, Hugo, 19/10/2026,
   /// QA D8). Une correction prend d'abord ici, puis au crédit du jour ; pot
   /// vide, ce qui dépasse attend l'illimité. Revenir à la version proposée ne
   /// le remet pas à zéro — sinon l'aller-retour rouvrirait les 200. Un abonné
   /// ne l'entame pas : il ne le prendrait qu'à ses co-voyageurs.
-  correctionFreeCharacters Int @default(0)
+  correctionFreeCharacters Int       @default(0)
 
   /// Propositions de l'agent de rédaction, que la mise en page consomme.
   suggestedTitle String?
@@ -1286,7 +1286,7 @@ model Entry {
   /// Entière : personne ne dit « il faisait 23,4 degrés ». Négative l'hiver.
   /// Ce n'est **pas** la température relevée par un service — celle-là vit sur
   /// l'étape (`memo_steps.temperatureC`), et la dite l'emporte toujours.
-  temperatureC   Int?
+  temperatureC Int?
 
   /// Le quiz proposé pour ce souvenir. Il vit ici et non dans le payload du
   /// rendu, sinon il serait réécrit à chaque aperçu : c'est du texte que
@@ -1383,9 +1383,27 @@ model Entry {
   /// regrouper les entries par journée lors de la structuration.
   capturedAt DateTime @default(now())
   /// Lieu déclaré par l'app (nom lisible, ex. « Bogotá, Colombie »).
+  ///
+  /// ⚠️ C'est un **écho**, pas une mesure : l'app envoie le lieu de l'étape en
+  /// cours tel que le carnet le lui a donné (`thread.context.placeName`). Il ne
+  /// peut donc que répéter ce que le carnet croit déjà, faux compris. Il sert
+  /// de contexte à la rédaction, jamais à nommer une étape — voir
+  /// `capturedPlaceName`, qui, lui, est mesuré.
   placeLabel String?
+
+  /// **Où cette photo a été prise**, nom lisible — « Kanazawa ».
+  ///
+  /// Lu sur la photo elle-même (`PHAsset.location`) et transformé en nom **sur
+  /// le téléphone** : aucune coordonnée ne sort de l'appareil, et le serveur
+  /// n'a pas de géocodeur. `null` pour une photo sans position, pour un vocal,
+  /// et pour tout ce qui est arrivé avant le 20/11/2026.
+  ///
+  /// C'est la seule chose qu'une photo sache dire d'elle-même. Avant elle,
+  /// 88 souvenirs sur 108 d'un vrai carnet étaient muets, et le lieu d'une
+  /// étape ne tenait qu'à **un seul** récit (T280).
+  capturedPlaceName String?
   /// Message d'erreur du dernier échec de traitement, le cas échéant.
-  error      String?
+  error             String?
 
   mediaId String?
   media   MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
