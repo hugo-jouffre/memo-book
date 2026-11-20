@@ -1439,10 +1439,32 @@ public struct ChatPhotoUpload: Sendable, Hashable {
     public let filename: String
     public let mimeType: String
 
-    public init(data: Data, filename: String, mimeType: String) {
+    /// **Sa date de prise de vue**, quand la photothèque la connaît (T280).
+    ///
+    /// Un envoi n'avait qu'**une** date pour ses quatre photos : quatre
+    /// journées différentes arrivaient le même jour, et le carnet les rangeait
+    /// ensemble. `nil` fait retomber le serveur sur la date du tour.
+    public let capturedAt: Date?
+
+    /// **Où elle a été prise**, nom lisible — « Kanazawa ».
+    ///
+    /// Lu sur la photo (`PHAsset.location`) et géocodé **sur l'appareil** :
+    /// aucune coordonnée ne part. `nil` pour une photo sans position, et pour
+    /// une photo prise à l'instant.
+    public let capturedPlaceName: String?
+
+    public init(
+        data: Data,
+        filename: String,
+        mimeType: String,
+        capturedAt: Date? = nil,
+        capturedPlaceName: String? = nil
+    ) {
         self.data = data
         self.filename = filename
         self.mimeType = mimeType
+        self.capturedAt = capturedAt
+        self.capturedPlaceName = capturedPlaceName
     }
 }
 

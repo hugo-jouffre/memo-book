@@ -711,3 +711,82 @@ final class APIClientTests: XCTestCase {
         XCTAssertNil(declined?["phone"])
     }
 }
+
+// MARK: - Ce que chaque photo dit d'elle-même sur le fil (T280)
+
+extension APIClientTests {
+    /// La valeur d'un champ texte d'un corps multipart, telle quelle.
+    fileprivate static func field(named name: String, in body: String) -> String? {
+        guard let marker = body.range(of: "name=\"\(name)\"\r\n\r\n") else { return nil }
+        let rest = body[marker.upperBound...]
+        guard let end = rest.range(of: "\r\n--") else { return nil }
+        return String(rest[..<end.lowerBound])
+    }
+
+    /// **Le champ `photos`**, aligné sur l'ordre des fichiers.
+    ///
+    /// Un envoi n'avait qu'une date pour ses quatre photos, et aucune ne
+    /// disait où elle avait été prise. Le champ est un **tableau JSON** et non
+    /// un champ multipart répété : celui-ci se relit différemment d'une pile
+    /// serveur à l'autre. Les clés sont celles que `routes/chat.ts` attend —
+    /// ce tableau est un contrat, et c'est ce test qui le tient.
+    func testEachPhotoSaysItsDayAndPlaceOnTheWire() async throws {
+        let client = makeClient()
+        respond(status: 201, json: #"{"messages":[],"turn":{"status":"idle"}}"#)
+
+        let kanazawa = Date(timeIntervalSince1970: 1_775_000_000)
+        _ = try? await client.sendChatPhotos(
+            tripId: "voyage",
+            turn: ChatPhotosTurn(
+                id: "11111111-1111-1111-1111-111111111111",
+                photos: [
+                    ChatPhotoUpload(
+                        data: Data("une".utf8),
+                        filename: "photo-0.jpg",
+                        mimeType: "image/jpeg",
+                        capturedAt: kanazawa,
+                        capturedPlaceName: "Kanazawa"
+                    ),
+                    ChatPhotoUpload(data: Data("deux".utf8), filename: "photo-1.jpg", mimeType: "image/jpeg"),
+                ],
+                capturedAt: kanazawa
+            )
+        )
+
+        let body = try XCTUnwrap(StubURLProtocol.lastBody.flatMap { String(data: $0, encoding: .utf8) })
+        XCTAssertTrue(body.contains(#"name="photos""#), "Le champ doit partir : \(body.prefix(400))")
+
+        // Relu comme le serveur le relira : un tableau, dans l'ordre des
+        // fichiers, et aussi long qu'eux.
+        let champ = try XCTUnwrap(Self.field(named: "photos", in: body), body.prefix(400).description)
+        let metas = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(champ.utf8)) as? [[String: Any]],
+            champ
+        )
+        XCTAssertEqual(metas.count, 2, "Une entrée par fichier, même muette.")
+        XCTAssertEqual(metas[0]["capturedPlaceName"] as? String, "Kanazawa")
+        // La seconde ne sait rien : son entrée est **vide**, et non absente —
+        // sans elle, le serveur alignerait Kanazawa sur la mauvaise photo.
+        XCTAssertNil(metas[1]["capturedPlaceName"])
+        XCTAssertNil(metas[1]["capturedAt"])
+    }
+
+    /// Aucune ne sait rien : le champ ne part pas, et la requête est celle
+    /// d'avant — une pile serveur plus ancienne ne voit aucune différence.
+    func testNothingIsSentWhenNoPhotoKnowsAnything() async throws {
+        let client = makeClient()
+        respond(status: 201, json: #"{"messages":[],"turn":{"status":"idle"}}"#)
+
+        _ = try? await client.sendChatPhotos(
+            tripId: "voyage",
+            turn: ChatPhotosTurn(
+                id: "22222222-2222-2222-2222-222222222222",
+                photos: [ChatPhotoUpload(data: Data("une".utf8), filename: "photo-0.jpg", mimeType: "image/jpeg")],
+                capturedAt: Date(timeIntervalSince1970: 1_775_000_000)
+            )
+        )
+
+        let body = try XCTUnwrap(StubURLProtocol.lastBody.flatMap { String(data: $0, encoding: .utf8) })
+        XCTAssertFalse(body.contains(#"name="photos""#), "Rien à dire, rien à envoyer.")
+    }
+}

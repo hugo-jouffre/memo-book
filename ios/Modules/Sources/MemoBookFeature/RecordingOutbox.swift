@@ -898,6 +898,11 @@ public final class RecordingOutbox {
                 stepId: turn.stepId,
                 filenames: photos.map(\.filename),
                 mimeTypes: photos.map(\.mimeType),
+                // Gardé avec elles sur le disque : une photo qui attend le
+                // réseau ne doit pas oublier sa journée (T280).
+                photoMetas: photos.map {
+                    PendingPhotoMeta(capturedAt: $0.capturedAt, placeName: $0.capturedPlaceName)
+                },
                 recordedAt: capturedAt
             )
         }
@@ -954,8 +959,21 @@ public final class RecordingOutbox {
         case .photos:
             guard files.count == record.filenames.count, files.count == record.mimeTypes.count, !files.isEmpty
             else { return nil }
-            let photos = zip(files, zip(record.filenames, record.mimeTypes)).map { data, names in
-                ChatPhotoUpload(data: data, filename: names.0, mimeType: names.1)
+            // Ce que chaque photo savait d'elle-même au moment du choix est
+            // reposé ici (T280) : un tour qui a passé la nuit dans la file
+            // part avec la journée et le lieu de ses photos, pas avec ceux du
+            // jour où le réseau est revenu. Vide pour une fiche d'avant.
+            let photos = zip(files, zip(record.filenames, record.mimeTypes)).enumerated().map {
+                index, pair in
+                let (data, names) = pair
+                let meta = index < record.photoMetas.count ? record.photoMetas[index] : nil
+                return ChatPhotoUpload(
+                    data: data,
+                    filename: names.0,
+                    mimeType: names.1,
+                    capturedAt: meta?.capturedAt,
+                    capturedPlaceName: meta?.placeName
+                )
             }
             return OutgoingTurn(
                 id: record.id,

@@ -159,7 +159,9 @@ public struct ProfileView: View {
                 }
                 : nil
         ) { images in
-            guard let data = images.first, let jpeg = ProfileAvatar.jpeg(from: data) else { return }
+            // La photo de profil ne se range dans aucune étape : seule sa
+            // chair compte, ni sa date ni son lieu.
+            guard let data = images.first?.data, let jpeg = ProfileAvatar.jpeg(from: data) else { return }
             // Le rond porte la photo **avant** l'aller-retour — voir
             // ``ProfileAvatar/pending``.
             pendingAvatar = UIImage(data: jpeg)

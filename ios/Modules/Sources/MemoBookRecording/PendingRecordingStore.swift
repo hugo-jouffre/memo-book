@@ -6,6 +6,27 @@ import Foundation
 /// Ce qui est stocké, c'est **ce que le voyageur a dit**, jamais ce que le
 /// serveur en fera : la transcription appartient au serveur, et un tour en
 /// attente n'a encore rien produit.
+/// **Ce qu'une photo sait d'elle-même**, gardé avec elle dans la file (T280).
+///
+/// Sa date de prise de vue et le lieu où elle a été prise, lus sur la photo
+/// et géocodés **sur l'appareil** : la file ne garde aucune coordonnée, et il
+/// n'en sort donc aucune non plus.
+///
+/// Les deux sont facultatifs — une photo prise à l'instant n'a pas de lieu, et
+/// une photothèque peut ne rien savoir.
+public struct PendingPhotoMeta: Codable, Sendable, Hashable {
+    public let capturedAt: Date?
+    public let placeName: String?
+
+    public init(capturedAt: Date? = nil, placeName: String? = nil) {
+        self.capturedAt = capturedAt
+        self.placeName = placeName
+    }
+
+    /// Elle ne dit rien : inutile de l'écrire.
+    public var isEmpty: Bool { capturedAt == nil && placeName == nil }
+}
+
 public struct PendingTurn: Sendable, Hashable, Identifiable {
     public enum Kind: String, Codable, Sendable, Hashable {
         case voice
@@ -35,6 +56,13 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
     /// photos, aucun pour un texte. Écrits à côté de la fiche.
     public let filenames: [String]
     public let mimeTypes: [String]
+
+    /// Ce que chaque photo sait d'elle-même, **dans l'ordre des fichiers**
+    /// (T280). Vide pour un vocal, un texte, et pour des photos dont la
+    /// photothèque n'a rien dit — c'était le cas de toutes avant le
+    /// 20/11/2026, et c'est pourquoi le tableau n'est écrit que s'il porte
+    /// quelque chose : une fiche ordinaire ne change pas d'un octet.
+    public let photoMetas: [PendingPhotoMeta]
 
     /// La durée capturée d'un vocal, mesurée par l'app. Elle dessine la bulle
     /// en attendant le serveur, qui relit la sienne dans le fichier — c'est
@@ -82,6 +110,7 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
         stepId: String? = nil,
         filenames: [String] = [],
         mimeTypes: [String] = [],
+        photoMetas: [PendingPhotoMeta] = [],
         duration: TimeInterval? = nil,
         levels: [Double] = [],
         placeLabel: String? = nil,
@@ -99,6 +128,8 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
         self.stepId = stepId
         self.filenames = filenames
         self.mimeTypes = mimeTypes
+        // Rien à garder si aucune ne dit rien : la fiche reste celle d'avant.
+        self.photoMetas = photoMetas.allSatisfy(\.isEmpty) ? [] : photoMetas
         self.duration = duration
         self.levels = levels
         self.placeLabel = placeLabel
@@ -124,7 +155,7 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
 extension PendingTurn: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, tripId, kind, text, suggestionId, entryId, stepId
-        case filenames, mimeTypes, duration, levels, placeLabel, recordedAt, queuedAt
+        case filenames, mimeTypes, photoMetas, duration, levels, placeLabel, recordedAt, queuedAt
         case waitingForCreditUntil, waitingForUnlimited
         // La fiche d'avant le 22/09/2026 : un vocal, plusieurs carnets.
         case tripIds, filename, mimeType
@@ -163,6 +194,9 @@ extension PendingTurn: Codable {
                 ?? legacyFilename.map { [$0] } ?? [],
             mimeTypes: try container.decodeIfPresent([String].self, forKey: .mimeTypes)
                 ?? legacyMimeType.map { [$0] } ?? [],
+            // Absent de toute fiche écrite avant le 20/11/2026, et illisible
+            // ne doit pas emporter le tour : les photos partiront sans lieu.
+            photoMetas: (try? container.decodeIfPresent([PendingPhotoMeta].self, forKey: .photoMetas)) ?? [] ?? [],
             duration: try container.decodeIfPresent(TimeInterval.self, forKey: .duration),
             levels: try container.decodeIfPresent([Double].self, forKey: .levels) ?? [],
             placeLabel: try container.decodeIfPresent(String.self, forKey: .placeLabel),
@@ -185,6 +219,8 @@ extension PendingTurn: Codable {
         try container.encodeIfPresent(stepId, forKey: .stepId)
         try container.encode(filenames, forKey: .filenames)
         try container.encode(mimeTypes, forKey: .mimeTypes)
+        // Écrit seulement s'il porte quelque chose : voir `photoMetas`.
+        if !photoMetas.isEmpty { try container.encode(photoMetas, forKey: .photoMetas) }
         try container.encodeIfPresent(duration, forKey: .duration)
         try container.encode(levels, forKey: .levels)
         try container.encodeIfPresent(placeLabel, forKey: .placeLabel)

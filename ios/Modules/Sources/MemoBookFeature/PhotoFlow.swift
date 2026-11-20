@@ -147,7 +147,7 @@ extension View {
         title: String = ChatCopy.Photos.title,
         maxSelection: Int = ChatMetrics.maxPhotosPerMessage,
         onRemove: (() -> Void)? = nil,
-        onPicked: @escaping ([Data]) -> Void
+        onPicked: @escaping ([PickedPhoto]) -> Void
     ) -> some View {
         modifier(
             PhotoFlowModifier(
@@ -166,7 +166,7 @@ private struct PhotoFlowModifier: ViewModifier {
     let title: String
     let maxSelection: Int
     let onRemove: (() -> Void)?
-    let onPicked: ([Data]) -> Void
+    let onPicked: ([PickedPhoto]) -> Void
 
     @State private var selection: [PhotosPickerItem] = []
 
@@ -193,17 +193,26 @@ private struct PhotoFlowModifier: ViewModifier {
                 }
                 Button(ChatCopy.Photos.cancel, role: .cancel) {}
             }
+            // `photoLibrary: .shared()` n'est pas décoratif : sans lui,
+            // `PhotosPickerItem.itemIdentifier` est nul, et la photo arrive
+            // sans sa date ni sa position — iOS les retire des octets livrés
+            // par `loadTransferable`. L'accès est déjà demandé par
+            // ``PhotoFlow/begin()``, en `.readWrite`, avant toute ouverture.
             .photosPicker(
                 isPresented: $flow.isPickingFromLibrary,
                 selection: $selection,
                 maxSelectionCount: maxSelection,
-                matching: .images
+                matching: .images,
+                photoLibrary: .shared()
             )
             .fullScreenCover(isPresented: $flow.isTakingPhoto) {
                 CameraPicker { data in
                     flow.isTakingPhoto = false
                     guard let data else { return }
-                    onPicked([data])
+                    // Prise à l'instant : pas d'élément de photothèque, donc
+                    // ni date ni lieu. Le serveur retombe sur la date du tour,
+                    // qui est la bonne — c'est maintenant.
+                    onPicked([PickedPhoto(data: data)])
                 }
                 .ignoresSafeArea()
             }
@@ -214,16 +223,25 @@ private struct PhotoFlowModifier: ViewModifier {
                     // en parallèle depuis iCloud ont plus de chances d'échouer
                     // qu'un à la fois, et l'ordre du choix est celui du récit.
                     var images: [Data] = []
+                    var loaded: [PhotosPickerItem] = []
                     for item in items {
                         if let data = try? await item.loadTransferable(type: Data.self) {
                             images.append(data)
+                            // Gardé en parallèle des octets : un transfert
+                            // raté décale la liste, et la photo suivante
+                            // hériterait de la date et du lieu de celle qui
+                            // n'est jamais arrivée.
+                            loaded.append(item)
                         }
                     }
                     selection = []
                     // `loadTransferable` rend le fichier de la photothèque tel
                     // quel — en HEIC sur un iPhone, que le moteur du carnet ne
                     // sait pas peindre. Voir `PhotoEncoding`.
-                    onPicked(PhotoEncoding.jpegs(from: images))
+                    let jpegs = PhotoEncoding.jpegs(from: images)
+                    // Puis ce que chacune sait d'elle-même (T280) : sa date de
+                    // prise de vue, et le nom de l'endroit — géocodé ici même.
+                    onPicked(await PhotoOrigin.describe(loaded, images: jpegs))
                 }
             }
     }
