@@ -26,7 +26,13 @@ final class ChatImagesTests: XCTestCase {
             }
     }
 
-    private func model(downloads: Downloads) -> ChatModel {
+    /// Ce que le modèle a confié au transport.
+    private actor Sent {
+        var turns: [OutgoingTurn] = []
+        func record(_ turn: OutgoingTurn) { turns.append(turn) }
+    }
+
+    private func model(downloads: Downloads, sent: Sent? = nil) -> ChatModel {
         let picture = picture
         let thread = ChatThread(
             id: "trip",
@@ -40,7 +46,10 @@ final class ChatImagesTests: XCTestCase {
             transport: ChatTransport(
                 load: { thread },
                 poll: { _ in ChatThreadUpdate(messages: [], suggestions: [], turn: .idle, now: .now) },
-                send: { _ in .queued },
+                send: { turn in
+                    await sent?.record(turn)
+                    return .queued
+                },
                 editTranscript: { _, _ in throw CancellationError() },
                 media: { url in
                     await downloads.record(url)
@@ -98,7 +107,7 @@ final class ChatImagesTests: XCTestCase {
         let model = model(downloads: Downloads())
         let trop = ChatMetrics.maxPhotosPerMessage + 5
 
-        model.sendPhotos(Array(repeating: picture, count: trop))
+        model.sendPhotos(Array(repeating: PickedPhoto(data: picture), count: trop))
 
         let dit = try XCTUnwrap(model.errorMessage, "Le surplus doit se dire.")
         XCTAssertTrue(dit.contains("\(ChatMetrics.maxPhotosPerMessage)"), dit)
@@ -110,7 +119,7 @@ final class ChatImagesTests: XCTestCase {
     func testTheLimitSaysNothingWhenEverythingFits() async throws {
         let model = model(downloads: Downloads())
 
-        model.sendPhotos(Array(repeating: picture, count: ChatMetrics.maxPhotosPerMessage))
+        model.sendPhotos(Array(repeating: PickedPhoto(data: picture), count: ChatMetrics.maxPhotosPerMessage))
 
         XCTAssertNil(model.errorMessage, "Tout est parti : rien à signaler.")
     }
@@ -130,15 +139,69 @@ final class ChatImagesTests: XCTestCase {
 
     private func until(
         timeout: Duration = .seconds(2),
-        _ condition: @MainActor () -> Bool,
+        _ condition: @MainActor () async -> Bool,
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
-            if condition() { return }
+            if await condition() { return }
             try await Task.sleep(for: .milliseconds(20))
         }
         XCTFail("Jamais atteint", file: file, line: line)
+    }
+}
+
+
+// MARK: - Ce que chaque photo sait d'elle-même (T280)
+
+extension ChatImagesTests {
+    /// **Sa journée et son lieu voyagent avec elle**, pas avec le tour
+    /// (T280, 20/11/2026 — « Shanghai alors qu'on est à Tokyo »).
+    ///
+    /// Un envoi n'avait qu'une date pour ses quatre photos, et aucune ne
+    /// disait où elle avait été prise : le lieu d'une étape ne tenait alors
+    /// qu'à un seul récit.
+    func testEachPhotoCarriesItsOwnDayAndPlace() async throws {
+        let sent = Sent()
+        let model = model(downloads: Downloads(), sent: sent)
+        // Le modèle n'envoie rien sans fil : `send` sort tout de suite.
+        await model.load()
+        let kanazawa = Date(timeIntervalSince1970: 1_775_000_000)
+        let takayama = Date(timeIntervalSince1970: 1_775_300_000)
+
+        model.sendPhotos([
+            PickedPhoto(data: picture, capturedAt: kanazawa, placeName: "Kanazawa"),
+            PickedPhoto(data: picture, capturedAt: takayama, placeName: "Takayama"),
+        ])
+
+        try await until { await sent.turns.isEmpty == false }
+        let turns = await sent.turns
+        let turn = try XCTUnwrap(turns.first)
+        guard case .photos(let uploads, _) = turn.body else {
+            return XCTFail("Un envoi de photos était attendu.")
+        }
+        XCTAssertEqual(uploads.map(\.capturedAt), [kanazawa, takayama])
+        XCTAssertEqual(uploads.map(\.capturedPlaceName), ["Kanazawa", "Takayama"])
+    }
+
+    /// Une photo prise à l'instant n'a ni l'un ni l'autre, et ce n'est pas un
+    /// manque : le serveur retombe sur la date du tour, qui est maintenant.
+    func testAPhotoTakenNowSaysNothingOfItself() async throws {
+        let sent = Sent()
+        let model = model(downloads: Downloads(), sent: sent)
+        await model.load()
+
+        model.sendPhotos([PickedPhoto(data: picture)])
+
+        try await until { await sent.turns.isEmpty == false }
+        let turns = await sent.turns
+        let turn = try XCTUnwrap(turns.first)
+        guard case .photos(let uploads, _) = turn.body else {
+            return XCTFail("Un envoi de photos était attendu.")
+        }
+        XCTAssertEqual(uploads.count, 1)
+        XCTAssertNil(uploads[0].capturedAt)
+        XCTAssertNil(uploads[0].capturedPlaceName)
     }
 }

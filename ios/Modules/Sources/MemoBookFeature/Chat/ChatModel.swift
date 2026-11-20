@@ -1963,7 +1963,7 @@ public final class ChatModel {
     /// Les images sont écrites dans les caches avant d'entrer dans le fil : une
     /// bulle qui garderait ses octets en mémoire ferait grossir la conversation
     /// à chaque photo, et les perdrait au premier retour d'arrière-plan.
-    public func sendPhotos(_ images: [Data]) {
+    public func sendPhotos(_ images: [PickedPhoto]) {
         guard !images.isEmpty else { return }
         hideExhaustedNotice()
         let id = UUID().uuidString.lowercased()
@@ -1978,11 +1978,21 @@ public final class ChatModel {
         }
 
         var uploads: [ChatPhotoUpload] = []
-        for (index, data) in images.prefix(ChatMetrics.maxPhotosPerMessage).enumerated() {
+        for (index, picked) in images.prefix(ChatMetrics.maxPhotosPerMessage).enumerated() {
             let photoId = "\(id)-\(index)"
-            guard let url = try? ChatPhotoFile.save(data, id: photoId) else { continue }
+            guard let url = try? ChatPhotoFile.save(picked.data, id: photoId) else { continue }
             localPhotoUrls[photoId] = url
-            uploads.append(ChatPhotoUpload(data: data, filename: "\(photoId).jpg", mimeType: "image/jpeg"))
+            uploads.append(
+                ChatPhotoUpload(
+                    data: picked.data,
+                    filename: "\(photoId).jpg",
+                    mimeType: "image/jpeg",
+                    // Ce que la photo sait d'elle-même (T280) : sa journée et
+                    // son lieu voyagent avec elle, et non avec le tour.
+                    capturedAt: picked.capturedAt,
+                    capturedPlaceName: picked.placeName
+                )
+            )
         }
 
         guard !uploads.isEmpty else {

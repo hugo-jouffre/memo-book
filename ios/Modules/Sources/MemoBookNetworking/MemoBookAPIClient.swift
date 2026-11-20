@@ -592,6 +592,21 @@ public actor MemoBookAPIClient: MemoBookAPI {
         if let stepId = turn.stepId {
             form.addField(name: "stepId", value: stepId)
         }
+        // **Ce que chaque photo sait d'elle-même** (T280) : un tableau JSON
+        // aligné sur l'ordre des fichiers, et non un champ multipart répété —
+        // celui-ci se relit différemment d'une pile serveur à l'autre.
+        // Omis quand aucune ne dit rien : la requête reste celle d'avant.
+        if turn.photos.contains(where: { $0.capturedAt != nil || $0.capturedPlaceName != nil }) {
+            let metas = turn.photos.map { photo in
+                PhotoMetaField(
+                    capturedAt: photo.capturedAt.map { ISO8601DateFormatter.memoBookString(from: $0) },
+                    capturedPlaceName: photo.capturedPlaceName
+                )
+            }
+            if let json = try? JSONEncoder().encode(metas), let value = String(data: json, encoding: .utf8) {
+                form.addField(name: "photos", value: value)
+            }
+        }
         for photo in turn.photos {
             form.addFile(name: "file", filename: photo.filename, mimeType: photo.mimeType, data: photo.data)
         }
@@ -804,6 +819,13 @@ public actor MemoBookAPIClient: MemoBookAPI {
     /// Le corps du `PATCH` des couvertures : le plat, et **un seul geste** —
     /// c'est ce que `BookCoverEdit` porte, et le serveur ne touche à rien
     /// d'autre.
+    /// Une entrée du champ `photos` d'un envoi de photos (T280). Les noms
+    /// sont ceux que `routes/chat.ts` relit — ce tableau est un contrat.
+    private struct PhotoMetaField: Encodable {
+        let capturedAt: String?
+        let capturedPlaceName: String?
+    }
+
     private struct CoverEditBody: Encodable {
         let face: String
         var styleId: String?

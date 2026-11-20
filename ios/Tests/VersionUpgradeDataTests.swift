@@ -233,6 +233,54 @@ final class VersionUpgradeDataTests: XCTestCase {
         XCTAssertEqual(turn.stepId, "step-2")
     }
 
+    /// **La fiche d'avant T280 se relit, et une fiche ordinaire ne grossit
+    /// pas** (20/11/2026).
+    ///
+    /// Chaque photo porte maintenant ce qu'elle sait d'elle-même — sa date de
+    /// prise de vue, le nom de l'endroit. Deux choses à tenir : une fiche
+    /// écrite sans ce champ se relit sans lui, et une fiche qui n'a rien à en
+    /// dire ne l'écrit **pas** — sinon toutes les fiches du monde changeraient
+    /// d'octets pour une fonctionnalité que la plupart n'utilisent pas.
+    func testPhotoOriginsRoundTripAndCostNothingWhenEmpty() async throws {
+        let directory = scratch()
+        let store = PendingRecordingStore(directory: directory)
+
+        let nu = PendingTurn(
+            id: "aaaaaaaa-0000-0000-0000-000000000000",
+            tripId: "voyage",
+            kind: .photos,
+            filenames: ["photo-0.jpg"],
+            mimeTypes: ["image/jpeg"],
+            recordedAt: Date(timeIntervalSince1970: 1_775_000_000)
+        )
+        _ = try await store.enqueue(nu, files: [Data("photo".utf8)])
+        let ecrit = try String(contentsOf: directory.appending(path: "\(nu.id).json"), encoding: .utf8)
+        XCTAssertFalse(ecrit.contains("photoMetas"), "Rien à dire, rien à écrire : \(ecrit)")
+
+        let situe = PendingTurn(
+            id: "bbbbbbbb-0000-0000-0000-000000000000",
+            tripId: "voyage",
+            kind: .photos,
+            filenames: ["photo-0.jpg", "photo-1.jpg"],
+            mimeTypes: ["image/jpeg", "image/jpeg"],
+            photoMetas: [
+                PendingPhotoMeta(capturedAt: Date(timeIntervalSince1970: 1_775_000_000), placeName: "Kanazawa"),
+                PendingPhotoMeta(),
+            ],
+            recordedAt: Date(timeIntervalSince1970: 1_775_300_000)
+        )
+        _ = try await store.enqueue(situe, files: [Data("une".utf8), Data("deux".utf8)])
+
+        let relus = await PendingRecordingStore(directory: directory).all()
+        let repris = try XCTUnwrap(relus.first { $0.id == situe.id })
+        XCTAssertEqual(repris.photoMetas.count, 2)
+        XCTAssertEqual(repris.photoMetas.first?.placeName, "Kanazawa")
+        XCTAssertNil(repris.photoMetas.last?.placeName, "La seconde ne sait rien, et le dit.")
+
+        let ancien = try XCTUnwrap(relus.first { $0.id == nu.id })
+        XCTAssertTrue(ancien.photoMetas.isEmpty)
+    }
+
     /// Un tour retenu jusqu'au crédit de demain garde sa retenue : relu sans
     /// elle, il partirait tout de suite et se ferait refuser.
     func testATurnHeldUntilTomorrowKeepsItsHold() async throws {
