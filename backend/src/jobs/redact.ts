@@ -11,7 +11,12 @@ import {
 } from "../services/redaction.js";
 
 import { describeTripContext, parseTripContext } from "../services/tripContext.js";
-import { askToSplit, confirmRedaction, firstNameOf } from "../services/conversationThread.js";
+import {
+  askToConfirmName,
+  askToSplit,
+  confirmRedaction,
+  firstNameOf,
+} from "../services/conversationThread.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { fillMissingStepTemperaturesQuietly } from "../services/weatherLookup.js";
 
@@ -332,10 +337,16 @@ export async function redactEntry(
     // la fiche de l'étape se met à jour au tour de relecture suivant de
     // l'app.
     if (!rewrite) {
-      const asked = await askToSplit(prisma, entryId, result.moments);
-      // Les doutes de l'écrivain ne passent plus dans la bulle (Hugo,
-      // 16/11/2026) : ils restent dans `doubts`, qui dit pourquoi un
+      // Le découpage d'abord : s'il a lieu, les textes changent entièrement,
+      // et l'orthographe d'un prénom se redemandera sur la part qui le porte.
+      const split = await askToSplit(prisma, entryId, result.moments);
+      // Puis le nom propre dont l'écrivain doute (T282) — la seule question
+      // qui reste. Les doutes ordinaires, eux, ne passent plus dans la bulle
+      // (Hugo, 16/11/2026) : ils restent dans `doubts`, qui dit pourquoi un
       // passage n'est pas dans le texte, et se lisent dans « Mot pour mot ».
+      // Un prénom est à part : ce n'est pas un passage écarté, c'est un mot
+      // imprimé soixante fois, et faux.
+      const asked = split || (await askToConfirmName(prisma, entryId, result.namesToConfirm));
       if (!asked) await confirmRedaction(prisma, entryId);
     }
     await refreshTripFactsQuietly(context, entry.memoId);

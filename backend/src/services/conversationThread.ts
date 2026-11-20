@@ -18,6 +18,7 @@ import {
   SUGGESTION_SETS,
   photosWanted,
   redactionKept,
+  nameQuestionFor,
   splitQuestionFor,
   validationQuestion,
 } from "./conversationCopy.js";
@@ -455,6 +456,55 @@ export async function askToSplit(
       // `asksSplitFor` : c'est lui qui dit **quel** souvenir la réponse
       // découpe, quand elle arrivera.
       payload: { suggestions: [...SUGGESTION_SETS.split], asksSplitFor: entryId },
+    },
+  });
+  return true;
+}
+
+/**
+ * **« Ça s'écrit comment ? »** (T282, 20/11/2026).
+ *
+ * Posée à la place de la bulle « Voilà ton texte » quand l'écrivain a entendu
+ * un nom propre sans pouvoir l'écrire (``RedactionResult/namesToConfirm``).
+ * Le voyageur répond son orthographe ; elle arrive comme une **précision**
+ * ordinaire, la rédaction repasse avec, et la fiche de cohérence fige enfin
+ * la bonne graphie pour tout le carnet.
+ *
+ * **Un seul nom**, le premier : deux questions dans une bulle, c'est un
+ * formulaire. Et aucune puce — une orthographe ne se choisit pas dans une
+ * liste.
+ *
+ * - Returns: `true` quand la question a été posée ; l'appelant ne confirme
+ *   alors pas la rédaction, exactement comme pour le découpage.
+ */
+export async function askToConfirmName(
+  db: Db,
+  entryId: string,
+  names: readonly string[],
+): Promise<boolean> {
+  const name = names[0]?.trim();
+  if (!name) return false;
+
+  const card = await db.chatMessage.findFirst({
+    where: { entryId, author: "memo", kind: "transcript" },
+    include: { entry: { select: { validatedAt: true } } },
+    orderBy: { seq: "desc" },
+  });
+  // Un souvenir déjà validé ne se rouvre pas pour une orthographe : on ne
+  // revient pas sur ce qui est réglé.
+  if (!card || card.entry?.validatedAt) return false;
+
+  const question = nameQuestionFor(name);
+  await db.chatMessage.create({
+    data: {
+      memoId: card.memoId,
+      author: "memo",
+      kind: "text",
+      text: question,
+      replyToId: card.replyToId,
+      stepId: card.stepId,
+      pauseMilliseconds: pauseBeforeSaying(question),
+      model: "scripted",
     },
   });
   return true;

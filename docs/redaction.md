@@ -26,8 +26,8 @@ les trois dernières étapes écrites, tous les titres et encarts déjà employ�
 **Ce qu'il rend** : sa lecture du vocal (`understanding` — le cœur de l'étape,
 le ton, ce que veut dire chaque passage oral), le titre, le récit, la météo
 — seulement si le vocal la dit clairement, `null` sinon —, l'encart éventuel, la fiche de cohérence mise à jour, le relevé pour les
-statistiques, ses doutes, et les **moments distincts** d'un récit qui en
-contient plusieurs — chacun citant sa tranche mot pour mot, et disant **quand**
+statistiques, ses doutes, les **noms propres qu'il n'ose pas écrire** (§ 4,
+20/11/2026), et les **moments distincts** d'un récit qui en contient plusieurs — chacun citant sa tranche mot pour mot, et disant **quand**
 il a été vécu quand le récit le dit (§ 4, 20/11/2026).
 
 ## 2. Où changer quoi
@@ -109,6 +109,49 @@ mesurerait plus rien. On illustre avec des voyages inventés (Lisbonne, l'Algarv
 Clara, Tom).
 
 ## 4. Journal
+
+### 20/11/2026 — Un prénom ne se devine pas
+
+Hugo, le 05/11 : « faire valider les noms propres, surtout ceux des amis,
+quand il y a un risque ou un doute : “Kom” au lieu de “Come”. MEMO devrait
+demander plutôt que d'imprimer une orthographe inventée » (T282).
+
+**Ce qui rendait la faute durable.** Un prénom mal transcrit était imprimé,
+puis entrait dans la **fiche de cohérence** comme « la graphie retenue, à
+réutiliser telle quelle ». Le carnet entier le répétait ensuite — soixante
+pages avec le prénom d'un ami défiguré. Et le transcripteur, à qui l'on souffle
+les noms que le carnet connaît déjà (`transcriptionHintFor`), apprenait le
+mauvais.
+
+Il existait bien `doubts`, mais il ne pouvait pas servir : depuis le
+16/11/2026, les doutes ne passent plus dans la bulle — les citer à chaque
+souvenir « sonnait comme un refus ». Et c'est juste pour un passage écarté. Un
+prénom n'est pas écarté : il est **imprimé**, et faux.
+
+**`namesToConfirm`**, donc : les noms propres entendus sans pouvoir les écrire.
+MEMO en fait une question dans le fil, à la place de la bulle « Voilà ton
+texte » :
+
+> Un prénom que je n'ai pas réussi à écrire avec certitude : j'ai entendu
+> « Kom ». Tu me le réécris comme il faut ? Sinon je le garde tel quel.
+
+**Aucune puce** : une orthographe ne se choisit pas dans une liste. La réponse
+arrive donc comme une **précision** ordinaire (`disposition: context`), la
+rédaction repasse avec, et la fiche de cohérence fige enfin la bonne graphie —
+tout ce chemin existait déjà, il ne manquait que la question.
+
+**Trois garde-fous**, parce que la leçon du 16/11 tient toujours :
+
+- un nom qu'on ne **retrouve pas dans la transcription** est écarté : MEMO ne
+  demande pas comment s'écrit un prénom que l'écrivain a inventé ;
+- un nom que la **fiche de cohérence porte déjà** est écarté : il est réglé ;
+- **un seul nom par question**, le premier. Deux, c'est un formulaire.
+
+Et un souvenir déjà validé ne se rouvre pas pour une orthographe.
+
+**Reste à mesurer** : le banc n'a pas tourné dessus. À quelle fréquence
+l'écrivain ose-t-il douter d'un nom, et a-t-il raison quand il doute ? C'est
+tout l'enjeu — la question doit rester rare.
 
 ### 20/11/2026 — On lui demandait les moments, jamais quand ils avaient eu lieu
 

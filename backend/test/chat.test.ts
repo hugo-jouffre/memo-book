@@ -132,6 +132,8 @@ interface ChatThreadJson {
  */
 class ScriptedRedactor extends FakeRedactor {
   doubts: string[] = [];
+  /** Les noms propres dont l'écrivain doute, sur commande (T282). */
+  namesToConfirm: string[] = [];
   inputs: RedactionInput[] = [];
   /**
    * **La panne de l'écrivain, sur commande.** Le crédit Anthropic épuisé
@@ -143,7 +145,11 @@ class ScriptedRedactor extends FakeRedactor {
   override async redact(input: RedactionInput): Promise<RedactionResult> {
     this.inputs.push(input);
     if (this.fails) throw new Error(this.fails);
-    return { ...(await super.redact(input)), doubts: this.doubts };
+    return {
+      ...(await super.redact(input)),
+      doubts: this.doubts,
+      namesToConfirm: this.namesToConfirm,
+    };
   }
 }
 
@@ -172,6 +178,7 @@ beforeEach(async () => {
   responder.calls = 0;
   responder.inputs = [];
   redactor.doubts = [];
+  redactor.namesToConfirm = [];
   redactor.inputs = [];
   redactor.fails = null;
 });
@@ -2219,5 +2226,60 @@ describe("le lieu et le jour que chaque photo porte", () => {
     // Les deux sont créées dans la même transaction : leur ordre de retour
     // n'est pas garanti, et ce n'est pas lui que le test regarde.
     expect(photos.map((row) => row.capturedPlaceName).sort()).toEqual(["Takayama", null]);
+  });
+});
+
+/**
+ * **« Ça s'écrit comment ? »** (T282, Hugo, 05/11/2026 — « faire valider les
+ * noms propres, surtout ceux des amis : “Kom” au lieu de “Come” »).
+ *
+ * Un prénom imprimé au jugé entre dans la fiche de cohérence, et le carnet le
+ * répète sur soixante pages.
+ */
+describe("faire valider un nom propre", () => {
+  const textOf = (thread: ChatThreadJson) =>
+    memoBubbles(thread).map((message) => (message.body.kind === "text" ? message.body.text : ""));
+
+  it("pose la question au lieu de garder le texte d'office", async () => {
+    const memo = await seedTrip(owner.accountId);
+    redactor.namesToConfirm = ["Kom"];
+
+    await say(memo.id, "On a retrouvé Kom au port, il nous attendait depuis une heure.");
+
+    const bulles = textOf(await readThread(memo.id));
+    const question = bulles.find((text) => text.includes("Kom"));
+    expect(question, `Aucune question sur le prénom : ${bulles.join(" | ")}`).toBeTruthy();
+    expect(question).toContain("Tu me le réécris comme il faut ?");
+    // La bulle « Voilà ton texte » ne se pose pas : on ne garde pas d'office
+    // un texte dont un prénom est peut-être faux.
+    expect(bulles).not.toContain(redactionKept());
+  });
+
+  it("ne demande rien quand l'écrivain ne doute d'aucun nom", async () => {
+    const memo = await seedTrip(owner.accountId);
+
+    await say(memo.id, "On a retrouvé Clairette au port.");
+
+    const bulles = textOf(await readThread(memo.id));
+    expect(bulles).toContain(redactionKept());
+    expect(bulles.some((text) => text.includes("réécris"))).toBe(false);
+  });
+
+  it("la réponse du voyageur atteint le texte, comme une précision", async () => {
+    const memo = await seedTrip(owner.accountId);
+    redactor.namesToConfirm = ["Kom"];
+    await say(memo.id, "On a retrouvé Kom au port, il nous attendait depuis une heure.");
+
+    // Plus de doute à la relance : le nom est réglé.
+    redactor.namesToConfirm = [];
+    await say(memo.id, "C’est Côme, avec un accent.");
+
+    const entry = await harness.prisma.entry.findFirstOrThrow({
+      where: { memoId: memo.id, kind: "text" },
+      orderBy: { createdAt: "asc" },
+    });
+    // Le faux rédacteur recopie les précisions dans le texte : c'est ainsi
+    // qu'on voit qu'elle a bien atteint la rédaction.
+    expect(entry.redactedText ?? "").toContain("Côme");
   });
 });

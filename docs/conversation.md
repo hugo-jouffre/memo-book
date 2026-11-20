@@ -550,6 +550,31 @@ n'a donc rien à remonter — « Ignorer » reste local, comme pour tous les bou
 caché qui daterait un souvenir d'il y a une semaine serait pire que pas de
 fonctionnalité du tout.
 
+### « Ça s'écrit comment ? » (T282, 20/11/2026)
+
+Un prénom se transcrit mal et ne se devine pas : « Côme », « Kom » et
+« Comme » s'entendent pareil. Imprimé au jugé, il entrait dans la fiche de
+cohérence et le carnet le répétait sur soixante pages — le prénom d'un ami,
+défiguré d'un bout à l'autre du livre (Hugo, 05/11/2026).
+
+L'écrivain peut maintenant dire qu'il n'ose pas l'écrire
+(`namesToConfirm`, [`redaction.md`](redaction.md) § 4), et MEMO pose la
+question **à la place** de la bulle « Voilà ton texte » :
+
+> Un prénom que je n'ai pas réussi à écrire avec certitude : j'ai entendu
+> « Kom ». Tu me le réécris comme il faut ? Sinon je le garde tel quel.
+
+**Aucune puce** — une orthographe ne se choisit pas dans une liste. La réponse
+est donc une **précision** ordinaire (§ 4), qui relance la rédaction comme
+« en fait c'était mardi ». Rien de neuf dans ce chemin : il ne manquait que la
+question.
+
+⚠️ **Elle doit rester rare.** La bulle qui citait les doutes a été retirée le
+16/11/2026 parce qu'à chaque souvenir elle sonnait comme un refus. Celle-ci ne
+se pose que sur un **nom propre**, jamais sur un que le carnet connaît déjà,
+jamais sur un que personne n'a prononcé, **un seul à la fois**, et jamais sur
+un souvenir déjà validé.
+
 ### Plusieurs moments dans un seul vocal
 
 **Le problème** : quelqu'un qui rattrape trois jours les raconte d'un coup, et

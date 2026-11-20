@@ -11,6 +11,7 @@ import {
   createRedactor,
   parseDoubts,
   parseMoments,
+  parseNamesToConfirm,
   withinFunFactLimit,
   withinQuizLimits,
   type RedactionInput,
@@ -479,5 +480,44 @@ describe("createRedactor", () => {
     // Le piège de `docs/modeles-ia.md` § 5 : une clé Anthropic valide, mais
     // pas de clé OpenAI, donc `live` faux. La rédaction comprend quand même.
     expect(createRedactor(env("auto", false, "sk-test"), muet).constructor.name).toBe("AnthropicRedactor");
+  });
+});
+
+
+/**
+ * **T282** (Hugo, 05/11/2026) : « faire valider les noms propres, surtout ceux
+ * des amis : “Kom” au lieu de “Come” ».
+ *
+ * Un prénom imprimé au jugé entre dans la fiche de cohérence, et le carnet le
+ * répète sur soixante pages. L'écrivain peut maintenant dire qu'il n'est pas
+ * sûr ; MEMO en fait une question. Encore faut-il que la question porte sur
+ * un nom qui a été prononcé, et pas sur un qui est déjà réglé.
+ */
+describe("parseNamesToConfirm", () => {
+  const transcript = "On a retrouvé Kom et Clairette au port, ils nous attendaient depuis une heure.";
+
+  it("garde un nom qu'on entend dans la transcription", () => {
+    expect(parseNamesToConfirm(["Kom"], transcript)).toEqual(["Kom"]);
+  });
+
+  it("refuse un nom que personne n'a prononcé", () => {
+    // Sinon MEMO demanderait comment s'écrit un prénom qu'il a inventé.
+    expect(parseNamesToConfirm(["Bartholomé"], transcript)).toEqual([]);
+  });
+
+  it("laisse tomber un nom que la fiche de cohérence connaît déjà", () => {
+    // Il est réglé depuis une étape : le reposer serait la question de trop.
+    expect(parseNamesToConfirm(["Kom", "Clairette"], transcript, ["Clairette"])).toEqual(["Kom"]);
+  });
+
+  it("ne garde pas deux fois le même, ni une phrase entière", () => {
+    expect(parseNamesToConfirm(["Kom", "kom", " « Kom » "], transcript)).toEqual(["Kom"]);
+    expect(parseNamesToConfirm([transcript], transcript)).toEqual([]);
+  });
+
+  it("rend vide sans transcription à vérifier, et sur n'importe quoi", () => {
+    expect(parseNamesToConfirm(["Kom"], null)).toEqual([]);
+    expect(parseNamesToConfirm("Kom", transcript)).toEqual([]);
+    expect(parseNamesToConfirm([42, null], transcript)).toEqual([]);
   });
 });
