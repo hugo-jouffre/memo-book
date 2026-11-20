@@ -239,7 +239,7 @@ importée pour une couverture arrive déjà à 1 600 px de l'app, soit quatre fo
 plus que nécessaire. La colonne est nommée pour eux ; le ticket parlait des
 couvertures.
 
-## 0 quater. Le lieu que la photo connaît — *implémenté côté serveur* (20/11/2026, T280)
+## 0 quater. Le lieu que la photo connaît — *implémenté* (20/11/2026, T280)
 
 **Une photo ne disait rien d'elle-même**, et ça décidait du nom des étapes.
 
@@ -305,20 +305,57 @@ deux autres :
    le ticket : étape Shanghai le 24, étape Tokyo le 26, une photo du 25 à
    égalité des deux, et la première restait.
 
-### Ce qui reste
+### Côté app
 
-**L'app n'envoie encore rien** : la moitié iOS — lire `PHAsset.location`,
-géocoder, poster — est à venir. Le serveur sait l'accueillir, les colonnes sont
-là, et rien ne change tant que l'app se tait.
+`PhotoOrigin` (`MemoBookFeature`) lit l'élément choisi, remonte à son `PHAsset`,
+en tire `creationDate` et `location`, et géocode **sur l'appareil**
+(`CLGeocoder`). Trois points qui ne se devinent pas :
 
-Deux choses que ce lot ne fait pas :
+- **`photoLibrary: .shared()` sur le sélecteur n'est pas décoratif.** Sans lui,
+  `PhotosPickerItem.itemIdentifier` est `nil`, et iOS retire la date comme la
+  position des octets que rend `loadTransferable`. Mesuré en simulateur : sans
+  l'option — ou en accès **limité** à la photothèque — tout arrive vide, et le
+  serveur retombe sur la date du tour.
+- **Les noms sont gardés par cellule d'environ un kilomètre.** Quatre photos
+  d'une même journée, c'est un appel au géocodeur au lieu de quatre : Apple
+  le limite en cadence.
+- **Aucune autorisation de plus.** `PhotoFlow` demande `PHPhotoLibrary` en
+  `.readWrite` depuis toujours, et `CLGeocoder` n'en demande aucune — il
+  traduit une coordonnée qu'on a déjà. Le dépôt n'utilise `CLLocationManager`
+  nulle part, et ce lot ne l'introduit pas.
 
-- **une photo n'ouvre toujours pas d'étape.** Elle en nomme une, elle en
+La file hors ligne les garde avec les photos (`PendingTurn.photoMetas`), en
+option et écrit **seulement s'il porte quelque chose** : une fiche ordinaire ne
+change pas d'un octet, une fiche d'avant se relit, et un tour qui a passé la
+nuit part avec la journée de ses photos et non celle du retour du réseau.
+
+### Vérifié de bout en bout
+
+Deux photos envoyées **dans le même message**, en simulateur contre le
+back-end local :
+
+| ce que la base a reçu | |
+|---|---|
+| `2012-08-08` | **Hvolsvöllur** (Skógafoss, Islande) |
+| `2011-03-13` | **Inverness** (Écosse) |
+
+Deux journées, deux pays, un seul envoi — là où le tour n'avait qu'une date
+pour toutes et aucun lieu.
+
+### Ce que ce lot ne fait pas
+
+- **Une photo n'ouvre toujours pas d'étape.** Elle en nomme une, elle en
   rejoint une ; elle n'en crée pas. Une suite de photos à Kanazawa sans aucun
-  récit reste donc attachée à l'étape voisine ;
-- **l'autorisation est déjà là** — `PhotoFlow` demande `PHPhotoLibrary` en
-  `.readWrite` depuis toujours. Aucune nouvelle permission, et surtout **pas**
-  `CoreLocation` : géocoder une coordonnée qu'on a déjà n'en demande aucune.
+  récit reste attachée à l'étape voisine.
+- **Hors ligne, le géocodage ne peut pas aboutir** : les photos partent alors
+  sans lieu, leur date suffisant à les ranger. On ne garde pas la coordonnée
+  pour réessayer plus tard — ce serait précisément la donnée qu'on a choisi de
+  ne pas conserver.
+- **En accès « limité » à la photothèque, rien n'est lu** : `PHAsset` ne voit
+  alors que la sélection que l'utilisateur a consentie, et le sélecteur ne l'y
+  ajoute pas. Les photos partent comme avant. C'est le bon comportement — on
+  ne contourne pas un choix de l'utilisateur — mais il explique un carnet qui
+  resterait muet.
 
 ## 0 ter. Le sticker découpé dans la photo — *implémenté* (12/11/2026)
 
