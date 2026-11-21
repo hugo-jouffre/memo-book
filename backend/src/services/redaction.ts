@@ -413,6 +413,23 @@ export interface RedactionResult {
    */
   moments: RedactedMoment[];
 
+  /**
+   * **Les noms propres que l'écrivain n'ose pas écrire** (Hugo, 05/11/2026 —
+   * « faire valider les noms propres, surtout ceux des amis : “Kom” au lieu
+   * de “Come” »).
+   *
+   * Un prénom se transcrit mal et ne se devine pas : le contexte ne dit pas
+   * si l'on a entendu Côme, Kom ou Comme. Imprimé une fois, il entre dans la
+   * fiche de cohérence, et le carnet entier le répète — le prénom d'un ami,
+   * mal écrit, sur soixante pages.
+   *
+   * Vide le plus souvent, et il faut que ça le reste : MEMO en fait une
+   * question dans le fil, et une question à chaque souvenir se lit comme un
+   * refus (voir `redactionKept`, 16/11/2026). D'où **un seul** nom par
+   * question, et jamais un que la fiche de cohérence connaît déjà.
+   */
+  namesToConfirm: string[];
+
   /** Modèle qui a produit le texte, tracé sur l'entrée. */
   model: string;
 }
@@ -557,6 +574,44 @@ export function parseDoubts(value: unknown): string[] {
     doubts.push(clean.length > DOUBT_MAX_CHARS ? `${clean.slice(0, DOUBT_MAX_CHARS - 1).trimEnd()}…` : clean);
   }
   return doubts;
+}
+
+/** Au-delà, ce n'est pas un nom propre : c'est une phrase. */
+const NAME_MAX_CHARS = 40;
+
+/**
+ * Les noms à faire confirmer, relus **contre la transcription**.
+ *
+ * Un nom que personne n'a prononcé n'a rien à faire dans une question : MEMO
+ * demanderait comment s'écrit un prénom inventé. On ne garde donc que ceux
+ * qu'on retrouve dans ce qui a été dit — la même garantie que `parseMoments`,
+ * et pour la même raison.
+ *
+ * On ne garde pas non plus ceux que la fiche de cohérence porte déjà : ils
+ * sont réglés, et les reposer serait la question de trop.
+ */
+export function parseNamesToConfirm(
+  value: unknown,
+  transcript: string | null,
+  known: readonly string[] = [],
+): string[] {
+  if (!Array.isArray(value)) return [];
+  const haystack = normalizeForMatching(transcript ?? "");
+  if (!haystack) return [];
+  const seen = new Set(known.map((name) => normalizeForMatching(name)));
+
+  const names: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const clean = item.trim().replace(/^[«"“\s]+|[»"”\s]+$/g, "").replace(/\s+/g, " ");
+    if (!clean || clean.length > NAME_MAX_CHARS) continue;
+    const key = normalizeForMatching(clean);
+    if (!key || seen.has(key)) continue;
+    if (!haystack.includes(key)) continue;
+    seen.add(key);
+    names.push(clean);
+  }
+  return names;
 }
 
 export interface Redactor {
@@ -856,6 +911,20 @@ const REDACTION_SCHEMA = {
       ],
       additionalProperties: false,
     },
+    namesToConfirm: {
+      type: "array",
+      description:
+        "Les NOMS PROPRES que tu as entendus sans pouvoir les écrire avec certitude — un prénom " +
+        "surtout, celui d'un ami : « Côme », « Kom », « Comme » s'entendent pareil, et le contexte " +
+        "ne tranche pas. Cite la graphie que tu as entendue, telle quelle. " +
+        "Tableau VIDE dans le cas normal, et c'est le cas de presque tous les souvenirs : " +
+        "n'y mets un nom que si l'écrire au jugé risquerait vraiment de le défigurer. " +
+        "JAMAIS un nom que la fiche de cohérence porte déjà — il est réglé. " +
+        "JAMAIS une ville ni un monument connus : ceux-là se vérifient. " +
+        "MEMO en posera la question au voyageur, et une question de trop vaut moins qu'un prénom " +
+        "approximatif imprimé soixante fois.",
+      items: { type: "string" },
+    },
     doubts: {
       type: "array",
       description:
@@ -929,6 +998,7 @@ const REDACTION_SCHEMA = {
     "doubts",
     "continuesPrevious",
     "moments",
+    "namesToConfirm",
   ],
   additionalProperties: false,
 } as const;
@@ -964,6 +1034,7 @@ const RECIT_KEYS = [
   "funFactTitle",
   "quiz",
   "doubts",
+  "namesToConfirm",
   "continuesPrevious",
   "moments",
 ] as const;
@@ -1472,6 +1543,14 @@ export class AnthropicRedactor implements Redactor {
       ...withinFunFactLimit(parsed),
       quiz: withinQuizLimits(parsed.quiz),
       doubts: parseDoubts(parsed.doubts),
+      // Relus contre la transcription, et contre ce que le carnet sait déjà :
+      // MEMO ne demande pas comment s'écrit un prénom qu'il a lui-même inventé,
+      // ni un qui est réglé depuis dix étapes.
+      namesToConfirm: parseNamesToConfirm(
+        parsed.namesToConfirm,
+        input.entry.transcript,
+        input.coherenceSheet.people.map((person) => person.canonicalName),
+      ),
       // Relus **contre la transcription** : une part que personne n'a dite
       // découperait le souvenir sur des mots inventés. Et contre la fenêtre
       // du voyage : un jour hors d'elle redevient `null` plutôt que de ranger
@@ -1522,6 +1601,9 @@ export class FakeRedactor implements Redactor {
       // Le faux rédacteur n'entend qu'un moment : les tests qui veulent un
       // découpage posent la proposition eux-mêmes.
       moments: [],
+      // Il ne doute d'aucun nom non plus : les tests qui veulent la question
+      // posent `namesToConfirm` eux-mêmes.
+      namesToConfirm: [],
       title: firstSentence.slice(0, 60).replace(/[.!?…]+$/, ""),
       text: withPrecisions.slice(0, 420),
       // Le faux rédacteur ne lit pas le temps dans le vocal : il n'en met pas.
