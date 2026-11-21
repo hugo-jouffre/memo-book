@@ -181,6 +181,32 @@ export function splitQuestionFor(titles: readonly string[]): string {
 /** « Garde d'un seul tenant » : rien ne bouge, et il reste à valider le texte. */
 export const SPLIT_REFUSED = "Très bien, je garde tout d’un seul tenant. Et le texte, il te convient ?";
 
+/**
+ * **« Ça s'écrit comment ? »** (T282, Hugo, 05/11/2026 — « faire valider les
+ * noms propres, surtout ceux des amis : “Kom” au lieu de “Come” »).
+ *
+ * Un prénom ne se devine pas. Imprimé au jugé, il entre dans la fiche de
+ * cohérence et le carnet le répète sur soixante pages — le prénom d'un ami,
+ * défiguré d'un bout à l'autre du livre.
+ *
+ * La question **cite ce qui a été entendu** : c'est ce qui permet de répondre
+ * « non, c'est Côme » sans avoir à deviner de quoi MEMO parle. Et elle ne
+ * porte **aucune puce** : la réponse est une orthographe, qu'aucun bouton ne
+ * peut écrire à la place du voyageur. Elle arrive alors comme une précision
+ * ordinaire, et la rédaction repasse avec (`disposition: context`).
+ *
+ * ⚠️ **Un seul nom, et rarement.** La bulle des doutes a été retirée le
+ * 16/11/2026 parce que la poser à chaque souvenir « sonnait comme un refus »
+ * (voir ``redactionKept``). Celle-ci ne se pose que sur un nom propre dont
+ * l'écrivain doute vraiment, jamais sur un nom que le carnet connaît déjà.
+ */
+export function nameQuestionFor(name: string): string {
+  return (
+    `Un prénom que je n’ai pas réussi à écrire avec certitude : j’ai entendu « ${name} ». ` +
+    "Tu me le réécris comme il faut ? Sinon je le garde tel quel."
+  );
+}
+
 /** « Découpe en deux étapes » : les étapes arrivent, chacune avec son texte. */
 export function splitAccepted(count: number): string {
   return `C’est fait : j’en ai fait ${count} étapes. Je te les écris, une par une.`;
