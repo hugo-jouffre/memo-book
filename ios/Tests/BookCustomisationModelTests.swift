@@ -719,3 +719,103 @@ final class BookPageTargetChangeTests: XCTestCase {
         }
     }
 }
+
+// MARK: - La cible hors d'atteinte, et le moment où on le dit (T283)
+
+/// **T283** (Hugo, 05/11/2026) : « le bandeau *cible hors d'atteinte* arrive
+/// dès qu'on change le ratio ».
+///
+/// La feuille s'ouvrait depuis ``BookCustomisationModel/setPhotoTextRatio(_:)``,
+/// alors que le ratio était **déjà appliqué** — et son second bouton proposait
+/// de le remonter, c'est-à-dire de défaire le geste qui venait de l'ouvrir.
+@MainActor
+final class PageTargetReachMomentTests: XCTestCase {
+    private static let tripId = "voyage"
+
+    /// À 25 % de photos le carnet plafonne à 50 pages ; à 75 %, il va jusqu'à
+    /// 120. Une cible personnalisée de 90 pages traverse donc la frontière
+    /// quand on baisse les photos.
+    private static let allowance = PageTargetAllowance(
+        reachableByRatio: [
+            25: PageRange(min: 20, max: 50),
+            50: PageRange(min: 25, max: 80),
+            75: PageRange(min: 30, max: 120),
+        ]
+    )
+
+    func testLoweringTheRatioDoesNotOpenTheSheet() async throws {
+        let (model, _) = await open(ratio: 75, target: 90)
+
+        model.setPhotoTextRatio(25)
+
+        XCTAssertNil(model.pageTargetReach, "Le ratio ne pose pas de question sur la cible.")
+    }
+
+    /// Mais il ne se tait pas : l'état des deux réglages se dit sous les
+    /// paliers, à l'orange, et **reste** tant qu'ils se contredisent.
+    func testItIsSaidQuietlyInstead() async throws {
+        let (model, _) = await open(ratio: 75, target: 90)
+        XCTAssertNil(model.targetOutOfReach, "Rien à dire tant que la cible tient.")
+
+        model.setPhotoTextRatio(25)
+
+        let reach = try XCTUnwrap(model.targetOutOfReach)
+        XCTAssertEqual(reach.target, 90)
+        XCTAssertTrue(reach.isTooLong)
+        XCTAssertEqual(reach.range.max, 50)
+    }
+
+    /// Et elle s'efface dès que les deux réglages se retrouvent.
+    func testItGoesAwayWhenTheRatioOpensTheTargetAgain() async throws {
+        let (model, _) = await open(ratio: 25, target: 90)
+        XCTAssertNotNil(model.targetOutOfReach)
+
+        model.setPhotoTextRatio(75)
+
+        XCTAssertNil(model.targetOutOfReach)
+    }
+
+    /// La feuille garde tout son sens là où elle est née : un appui **sur la
+    /// cible**, où rien n'est encore parti.
+    func testTappingTheTargetStillOpensTheSheet() async throws {
+        let (model, _) = await open(ratio: 25, target: 40)
+
+        model.requestCustomTarget(90)
+
+        let reach = try XCTUnwrap(model.pageTargetReach, "L'appui sur la cible, lui, demande.")
+        XCTAssertEqual(reach.target, 90)
+    }
+
+    private func open(ratio: Int, target: Int) async -> (BookCustomisationModel, RatioServer) {
+        let server = RatioServer(ratio: ratio, target: target)
+        let model = BookCustomisationModel(
+            tripId: Self.tripId,
+            source: { _ in server.settings },
+            persist: { _, edit in server.patch(edit) }
+        )
+        await model.load()
+        return (model, server)
+    }
+
+    /// Un serveur qui accepte le ratio et la cible, sans rien compter.
+    @MainActor
+    private final class RatioServer {
+        var settings: TripSettings
+
+        init(ratio: Int, target: Int) {
+            settings = .fixture
+            settings.pageTarget = PageTargetReachMomentTests.allowance
+            settings.customisation?.photoTextRatio = ratio
+            settings.customisation?.targetPageCount = target
+        }
+
+        func patch(_ edit: BookCustomisationEdit) -> TripSettings {
+            switch edit {
+            case .photoTextRatio(let ratio): settings.customisation?.photoTextRatio = ratio
+            case .targetPageCount(let pages): settings.customisation?.targetPageCount = pages
+            default: break
+            }
+            return settings
+        }
+    }
+}
