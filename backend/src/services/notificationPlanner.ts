@@ -209,7 +209,26 @@ const HOLIDAY_COOLDOWN_DAYS = 7;
 export interface PlannerTrip {
   id: string;
   title: string;
+  /**
+   * La destination du voyage, **figée à sa création** — « Japon », « Tokyo ».
+   * Elle nomme le voyage entier : c'est elle qui dit « ton voyage à Tokyo se
+   * termine aujourd'hui », et elle a raison de le dire même depuis Kyoto.
+   */
   city: string | null;
+
+  /**
+   * **Où l'on en est**, le lieu de la dernière étape (T281, 20/11/2026).
+   *
+   * Seule la relance d'écriture s'en sert : elle parle du moment présent, et
+   * `city` lui faisait demander « et la suite, à Tokyo ? » à quelqu'un parti
+   * depuis trois jours pour Kyoto. Les autres notifications parlent du voyage
+   * entier et gardent `city`.
+   *
+   * `null` tant qu'aucune étape n'existe — avant le départ, ou avant le
+   * premier récit.
+   */
+  currentPlace: string | null;
+
   /** Les dates du voyage, dans le calendrier du voyageur. */
   startsOn: LocalDate | null;
   endsOn: LocalDate | null;
