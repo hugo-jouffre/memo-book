@@ -4,7 +4,12 @@ import { bookCoversOf, coverPhotoEntryIds } from "../services/bookCovers.js";
 import { currentBookFingerprint } from "../services/bookFingerprint.js";
 import { applyBookSettings, keepsPhotos } from "../services/bookSettings.js";
 import { validatePayload } from "../services/payloadValidator.js";
-import { premiereEtapeAGauche, quizForBook, type StructuringEntry } from "../services/structuring.js";
+import {
+  ouvrirLesChapitresSurUneCarte,
+  premiereEtapeAGauche,
+  quizForBook,
+  type StructuringEntry,
+} from "../services/structuring.js";
 import { parseTripContext } from "../services/tripContext.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { renderablePhotoUrl } from "../services/renderPhotos.js";
@@ -103,7 +108,12 @@ export async function structureRender(
         // Les deux plats du carnet lisent le voyage : les étapes et les pays
         // traversés font les chiffres du dos, les photos importées font les
         // couvertures (`services/bookCovers.ts`).
-        steps: { select: { destinationCountryCode: true, transport: true } },
+        // ⚠️ `orderBy` explicite : le pays de chaque étape sert à ouvrir les
+        // chapitres sur leur carte (T284), et l'ordre fait alors foi.
+        steps: {
+          select: { destinationCountryCode: true, transport: true },
+          orderBy: { number: "asc" },
+        },
         coverPhotos: { select: { id: true, storageKey: true }, orderBy: { createdAt: "asc" } },
         // **La photo principale du voyage** (T270, l'étoile lime) : elle sert
         // de couverture quand l'atelier n'en a pas composé une.
@@ -229,9 +239,18 @@ export async function structureRender(
       );
     }
 
+    // **Un chapitre s'ouvre sur la carte de son pays** (T284) — avant
+    // `applyBookSettings`, qui compose : c'est le champ `map` qui lui fait
+    // choisir `layout_chapter_map` pour la première page de l'étape.
+    const avecCartes = ouvrirLesChapitresSurUneCarte(
+      compose,
+      memo.steps.map((step) => step.destinationCountryCode),
+      memo.destinationCountryCode,
+    );
+
     const payload = premiereEtapeAGauche(
       applyBookSettings(
-        compose,
+        avecCartes,
         memo,
         (texte) => {
           if (!texte.startsWith("pages cible")) return;
