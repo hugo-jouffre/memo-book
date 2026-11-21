@@ -1,3 +1,4 @@
+import PDFKit
 import Foundation
 import MemoBookCore
 import Observation
@@ -756,7 +757,7 @@ public final class BookPreviewModel {
     /// document dans WhatsApp ou Mail, et « Rome et la Dolce Vita.pdf » se
     /// reçoit mieux que « Pièce jointe ». Le nom est nettoyé de ce qu'un système
     /// de fichiers refuse.
-    public func exportPdf() -> URL? {
+    public func exportPdf(chapters choisis: Set<Int>? = nil) -> URL? {
         let title = preview?.title ?? "Carnet MemoBook"
 
         // **Il y a toujours un fichier à partager** (Hugo, 19/09/2026). Quand
@@ -765,7 +766,12 @@ public final class BookPreviewModel {
         // bouton ne faisait rien du tout : on touchait « Partager le fichier
         // PDF » et la feuille du système n'arrivait jamais. On en compose donc
         // un, d'une page, qui dit ce qu'il est.
-        let data = renderer.documentData ?? Self.placeholderPdf(title: title)
+        let complet = renderer.documentData ?? Self.placeholderPdf(title: title)
+        // **Quelques étapes seulement** (T285) : le PDF est déjà là, on le
+        // découpe sur place. Rien ne repart au serveur, et ça marche hors
+        // ligne. Un découpage qui échoue rend le carnet entier — mieux vaut
+        // trop envoyer que rien.
+        let data = Self.extrait(complet, chapitres: choisis, preview: preview) ?? complet
         let safe =
             title
             .components(separatedBy: CharacterSet(charactersIn: "/\\:?%*|\"<>"))
@@ -780,6 +786,46 @@ public final class BookPreviewModel {
         } catch {
             return nil
         }
+    }
+
+    /**
+     **Les pages des étapes choisies, découpées dans le PDF déjà chargé**
+     (T285, Hugo, 05/11/2026 — « pouvoir choisir ce qu'on envoie »).
+
+     `nil` quand il n'y a rien à découper : aucune sélection, ou toutes les
+     étapes cochées — on partage alors le document tel quel, octet pour octet.
+
+     Les couvertures partent **toujours** : un carnet qui commence par
+     « Jour 4 » et finit sans sa quatrième n'a plus l'air d'un carnet. Elles
+     ne se cochent donc pas, et le serveur ne les compte pas non plus —
+     ``BookChapter/pages(inDocumentOf:inner:)`` fait la conversion.
+     */
+    static func extrait(_ data: Data, chapitres choisis: Set<Int>?, preview: BookPreview?) -> Data? {
+        guard let choisis, let chapters = preview?.chapters, !chapters.isEmpty else { return nil }
+        // Tout coché : rien à faire, et surtout pas recomposer le document.
+        if choisis.count >= chapters.count { return nil }
+        guard let document = PDFDocument(data: data), document.pageCount > 0 else { return nil }
+
+        let inner = preview?.pageCount ?? document.pageCount
+        var gardees = IndexSet()
+        for chapitre in chapters where choisis.contains(chapitre.firstPage) {
+            gardees.insert(integersIn: chapitre.pages(inDocumentOf: document.pageCount, inner: inner))
+        }
+        guard !gardees.isEmpty else { return nil }
+
+        // Les couvertures encadrent toujours : ce qu'on envoie reste un carnet.
+        let devant = max(0, (document.pageCount - inner + 1) / 2)
+        for page in 0..<devant { gardees.insert(page) }
+        for page in (devant + inner)..<document.pageCount { gardees.insert(page) }
+
+        let extrait = PDFDocument()
+        var place = 0
+        for index in gardees.sorted() {
+            guard let page = document.page(at: index) else { continue }
+            extrait.insert(page, at: place)
+            place += 1
+        }
+        return place > 0 ? extrait.dataRepresentation() : nil
     }
 
     /// Un PDF d'une page, composé par l'app, à la place du carnet.

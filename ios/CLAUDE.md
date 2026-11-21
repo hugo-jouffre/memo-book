@@ -273,6 +273,14 @@ police ou marge codée en dur ailleurs.
   sur le contenu, titre à gauche ou centré (`titleAlignment`), aplat papier ou
   bleu d'écoute (`surface`). Son en-tête accepte une pastille (`badge:`) et un
   chapeau en plusieurs paragraphes (`paragraphs:`).
+  ⚠️ **Une exception depuis T285** (21/11/2026) : la feuille « Qu'est-ce que tu
+  envoies ? » emploie `BrandOptionGroup` pour un choix **multiple** — on y coche
+  les étapes du carnet qu'on partage. La ligne, `BrandOptionRow`, ne porte
+  pourtant aucun choix unique : elle prend un `isSelected` et une action, et
+  elle coche. Dessiner une seconde famille de lignes pour la seule différence
+  du nombre de coches aurait fait deux dessins pour une même idée, ce que la
+  règle cherche justement à éviter. La règle vise donc l'usage, pas le
+  composant — à relire le jour où un vrai groupe à cocher naîtra ailleurs.
 - **Un enchaînement de feuilles ne s'empile pas.** Une confirmation en plusieurs
   temps se fait dans **une seule** `BrandSheet` dont le contenu change (voir
   `SubscriptionSheet`) : chaque feuille ouverte par-dessus une autre fait

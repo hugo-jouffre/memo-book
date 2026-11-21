@@ -19,12 +19,43 @@ import UIKit
 /// Graph, et c'est cette vignette-là qui apparaîtra dans WhatsApp. La montrer
 /// avant d'envoyer évite la surprise.
 struct ShareBookSheet: View {
+    /**
+     **Où en est le partage** (T285, 21/11/2026).
+
+     Choisir les étapes est un **second temps** du même geste, et il reste
+     dans **la même feuille** : « un enchaînement de feuilles ne s'empile
+     pas » (`ios/CLAUDE.md`), et une feuille qu'on referme pour en rouvrir
+     une autre se voit descendre puis remonter. Le contenu change, le cadre
+     reste — comme `SubscriptionSheet` et `PageTargetChangeSheet`.
+     */
+    enum Step: Equatable {
+        /// Le fichier ou le lien.
+        case choice
+        /// Quelles étapes partent dans le fichier.
+        case chapters
+    }
+
     let preview: BookPreview?
     let isPreparingLink: Bool
     let onSharePdf: () -> Void
     let onShareLink: () -> Void
 
+    /// L'étape en cours, portée par l'écran — c'est lui qui sait si le carnet
+    /// a de quoi choisir.
+    @Binding var step: Step
+    /// Les étapes cochées, par leur `firstPage`.
+    @Binding var chosen: Set<Int>
+    /// Envoie le fichier avec ce qui est coché.
+    let onConfirmChapters: () -> Void
+
     var body: some View {
+        switch step {
+        case .choice: choice
+        case .chapters: chapters
+        }
+    }
+
+    private var choice: some View {
         BrandSheet(BookCopy.Share.title) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
                 previewCard
@@ -57,6 +88,68 @@ struct ShareBookSheet: View {
                         action: onShareLink
                     )
                 }
+            }
+        }
+    }
+
+    // MARK: - Second temps : quelles étapes (T285)
+
+    /**
+     **Choisir les étapes qu'on envoie** (Hugo, 05/11/2026 — « tout depuis le
+     début, ou seulement quelques étapes sélectionnées »).
+
+     **Tout est coché en arrivant** : « tout depuis le début » n'est donc pas
+     une option à prendre, c'est l'état de départ. Toucher « Partager » sans
+     rien faire envoie le carnet entier, exactement comme avant ce lot.
+
+     ⚠️ **Une exception assumée au design system.** `BrandOptionGroup` est
+     « le choix unique en lignes encadrées » (`ios/CLAUDE.md`), et c'est lui
+     qu'on emploie ici pour un choix **multiple**. La ligne, `BrandOptionRow`,
+     ne porte pourtant aucun choix unique : elle prend un `isSelected` et une
+     action, et elle coche. Dessiner une seconde famille de lignes pour la
+     seule différence du nombre de coches aurait fait deux dessins pour une
+     même idée — ce que la règle cherche justement à éviter.
+     */
+    private var chapters: some View {
+        let etapes = preview?.chapters ?? []
+        return BrandSheet(BookCopy.Share.chooseTitle, paragraphs: [BookCopy.Share.chooseLead]) {
+            VStack(spacing: MemoBookSpacing.s) {
+                // Le même geste dans les deux sens : on ne décoche pas dix
+                // étapes à la main pour n'en garder qu'une.
+                BrandButton(
+                    chosen.count >= etapes.count ? BookCopy.Share.chooseNone : BookCopy.Share.chooseAll,
+                    style: .link,
+                    fillsWidth: true
+                ) {
+                    chosen = chosen.count >= etapes.count ? [] : Set(etapes.map(\.firstPage))
+                }
+
+                BrandOptionGroup {
+                    ForEach(etapes) { chapitre in
+                        BrandOptionRow(
+                            chapitre.title,
+                            subtitle: BookCopy.Share.chapterPages(chapitre.pageCount),
+                            isSelected: chosen.contains(chapitre.firstPage)
+                        ) {
+                            if chosen.contains(chapitre.firstPage) {
+                                chosen.remove(chapitre.firstPage)
+                            } else {
+                                chosen.insert(chapitre.firstPage)
+                            }
+                        }
+                    }
+                }
+
+                BrandButton(
+                    BookCopy.Share.chooseConfirm(chapters: chosen.count, total: etapes.count),
+                    fillsWidth: true,
+                    action: onConfirmChapters
+                )
+                // Rien de coché, rien à envoyer. Pâli plutôt que désactivé :
+                // ici la cause se voit — aucune coche — et le geste n'a rien
+                // à expliquer (`ios/CLAUDE.md`).
+                .opacity(chosen.isEmpty ? 0.45 : 1)
+                .disabled(chosen.isEmpty)
             }
         }
     }
@@ -401,7 +494,27 @@ private final class ClosureActivity: UIActivity {
                 preview: .fixture,
                 isPreparingLink: false,
                 onSharePdf: {},
-                onShareLink: {}
+                onShareLink: {},
+                step: .constant(.choice),
+                chosen: .constant([]),
+                onConfirmChapters: {}
+            )
+        }
+        .environment(\.colorScheme, .light)
+}
+
+/// Le second temps : quelles étapes partent dans le fichier (T285).
+#Preview("Qu'est-ce que tu envoies ?") {
+    Color.clear
+        .brandSheet(isPresented: .constant(true)) {
+            ShareBookSheet(
+                preview: .fixture,
+                isPreparingLink: false,
+                onSharePdf: {},
+                onShareLink: {},
+                step: .constant(.chapters),
+                chosen: .constant(Set((BookPreview.fixture.chapters ?? []).map(\.firstPage))),
+                onConfirmChapters: {}
             )
         }
         .environment(\.colorScheme, .light)
