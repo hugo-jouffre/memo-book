@@ -436,6 +436,59 @@ Le PNG se sert par `GET /v1/trip-stickers/:file`, comme les photos de la
 conversation (§ 0 bis), et s'efface avec le voyage, le compte ou la photo
 (`services/deletion.ts`).
 
+## 0 quinquies. La carte qui ouvre un chapitre — *implémentée* (21/11/2026, T284)
+
+**Aucune carte ne sortait du carnet de l'app**, et pourtant tout était là : le
+layout (`layout_chapter_map`), la géométrie (`services/mapSvg.ts`), les
+contours de Natural Earth 10 m (`assets/maps/detail/`, un fichier par pays),
+le cadrage sur la zone parcourue, et jusqu'au rapatriement des rues
+d'OpenStreetMap pour les cartes de ville.
+
+Il manquait **le champ `map` sur une journée** — la seule chose que personne
+ne calculait :
+
+- le **structureur déterministe** ne l'écrit pas ;
+- le **prompt du metteur en page** n'en dit pas un mot ;
+- les cartes de l'atelier sont écrites **à la main** dans le payload
+  (`samples/showcase.json` en porte une).
+
+Autrement dit : les cartes de l'app n'étaient écrites par personne.
+
+### Ce qui les pose
+
+`ouvrirLesChapitresSurUneCarte` (`services/structuring.ts`), appelé dans le
+job de structuration **avant** la composition — c'est `map` qui fait choisir
+`layout_chapter_map` au composeur pour la première page de l'étape.
+
+**Sans modèle** : un pays est une donnée que le carnet a déjà
+(`memo_steps.destinationCountryCode`, relevé par la rédaction).
+
+### Une carte par pays, pas une par chapitre
+
+`planifierCartes` sait enchaîner plusieurs cartes dans un même pays — on y voit
+le trajet avancer. Mais ce trajet se dessine avec des **points**, et l'app n'en
+a aucun : elle ne garde aucune coordonnée (T280), et le lieu d'une photo lui
+arrive déjà géocodé en nom. Deux cartes d'un même pays sans points seraient
+donc **identiques**.
+
+Une seule, donc : sur le premier chapitre qui entre dans un pays.
+
+### Quand on ne sait pas
+
+Si le nombre d'étapes ne correspond plus au nombre de chapitres — le metteur en
+page a regroupé ou scindé —, on ne redistribue pas au jugé : une seule carte,
+celle du pays du voyage, sur le premier chapitre. Et sans pays du tout, aucune
+carte : un carnet sans carte vaut mieux qu'une carte fausse.
+
+Une carte déjà écrite (l'atelier) n'est jamais remplacée : elle en sait plus,
+elle a ses points.
+
+### Ce qui reste
+
+Les cartes de l'app sont des **contours de pays**, sans lieux nommés ni
+parcours. Le dessin fin existe et attend des coordonnées que l'app ne collecte
+pas.
+
 ## 1. Contrôle de qualité
 
 Une photo de carnet est imprimée en A5. Une image de 800 px de large étalée sur

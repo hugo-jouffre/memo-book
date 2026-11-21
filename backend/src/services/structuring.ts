@@ -267,6 +267,80 @@ export function premiereEtapeAGauche(payload: BookPayload): BookPayload {
   return pagesAvantEtapes(sans) % 2 === 0 ? { ...sans, pages_libres_avant: 1 } : sans;
 }
 
+/**
+ * **Un chapitre s'ouvre sur la carte de son pays** (T284, Hugo, 05/11/2026 —
+ * « aucune carte n'est générée dans le PDF d'aperçu »).
+ *
+ * Tout était en place pour les dessiner : le layout (`layout_chapter_map`),
+ * la géométrie (`services/mapSvg.ts`), les contours de Natural Earth, et
+ * jusqu'au rapatriement des rues pour les cartes de ville. Il manquait la
+ * seule chose que rien ne calculait : **le champ `map` sur une journée**.
+ * Aucun des deux structureurs ne l'écrivait — ni le déterministe, ni le
+ * prompt du metteur en page, qui n'en dit pas un mot. Les cartes de
+ * l'atelier sont écrites à la main dans le payload ; celles de l'app
+ * n'étaient écrites par personne.
+ *
+ * Ici, donc, et **sans modèle** : un pays, c'est une donnée que le carnet a
+ * déjà (`memo_steps.destinationCountryCode`, relevé par la rédaction).
+ *
+ * ## Une carte par pays, pas une par chapitre
+ *
+ * `planifierCartes` sait enchaîner plusieurs cartes dans un même pays — on y
+ * voit le trajet avancer d'une étape à l'autre. Mais ce trajet se dessine
+ * avec des **points**, et nous n'en avons aucun : l'app ne connaît aucune
+ * coordonnée (T280 a établi qu'elle n'en garde pas, et le lieu d'une photo
+ * nous arrive géocodé en nom). Deux cartes d'un même pays sans points
+ * seraient donc **identiques**, et le carnet répéterait le même dessin.
+ *
+ * On n'en pose donc qu'une : sur le premier chapitre qui entre dans un pays.
+ *
+ * ## Quand on ne sait pas
+ *
+ * `codes` donne le pays de chaque étape, dans l'ordre. S'il n'y en a pas
+ * autant que de chapitres — le metteur en page a regroupé ou scindé —, on
+ * n'essaie pas de deviner lequel va où : on pose la seule carte dont on soit
+ * sûr, celle du pays du voyage, sur le premier chapitre. Et sans pays du
+ * tout, aucune carte : un carnet sans carte vaut mieux qu'une carte fausse.
+ */
+export function ouvrirLesChapitresSurUneCarte(
+  payload: BookPayload,
+  codes: readonly (string | null | undefined)[],
+  paysDuVoyage: string | null | undefined,
+): BookPayload {
+  const days = Array.isArray(payload["days"]) ? (payload["days"] as Record<string, unknown>[]) : [];
+  if (days.length === 0) return payload;
+
+  const chapitres = groupSteps(days);
+  const propres = codes.map((code) => code?.trim().toUpperCase() || null);
+  // Un code par chapitre, ou rien : on ne redistribue pas au jugé.
+  const parChapitre =
+    propres.length === chapitres.length
+      ? propres
+      : chapitres.map((_, index) => (index === 0 ? paysDuVoyage?.trim().toUpperCase() || null : null));
+
+  const posees = new Set<string>();
+  const avecCarte = new Map<number, string>();
+  for (const [index, chapitre] of chapitres.entries()) {
+    const code = parChapitre[index];
+    // Le premier chapitre du pays, et lui seul.
+    if (!code || posees.has(code)) continue;
+    posees.add(code);
+    avecCarte.set(chapitre.start, code);
+  }
+  if (avecCarte.size === 0) return payload;
+
+  return {
+    ...payload,
+    days: days.map((day, index) => {
+      const code = avecCarte.get(index);
+      // Une carte déjà posée — l'atelier en écrit à la main — n'est pas
+      // remplacée : elle en sait plus que nous, elle a ses points.
+      if (!code || day["map"] || day["map_svg"]) return day;
+      return { ...day, map: { regions: [code] } };
+    }),
+  };
+}
+
 /** Combien de photos chaque layout montre : au-delà, elles ne sont pas dessinées. */
 const PHOTOS_MONTREES: Readonly<Record<string, number>> = {
   layout_hero_top: 1,
