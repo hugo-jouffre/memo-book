@@ -1690,6 +1690,19 @@ model Render {
   /// dont le fichier n'a jamais été versionné ; elle n'était lue par personne.
   pageCount Int?
 
+  /// **Les chapitres de ce PDF-là, et les pages de chacun** (T285).
+  ///
+  /// `[{ "title": "Jour 1 – Arrivée à Bogotá", "firstPage": 3, "pageCount": 2 }]`,
+  /// dans l'ordre du carnet. C'est ce qui permet à l'app de n'envoyer que
+  /// quelques étapes au partage : elle découpe le PDF qu'elle a déjà.
+  ///
+  /// Posé **sur le rendu** et non sur le carnet : une recomposition change les
+  /// pages, et l'index d'hier mentirait sur le PDF d'aujourd'hui. Il se
+  /// **dérive** du payload (une page par entrée de `days[]`) — on le range ici
+  /// pour que l'aperçu, relu toutes les deux secondes pendant une composition,
+  /// n'ait pas à charger tout le payload pour le recalculer.
+  chapters Json?
+
   /// L'empreinte de ce que ce rendu a composé — souvenirs, étapes,
   /// personnalisations, couvertures, titre, dates (`services/bookFingerprint.ts`).
   /// C'est elle qui dit qu'un rendu prêt est **à jour** : l'aperçu se recompose

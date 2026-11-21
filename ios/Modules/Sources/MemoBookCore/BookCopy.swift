@@ -460,6 +460,29 @@ public enum BookCopy {
             "Partage un fichier PDF accessible hors connexion et sur l’outil de ton choix ou partage un lien de prévisualisation permettant de suivre l’avancée de ton carnet en direct."
 
         public static let sharePdf = "Partager le fichier pdf"
+
+        // MARK: Choisir les étapes (T285, 21/11/2026)
+
+        /// La feuille qui précède le partage du fichier, quand le carnet a
+        /// plus d'une étape. Tout est coché en arrivant : « tout depuis le
+        /// début » n'est pas un choix à faire, c'est l'état de départ.
+        public static let chooseTitle = "Qu'est-ce que tu envoies ?"
+        public static let chooseLead =
+            "Tout le carnet, ou seulement les étapes que tu choisis. La couverture part dans tous les cas."
+        public static let chooseAll = "Tout le carnet"
+        public static let chooseNone = "Tout décocher"
+
+        /// « 2 pages », sous le titre de l'étape.
+        public static func chapterPages(_ count: Int) -> String {
+            count <= 1 ? "1 page" : "\(count) pages"
+        }
+
+        /// Le bouton qui envoie — il dit **ce qui part**, pour qu'on n'ait pas
+        /// à recompter les coches.
+        public static func chooseConfirm(chapters: Int, total: Int) -> String {
+            if chapters >= total { return "Partager tout le carnet" }
+            return chapters <= 1 ? "Partager 1 étape" : "Partager \(chapters) étapes"
+        }
         public static let shareLink = "Partager le lien de prévisualisation"
 
         /// Le message pré-rempli dans WhatsApp, iMessage ou Snapchat.

@@ -1,4 +1,5 @@
-import { pagesAvantEtapes } from "../services/payloadValidator.js";
+import type { Prisma } from "@prisma/client";
+import { groupSteps, pagesAvantEtapes } from "../services/payloadValidator.js";
 import type { AppContext } from "../context.js";
 import type { BookPayload } from "../services/structuring.js";
 
@@ -38,6 +39,8 @@ export async function renderBook(
   try {
     const result = await renderer.render(render.payload as BookPayload);
     const pageCount = composedPageCount(render.payload);
+    // Les chapitres de **ce** PDF, pour n'en partager que quelques-uns (T285).
+    const chapters = composedChapters(render.payload);
 
     await prisma.render.update({
       where: { id: renderId },
@@ -46,6 +49,7 @@ export async function renderBook(
         pdfUrl: result.pdfUrl,
         apitemplateTransactionId: result.transactionId,
         pageCount,
+        chapters: chapters as unknown as Prisma.InputJsonArray,
         error: null,
       },
     });
@@ -83,6 +87,52 @@ export async function renderBook(
  * le prix (`billablePages`, Hugo, 18/10/2026) ; il ne comptait que les pages
  * d'étape. `null` pour un payload qui n'en a pas.
  */
+/** Un chapitre du carnet composé, et les pages qu'il occupe dans le PDF. */
+export interface ComposedChapter {
+  /** Le titre de l'étape, tel que le carnet l'imprime. */
+  title: string;
+  /** Sa première page dans le PDF, **1 pour la première page du document**. */
+  firstPage: number;
+  /** Combien de pages elle occupe. */
+  pageCount: number;
+}
+
+/**
+ * **Les chapitres du carnet composé, et leurs pages** (T285, Hugo, 05/11/2026
+ * — « au partage d'un PDF, pouvoir choisir ce qu'on envoie »).
+ *
+ * Rien à calculer qui ne se déduise : le carnet composé fait **une page par
+ * entrée de `days[]`** (voir `composedPageCount` ci-dessous), `groupSteps` les
+ * regroupe déjà par étape sur `day_intro`, et `pagesAvantEtapes` donne le
+ * décalage de tête — le colophon, l'introduction, les pages blanches.
+ *
+ * ⚠️ **Hors couvertures**, comme tout ce qui compte les pages ici. Le PDF que
+ * l'app télécharge les porte, lui : c'est à elle d'en tenir compte, et son
+ * modèle le dit (`BookChapter`).
+ *
+ * `[]` pour un payload sans journée — il n'y a alors rien à choisir.
+ */
+export function composedChapters(payload: unknown): ComposedChapter[] {
+  const record = payload as Record<string, unknown> | null;
+  const days = record?.["days"];
+  if (!Array.isArray(days)) return [];
+
+  const avant = pagesAvantEtapes(record!);
+  return groupSteps(days as Record<string, unknown>[]).map((etape) => {
+    const premiere = etape.days[0] ?? {};
+    const intro = (premiere["day_intro"] ?? {}) as Record<string, unknown>;
+    const titre = [premiere["title"], intro["location"], premiere["city"]]
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .find((v) => v.length > 0);
+    return {
+      // Sans titre ni lieu, le numéro : une ligne vide ne se coche pas.
+      title: titre ?? `Étape ${etape.start + 1}`,
+      firstPage: avant + etape.start + 1,
+      pageCount: etape.days.length,
+    };
+  });
+}
+
 export function composedPageCount(payload: unknown): number | null {
   const record = payload as Record<string, unknown> | null;
   const days = record?.["days"];

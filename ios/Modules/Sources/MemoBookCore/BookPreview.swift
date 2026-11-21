@@ -157,6 +157,45 @@ public struct BookExcerpt: Codable, Sendable, Hashable {
 }
 
 /// Tout ce que l'aperçu du carnet a besoin de savoir.
+/**
+ **Une étape du carnet composé, et les pages qu'elle occupe** (T285, Hugo,
+ 05/11/2026 — « au partage d'un PDF, pouvoir choisir ce qu'on envoie »).
+
+ ⚠️ `firstPage` compte **hors couvertures**, comme tout ce qui compte les
+ pages côté serveur. Le PDF téléchargé, lui, les porte : la première de
+ couverture est sa page 1. C'est ``BookChapter/pages(inDocumentOf:)`` qui fait
+ la conversion, et elle seule — la faire deux fois ailleurs, c'est l'oublier
+ une fois.
+ */
+public struct BookChapter: Codable, Sendable, Hashable, Identifiable {
+    /// Le titre de l'étape, tel que le carnet l'imprime.
+    public let title: String
+    /// Sa première page **hors couvertures**, à partir de 1.
+    public let firstPage: Int
+    /// Combien de pages elle occupe.
+    public let pageCount: Int
+
+    public var id: Int { firstPage }
+
+    public init(title: String, firstPage: Int, pageCount: Int) {
+        self.title = title
+        self.firstPage = firstPage
+        self.pageCount = pageCount
+    }
+
+    /// Les index de ses pages **dans le document**, à partir de 0.
+    ///
+    /// Le décalage se mesure, il ne se suppose pas : `total` est le nombre de
+    /// pages du PDF, `inner` celui que le serveur a compté. La différence,
+    /// ce sont les couvertures — une devant, une derrière d'ordinaire, mais
+    /// un carnet sans couverture choisie n'en a pas forcément autant.
+    public func pages(inDocumentOf total: Int, inner: Int) -> Range<Int> {
+        let devant = max(0, (total - inner + 1) / 2)
+        let debut = min(max(0, firstPage - 1 + devant), total)
+        return debut..<min(debut + pageCount, total)
+    }
+}
+
 public struct BookPreview: Codable, Sendable, Hashable {
     /// L'identifiant du carnet côté serveur. C'est lui qu'on repasse pour
     /// relancer une composition ou commander l'impression.
@@ -227,6 +266,17 @@ public struct BookPreview: Codable, Sendable, Hashable {
     /// attend avant de mettre en page. `nil` sur un serveur qui ne le dit pas.
     public let pendingMemoryCount: Int?
 
+    /// **Les étapes de ce PDF, et les pages de chacune** (T285).
+    ///
+    /// C'est ce qui permet de n'en partager que quelques-unes : l'app découpe
+    /// le PDF qu'elle a déjà, sans rien redemander au serveur.
+    ///
+    /// ⚠️ **Optionnel, et il doit le rester** : un serveur d'avant le
+    /// 21/11/2026 ne l'envoie pas, et un champ non optionnel absent de la
+    /// réponse fait cesser de décoder **tout l'écran** (`ios/CLAUDE.md`).
+    /// `nil` comme vide : le partage propose le carnet entier, comme avant.
+    public let chapters: [BookChapter]?
+
     public init(
         memoId: String,
         title: String,
@@ -241,7 +291,8 @@ public struct BookPreview: Codable, Sendable, Hashable {
         render: BookRenderProgress? = nil,
         readyRenderId: String? = nil,
         isUpToDate: Bool? = nil,
-        pendingMemoryCount: Int? = nil
+        pendingMemoryCount: Int? = nil,
+        chapters: [BookChapter]? = nil
     ) {
         self.memoId = memoId
         self.title = title
@@ -257,6 +308,7 @@ public struct BookPreview: Codable, Sendable, Hashable {
         self.readyRenderId = readyRenderId
         self.isUpToDate = isUpToDate
         self.pendingMemoryCount = pendingMemoryCount
+        self.chapters = chapters
     }
 
     /// Le lien des jeux d'essai — bac à sable, aperçus Xcode —, à la forme de

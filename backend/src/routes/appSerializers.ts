@@ -1108,11 +1108,36 @@ type MemoForPreview = Memo & {
 /** Ce que l'aperçu sait de la composition, au-delà du dernier rendu. */
 export interface PreviewComposition {
   /** Le dernier rendu **prêt** : son PDF, et ce qu'il a composé. */
-  lastReady: { id: string; pdfUrl: string | null; inputFingerprint: string | null } | null;
+  lastReady: {
+    id: string;
+    pdfUrl: string | null;
+    inputFingerprint: string | null;
+    /** Les chapitres de ce PDF et leurs pages (T285) — `renders.chapters`. */
+    chapters?: unknown;
+  } | null;
   /** L'empreinte du carnet aujourd'hui — voir `services/bookFingerprint.ts`. */
   currentFingerprint: string | null;
   /** Les souvenirs que MEMO n'a pas fini d'écrire. */
   pendingMemoryCount: number;
+}
+
+/**
+ * Les chapitres d'un rendu, relus **défensivement** : la colonne est du JSON
+ * libre, et un rendu d'avant T285 n'en a pas. Une entrée bancale se jette
+ * plutôt que de faire découper le PDF au mauvais endroit.
+ */
+function serializeChapters(value: unknown): { title: string; firstPage: number; pageCount: number }[] {
+  if (!Array.isArray(value)) return [];
+  const chapters: { title: string; firstPage: number; pageCount: number }[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const { title, firstPage, pageCount } = item as Record<string, unknown>;
+    if (typeof title !== "string" || !title.trim()) continue;
+    if (!Number.isInteger(firstPage) || !Number.isInteger(pageCount)) continue;
+    if ((firstPage as number) < 1 || (pageCount as number) < 1) continue;
+    chapters.push({ title: title.trim(), firstPage: firstPage as number, pageCount: pageCount as number });
+  }
+  return chapters;
 }
 
 /** L'aperçu du carnet : le PDF composé, et de quoi le partager. */
@@ -1153,6 +1178,10 @@ export function serializeBookPreview(
       : null,
     // Le rendu derrière `pdfUrl` : c'est lui qu'on commande.
     readyRenderId: lastReady?.id ?? null,
+    // **Les chapitres de ce PDF-là**, pour n'en partager que quelques-uns
+    // (T285). Vides pour un rendu d'avant le 21/11/2026 : l'app propose alors
+    // le carnet entier, comme elle le faisait.
+    chapters: serializeChapters(lastReady?.chapters),
     // Le PDF montre-t-il le carnet d'aujourd'hui ? Faux sans PDF, ou quand un
     // souvenir, une étape, une personnalisation ou une couverture a changé
     // depuis — la prochaine ouverture recomposera.

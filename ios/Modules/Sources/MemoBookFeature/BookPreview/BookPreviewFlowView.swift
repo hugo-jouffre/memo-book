@@ -27,6 +27,12 @@ public struct BookPreviewFlowView: View {
     /// en partage — c'est ce qui la présente.
     @State private var systemShare: BookSharePayload?
 
+    /// **Les étapes qu'on envoie** (T285). Vide tant que le second temps de
+    /// la feuille ne s'est pas ouvert ; elles y entrent toutes cochées.
+    @State private var chosenChapters: Set<Int> = []
+    /// Où en est la feuille de partage — le choix, puis les étapes.
+    @State private var shareStep: ShareBookSheet.Step = .choice
+
     private let onIntent: (BookPreviewIntent) -> Void
 
     /// Le formulaire de retours est ouvert — voir « Partager mes retours » du
@@ -111,7 +117,10 @@ public struct BookPreviewFlowView: View {
                     preview: model.preview,
                     isPreparingLink: model.isPreparingLink,
                     onSharePdf: { Task { await share(.pdf) } },
-                    onShareLink: { Task { await share(.link) } }
+                    onShareLink: { Task { await share(.link) } },
+                    step: $shareStep,
+                    chosen: $chosenChapters,
+                    onConfirmChapters: { Task { await sharePdf(chapters: chosenChapters) } }
                 )
             }
             // La feuille de partage du système, et non une feuille de la
@@ -157,6 +166,9 @@ public struct BookPreviewFlowView: View {
     }
 
     private func openShare() {
+        // Rouverte, la feuille repart de son premier temps : on ne retrouve
+        // pas la liste des étapes d'un partage abandonné hier (T285).
+        shareStep = .choice
         showsShareChoice = true
     }
 
@@ -172,21 +184,44 @@ public struct BookPreviewFlowView: View {
 
         switch kind {
         case .pdf:
-            guard let file = model.exportPdf() else { return }
-            // **Le fichier seul** (Hugo, 10/11/2026) : « c'est soit on partage
-            // direct le fichier PDF, soit on partage le lien de
-            // prévisualisation ». Le lien l'accompagnait, si bien que les deux
-            // boutons de la feuille envoyaient à peu près la même chose — et
-            // que le carnet partait avec une adresse à suivre que personne
-            // n'avait demandé à donner.
-            showsShareChoice = false
-            systemShare = payload(title: title, pages: pages, file: file, link: nil)
+            // **On demande d'abord ce qui part** (T285) — mais seulement s'il
+            // y a de quoi choisir : à une étape, la question serait une porte
+            // de plus devant la même réponse. Un rendu d'avant le 21/11/2026
+            // n'a pas d'étapes : le carnet entier part, comme avant.
+            let chapters = model.preview?.chapters ?? []
+            guard chapters.count > 1 else { return await sharePdf(chapters: nil) }
+            // Tout coché en arrivant : « tout depuis le début » est l'état de
+            // départ, pas une option à prendre.
+            chosenChapters = Set(chapters.map(\.firstPage))
+            // **La même feuille, un autre contenu** : elle ne se referme pas
+            // pour en rouvrir une autre (`ios/CLAUDE.md`).
+            shareStep = .chapters
 
         case .link:
             guard let link = await model.prepareShareLink() else { return }
             showsShareChoice = false
             systemShare = payload(title: title, pages: pages, file: nil, link: link)
         }
+    }
+
+    /// Le fichier part, avec les étapes choisies — toutes quand `chapters`
+    /// est nul.
+    ///
+    /// **Le fichier seul** (Hugo, 10/11/2026) : « c'est soit on partage direct
+    /// le fichier PDF, soit on partage le lien de prévisualisation ». Le lien
+    /// l'accompagnait, si bien que les deux boutons de la feuille envoyaient à
+    /// peu près la même chose — et que le carnet partait avec une adresse à
+    /// suivre que personne n'avait demandé à donner.
+    private func sharePdf(chapters: Set<Int>?) async {
+        guard let file = model.exportPdf(chapters: chapters) else { return }
+        showsShareChoice = false
+        shareStep = .choice
+        systemShare = payload(
+            title: model.preview?.title ?? "",
+            pages: model.sheetCount,
+            file: file,
+            link: nil
+        )
     }
 
     /// Le partage, habillé comme la maquette `3551:26331` : la photo et le

@@ -78,7 +78,9 @@ async function readPreview(context: AppContext, accountId: string, memoId: strin
     context.prisma.render.findFirst({
       where: { memoId, status: "ready" },
       orderBy: { createdAt: "desc" },
-      select: { id: true, pdfUrl: true, inputFingerprint: true },
+      // `chapters` : les étapes de ce PDF et leurs pages (T285). Un petit
+      // tableau, pas le payload — c'est tout l'intérêt de l'avoir rangé là.
+      select: { id: true, pdfUrl: true, inputFingerprint: true, chapters: true },
     }),
     currentBookFingerprint(context.prisma, memoId),
     pendingRedactionCount(context.prisma, memoId),

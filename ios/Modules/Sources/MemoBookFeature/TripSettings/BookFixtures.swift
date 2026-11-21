@@ -134,7 +134,14 @@ extension BookPreview {
                 detail:
                     "Les ruines dorées du Colisée nous rappellent la grandeur de l’histoire à chaque coin de rue."
             ),
-            hasConfiguredCovers: false
+            hasConfiguredCovers: false,
+            // Les étapes du carnet, pour que la feuille « Qu'est-ce que tu
+            // envoies ? » ait de quoi se montrer dans le bac à sable (T285).
+            chapters: [
+                BookChapter(title: "Jour 1 – Arrivée à Rome", firstPage: 3, pageCount: 2),
+                BookChapter(title: "Jour 2 – Le Colisée", firstPage: 5, pageCount: 2),
+                BookChapter(title: "Jour 3 – Trastevere", firstPage: 7, pageCount: 2),
+            ]
         )
     }
 
