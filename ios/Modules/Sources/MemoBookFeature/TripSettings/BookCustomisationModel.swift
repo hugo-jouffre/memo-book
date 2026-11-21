@@ -183,7 +183,8 @@ public final class BookCustomisationModel {
     /// Une cible posée sur un palier suit le palier — les paliers dépendent du
     /// ratio, le serveur fait de même sans compter de changement
     /// (`presetTargetForRatio`). Une cible personnalisée ne bouge pas ; si
-    /// elle devient hors d'atteinte, la feuille ``PageTargetReach`` s'ouvre.
+    /// elle devient hors d'atteinte, c'est ``targetOutOfReach`` qui le dit,
+    /// sous les paliers — **pas** une feuille (T283, voir plus bas).
     public func setPhotoTextRatio(_ ratio: Int) {
         let before = customisation?.photoTextRatio ?? 50
         let target = customisation?.targetPageCount
@@ -200,9 +201,38 @@ public final class BookCustomisationModel {
                 customisation.targetPageCount = pages
             }
         }
-        if tier == .custom, let target, let reach = pageTargetAllowance.reach(of: target, ratio: ratio) {
-            pageTargetReach = reach
-        }
+    }
+
+    /**
+     ⚠️ **Le ratio n'ouvre plus la feuille « cible hors d'atteinte »**
+     (T283, Hugo, 05/11/2026 — « le bandeau arrive dès qu'on change le
+     ratio »).
+
+     Elle s'ouvrait ici, et c'était deux fautes :
+
+     - **elle arrivait après coup.** Le ratio est déjà appliqué quand elle
+       paraît — elle n'arbitre rien, elle commente ;
+     - **elle proposait de défaire le geste qui l'avait ouverte.** « Passer à
+       75 % de photos » est son second bouton : on baisse les photos, et
+       l'app propose aussitôt de les remonter.
+
+     La feuille garde son sens là où elle est née : sur un appui **sur la
+     cible** (``requestCustomTarget``), où rien n'est encore parti et où les
+     trois boutons sont de vraies réponses.
+
+     Ce que le ratio laisse derrière lui se dit maintenant **sous les
+     paliers**, à l'orange et sans question — ``targetOutOfReach``.
+     */
+    public var targetOutOfReach: PageTargetReach? {
+        guard let target = customisation?.targetPageCount else { return nil }
+        let ratio = customisation?.photoTextRatio ?? 50
+        let plafond = printPricing?.maxPages ?? PrintPricing.closedGridMaxPages
+        // Seule une cible **personnalisée** peut se retrouver hors d'atteinte :
+        // une cible posée sur un palier suit le palier, et le palier suit le
+        // ratio.
+        guard BookPageTarget.matching(pageCount: target, tripDays: tripDays, ratio: ratio, maxPages: plafond) == .custom
+        else { return nil }
+        return pageTargetAllowance.reach(of: target, ratio: ratio)
     }
 
     /// Demande une cible **personnalisée** : hors d'atteinte, la feuille le

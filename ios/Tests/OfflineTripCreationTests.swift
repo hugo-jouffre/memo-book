@@ -50,7 +50,12 @@ final class OfflineTripCreationTests: XCTestCase {
         XCTAssertEqual(model.accessCode, "ABC123")
         let log = await server.log
         XCTAssertEqual(log, ["trip:\(model.trip?.id ?? "?"):Lisbonne"], "Le serveur reprend l'identifiant de l'app.")
-        XCTAssertTrue(outbox.localTrips.isEmpty, "Arrivé, le voyage ne se montre plus que depuis le serveur.")
+        // ⚠️ **Attendu, pas affirmé** (21/11/2026). `awaitAccessCode()` rend la
+        // main dès que le code arrive ; la file, elle, retire le brouillon
+        // juste après, sur un tour de boucle à elle. Sur un runner chargé, la
+        // CI passait entre les deux et ce test tombait seul, sans rien à voir
+        // avec le changement qu'il gardait.
+        try await until("le brouillon quitte la file") { outbox.localTrips.isEmpty }
     }
 
     /// T238 : un voyage a toujours un départ. Ni « Valider » appelé quand même,
