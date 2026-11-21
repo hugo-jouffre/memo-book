@@ -783,6 +783,21 @@ public enum BookCopy {
             "Tu as utilisé tes deux changements : **le nombre de pages cible ne peut plus changer** pour ce voyage."
         public static let understood = "Compris"
 
+        /// **La cible personnalisée que le ratio vient de mettre hors
+        /// d'atteinte** (T283, 20/11/2026). Dite sous les paliers, à l'orange,
+        /// et elle **reste** tant que les deux réglages se contredisent : ce
+        /// n'est pas la réponse à un appui, c'est l'état des deux réglages.
+        ///
+        /// Elle ne pose aucune question — elle en posait une, en feuille
+        /// modale, au milieu d'un geste sur le ratio. Elle dit ce que le
+        /// carnet fera, et ce qui le changerait.
+        public static func targetOutOfReach(target: Int, limit: Int, isTooLong: Bool) -> String {
+            let sens = isTooLong
+                ? "ton carnet ira jusqu’à **\(limit) pages**"
+                : "ton carnet fera au moins **\(limit) pages**"
+            return "Avec ce ratio, \(target) pages n’est plus atteignable : \(sens). Touche un palier pour choisir une autre cible, ou remonte les photos."
+        }
+
         /// Sans date de fin, l'app ne sait pas où en est le voyage : elle le
         /// demande.
         public static let stageTitle = "À quel stade de ton voyage en es-tu ?"

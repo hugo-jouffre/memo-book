@@ -146,10 +146,27 @@ struct BookPagesPanel: View {
                     .transition(.opacity)
             }
 
+            // **La cible que le ratio a mise hors d'atteinte** (T283). Elle
+            // reste tant que les deux réglages se contredisent : c'est leur
+            // état, pas la réponse à un appui — et surtout pas une feuille
+            // modale au milieu d'un geste sur le ratio.
+            if let reach = model.targetOutOfReach {
+                BrandNotice(
+                    BookCopy.Pages.targetOutOfReach(
+                        target: reach.target,
+                        limit: reach.isTooLong ? reach.range.max : reach.range.min,
+                        isTooLong: reach.isTooLong
+                    ),
+                    tone: .warning
+                )
+                .transition(.opacity)
+            }
+
             rewrite
         }
         .animation(.snappy(duration: 0.25), value: isCustomising)
         .animation(.snappy(duration: 0.25), value: model.showsPageTargetLimitNotice)
+        .animation(.snappy(duration: 0.25), value: model.targetOutOfReach)
         .animation(.snappy(duration: 0.25), value: model.offersRewrite)
         .disabled(model.customisation == nil)
         .onAppear {
