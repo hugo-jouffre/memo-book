@@ -13,6 +13,7 @@ import {
 import { parseTripContext } from "../services/tripContext.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { renderablePhotoUrl } from "../services/renderPhotos.js";
+import { settlePhotoBeauty } from "../services/photoBeautyPass.js";
 import { photoStickersOf, settlePhotoStickers } from "../services/photoStickers.js";
 import { JOB_NAMES } from "./queue.js";
 import { finalTextOf } from "./redact.js";
@@ -91,6 +92,13 @@ export async function structureRender(
     // Les chiffres du dos de couverture à jour avant de composer — les jours
     // d'un voyage en cours avancent sans qu'aucun souvenir n'arrive (T227).
     await refreshTripFactsQuietly(context, found.memoId);
+
+    // **Ce que chaque photo vaut à regarder** (T265, 23/11/2026) : la note
+    // se garde en base, donc seule la première composition d'un carnet la
+    // paie. ⚠️ **Avant la lecture du carnet, et pas après** — c'est elle qui
+    // charge les photos avec leur note, et une note écrite ensuite n'aurait
+    // servi qu'à la composition suivante.
+    await settlePhotoBeauty(context, found.memoId);
 
     const memo = await prisma.memo.findUniqueOrThrow({
       where: { id: found.memoId },
@@ -171,6 +179,7 @@ export async function structureRender(
         // partie. Nuls pour une photo d'avant le 18/11/2026.
         photoSharpness: entry.photoSharpness,
         photoVerdict: entry.photoVerdict,
+        photoBeauty: entry.photoBeauty,
       });
     }
 

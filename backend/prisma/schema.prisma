@@ -1337,6 +1337,21 @@ model Entry {
   /// Variance du laplacien, et part de pixels dans les extrêmes de
   /// l'histogramme. Seuils à calibrer sur un lot réel.
   photoSharpness Float?
+
+  /// **Ce que vaut cette photo à regarder**, de 0 à 100 (T265, 23/11/2026).
+  ///
+  /// La netteté ci-dessus se mesure dans les pixels, gratuitement. La beauté,
+  /// elle, demande un œil : cadrage, lumière, sujet, ce qu'on a envie de voir
+  /// imprimé. C'est un appel de vision, et il se paie — d'où la colonne : une
+  /// photo ne se note **qu'une fois dans sa vie**. La note ne dépend que de la
+  /// photo, jamais du texte qui l'accompagne ni du carnet où elle finit ; la
+  /// recomposer ne la rejuge pas.
+  ///
+  /// `null` veut dire **pas encore notée** : le job ne l'a pas vue, ou le
+  /// modèle n'a rien rendu. Une photo sans note ne passe pas derrière les
+  /// autres pour autant — elle se range sur sa netteté, comme avant
+  /// (`services/photoPicking.ts`).
+  photoBeauty Int?
   photoExposure  Float?
 
   /// Où poser le scotch, et où recadrer. Sans ces champs, le gabarit retombe

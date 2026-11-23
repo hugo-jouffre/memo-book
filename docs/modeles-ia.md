@@ -98,6 +98,76 @@ Deux choses que ce tableau rend visibles :
 | Modération | — | **gratuite** (Moderation 2) | non publiée | non publiée |
 | Repli de MEMO (1 tour) | — | 0,54 ¢ (Medium 3.5) | 0,27 ¢ (3.8 Flash) | 0,72 ¢ (GPT-6 Sol) |
 
+### Choisir les photos par la vision : ce que ça coûterait (23/11/2026)
+
+T265 demande, quand une étape porte plus de photos que sa page n'en dessine,
+une sélection sur « l'esthétique, la netteté et la pertinence par rapport aux
+textes ». La netteté est faite et gratuite (`services/photoPicking.ts`,
+18/11). Les deux autres demandent un appel de vision — voici le prix.
+
+**Le chiffre qui change tout : une image en `detail: "low"` ne coûte pas le
+même nombre de jetons selon le modèle.** Elle coûte les « jetons de base » du
+modèle, *quelle que soit sa taille* :
+
+| Modèle | Jetons par image en `low` |
+|---|---|
+| `gpt-4o-mini` | **2 833** |
+| `gpt-4o`, `gpt-4.1` | 85 |
+| `gpt-5.1`, `gpt-5` | 70 |
+| `gpt-5.6-luna` | ~308 (dérivé : 256 patchs × 1,2) |
+
+⚠️ **Réduire la photo à 512 px ne fait donc rien pour le prix** en `low` — le
+commentaire de `services/stickerVision.ts` qui l'affirme se trompe de raison
+(la réduction sert au transport, pas à la facture). Et `gpt-4o-mini`, qu'on y
+a configuré par défaut, est **33 fois plus cher par image** que `gpt-4o` pour
+le même `low`.
+
+**Deux tâches, et elles n'ont pas le même rythme** — c'est là que se joue la
+facture, plus que le modèle :
+
+- l'**esthétique** est une propriété de la photo seule : elle se mesure **une
+  fois**, à l'arrivée, et se garde en base comme la netteté ;
+- la **pertinence** dépend du couple (photo, texte) : elle se refait à
+  **chaque composition**.
+
+Par photo, lot de 10 comme les stickers, ~55 jetons de texte et ~60 de sortie :
+
+| | `gpt-4o-mini` | `gpt-5.6-luna` |
+|---|---|---|
+| Une photo, une passe | 0,047 ¢ | 0,015 ¢ |
+| **Esthétique** d'un carnet de 109 photos, une fois | **5,1 ¢** | **1,6 ¢** |
+| **Pertinence**, 2 compositions (la médiane) | 10,2 ¢ | 3,2 ¢ |
+| **Pertinence**, 31 compositions (le maximum vu) | **1,59 $** | 0,49 $ |
+
+Le carnet de référence est le seul vrai de la production au 23/11 — « 100 jours
+de miel », 109 photos. Et le 31 n'est pas théorique : c'est le nombre de rendus
+d'un carnet en base, l'aperçu se recomposant à chaque changement.
+
+**Ce que ça dit.** Un carnet complet coûte 2,90 $ de modèle (§ 2). La
+pertinence recalculée à chaque composition, sur `gpt-4o-mini`, ajoute jusqu'à
+**1,59 $ — plus de la moitié** de ce total, pour la tâche la moins centrale de
+la pile. **Les trois leviers sont posés le 23/11/2026** (`services/photoBeauty.ts`,
+`services/photoBeautyPass.ts`) : la note d'esthétique s'écrit une fois en base
+(`entries.photoBeauty`), la passe ne regarde que les photos pas encore notées,
+et le modèle est réglé à part (`OPENAI_PHOTO_BEAUTY_MODEL`). La **pertinence**
+par rapport au texte reste à faire, et c'est elle qui portait le gros du coût.
+
+Trois leviers, dans cet ordre :
+
+1. **Ne noter que le surplus.** Une étape dont toutes les photos tiennent dans
+   sa page n'a rien à choisir : les noter est du pur gâchis. C'est d'ailleurs
+   ce que le ticket demande — « quand il y en a trop ».
+2. **Séparer les deux tâches.** L'esthétique à l'arrivée, une fois ; la
+   pertinence à la composition. Tout mélanger multiplie la première par le
+   nombre de rendus.
+3. **Changer de modèle.** `gpt-4o-mini` est le pire choix possible pour de la
+   vision en `low`. `gpt-5.6-luna` divise par trois ; `gpt-6-luna` est annoncé
+   deux fois moins cher encore, mais **sa capacité vision n'est pas confirmée**
+   sur les pages tarifaires — à vérifier avant de s'en servir.
+
+Relevé sur `developers.openai.com/api/docs/guides/images` et
+`/api/docs/pricing`, consultés le 23/11/2026.
+
 ## 3. Ce qui tranche vraiment
 
 Cinq critères, dans l'ordre où je les ferais peser.

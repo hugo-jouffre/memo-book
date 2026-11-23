@@ -87,7 +87,10 @@ type Deps = Pick<AppContext, "prisma" | "storage" | "env" | "logger" | "stickerS
  * `toRenderablePhoto` rend un JPEG déjà décodé et laisse passer tel quel ce
  * qui est déjà lisible : la conversion ne coûte rien quand elle est inutile.
  */
-async function lisible(deps: Deps, storageKey: string): Promise<Buffer> {
+export async function lisible(
+  deps: Pick<AppContext, "storage">,
+  storageKey: string,
+): Promise<Buffer> {
   const brut = await deps.storage.get(storageKey);
   const { buffer } = await toRenderablePhoto(brut, "photo.jpg", "image/jpeg");
   return buffer;
