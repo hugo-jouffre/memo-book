@@ -82,6 +82,20 @@ const schema = z.object({
   OPENAI_STICKER_MODEL: z.string().default("gpt-4o-mini"),
 
   /**
+   * L'œil qui note ce qu'une photo vaut à regarder, de 0 à 100
+   * (`services/photoBeauty.ts`, T265). Une note par photo, écrite une fois en
+   * base : elle ne dépend pas du texte, donc une recomposition ne la rejuge
+   * pas.
+   *
+   * ⚠️ **Pas `gpt-4o-mini`**, contrairement aux stickers. En `detail: "low"`,
+   * une image coûte les jetons de base du modèle **quelle que soit sa
+   * taille** : 2 833 pour `gpt-4o-mini`, 85 pour `gpt-4o`, ~308 pour
+   * `gpt-5.6-luna`. Réduire la photo à 512 px allège le transport, jamais la
+   * facture (`docs/modeles-ia.md` § 2, 23/11/2026).
+   */
+  OPENAI_PHOTO_BEAUTY_MODEL: z.string().default("gpt-5.6-luna"),
+
+  /**
    * Rédaction du texte de carnet. Séparée d'OpenAI, qui reste sur la
    * transcription audio et la mise en page : la rédaction est l'étape où la
    * qualité se voit, et elle doit pouvoir changer de modèle sans toucher au

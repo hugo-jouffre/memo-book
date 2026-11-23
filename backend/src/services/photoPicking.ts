@@ -38,6 +38,27 @@ export interface PhotoQuality {
   sharpness?: number | null;
   /** `reject` pour une photo jugée floue, `upscale` pour une trop petite. */
   verdict?: string | null;
+  /**
+   * Ce que la photo vaut à regarder, de 0 à 100 (`services/photoBeauty.ts`,
+   * T265). `null` ou absent : pas encore notée.
+   */
+  beauty?: number | null;
+}
+
+/**
+ * La note d'une photo qu'on n'a pas notée : **le milieu**.
+ *
+ * Même doctrine que ``rang`` pour une netteté absente — on ne la privilégie
+ * pas, on ne la condamne pas. Mettre 0 ferait passer derrière toutes les
+ * autres une photo dont le seul tort est d'être arrivée avant le juge ; mettre
+ * 100 lui offrirait la page.
+ */
+const BEAUTE_INCONNUE = 50;
+
+function beaute(photo: PhotoQuality): number {
+  return typeof photo.beauty === "number" && Number.isFinite(photo.beauty)
+    ? photo.beauty
+    : BEAUTE_INCONNUE;
 }
 
 /**
@@ -82,6 +103,12 @@ export function photosLesPlusNettes<T>(
     .sort((a, b) => {
       const parRang = rang(a.qualite) - rang(b.qualite);
       if (parRang !== 0) return parRang;
+      // **La beauté avant la netteté** (T265, 23/11/2026) : une photo nette
+      // d'un mur ne vaut pas une photo un peu molle d'un visage. Le verdict
+      // reste au-dessus des deux — une photo trop floue pour l'impression ne
+      // se rattrape pas en étant jolie.
+      const parBeaute = beaute(b.qualite) - beaute(a.qualite);
+      if (parBeaute !== 0) return parBeaute;
       const nettete = (b.qualite.sharpness ?? 0) - (a.qualite.sharpness ?? 0);
       if (nettete !== 0) return nettete;
       return a.index - b.index;

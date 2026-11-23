@@ -14,6 +14,7 @@ import { createMailer, type Mailer } from "./services/mailer.js";
 import { createPaymentGateway, type PaymentGateway } from "./services/payments.js";
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
+import { createBeautyJudge, type BeautyJudge } from "./services/photoBeauty.js";
 import { createStickerSpotter, type StickerSpotter } from "./services/stickerVision.js";
 import { createTranscriber, type Transcriber } from "./services/transcription.js";
 import { createAssetPublisher, type AssetPublisher } from "./services/webflow.js";
@@ -44,6 +45,9 @@ export interface AppContext {
   structurer: Structurer;
   /** L'œil qui repère billets et tampons à découper — voir `services/stickerVision.ts`. */
   stickerSpotter: StickerSpotter;
+
+  /** L'œil qui note ce qu'une photo vaut à regarder — voir `services/photoBeauty.ts`. */
+  beautyJudge: BeautyJudge;
   publisher: AssetPublisher;
   renderer: BookRenderer;
   /** Encaissement Stripe : carnets imprimés (la cagnotte est retirée). Jamais l'abonnement. */
@@ -93,6 +97,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     responder: createResponder(env, logger),
     structurer: createStructurer(env),
     stickerSpotter: createStickerSpotter(env),
+    beautyJudge: createBeautyJudge(env),
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),
     payments: createPaymentGateway(env),

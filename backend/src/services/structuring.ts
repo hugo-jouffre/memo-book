@@ -66,6 +66,12 @@ export interface StructuringEntry {
    */
   photoSharpness?: number | null;
   photoVerdict?: string | null;
+  /**
+   * Ce que la photo vaut à regarder, de 0 à 100 — notée une fois par
+   * `jobs/judgePhotos.ts` (T265, 23/11/2026). Nulle tant que le job ne l'a
+   * pas vue ; la photo se range alors sur sa netteté, comme avant.
+   */
+  photoBeauty?: number | null;
 }
 
 /** Le quiz tel que le gabarit le lit (`day.quiz`, `index.html`). */
@@ -689,7 +695,11 @@ export function choisirLesMontrees(
   const qualite = new Map<string, PhotoQuality>();
   for (const entry of entries) {
     if (!entry.photoUrl) continue;
-    qualite.set(entry.photoUrl, { sharpness: entry.photoSharpness, verdict: entry.photoVerdict });
+    qualite.set(entry.photoUrl, {
+      sharpness: entry.photoSharpness,
+      verdict: entry.photoVerdict,
+      beauty: entry.photoBeauty,
+    });
   }
   if (qualite.size === 0) return days;
 

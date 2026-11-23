@@ -146,7 +146,13 @@ d'un carnet en base, l'aperçu se recomposant à chaque changement.
 **Ce que ça dit.** Un carnet complet coûte 2,90 $ de modèle (§ 2). La
 pertinence recalculée à chaque composition, sur `gpt-4o-mini`, ajoute jusqu'à
 **1,59 $ — plus de la moitié** de ce total, pour la tâche la moins centrale de
-la pile. Trois leviers, dans cet ordre :
+la pile. **Les trois leviers sont posés le 23/11/2026** (`services/photoBeauty.ts`,
+`services/photoBeautyPass.ts`) : la note d'esthétique s'écrit une fois en base
+(`entries.photoBeauty`), la passe ne regarde que les photos pas encore notées,
+et le modèle est réglé à part (`OPENAI_PHOTO_BEAUTY_MODEL`). La **pertinence**
+par rapport au texte reste à faire, et c'est elle qui portait le gros du coût.
+
+Trois leviers, dans cet ordre :
 
 1. **Ne noter que le surplus.** Une étape dont toutes les photos tiennent dans
    sa page n'a rien à choisir : les noter est du pur gâchis. C'est d'ailleurs
