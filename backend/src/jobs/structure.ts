@@ -8,12 +8,14 @@ import {
   ouvrirLesChapitresSurUneCarte,
   premiereEtapeAGauche,
   quizForBook,
+  withBestPhotosFirst,
   type StructuringEntry,
 } from "../services/structuring.js";
 import { parseTripContext } from "../services/tripContext.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { renderablePhotoUrl } from "../services/renderPhotos.js";
 import { settlePhotoBeauty } from "../services/photoBeautyPass.js";
+import { noterLaPertinence, type PhotoSource } from "../services/photoRelevancePass.js";
 import { photoStickersOf, settlePhotoStickers } from "../services/photoStickers.js";
 import { JOB_NAMES } from "./queue.js";
 import { finalTextOf } from "./redact.js";
@@ -256,6 +258,34 @@ export async function structureRender(
       memo.steps.map((step) => step.destinationCountryCode),
       memo.destinationCountryCode,
     );
+
+    // **Est-ce que cette photo illustre ce texte ?** (T265, le dernier tiers.)
+    //
+    // Après la mise en page, parce qu'il faut savoir quelle page montre quoi
+    // pour n'interroger que les étapes qui **débordent** — celles dont la
+    // page ne dessine pas toutes les photos. Une étape dont tout tient n'a
+    // aucun choix à faire, et la faire juger serait payer pour rien.
+    //
+    // Contrairement à la beauté, cette note ne se garde pas : elle dépend du
+    // couple photo-texte, et le texte change. Elle se refait donc à chaque
+    // composition — d'où le soin à n'en demander que le strict nécessaire
+    // (`docs/modeles-ia.md` § 2).
+    const sourcesDesPhotos = new Map<string, PhotoSource>();
+    for (const entry of memo.entries) {
+      const url = adresseDeLaPhoto.get(entry.id);
+      if (url && entry.media?.storageKey) {
+        sourcesDesPhotos.set(url, { entryId: entry.id, storageKey: entry.media.storageKey });
+      }
+    }
+    const joursComposes = (compose as unknown as { days?: unknown }).days;
+    if (Array.isArray(joursComposes)) {
+      const pertinence = await noterLaPertinence(
+        context,
+        joursComposes as Record<string, unknown>[],
+        sourcesDesPhotos,
+      );
+      if (pertinence.size > 0) withBestPhotosFirst(compose, structuringEntries, pertinence);
+    }
 
     const payload = premiereEtapeAGauche(
       applyBookSettings(

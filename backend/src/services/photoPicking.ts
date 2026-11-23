@@ -43,6 +43,12 @@ export interface PhotoQuality {
    * T265). `null` ou absent : pas encore notée.
    */
   beauty?: number | null;
+  /**
+   * À quel point elle illustre **le texte de sa page**, de 0 à 100
+   * (`services/photoRelevance.ts`, T265). Absente sur une étape qui ne
+   * déborde pas : il n'y avait aucun choix à faire, donc rien à juger.
+   */
+  relevance?: number | null;
 }
 
 /**
@@ -55,10 +61,31 @@ export interface PhotoQuality {
  */
 const BEAUTE_INCONNUE = 50;
 
+function note(valeur: number | null | undefined): number | null {
+  return typeof valeur === "number" && Number.isFinite(valeur) ? valeur : null;
+}
+
+/**
+ * **Ce que vaut une photo pour cette page-ci** : la moyenne de ce qu'on sait
+ * d'elle.
+ *
+ * Deux notes, et on ne les hiérarchise pas. Une belle photo qui ne raconte
+ * pas la page n'a pas sa place ; une photo juste mais ratée non plus. Les
+ * classer l'une avant l'autre reviendrait à décréter laquelle des deux fautes
+ * est la pire, et rien ne le dit — la moyenne laisse chacune peser autant.
+ *
+ * Quand une seule est connue, elle décide seule : c'est le cas courant, la
+ * pertinence n'étant calculée que sur les étapes qui débordent
+ * (`services/photoRelevancePass.ts`). Aucune des deux : le milieu, comme pour
+ * une netteté absente — on ne privilégie ni ne condamne une photo pour une
+ * note qui manque.
+ */
 function beaute(photo: PhotoQuality): number {
-  return typeof photo.beauty === "number" && Number.isFinite(photo.beauty)
-    ? photo.beauty
-    : BEAUTE_INCONNUE;
+  const connues = [note(photo.beauty), note(photo.relevance)].filter(
+    (valeur): valeur is number => valeur !== null,
+  );
+  if (connues.length === 0) return BEAUTE_INCONNUE;
+  return connues.reduce((somme, valeur) => somme + valeur, 0) / connues.length;
 }
 
 /**

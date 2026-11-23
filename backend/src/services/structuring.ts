@@ -348,6 +348,18 @@ export function ouvrirLesChapitresSurUneCarte(
 }
 
 /** Combien de photos chaque layout montre : au-delà, elles ne sont pas dessinées. */
+/**
+ * Combien de photos la page d'une étape **montre**, d'après son gabarit.
+ *
+ * Exporté pour la pertinence (T265) : c'est ce nombre qui dit si une étape a
+ * un choix à faire. Une étape dont toutes les photos tiennent n'en a aucun —
+ * et la faire juger par un modèle serait payer pour un classement sans effet.
+ */
+export function photosQueLaPageMontre(day: Record<string, unknown>): number {
+  const layout = Object.keys(day).find((cle) => cle.startsWith("layout_") && day[cle] === true) ?? "";
+  return PHOTOS_MONTREES[layout] ?? 1;
+}
+
 const PHOTOS_MONTREES: Readonly<Record<string, number>> = {
   layout_hero_top: 1,
   layout_split_left: 2,
@@ -691,6 +703,7 @@ export class LlmStructurer implements Structurer {
 export function choisirLesMontrees(
   days: Record<string, unknown>[],
   entries: readonly StructuringEntry[],
+  pertinence: ReadonlyMap<string, number> = new Map(),
 ): Record<string, unknown>[] {
   const qualite = new Map<string, PhotoQuality>();
   for (const entry of entries) {
@@ -706,9 +719,10 @@ export function choisirLesMontrees(
   for (const day of days) {
     const photos = day["photos"];
     if (!Array.isArray(photos) || photos.length < 2) continue;
-    const layout = Object.keys(day).find((cle) => cle.startsWith("layout_") && day[cle] === true) ?? "";
-    day["photos"] = photosLesPlusNettes(photos, PHOTOS_MONTREES[layout] ?? 1, (photo) =>
-      typeof photo === "string" ? (qualite.get(photo) ?? {}) : {},
+    day["photos"] = photosLesPlusNettes(photos, photosQueLaPageMontre(day), (photo) =>
+      typeof photo === "string"
+        ? { ...(qualite.get(photo) ?? {}), relevance: pertinence.get(photo) ?? null }
+        : {},
     );
   }
   return days;
@@ -718,9 +732,12 @@ export function choisirLesMontrees(
 export function withBestPhotosFirst(
   payload: BookPayload,
   entries: readonly StructuringEntry[],
+  pertinence: ReadonlyMap<string, number> = new Map(),
 ): BookPayload {
   const days = (payload as unknown as { days?: unknown }).days;
-  if (Array.isArray(days)) choisirLesMontrees(days as Record<string, unknown>[], entries);
+  if (Array.isArray(days)) {
+    choisirLesMontrees(days as Record<string, unknown>[], entries, pertinence);
+  }
   return payload;
 }
 
