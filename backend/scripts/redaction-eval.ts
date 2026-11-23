@@ -159,6 +159,31 @@ function checksOf(result: RedactionResult): string[] {
   return findings;
 }
 
+/**
+ * **Ce que l'écrivain a osé situer, et qui il a hésité à nommer** (T279, T282).
+ *
+ * Les deux champs ne se jugent qu'ici : un test prouve qu'on sait **lire** un
+ * `day`, jamais que le modèle ose l'écrire ni qu'il ait raison de le faire. Et
+ * ils se jugent par leur fréquence autant que par leur contenu — un découpeur
+ * qui ne date jamais ne règle rien, un découpeur qui date tout invente, et un
+ * MEMO qui demande chaque prénom devient un interrogatoire.
+ *
+ * Le relevé est **brut** : le banc montre, il ne note pas. C'est en regardant
+ * la transcription en face qu'on dit si « mardi » était dans le vocal.
+ */
+function momentsOf(result: RedactionResult): string[] {
+  const lines: string[] = [];
+  for (const [index, moment] of result.moments.entries()) {
+    const quand = [moment.day, moment.partOfDay].filter(Boolean).join(" ");
+    lines.push(`- moment ${index + 1} — ${quand || "sans date"} — « ${moment.title} »`);
+    lines.push(`  ↳ ${moment.transcript.replace(/\s+/g, " ").slice(0, 160)}`);
+  }
+  if (result.namesToConfirm.length > 0) {
+    lines.push(`- noms à confirmer : ${result.namesToConfirm.map((name) => `« ${name} »`).join(", ")}`);
+  }
+  return lines;
+}
+
 // ---------------------------------------------------------------------------
 // Rédiger le voyage
 // ---------------------------------------------------------------------------
@@ -252,8 +277,33 @@ function runToMarkdown(report: RunReport): string {
       lines.push(`Doutes : ${step.result.doubts.map((doubt) => `« ${doubt} »`).join(", ")}`, "");
     }
     lines.push(...step.checks.map((check) => `- ${check}`));
+    lines.push(...momentsOf(step.result));
   }
-  return lines.join("\n");
+  return [...lines.slice(0, 3), "", ...decoupageEnBref(report), ...lines.slice(3)].join("\n");
+}
+
+/**
+ * Le découpage du voyage entier, en quatre nombres — posés en tête du rapport
+ * parce que c'est la question qu'on vient lui poser (T279, T282). Le détail
+ * étape par étape suit ; ces lignes-ci disent s'il vaut la peine d'être lu.
+ */
+function decoupageEnBref(report: RunReport): string[] {
+  const moments = report.steps.flatMap((step) => step.result?.moments ?? []);
+  const dates = moments.filter((moment) => moment.day !== null);
+  const momentsDuJour = moments.filter((moment) => moment.partOfDay !== null);
+  const noms = report.steps.flatMap((step) => step.result?.namesToConfirm ?? []);
+  const coupes = report.steps.filter((step) => (step.result?.moments.length ?? 0) > 1);
+
+  return [
+    "## Le découpage, en bref",
+    "",
+    `- ${moments.length} moment(s) pour ${report.steps.length} souvenir(s) — ${coupes.length} souvenir(s) coupé(s) en deux ou plus`,
+    `- ${dates.length} moment(s) datés (\`day\`), ${momentsDuJour.length} situés dans la journée (\`partOfDay\`)`,
+    `- ${noms.length} nom(s) à faire confirmer${noms.length > 0 ? ` : ${noms.map((name) => `« ${name} »`).join(", ")}` : ""}`,
+    "",
+    "Chaque date se relit sur la transcription citée sous son moment : le banc",
+    "montre, il ne note pas.",
+  ];
 }
 
 // ---------------------------------------------------------------------------
