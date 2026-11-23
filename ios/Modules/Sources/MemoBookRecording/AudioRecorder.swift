@@ -160,6 +160,18 @@ public final class AudioRecorder {
         startMetering()
     }
 
+    /// **Met le vocal de côté sans rien perdre** : l'écran s'en va, ce qui a
+    /// été dit reste (T252).
+    ///
+    /// C'est ``pause()`` vu de l'extérieur, et c'est exprès : l'appelant n'a
+    /// pas à savoir si l'on captait encore — il dit « je ne regarde plus »,
+    /// l'enregistreur en tire la seule conséquence qui ne perde rien. Un vocal
+    /// déjà suspendu ne bouge pas.
+    public func keepForLater() {
+        guard isCapturing else { return }
+        pause()
+    }
+
     /// Relève le temps du fichier. Seulement pendant que l'enregistreur
     /// tourne : en pause ou arrêté, `currentTime` n'a pas toujours de sens —
     /// on garde alors le dernier relevé, qui ne bouge pas plus que le fichier.
@@ -207,6 +219,7 @@ public final class AudioRecorder {
 
     /// Abandonne l'enregistrement en cours sans rien conserver.
     public func cancel() {
+        let hadASession = recorder != nil
         recorder?.stop()
         stopMetering()
         if let fileURL { try? FileManager.default.removeItem(at: fileURL) }
@@ -217,7 +230,28 @@ public final class AudioRecorder {
         isPaused = false
         level = 0
         elapsed = 0
+        // Comme ``stop()`` : la session rendue, et la musique des autres apps
+        // avec. Elle est atténuée depuis ``start()`` (`.duckOthers`) et rien
+        // ne la relevait ici — un vocal jeté laissait le podcast en sourdine.
+        if hadASession {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
+
+    #if DEBUG
+        /// **Ouvre un vocal sans micro.** Absente de l'app livrée.
+        ///
+        /// Les tests du cycle de vie de l'écran en ont besoin : ce qui se perd
+        /// ou se garde en quittant la conversation ne dépend que de ces deux
+        /// états, mais les atteindre par ``start()`` demanderait le micro — et
+        /// le ferait demander à qui lance les tests.
+        public func openWithoutMicrophone() {
+            isRecording = true
+            isPaused = false
+            level = 0
+            elapsed = 0
+        }
+    #endif
 
     private func startMetering() {
         meterTask = Task { [weak self] in

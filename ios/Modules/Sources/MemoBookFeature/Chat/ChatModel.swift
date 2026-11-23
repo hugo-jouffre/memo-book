@@ -478,6 +478,14 @@ public final class ChatModel {
     /// Tout arrêter en quittant l'écran : la lecture, la voix de synthèse, le
     /// tour en vol, le sondage, l'écoute de la file et la collecte de niveaux.
     /// Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
+    ///
+    /// ⚠️ **Il ne jette pas le vocal en cours** (T252). Il appelait
+    /// `recorder.cancel()`, et le fichier partait avec : ouvrir les réglages du
+    /// voyage depuis la conversation — ils se posent **par-dessus**, donc
+    /// l'écran disparaît — effaçait ce qu'on venait de dire. Or cet écran-ci
+    /// reste dans la pile, et son modèle avec : un vocal suspendu y attend le
+    /// retour, comme un brouillon de texte attend dans son champ. Seule la
+    /// corbeille de la barre jette (``cancelRecording()``).
     public func teardown() {
         // Ce qu'on vient de lire, gardé tel qu'on le quitte : les réponses de
         // MEMO arrivées depuis l'ouverture comprises.
@@ -491,7 +499,10 @@ public final class ChatModel {
         levelSampler?.cancel()
         player.stop()
         reader.stop()
-        recorder.cancel()
+        // « Ne doit pas enregistrer » : le micro se suspend. Il ne continue pas
+        // de capter derrière un écran qu'on ne regarde plus — ce serait
+        // enregistrer les réglages —, et il ne perd rien de ce qui précède.
+        recorder.keepForLater()
     }
 
     /// Garde le fil sur le téléphone — voir ``ChatTransport/remember``. Rien

@@ -707,6 +707,49 @@ final class ChatModelTests: XCTestCase {
         XCTAssertEqual(model.creditTextNotice, .reminder(ChatCopy.Credit.charactersLeft(20)))
     }
 
+    /// **Quitter l'écran ne jette pas le vocal en cours** (T252) : il se
+    /// suspend, et il est encore là au retour.
+    ///
+    /// Le geste réel est d'ouvrir les réglages du voyage depuis la
+    /// conversation : ils se posent **par-dessus**, l'écran disparaît, et
+    /// `teardown()` effaçait l'enregistrement. Ce qu'on vérifie ici est la
+    /// seule chose dont ça dépendait — ce que le départ fait de l'enregistreur.
+    func testLeavingTheScreenKeepsTheVoiceNotePaused() async throws {
+        let model = ChatModel(transport: transport(Script(thread: thread())), callToActionMemory: .inMemory())
+        await model.load()
+
+        model.composer = .speaking
+        model.recorder.openWithoutMicrophone()
+        XCTAssertTrue(model.recorder.isCapturing)
+
+        model.teardown()
+
+        XCTAssertTrue(model.recorder.isRecording, "Le vocal est encore là.")
+        XCTAssertTrue(model.recorder.isPaused, "Et il ne capte plus les réglages qu'on est allé ouvrir.")
+        XCTAssertEqual(model.composer, .speaking, "La barre revient comme on l'a laissée.")
+
+        // Un second départ — on ressort de l'écran sans avoir reparlé — ne
+        // change rien : une pause ne se repose pas.
+        model.teardown()
+        XCTAssertTrue(model.recorder.isRecording)
+        XCTAssertTrue(model.recorder.isPaused)
+    }
+
+    /// La corbeille de la barre, elle, jette : c'est le seul geste qui perde
+    /// un vocal.
+    func testOnlyTheBinDiscardsAVoiceNote() async throws {
+        let model = ChatModel(transport: transport(Script(thread: thread())), callToActionMemory: .inMemory())
+        await model.load()
+
+        model.composer = .speaking
+        model.recorder.openWithoutMicrophone()
+        model.cancelRecording()
+
+        XCTAssertFalse(model.recorder.isRecording, "Rien n'est gardé.")
+        XCTAssertFalse(model.recorder.isPaused)
+        XCTAssertEqual(model.composer, .tools, "La barre revient à ses trois boutons.")
+    }
+
     /// Crédit épuisé : le micro et le clavier ne s'ouvrent pas, ils font
     /// paraître le bandeau « épuisé » — qui **passe** : il s'efface au geste
     /// suivant, ou de lui-même. Les puces, gratuites, restent là ; « Raconter
