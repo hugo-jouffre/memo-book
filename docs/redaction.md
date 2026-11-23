@@ -117,6 +117,44 @@ Clara, Tom).
 
 ## 4. Journal
 
+### 23/11/2026 (soir) — Le prénom figé dès le premier vocal
+
+Le juge du banc (§ 3) donne **3,6 sur 5 en fidélité**, la plus basse des cinq
+notes et la seule qui n'a pas bougé depuis le 02/10. En lisant ses reproches
+étape par étape, un seul revient sous une forme mesurable : sur l'étape 14, il
+note que « le prénom est devenu *Max*, un diminutif jamais prononcé ».
+
+**Compté sur les neuf vocaux** :
+
+| | Dans les vocaux | Dans les textes |
+|---|---|---|
+| « Maxime » | **5** (étapes 14, 16, 18, 19) | **0** |
+| « Max » | 1 (étape 11, la première) | **7** |
+
+Le voyageur dit « Max » **une fois**, au tout premier vocal. Le carnet ne dit
+plus que ça.
+
+**La cause est une ligne de la consigne**, § Fiche de cohérence :
+
+> `people` | Chaque personne, sa graphie et qui elle est […] Une personne =
+> **une façon de la nommer, fixée à sa première apparition**
+
+Elle fait exactement ce qu'elle dit. Elle a été écrite pour les **orthographes**
+— « Côme » et non « Kom », « Séville » et non « Sevilla » —, et elle est juste
+pour elles : une graphie hésitante abîme un carnet. Mais un prénom et son
+diminutif ne sont pas deux orthographes du même mot : ce sont **deux
+registres**, et c'est le voyageur qui choisit lequel il emploie, souvenir par
+souvenir. « Maxime a enchaîné les gin tonics » et « sieste bien méritée pour
+Max » ne disent pas la même chose du même homme.
+
+C'est le même motif que le tiret cadratin du 18/11 : le défaut ne venait pas du
+modèle, mais d'une règle qui le demandait.
+
+**Reste à mesurer.** La correction est une règle à réécrire — figer la
+*graphie* d'un nom, jamais sa *forme* —, et toute règle réécrite se mesure
+avant et après (décision du 02/10). L'avant est en main : c'est le passage
+`t279-t282` du 23/11. L'après coûte un passage, 1 à 2 $.
+
 ### 23/11/2026 — Le banc sur la date et sur le prénom
 
 Deux champs livrés le 20/11 reposaient sur un pari que rien ne vérifiait : que
