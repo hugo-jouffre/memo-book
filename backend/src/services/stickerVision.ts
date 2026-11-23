@@ -6,6 +6,14 @@ import { acceptableCorners, type StickerCorners } from "./stickerCut.js";
  * **Repérer ce qui se découpe dans une photo** (Hugo, 10/11/2026 — « stickers
  * découpés depuis tes vraies photos de billets et tampons »).
  *
+ * ⚠️ **Rien ne l'appelle encore** (23/11/2026). `context.ts` le construit, et
+ * aucun job ni aucune route ne s'en sert — c'est pour ça que la politique de
+ * confidentialité peut écrire, au § 2.4, que « vos photos ne sont pas envoyées
+ * aux modèles d'intelligence artificielle ». **Le jour où on le branche, cette
+ * phrase devient fausse** : il faut la corriger dans les deux politiques (iOS
+ * et Android, mot pour mot) et ajouter OpenAI aux destinataires qui voient des
+ * photos, dans la même PR.
+ *
  * Un œil, et des ciseaux : ce fichier est l'œil. Il regarde les photos d'un
  * voyage et dit, pour chacune, s'il y voit un **souvenir plat** et où sont ses
  * quatre coins. Les ciseaux sont dans `stickerCut.ts`, et ne savent rien de

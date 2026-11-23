@@ -17,6 +17,10 @@ package com.memobook.core
 // destinataires (T152) et ponctuation (T153) corrigées sur retour de Clara le
 // 26/09 ; abonnement et crédit du jour ajoutés le 03/10 ; formulaire bêta
 // retiré et Stripe ajouté le 19/10 (D6).
+// Le **lieu d'une photo** ajouté le 23/11/2026 (T203) : l'app lit la date de
+// prise de vue et le nom de l'endroit depuis le 20/11 (T280), et la politique
+// ne le disait pas. La **durée de cinq ans** avec, pour dire ce que la FAQ
+// annonce déjà.
 //
 // ⚠️ **C'est le site qui fait foi** : memo-book.com doit publier ce texte le
 // même jour que l'app, et c'est son adresse que demandent l'App Store et la
@@ -89,11 +93,12 @@ object PrivacyPolicy {
 
             LegalBlock.Heading("2.3 Vos voyages et vos récits"),
             LegalBlock.Lines(listOf(
-                "**Données collectées :** les voyages que vous créez ou rejoignez (titre, dates, destination, étapes, dépenses, et le contexte du voyage, comme l’occasion ou les prénoms de vos compagnons), vos enregistrements vocaux, vos textes, vos photos, votre conversation avec MEMO, les souvenirs rédigés et vos corrections, les carnets composés, et les informations tirées de vos récits pour vos statistiques (pays, villes, personnes rencontrées, distances, moyens de transport)",
+                "**Données collectées :** les voyages que vous créez ou rejoignez (titre, dates, destination, étapes, dépenses, et le contexte du voyage, comme l’occasion ou les prénoms de vos compagnons), vos enregistrements vocaux, vos textes, vos photos, votre conversation avec MEMO, les souvenirs rédigés et vos corrections, les carnets composés, et les informations tirées de vos récits pour vos statistiques (pays, villes, personnes rencontrées, distances, moyens de transport) ; pour chaque photo que vous importez, sa date de prise de vue et le nom de l’endroit où elle a été prise, quand votre téléphone les connaît",
                 "**Finalité :** composer votre carnet de voyage, le partager avec les participants du voyage, l’afficher dans l’app et vous permettre de le commander imprimé",
                 "**Base légale :** exécution du contrat (article 6.1.b du RGPD)",
-                "**Durée de conservation :** tant que le voyage existe ; vous pouvez supprimer un souvenir, ou un voyage que vous avez créé, à tout moment",
+                "**Durée de conservation :** tant que le voyage existe, et au moins cinq ans après sa fin ; vous pouvez supprimer un souvenir, ou un voyage que vous avez créé, à tout moment",
             )),
+            LegalBlock.Paragraph("Le nom de l’endroit où une photo a été prise est obtenu **sur votre téléphone** : l’app lit la position enregistrée dans la photo par votre appareil, et la fait traduire en nom de lieu par le service de cartographie de votre téléphone. Seul ce **nom** nous est transmis — « Kanazawa », jamais des coordonnées : la position exacte ne nous parvient pas et nous ne la conservons pas. Une photo sans position est envoyée sans lieu."),
             LegalBlock.Paragraph("Vos récits sont visibles des autres participants du voyage. Ils peuvent parler d’autres personnes (vos compagnons de voyage, les personnes rencontrées) : ne racontez que ce que vous êtes en droit de partager. Nous ne vous demandons aucune donnée sensible (santé, opinions, religion…) ; si vos récits en contiennent, elles servent uniquement à fabriquer votre carnet. Si vous partagez un carnet par lien, toute personne qui a ce lien peut le consulter."),
 
             LegalBlock.Heading("2.4 Le traitement de vos récits par l’intelligence artificielle"),

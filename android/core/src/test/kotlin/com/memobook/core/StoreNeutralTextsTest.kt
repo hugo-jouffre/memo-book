@@ -84,6 +84,36 @@ class StoreNeutralTextsTest {
         assertTrue(recipients.any { it.contains("Google Play") && it.contains("Android") })
     }
 
+    /**
+     * **Ce que l'app lit d'une photo, la politique le dit** (T203) : sa date
+     * de prise de vue et le nom du lieu — jamais la position, qui ne quitte
+     * pas le téléphone (T280). Et le même texte sur les deux stores : c'est
+     * « le service de cartographie de votre téléphone », pas celui de Google.
+     */
+    @Test
+    fun thePolicyNamesWhatAPhotoCarries() {
+        val section = PrivacyPolicy.collectedData.blocks.flatMap { it.texts() }
+
+        val collecte = section.first { it.contains("Données collectées") && it.contains("vos photos") }
+        assertTrue(collecte.contains("date de prise de vue"), collecte)
+        assertTrue(collecte.contains("nom de l\u2019endroit"), collecte)
+
+        val comment = section.first { it.contains("sur votre téléphone") }
+        assertTrue(comment.contains("jamais des coordonnées"), comment)
+        assertFalse(comment.contains("Apple") || comment.contains("Google"), comment)
+    }
+
+    /** La FAQ promet cinq ans ; la politique doit dire la même chose. */
+    @Test
+    fun thePolicyAndTheFaqAgreeOnFiveYears() {
+        val conservation = PrivacyPolicy.collectedData.blocks.flatMap { it.texts() }
+            .first { it.contains("Durée de conservation") && it.contains("tant que le voyage existe") }
+        assertTrue(conservation.contains("au moins cinq ans"), conservation)
+
+        val faq = Faq.entry("faq.donnees.conservation")?.answer().orEmpty()
+        assertTrue(faq.any { it.contains("5 ans") }, faq.toString())
+    }
+
     /** Le sélecteur de photos est celui du téléphone, quel qu'il soit. */
     @Test
     fun thePhotoAnswerSpeaksOfThePhone() {

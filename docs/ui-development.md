@@ -93,8 +93,8 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T203 | Le chapitre 2 de la politique de confidentialité décrit **le site** (Google Analytics, Hotjar, pixel Meta, cookies Webflow), pas l'app, et ne dit pas ce qu'elle collecte (enregistrements, photos, positions). À réécrire avec les étiquettes de la fiche App Store. Sa liste de destinataires ne nomme ni OpenAI, ni Anthropic, ni Stripe, ni APITemplate, et elle ne dit pas les 5 ans de conservation que la FAQ annonce | Politique de confidentialité |
-| T195 | « Hotter Ltd » lu **Hotjar Ltd** dans les prestataires. À confirmer | Politique de confidentialité |
+| T203 | Le chapitre 2 de la politique de confidentialité décrit **le site** (Google Analytics, Hotjar, pixel Meta, cookies Webflow), pas l'app, et ne dit pas ce qu'elle collecte (enregistrements, photos, positions). À réécrire avec les étiquettes de la fiche App Store. Sa liste de destinataires ne nomme ni OpenAI, ni Anthropic, ni Stripe, ni APITemplate, et elle ne dit pas les 5 ans de conservation que la FAQ annonce **Repris le 23/11** : trois des quatre reproches étaient **périmés** — le chapitre 2 décrit l'app depuis la réécriture du 23/10 (neuf sections : compte, profil, récits, IA, commandes, abonnement, notifications, assistance, support), et la liste des destinataires nomme bien Anthropic, OpenAI, APITemplate et Stripe. Deux manques réels, corrigés : le **lieu d'une photo** (T280 est du 20/11, postérieur à la réécriture) — l'app envoie la date de prise de vue et le nom de l'endroit, jamais la position —, et la **durée de cinq ans** que la FAQ annonçait sans que la politique la dise. Dans les deux fichiers, iOS et Android, mot pour mot. ⚠️ Reste à toi : faire relire le texte, et le republier sur memo-book.com (T254) | Politique de confidentialité |
+| T195 | « Hotter Ltd » lu **Hotjar Ltd** dans les prestataires. À confirmer **Vérifié le 23/11** : c'est déjà **« Hotjar Ltd »** dans les deux politiques — corrigé au plus tard à la réécriture du 23/10. Rien à faire | Politique de confidentialité |
 
 ### Partout
 
