@@ -99,6 +99,13 @@ npm run redaction:eval -- --label essai --until 13       # seulement les trois p
 
 Les rapports vont dans `backend/.redaction-eval/` (hors dépôt).
 
+**Le rapport montre aussi le découpage** (23/11/2026) : en tête, quatre nombres
+— moments rendus, souvenirs coupés, moments datés ou situés dans la journée,
+noms à faire confirmer —, puis sous chaque étape ses moments avec **la
+transcription citée en face**. C'est la seule façon de juger `day`,
+`partOfDay` et `namesToConfirm` : un test prouve qu'on sait les lire, jamais
+que le modèle ait raison de les écrire.
+
 **Ce que ça coûte** (02/10/2026, Opus 5) : environ **1 à 2 $** pour un passage
 complet des neuf vocaux, autant pour le relecteur. Pour régler un détail,
 `--until` sur trois étapes suffit ; le relecteur se garde pour la fin.
@@ -109,6 +116,59 @@ mesurerait plus rien. On illustre avec des voyages inventés (Lisbonne, l'Algarv
 Clara, Tom).
 
 ## 4. Journal
+
+### 23/11/2026 — Le banc sur la date et sur le prénom
+
+Deux champs livrés le 20/11 reposaient sur un pari que rien ne vérifiait : que
+l'écrivain **ose** situer un moment sans inventer la date (T279), et qu'il
+**signale** un prénom douteux sans les signaler tous (T282). Les tests
+prouvaient qu'on savait lire les champs, jamais que le modèle les écrive bien.
+Un passage complet (`--label t279-t282`, Opus 5, règles `012dd30499`).
+
+**Le relevé** : 4 moments pour 9 souvenirs — 2 souvenirs coupés en deux —,
+4 moments datés, 0 situés dans la journée, 1 nom à faire confirmer.
+
+**Les quatre dates sont justes**, et chacune se relit sur la transcription
+citée en face : « Mercredi 2 septembre » → `2026-09-02`, « le jeudi
+3 septembre » → `2026-09-03`, « Vendredi 4 septembre » → `2026-09-04`. La
+quatrième est la plus parlante : « et puis **le lendemain** » n'est pas une
+date, elle se calcule depuis la veille — et le calcul est bon. **Aucune date
+inventée**, qui était le risque : un beau texte rangé au mauvais jour est pire
+que l'ordre du vocal.
+
+**Il sait aussi ne pas couper.** Le vocal « deux jours fusionnés » s'ouvre sur
+« Vendredi 28 août et samedi 29 août, parce que le samedi il n'y avait pas
+grand-chose à dire » : deux dates annoncées, un seul récit. Il n'a rendu aucun
+moment. Couper aurait fabriqué une étape vide.
+
+**`partOfDay` n'a jamais servi** : aucun des neuf vocaux ne situe un moment
+dans la journée sans le dater. Ce champ est donc **non mesuré**, et non pas
+mesuré bon — c'est un angle mort du corpus, à combler par une scène qui dise
+« le soir » sans dire quel jour.
+
+**Un seul prénom signalé, et c'est le bon.** « un super échec qui est offert
+par **Fabien**, encore une fois trop forte » — l'accord féminin dit que c'est
+Fanny : erreur de transcription, et il demande au lieu de graver. Le
+contre-test tient dans le même passage : « **Famine** a perdu son radar »
+devient « Fanny avait perdu son radar » **sans** question, parce que Fanny est
+dans la fiche de cohérence. Il distingue le nom qu'il peut replacer de celui
+qu'il ne connaît pas — pas d'interrogatoire, une question quand elle se
+justifie.
+
+**La prose n'a pas souffert** d'avoir deux champs de plus à produire
+(`--compare apres-t266 t279-t282`, gratuit). Un progrès, même : « des
+Australiens totalement **je tarbé** », laissé en doute le 18/11, se lit
+« totalement **tarés** ».
+
+⚠️ **Ce que le passage révèle en passant.** Un souvenir **non coupé** ne porte
+aucune date : `askToSplit` ignore un moment seul (`moments.length < 2`). Un
+vocal enregistré le lendemain pour raconter la veille reste donc classé au jour
+de l'enregistrement, et son texte peut dire « hier » sous un en-tête daté
+d'aujourd'hui. T279 a réglé l'ordre **à l'intérieur** d'un vocal, pas le
+décalage **entre** le vocal et ce qu'il raconte. Hors du ticket, mais à savoir.
+
+**Le banc montre, il ne note pas** : le rapport cite la transcription sous
+chaque moment, et c'est en la lisant qu'on dit si « mardi » y était.
 
 ### 20/11/2026 — Un prénom ne se devine pas
 
@@ -199,9 +259,9 @@ autrement qu'un modèle qui écrit :
 Sans aucune date ni moment de journée, le découpage date exactement comme
 avant. Le reste est dans `momentInstants` (`backend/src/services/entrySplit.ts`).
 
-**Reste à mesurer** : le banc n'a pas encore tourné sur ces deux champs. On ne
-sait donc pas encore à quelle fréquence l'écrivain ose situer un moment, ni
-combien de fois il se trompe en le faisant.
+**Mesuré le 23/11/2026** (§ 4) : sur les neuf vocaux de Maxime, quatre moments
+datés, **quatre dates justes, aucune inventée** — et jamais de `partOfDay`,
+qu'aucun de ces vocaux n'appelait.
 
 ### 18/11/2026 — Le tiret qui faisait IA venait de la consigne
 
