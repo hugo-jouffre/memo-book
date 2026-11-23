@@ -25,7 +25,11 @@ import {
 import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCountries.js";
 import { storeManageUrl, SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
 import { finalTextOf } from "../jobs/redact.js";
-import { displayablePhotoUrl } from "./tripPhotos.js";
+import { displayablePhotoUrl, publiclyServableImageUrl } from "./tripPhotos.js";
+import {
+  derivedGalleryCategorySlugs,
+  derivedGallerySummary,
+} from "../services/galleryFacts.js";
 import {
   accountSubscriptionOf,
   grantsUnlimitedAccess,
@@ -239,7 +243,10 @@ export function serializeTrip(
 // ---------------------------------------------------------------------------
 
 type MemoForGallery = Memo & {
-  steps?: Pick<MemoStep, "destinationName" | "destinationCountryCode">[];
+  steps?: Pick<
+    MemoStep,
+    "destinationName" | "destinationCountryCode" | "transport" | "photoUrl"
+  >[];
   categories?: { categoryId: string }[];
 };
 
@@ -281,20 +288,58 @@ function galleryDestinations(memo: MemoForGallery) {
  * Une carte de l'écran « Exemples de carnets ».
  *
  * Volontairement **plus maigre** que `serializeTrip` : la galerie ne montre ni
- * compteurs, ni progression, ni co-voyageurs, et ses cartes ne s'ouvrent pas
- * encore. Servir un `Trip` complet exposerait le contenu de carnets qui ne sont
- * pas à celui qui regarde, pour des champs que l'écran n'affiche pas.
+ * compteurs, ni progression, ni co-voyageurs. Servir un `Trip` complet
+ * exposerait le contenu de carnets qui ne sont pas à celui qui regarde, pour
+ * des champs que l'écran n'affiche pas.
+ *
+ * `categories` est la table des catégories actives, telle que la route vient de
+ * la lire : elle sert à retrouver l'identifiant d'un slug déduit. Sans elle, les
+ * rangs déduits sont tus — un sérialiseur ne va pas chercher une table.
  */
-export function serializeGalleryTrip(memo: MemoForGallery) {
+export function serializeGalleryTrip(
+  memo: MemoForGallery,
+  categories: Pick<GalleryCategory, "id" | "slug">[] = [],
+) {
+  const steps = memo.steps ?? [];
+  const destinations = galleryDestinations(memo);
+
+  const facts = {
+    dayCount: memo.dayCount,
+    distanceKilometres: memo.distanceKilometres,
+    countryCount: destinations.length,
+    stepTransports: steps.map((step) => step.transport),
+  };
+
+  // Les rangs écrits en base d'abord — ils ont été choisis, pas devinés —, puis
+  // ceux que les faits prouvent, sans doublon.
+  const idBySlug = new Map(categories.map((category) => [category.slug, category.id]));
+  const categoryIds = [...new Set((memo.categories ?? []).map((link) => link.categoryId))];
+  for (const slug of derivedGalleryCategorySlugs(facts)) {
+    const id = idBySlug.get(slug);
+    if (id && !categoryIds.includes(id)) categoryIds.push(id);
+  }
+
   return {
     id: memo.id,
     title: memo.title,
-    // La phrase déduite du voyage. `null` tant qu'aucun agent ne l'a écrite :
-    // la carte n'affiche alors que son titre.
-    subtitle: memo.gallerySummary,
-    destinations: galleryDestinations(memo),
-    coverPhotoUrl: memo.coverPhotoUrl,
-    categoryIds: (memo.categories ?? []).map((link) => link.categoryId),
+    // La phrase sous le titre : celle qu'on a écrite si elle existe, sinon celle
+    // que les chiffres du voyage disent — voir `services/galleryFacts.ts`. `null`
+    // quand le carnet ne sait encore rien de lui-même, et la carte n'affiche
+    // alors que son titre.
+    subtitle: memo.gallerySummary ?? derivedGallerySummary(facts),
+    destinations,
+    // ⚠️ **Pas le repli de `serializeTrip`**, et c'est tout l'objet de T43. Celui
+    // du haut de ce fichier élit une photo de **souvenir** et la sert depuis
+    // notre seau ; une carte de la galerie se regarde sans compte, et la page
+    // publique d'un carnet partagé refuse exprès ce chemin (`sharePage.ts`,
+    // Hugo 06/10/2026 : « ni les photos des souvenirs — le seau est privé »).
+    // Donc la couverture composée dans l'atelier, sinon une photo d'étape, les
+    // deux seulement si elles sont publiées au CDN. Rien de plus que ce que
+    // `GET /c/:jeton` montre déjà du même carnet.
+    coverPhotoUrl:
+      publiclyServableImageUrl(memo.coverPhotoUrl) ??
+      publiclyServableImageUrl(steps.find((step) => step.photoUrl)?.photoUrl),
+    categoryIds,
   };
 }
 

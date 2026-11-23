@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { frenchDate } from "../lib/frenchFormat.js";
 import { shareUrlOf } from "../services/shareLink.js";
+import { publiclyServableImageUrl } from "./tripPhotos.js";
 
 /**
  * **La page d'un carnet partagé** — `GET /c/:jeton` (T229, Hugo 06/10/2026).
@@ -44,10 +45,15 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-/** Seule une adresse `https` publique peut servir d'image à une vignette. */
-function publicImage(url: string | null | undefined): string | null {
-  return url && /^https:\/\//.test(url) ? url : null;
-}
+/**
+ * Seule une adresse `https` publique peut servir d'image à une vignette.
+ *
+ * La règle a déménagé dans `tripPhotos.ts` le 23/11/2026, sans changer d'un
+ * caractère : les cartes de la galerie de la communauté s'affichent au même
+ * lecteur sans compte et doivent donc répondre pareil (T43). Une seule
+ * définition, pour qu'un durcissement ici profite aux deux.
+ */
+const publicImage = publiclyServableImageUrl;
 
 /** « du 5 au 12 janvier 2026 », « depuis le 5 janvier 2026 », ou rien. */
 export function tripDates(startDate: Date | null, endDate: Date | null): string | null {
