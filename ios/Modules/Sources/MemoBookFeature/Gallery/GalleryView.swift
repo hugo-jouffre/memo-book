@@ -15,8 +15,9 @@ import SwiftUI
 /// voile qui dissout le contenu, et un appel à l'action posé par-dessus, dont
 /// le contenu se réserve la place.
 ///
-/// **Les vignettes ne s'ouvrent pas.** Un carnet de la communauté n'a pas
-/// d'écran : elles ne sont donc pas des boutons, et ne promettent rien.
+/// **Les vignettes s'ouvrent** depuis T236 (23/11/2026) : chacune mène au
+/// carnet qu'elle montre, lisible sans compte — c'était la moitié manquante de
+/// cet écran, qui était une vitrine dont rien ne s'ouvrait.
 public struct GalleryView: View {
     @State private var model: GalleryModel
     private let onIntent: (HomeIntent) -> Void
@@ -235,7 +236,18 @@ public struct GalleryView: View {
                 ForEach(Array(model.columns.enumerated()), id: \.offset) { _, column in
                     LazyVStack(spacing: GalleryMetrics.gutter) {
                         ForEach(column) { trip in
-                            GalleryTripCard(trip: trip)
+                            GalleryTripCard(trip: trip) {
+                                // La vue ne navigue pas : elle annonce, et
+                                // `RootView` traduit en destination. La carte
+                                // part avec l'intention — l'écran s'ouvre sur
+                                // son titre et sa photo sans attendre le réseau.
+                                onIntent(
+                                    .openPublicBook(
+                                        trip: trip,
+                                        resumableTripId: model.resumableTripId
+                                    )
+                                )
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .top)

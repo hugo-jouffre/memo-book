@@ -116,6 +116,7 @@ interface GalleryBody {
     title: string;
     subtitle: string | null;
     destinations: { name: string; countryCode: string | null }[];
+    coverPhotoUrl: string | null;
     categoryIds: string[];
   }[];
   resumableTripId: string | null;
@@ -1659,6 +1660,153 @@ describe("la galerie de la communauté", () => {
     ]);
     // Un carnet peut tenir dans deux catégories : il apparaît sous chacune.
     expect(body.trips[0]?.categoryIds.sort()).toEqual([monde.id, rando.id].sort());
+  });
+
+  it("déduit la phrase d'un carnet que personne n'a résumé", async () => {
+    const account = await registerAccount(harness.app);
+    const memo = await seedTrip(account.accountId, {
+      isPublicGallery: true,
+      // Ce qu'a un carnet réellement partagé : les chiffres que
+      // `refreshTripFacts` écrit, et **aucun** `gallerySummary`.
+      gallerySummary: null,
+      dayCount: 12,
+      distanceKilometres: 1437.4,
+    });
+    await harness.prisma.memoStep.createMany({
+      data: [
+        { memoId: memo.id, number: 1, destinationName: "Suisse", destinationCountryCode: "CH" },
+        { memoId: memo.id, number: 2, destinationName: "Autriche", destinationCountryCode: "AT" },
+      ],
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/gallery",
+      headers: { authorization: account.authorization },
+    });
+
+    // Trois pays — l'Italie du carnet plus les deux étapes —, douze jours et les
+    // kilomètres relevés. Avant T236, la carte n'avait que son titre.
+    expect(response.json<GalleryBody>().trips[0]?.subtitle).toBe(
+      `12 jours · 3 pays · ${(1437).toLocaleString("fr-FR")} km`,
+    );
+  });
+
+  it("laisse la phrase écrite passer devant la phrase déduite", async () => {
+    const account = await registerAccount(harness.app);
+    await seedTrip(account.accountId, {
+      isPublicGallery: true,
+      gallerySummary: "12 jours de refuge en refuge",
+      dayCount: 12,
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/gallery",
+      headers: { authorization: account.authorization },
+    });
+
+    // Une phrase écrite par quelqu'un qui connaissait le voyage vaut mieux que
+    // trois chiffres : la déduction ne l'écrase jamais.
+    expect(response.json<GalleryBody>().trips[0]?.subtitle).toBe("12 jours de refuge en refuge");
+  });
+
+  it("range un carnet sous la catégorie que ses faits prouvent", async () => {
+    const account = await registerAccount(harness.app);
+    const velo = await seedCategory("velo", { position: 0 });
+    await seedCategory("montagne", { position: 1 });
+
+    const memo = await seedTrip(account.accountId, { isPublicGallery: true, dayCount: 9 });
+    await harness.prisma.memoStep.createMany({
+      data: [
+        { memoId: memo.id, number: 1, destinationName: "Nantes", transport: "bike" },
+        { memoId: memo.id, number: 2, destinationName: "Saint-Malo", transport: "bike" },
+      ],
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/gallery",
+      headers: { authorization: account.authorization },
+    });
+
+    // Deux étapes à vélo : la pastille « Vélo » le retient, sans qu'aucune ligne
+    // de `memo_gallery_categories` ait été écrite. « Montagne » ne se devine pas
+    // et ne le réclame donc pas.
+    expect(response.json<GalleryBody>().trips[0]?.categoryIds).toEqual([velo.id]);
+  });
+
+  it("ajoute les rangs déduits à ceux qu'on a choisis, sans doublon", async () => {
+    const account = await registerAccount(harness.app);
+    const rando = await seedCategory("randonnee", { position: 0 });
+    const monde = await seedCategory("tour-du-monde", { position: 1 });
+
+    const memo = await seedTrip(account.accountId, { isPublicGallery: true, dayCount: 120 });
+    // « Randonnée » est écrit en base **et** prouvé par les étapes : il ne doit
+    // pas compter deux fois.
+    await harness.prisma.memoGalleryCategory.create({
+      data: { memoId: memo.id, categoryId: rando.id },
+    });
+    await harness.prisma.memoStep.createMany({
+      data: [
+        { memoId: memo.id, number: 1, destinationName: "Chili", destinationCountryCode: "CL", transport: "walk" },
+        { memoId: memo.id, number: 2, destinationName: "Pérou", destinationCountryCode: "PE", transport: "walk" },
+      ],
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/gallery",
+      headers: { authorization: account.authorization },
+    });
+
+    // Trois pays sur cent vingt jours : un tour du monde, et à pied — les deux.
+    expect(response.json<GalleryBody>().trips[0]?.categoryIds).toEqual([rando.id, monde.id]);
+  });
+
+  it("replie la couverture sur une photo d'étape, mais jamais sur notre seau", async () => {
+    const account = await registerAccount(harness.app);
+    const sansAtelier = await seedTrip(account.accountId, {
+      title: "Sans atelier",
+      isPublicGallery: true,
+      coverPhotoUrl: null,
+    });
+    await harness.prisma.memoStep.create({
+      data: {
+        memoId: sansAtelier.id,
+        number: 1,
+        destinationName: "Islande",
+        photoUrl: "https://cdn.test/islande.jpg",
+      },
+    });
+
+    const prive = await seedTrip(account.accountId, {
+      title: "Photo non publiée",
+      isPublicGallery: true,
+      coverPhotoUrl: null,
+    });
+    await harness.prisma.memoStep.create({
+      data: {
+        memoId: prive.id,
+        number: 1,
+        destinationName: "Pérou",
+        // Une adresse servie par notre API, pas par le CDN : la galerie se
+        // regarde sans compte, et le seau est privé (T43).
+        photoUrl: "http://localhost:3000/v1/trip-photos/abc.jpg",
+      },
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/gallery",
+      headers: { authorization: account.authorization },
+    });
+
+    const covers = new Map(
+      response.json<GalleryBody>().trips.map((trip) => [trip.title, trip.coverPhotoUrl]),
+    );
+    expect(covers.get("Sans atelier")).toBe("https://cdn.test/islande.jpg");
+    expect(covers.get("Photo non publiée")).toBeNull();
   });
 
   it("propose de reprendre le voyage en cours, sinon le prochain, sinon rien", async () => {

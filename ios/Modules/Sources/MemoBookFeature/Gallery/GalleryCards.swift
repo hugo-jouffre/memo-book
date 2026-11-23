@@ -48,11 +48,21 @@ enum GalleryMetrics {
 /// Une vignette de la galerie : un carnet de la communauté, son titre et la
 /// phrase qui le résume, posés sur son image.
 ///
-/// **Elle ne s'ouvre pas encore.** Les carnets des autres n'ont pas d'écran :
-/// la carte est donc une image et du texte, sans bouton ni flèche — rien qui
-/// promette un geste qui ne se passerait pas.
+/// **Elle s'ouvre** depuis T236 (23/11/2026) : un vrai `Button`, et non un
+/// `onTapGesture` — c'est lui qui donne le geste à VoiceOver, au Contrôle de
+/// sélection et au clavier externe. `.plain` pour qu'il ne reteinte ni le
+/// titre ni la photo.
+///
+/// Pas de chevron ni de flèche pour l'annoncer : une vignette pleine largeur
+/// qui porte un titre est déjà lisible comme une porte, et une flèche posée sur
+/// une photo se bat avec le drapeau du coin. VoiceOver, lui, l'annonce — c'est
+/// le bouton qui le dit.
 struct GalleryTripCard: View {
     let trip: GalleryTrip
+
+    /// Ce que la carte fait quand on la touche. La vue ne navigue pas : elle
+    /// appelle, et c'est ``GalleryView`` qui annonce l'intention.
+    let open: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -61,10 +71,16 @@ struct GalleryTripCard: View {
     }
 
     var body: some View {
-        content
-            .clipShape(shape)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(accessibilityLabel)
+        Button(action: open) {
+            content
+                .clipShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+        // « Ouvre » plutôt que « Appuyer deux fois pour activer » : ce qu'on
+        // ouvre est le carnet de quelqu'un, pas une action sur le nôtre.
+        .accessibilityHint("Ouvre ce carnet")
     }
 
     /// Aux tailles de texte accessibles, le titre **sort de l'image**.
@@ -114,7 +130,10 @@ struct GalleryTripCard: View {
             if let image = phase.image {
                 image.resizable().scaledToFill()
             } else {
-                // Aucune photo n'est encore remontée du serveur : l'aplat de
+                // Le carnet n'a pas de photo montrable : ni couverture composée
+                // dans l'atelier, ni photo d'étape publiée au CDN — la galerie
+                // se regarde sans compte, et elle ne sert donc jamais une photo
+                // de notre seau (T43, `publiclyServableImageUrl`). L'aplat de
                 // marque des couvertures fait l'affaire, et donne à la grille
                 // ses couleurs.
                 TripCoverPlaceholder(seed: trip.id)

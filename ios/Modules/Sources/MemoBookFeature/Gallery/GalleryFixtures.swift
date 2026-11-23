@@ -9,6 +9,10 @@ import MemoBookCore
 //
 // Il recopie ce que `backend/prisma/seed.ts` pose en base : les deux doivent
 // montrer le même écran, sans quoi l'aperçu SwiftUI cesse d'être une référence.
+// Les couvertures en sont : **la même clé de photo que `slugOfTitle` côté
+// seed**, pour que la mosaïque se juge sur les mêmes images dans le bac à sable
+// et contre un vrai serveur (T43). Sans elles, le bac à sable ne montrait que
+// des aplats de marque et la mosaïque restait impossible à juger.
 
 extension Gallery {
     /// Les identifiants des catégories. Des chaînes lisibles plutôt que des
@@ -57,6 +61,7 @@ extension Gallery {
             title: "Bali entre amis",
             subtitle: "2 semaines de trek",
             destinations: [Destination(name: "Indonésie", countryCode: "ID")],
+            coverPhotoUrl: PublicBook.samplePhoto("bali-entre-amis", width: 1200, height: 900),
             categoryIds: [Category.randonnee, Category.plage]
         ),
         GalleryTrip(
@@ -70,6 +75,7 @@ extension Gallery {
                 Destination(name: "Vietnam", countryCode: "VN"),
                 Destination(name: "Thaïlande", countryCode: "TH"),
             ],
+            coverPhotoUrl: PublicBook.samplePhoto("philippines-avec-claire-gus", width: 1200, height: 900),
             categoryIds: [Category.tourDuMonde, Category.plage]
         ),
         GalleryTrip(
@@ -82,6 +88,7 @@ extension Gallery {
                 Destination(name: "Pérou", countryCode: "PE"),
                 Destination(name: "Nouvelle-Zélande", countryCode: "NZ"),
             ],
+            coverPhotoUrl: PublicBook.samplePhoto("tdm-2025", width: 1200, height: 900),
             categoryIds: [Category.tourDuMonde]
         ),
         GalleryTrip(
@@ -93,6 +100,7 @@ extension Gallery {
                 Destination(name: "Suisse", countryCode: "CH"),
                 Destination(name: "Italie", countryCode: "IT"),
             ],
+            coverPhotoUrl: PublicBook.samplePhoto("la-traversee-des-alpes", width: 1200, height: 900),
             categoryIds: [Category.randonnee, Category.montagne]
         ),
         GalleryTrip(
@@ -100,6 +108,7 @@ extension Gallery {
             title: "Road trip en Islande",
             subtitle: "1 400 km sur la ring road",
             destinations: [Destination(name: "Islande", countryCode: "IS")],
+            coverPhotoUrl: PublicBook.samplePhoto("road-trip-en-islande", width: 1200, height: 900),
             categoryIds: [Category.roadTrip]
         ),
         GalleryTrip(
@@ -107,6 +116,7 @@ extension Gallery {
             title: "Lisbonne en famille",
             subtitle: "5 jours à quatre, sans voiture",
             destinations: [Destination(name: "Portugal", countryCode: "PT")],
+            coverPhotoUrl: PublicBook.samplePhoto("lisbonne-en-famille", width: 1200, height: 900),
             categoryIds: [Category.cityTrip, Category.famille]
         ),
         GalleryTrip(
@@ -114,6 +124,7 @@ extension Gallery {
             title: "De Nantes à Saint-Malo à vélo",
             subtitle: "8 jours sur la Vélodyssée",
             destinations: [Destination(name: "France", countryCode: "FR")],
+            coverPhotoUrl: PublicBook.samplePhoto("de-nantes-a-saint-malo-a-velo", width: 1200, height: 900),
             categoryIds: [Category.velo]
         ),
         GalleryTrip(
@@ -121,6 +132,7 @@ extension Gallery {
             title: "Les Cyclades à la voile",
             subtitle: "3 semaines d’île en île",
             destinations: [Destination(name: "Grèce", countryCode: "GR")],
+            coverPhotoUrl: PublicBook.samplePhoto("les-cyclades-a-la-voile", width: 1200, height: 900),
             categoryIds: [Category.voile, Category.plage]
         ),
         GalleryTrip(
@@ -129,6 +141,7 @@ extension Gallery {
             // Sans résumé, volontairement : l'agent n'a pas encore écrit le
             // sien, et la carte doit alors n'afficher que son titre.
             destinations: [Destination(name: "Japon", countryCode: "JP")],
+            coverPhotoUrl: PublicBook.samplePhoto("kyoto-au-printemps", width: 1200, height: 900),
             categoryIds: [Category.cityTrip]
         ),
     ]

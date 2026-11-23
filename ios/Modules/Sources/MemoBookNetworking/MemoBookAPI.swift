@@ -94,6 +94,14 @@ public protocol MemoBookAPI: Sendable {
     /// publics, et le voyage que celui qui regarde peut reprendre.
     func gallery() async throws -> Gallery
 
+    /// **Un carnet de la galerie, ouvert** (T236). L'un des deux appels du
+    /// contrat qui ne demandent **aucune** identification : une vitrine se
+    /// regarde sans compte, c'est tout son objet.
+    ///
+    /// Ce qu'il rend ne porte rien de son auteur — voir ``PublicBook`` et
+    /// `backend/src/routes/publicBook.ts`.
+    func publicBook(id: String) async throws -> PublicBook
+
     /// Les carnets mis en avant sur l'écran de bienvenue. Seul appel du
     /// contrat qui ne demande **aucune** identification : cet écran s'affiche
     /// avant l'entrée dans un compte.

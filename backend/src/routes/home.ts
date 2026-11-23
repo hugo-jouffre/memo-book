@@ -545,16 +545,28 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       }),
 
       context.prisma.memo.findMany({
-        where: { isPublicGallery: true },
+        // `deletedAt: null` s'est ajouté avec la route de lecture (T236,
+        // 23/11/2026) : la liste ne l'exigeait pas, donc un carnet jeté restait
+        // dans la vitrine — et il aurait désormais une carte qui s'ouvre sur
+        // 404. Un carnet dans la corbeille sort de la galerie.
+        where: { isPublicGallery: true, deletedAt: null },
         // Le voyage le plus récent d'abord. `createdAt` départage les carnets
         // sans date de départ, qui remonteraient sinon dans un ordre changeant.
         orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
         include: {
-          // Les étapes ne servent qu'à leurs pays : c'est ce qui distingue un
-          // voyage dans un seul pays (son drapeau) d'un tour du monde (le
-          // globe).
+          // Les pays d'abord : c'est ce qui distingue un voyage dans un seul
+          // pays (son drapeau) d'un tour du monde (le globe). Puis deux champs
+          // que la carte déduit — le transport, qui dit sous quelle catégorie
+          // ranger le carnet (`services/galleryFacts.ts`), et la photo de
+          // l'étape, qui sert de couverture quand l'atelier n'en a pas composé
+          // (T43).
           steps: {
-            select: { destinationName: true, destinationCountryCode: true },
+            select: {
+              destinationName: true,
+              destinationCountryCode: true,
+              transport: true,
+              photoUrl: true,
+            },
             orderBy: { number: "asc" },
           },
           categories: { select: { categoryId: true } },
@@ -578,7 +590,10 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
 
     return {
       categories: categories.map(serializeGalleryCategory),
-      trips: memos.map(serializeGalleryTrip),
+      // Les catégories descendent dans chaque carte : c'est par elles qu'un
+      // slug déduit retrouve son identifiant, celui que la barre de filtres
+      // compare — voir `serializeGalleryTrip`.
+      trips: memos.map((memo) => serializeGalleryTrip(memo, categories)),
       resumableTripId: resumableTripId(resumable),
     };
   });

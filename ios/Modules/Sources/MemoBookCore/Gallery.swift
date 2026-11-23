@@ -42,9 +42,15 @@ public struct GalleryTrip: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let title: String
 
-    /// La phrase sous le titre : « 2 semaines de trek », « Un couple autour du
-    /// monde ». Elle sera **déduite du contenu du voyage** par un agent ; `nil`
-    /// tant qu'il ne l'a pas écrite, et la carte n'affiche alors que son titre.
+    /// La phrase sous le titre : « 2 semaines de trek », ou « 12 jours · 3 pays
+    /// · 1 437 km ».
+    ///
+    /// Deux provenances, et c'est le serveur qui tranche : la phrase **écrite**
+    /// pour le carnet si elle existe, sinon celle que ses chiffres **déduisent**
+    /// — durée, pays, kilomètres (`backend/src/services/galleryFacts.ts`, T236).
+    /// `nil` quand le carnet ne sait encore rien de lui-même, juste partagé et
+    /// aucun souvenir traité : la carte n'affiche alors que son titre, et
+    /// n'invente pas.
     public let subtitle: String?
 
     /// Les pays traversés, sans doublon, celui du carnet d'abord. C'est leur
