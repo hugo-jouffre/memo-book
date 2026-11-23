@@ -513,6 +513,51 @@ export async function askToConfirmName(
 }
 
 /**
+ * **« Ton carnet fait maintenant 84 pages »** (T265, 24/11/2026).
+ *
+ * Dit après une composition qui change le **prix** du carnet — pas à chaque
+ * changement de pagination, qui arrive à toutes les compositions et que
+ * l'accueil affiche déjà. Le raisonnement est dans
+ * `services/pageCountChange.ts`.
+ *
+ * **Une bulle, pas une question** : rien à décider, rien à répondre. Elle ne
+ * porte donc aucune puce et ne remplace aucune autre bulle — elle arrive
+ * après, quand le carnet s'est recomposé, souvent longtemps après le dernier
+ * message.
+ *
+ * - Returns: `true` quand la bulle a été posée.
+ */
+export async function tellPageCountChanged(db: Db, memoId: string, texte: string): Promise<boolean> {
+  // Le même changement ne se dit pas deux fois : deux compositions de suite
+  // peuvent franchir le même palier dans les deux sens, et le fil n'a pas à
+  // compter les allers-retours. On ne regarde que la dernière bulle du genre.
+  const deja = await db.chatMessage.findFirst({
+    where: {
+      memoId,
+      author: "memo",
+      kind: "text",
+      payload: { path: ["tellsPageCount"], not: Prisma.AnyNull },
+    },
+    orderBy: { seq: "desc" },
+    select: { text: true },
+  });
+  if (deja?.text === texte) return false;
+
+  await db.chatMessage.create({
+    data: {
+      memoId,
+      author: "memo",
+      kind: "text",
+      text: texte,
+      pauseMilliseconds: pauseBeforeSaying(texte),
+      model: "scripted",
+      payload: { tellsPageCount: true },
+    },
+  });
+  return true;
+}
+
+/**
  * **« On était où ? »** (T267, 23/11/2026).
  *
  * Posée quand l'étape de ce souvenir n'a **aucun lieu** : ni son récit, ni

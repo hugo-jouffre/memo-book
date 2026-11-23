@@ -1,3 +1,5 @@
+import { tellPageCountChanged } from "../services/conversationThread.js";
+import { changementDePages, pageCountChangeText } from "../services/pageCountChange.js";
 import type { Prisma } from "@prisma/client";
 import { groupSteps, pagesAvantEtapes } from "../services/payloadValidator.js";
 import type { AppContext } from "../context.js";
@@ -62,10 +64,32 @@ export async function renderBook(
     const newer = await prisma.render.count({
       where: { memoId: render.memoId, status: "ready", createdAt: { gt: render.createdAt } },
     });
+    const avant = await prisma.memo.findUnique({
+      where: { id: render.memoId },
+      select: { pageCount: true, targetPageCount: true },
+    });
     await prisma.memo.update({
       where: { id: render.memoId },
       data: { isPrintable: true, ...(newer === 0 && pageCount !== null ? { pageCount } : {}) },
     });
+
+    // **Quand le carnet change de prix, MEMO le dit** (T265, 24/11/2026).
+    // Pas à chaque changement de pagination : l'aperçu se recompose sans
+    // cesse, et l'accueil affiche déjà les pages. C'est le **prix**, par
+    // palier, que personne ne voit venir — voir `services/pageCountChange.ts`.
+    // Seulement sur le rendu le plus récent : un vieux rendu qui finit après
+    // un neuf ne raconte pas le carnet d'aujourd'hui.
+    if (newer === 0 && avant) {
+      const change = changementDePages(avant.pageCount, pageCount, avant.targetPageCount);
+      if (change) {
+        await tellPageCountChanged(prisma, render.memoId, pageCountChangeText(change)).catch(
+          (cause: unknown) => {
+            logger.warn({ err: cause, renderId }, "Le changement de pages n'a pas pu se dire");
+            return false;
+          },
+        );
+      }
+    }
 
     logger.info({ renderId, pdfUrl: result.pdfUrl, pageCount }, "Carnet généré");
   } catch (cause) {
