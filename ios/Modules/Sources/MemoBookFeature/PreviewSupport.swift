@@ -280,6 +280,14 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func gallery() async throws -> Gallery { .fixture }
 
+    /// Dans le bac à sable, **toutes** les cartes ouvrent le même carnet d'essai
+    /// — sauf celle de Kyoto, le carnet du seed qui n'a rien à lire : c'est le
+    /// seul moyen de voir les deux états sans serveur.
+    public func publicBook(id: String) async throws -> PublicBook {
+        try SandboxNetwork.failIfOffline()
+        return id == "gallery-kyoto" ? .nothingToReadFixture : .fixture
+    }
+
     public func tripThemes() async throws -> [TripTheme] { TripTheme.fixtures }
 
     /// La création rend un voyage qui ressemble au brouillon, et le code

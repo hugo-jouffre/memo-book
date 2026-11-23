@@ -10,6 +10,7 @@ import { registerAccountRoutes } from "./routes/accounts.js";
 import { registerAccountDeletionPageRoutes } from "./routes/accountDeletionPage.js";
 import { registerDataExportPageRoutes } from "./routes/dataExportPage.js";
 import { registerSharePageRoutes } from "./routes/sharePage.js";
+import { registerPublicBookRoutes } from "./routes/publicBook.js";
 import { registerAppStoreRoutes, registerAppStoreWebhookRoutes } from "./routes/appStore.js";
 import { registerGooglePlayRoutes, registerGooglePlayWebhookRoutes } from "./routes/googlePlay.js";
 import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
@@ -187,6 +188,13 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // « Partager » et de WhatsApp : ses destinataires n'ont pas de compte. Le
   // jeton est la seule clé (T229).
   registerSharePageRoutes(app, context);
+
+  // Lire un carnet de la galerie de la communauté (`GET /v1/gallery/:id`) :
+  // une vitrine se regarde **sans compte**, c'est tout son objet (T236). ⚠️ Sa
+  // voisine `GET /v1/gallery`, qui sert les cartes, est dans le groupe
+  // identifié plus bas — l'asymétrie est voulue, et l'en-tête de
+  // `routes/publicBook.ts` dit ce qu'un carnet public montre.
+  registerPublicBookRoutes(app, context);
 
   // Tout ce qui appartient à quelqu'un, sous **une seule** identification : la
   // session de compte. Le token d'appareil n'ouvre plus rien — un carnet a

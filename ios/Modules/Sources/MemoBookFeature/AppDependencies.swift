@@ -550,6 +550,19 @@ public final class AppDependencies {
         return ChatModel(transport: transport, focusStepId: stepId)
     }
 
+    /// **Un carnet de la communauté, ouvert** — `GET /v1/gallery/:id` (T236).
+    ///
+    /// Sans cache, contrairement à la galerie : voir ``PublicBookModel``. La
+    /// carte descend telle quelle, c'est elle qui remplit l'écran en attendant
+    /// le récit.
+    public func publicBookModel(trip: GalleryTrip, resumableTripId: String?) -> PublicBookModel {
+        PublicBookModel(
+            preview: trip,
+            resumableTripId: resumableTripId,
+            source: { [api] in try await api.publicBook(id: trip.id) }
+        )
+    }
+
     /// La galerie des carnets de la communauté, servie par `GET /v1/gallery`.
     public func galleryModel() -> GalleryModel {
         GalleryModel(

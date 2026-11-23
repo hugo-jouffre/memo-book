@@ -222,6 +222,18 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "GET", path: "/v1/gallery", credential: .session)
     }
 
+    public func publicBook(id: String) async throws -> PublicBook {
+        struct Response: Decodable { let book: PublicBook }
+        // `.none` : un carnet de la galerie se lit sans compte, et l'envoyer
+        // avec une session ne changerait rien à ce que le serveur rend.
+        let response: Response = try await send(
+            method: "GET",
+            path: "/v1/gallery/\(id)",
+            credential: .none
+        )
+        return response.book
+    }
+
     public func welcomeShowcases() async throws -> [Showcase] {
         struct Response: Decodable { let showcases: [Showcase] }
         let response: Response = try await send(

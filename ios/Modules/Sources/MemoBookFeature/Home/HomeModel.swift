@@ -479,6 +479,10 @@ public enum HomeIntent: Sendable, Hashable {
     /// reste au contrat d'API pour une campagne qui pointerait ailleurs ; le
     /// jour où l'une le fera, c'est ici que le choix se dira.
     case openGallery
+    /// **Lire un carnet de la communauté**, depuis sa carte dans la galerie
+    /// (T236). La carte voyage avec l'intention : l'écran s'ouvre sur son titre
+    /// et sa photo, qu'il a déjà, pendant que le récit arrive.
+    case openPublicBook(trip: GalleryTrip, resumableTripId: String?)
     /// Créer un carnet à partir de zéro — la première porte de la feuille
     /// « Nouveau carnet ».
     case createTrip

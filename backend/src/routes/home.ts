@@ -545,7 +545,11 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       }),
 
       context.prisma.memo.findMany({
-        where: { isPublicGallery: true },
+        // `deletedAt: null` s'est ajouté avec la route de lecture (T236,
+        // 23/11/2026) : la liste ne l'exigeait pas, donc un carnet jeté restait
+        // dans la vitrine — et il aurait désormais une carte qui s'ouvre sur
+        // 404. Un carnet dans la corbeille sort de la galerie.
+        where: { isPublicGallery: true, deletedAt: null },
         // Le voyage le plus récent d'abord. `createdAt` départage les carnets
         // sans date de départ, qui remonteraient sinon dans un ordre changeant.
         orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],

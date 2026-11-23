@@ -11,6 +11,7 @@ import type {
   Showcase,
   Subscription,
   TripTheme,
+  TripTransport,
 } from "@prisma/client";
 import { PAGE_TARGET_CHANGE_LIMIT, PAGE_TARGET_TOLERANCE, pageTargetChangesLeft } from "../services/pageTarget.js";
 import { CONNECTOR_CATALOG } from "../services/connectorCatalog.js";
@@ -26,6 +27,7 @@ import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCou
 import { storeManageUrl, SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
 import { finalTextOf } from "../jobs/redact.js";
 import { displayablePhotoUrl, publiclyServableImageUrl } from "./tripPhotos.js";
+import { tripDates } from "./sharePage.js";
 import {
   derivedGalleryCategorySlugs,
   derivedGallerySummary,
@@ -259,7 +261,11 @@ type MemoForGallery = Memo & {
  * qui décide du pictogramme de la carte — un seul pays donne son drapeau,
  * plusieurs donnent le globe.
  */
-function galleryDestinations(memo: MemoForGallery) {
+function galleryDestinations(memo: {
+  destinationName: string | null;
+  destinationCountryCode: string | null;
+  steps?: Pick<MemoStep, "destinationName" | "destinationCountryCode">[];
+}) {
   const all = [
     { name: memo.destinationName, countryCode: memo.destinationCountryCode },
     ...(memo.steps ?? []).map((step) => ({
@@ -340,6 +346,120 @@ export function serializeGalleryTrip(
       publiclyServableImageUrl(memo.coverPhotoUrl) ??
       publiclyServableImageUrl(steps.find((step) => step.photoUrl)?.photoUrl),
     categoryIds,
+  };
+}
+
+/** Un souvenir tel que `publicBookSelect` le charge — voir `routes/publicBook.ts`. */
+interface EntryForPublicBook {
+  id: string;
+  kind: string;
+  editedText: string | null;
+  redactedText: string | null;
+  transcript: string | null;
+  prefersTranscript: boolean;
+  media: { cdnUrl: string | null } | null;
+}
+
+/** Une étape telle que `publicBookSelect` la charge. */
+interface StepForPublicBook {
+  id: string;
+  number: number;
+  placeName: string | null;
+  destinationName: string | null;
+  destinationCountryCode: string | null;
+  startDate: Date | null;
+  endDate: Date | null;
+  photoUrl: string | null;
+  transport: TripTransport | null;
+  entries: EntryForPublicBook[];
+}
+
+/** Un carnet tel que `publicBookSelect` le charge. */
+interface MemoForPublicBook {
+  id: string;
+  title: string;
+  bookTitle: string | null;
+  startDate: Date | null;
+  endDate: Date | null;
+  coverPhotoUrl: string | null;
+  destinationName: string | null;
+  destinationCountryCode: string | null;
+  gallerySummary: string | null;
+  dayCount: number | null;
+  distanceKilometres: number | null;
+  pageCount: number;
+  memoryCount: number;
+  steps: StepForPublicBook[];
+}
+
+/**
+ * **Un carnet de la galerie, ouvert** (T236) — au nom près de `PublicBook` côté
+ * Swift.
+ *
+ * Il ne décide rien de ce qu'il montre : c'est `publicBookSelect`
+ * (`routes/publicBook.ts`) qui porte la décision, et ce sérialiseur ne peut
+ * mettre dans la réponse que ce que la requête a chargé. Il **met en forme** :
+ * le titre que le récit s'est donné s'il en a un, les dates en français, et le
+ * récit d'une étape ramené à une suite de paragraphes.
+ *
+ * `finalText` est passé en paramètre plutôt qu'importé : `jobs/redact.js` tire
+ * la moitié du pipeline derrière lui, et ce fichier est chargé par toutes les
+ * routes de l'app.
+ */
+export function serializePublicBook(
+  memo: MemoForPublicBook,
+  finalText: (entry: EntryForPublicBook) => string | null,
+) {
+  const destinations = galleryDestinations({
+    destinationName: memo.destinationName,
+    destinationCountryCode: memo.destinationCountryCode,
+    steps: memo.steps,
+  });
+
+  return {
+    id: memo.id,
+    // Le titre que le récit s'est donné passe devant celui du voyage : c'est
+    // celui qui est imprimé en couverture.
+    title: memo.bookTitle?.trim() || memo.title,
+    dates: tripDates(memo.startDate, memo.endDate),
+    // La même phrase que sur la carte, pour que l'écran s'ouvre sur ce qu'on
+    // venait de lire — écrite si elle existe, déduite sinon.
+    summary:
+      memo.gallerySummary ??
+      derivedGallerySummary({
+        dayCount: memo.dayCount,
+        distanceKilometres: memo.distanceKilometres,
+        countryCount: destinations.length,
+        stepTransports: memo.steps.map((step) => step.transport),
+      }),
+    coverPhotoUrl: publiclyServableImageUrl(memo.coverPhotoUrl),
+    destinations,
+    pageCount: memo.pageCount,
+    memoryCount: memo.memoryCount,
+    steps: memo.steps.map((step) => ({
+      id: step.id,
+      number: step.number,
+      // Le lieu précis s'il est connu, sinon le pays. `null` n'arrive que pour
+      // une étape qu'aucun récit n'a su nommer.
+      place: step.placeName?.trim() || step.destinationName?.trim() || null,
+      countryCode: step.destinationCountryCode,
+      dates: tripDates(step.startDate, step.endDate),
+      photoUrl: publiclyServableImageUrl(step.photoUrl),
+      transport: step.transport,
+      // Le récit de l'étape, un paragraphe par souvenir, dans l'ordre vécu. Les
+      // souvenirs encore en rédaction n'ont pas de texte : ils ne laissent pas
+      // de trou, ils ne sont simplement pas là.
+      story: step.entries
+        .filter((entry) => entry.kind !== "photo")
+        .map((entry) => finalText(entry)?.trim())
+        .filter((text): text is string => Boolean(text)),
+      // Les photos des souvenirs de l'étape, celles qui sont publiées. Une
+      // photo de notre seau n'en est pas (`publiclyServableImageUrl`).
+      photoUrls: step.entries
+        .filter((entry) => entry.kind === "photo")
+        .map((entry) => publiclyServableImageUrl(entry.media?.cdnUrl))
+        .filter((url): url is string => Boolean(url)),
+    })),
   };
 }
 

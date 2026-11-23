@@ -655,12 +655,58 @@ const GALLERY_CATEGORIES = [
 ];
 
 /**
+ * L'adresse d'une photo d'essai, stable pour une clé donnée.
+ *
+ * ⚠️ **Des photographies de remplacement, pas du contenu final** (Hugo,
+ * 23/11/2026). Elles existent pour que la mosaïque de la galerie et l'écran d'un
+ * carnet se jugent sur de **vraies images** : un aplat de marque ne dit rien du
+ * cadrage, de la lisibilité du voile sur un ciel blanc, ni de ce que devient un
+ * portrait dans une vignette large — et c'est précisément ce que T43 demandait
+ * de revoir. Le même hôte sert le jeu d'essai de l'app
+ * (`PublicBookFixtures.swift`), pour que les deux montrent le même écran.
+ *
+ * À remplacer par de vraies photos de voyage le jour où la vitrine s'adresse à
+ * de vrais visiteurs — ces neuf carnets sont des démos, et leurs photos aussi.
+ */
+function galleryPhoto(seed: string, width = 800, height = 1000): string {
+  return `https://picsum.photos/seed/${seed}/${width}/${height}`;
+}
+
+/**
+ * La clé de photo d'un carnet, tirée de son titre : « Les Cyclades à la voile »
+ * donne `les-cyclades-a-la-voile`.
+ *
+ * Stable, donc **la même photo d'un seed à l'autre** — sans quoi la galerie
+ * changerait d'images à chaque `npm run db:seed` et on ne saurait jamais si la
+ * mosaïque a bougé parce qu'on l'a changée.
+ */
+function slugOfTitle(title: string): string {
+  return title
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/**
  * Les carnets de la galerie de la communauté.
  *
  * `summary` est ce que l'agent écrira un jour à partir du contenu du voyage —
- * ici, à la main, pour que l'écran se regarde. `countries` porte le carnet en
- * premier puis ses étapes : c'est le **nombre de pays** qui décide du
- * pictogramme de la carte, un drapeau pour un seul, le globe au-delà.
+ * ici, à la main, pour que l'écran se regarde. Laissé `null`, c'est le serveur
+ * qui le **déduit** des chiffres du voyage (`services/galleryFacts.ts`, T236) :
+ * « Kyoto au printemps » est là pour montrer ce cas.
+ *
+ * `countries` porte le carnet en premier puis ses étapes : c'est le **nombre de
+ * pays** qui décide du pictogramme de la carte, un drapeau pour un seul, le
+ * globe au-delà.
+ *
+ * `story` est ce qui rend le carnet **lisible** (T236). Les carnets de la
+ * galerie n'étaient que des coquilles — ni souvenir, ni photo, ni rendu —, donc
+ * une carte qui s'ouvre n'avait rien à montrer. Un carnet qui porte un `story`
+ * tire ses étapes de là plutôt que de ses pays, et chaque étape reçoit ses
+ * souvenirs. Les autres gardent leurs étapes-pays et montrent l'autre état de
+ * l'écran, « Ce carnet s'écrit encore ».
  */
 const GALLERY_TRIPS = [
   {
@@ -703,6 +749,43 @@ const GALLERY_TRIPS = [
     ],
     categories: ["randonnee", "montagne"],
     startDate: "2025-07-19",
+    endDate: "2025-07-31",
+    dayCount: 12,
+    distanceKilometres: 214,
+    pageCount: 64,
+    story: [
+      {
+        place: "Chamonix",
+        startDate: "2025-07-19",
+        endDate: "2025-07-23",
+        transport: "walk" as const,
+        paragraphs: [
+          "On est partis de Chamonix sous la pluie, ce qui n'est pas le départ qu'on avait imaginé. Les sacs étaient trop lourds de deux jours de nourriture qu'on a mangée en un seul.",
+        ],
+        photos: 2,
+      },
+      {
+        place: "Le col du Grand-Saint-Bernard",
+        startDate: "2025-07-23",
+        endDate: "2025-07-27",
+        transport: "walk" as const,
+        paragraphs: [
+          "Le passage en Suisse se fait à pied, par un col où des chiens ont sauvé des gens pendant mille ans. Il n'y avait ni chien ni neige, seulement un vent qui venait d'Italie.",
+          "Le refuge était complet. On a dormi dans la salle commune, à huit, et c'est la meilleure nuit du voyage.",
+        ],
+        photos: 1,
+      },
+      {
+        place: "Courmayeur",
+        startDate: "2025-07-27",
+        endDate: "2025-07-31",
+        transport: "walk" as const,
+        paragraphs: [
+          "L'Italie commence par un café correct. Douze jours plus tard, on a revu le Mont-Blanc par l'autre côté — le même, et plus du tout le même.",
+        ],
+        photos: 2,
+      },
+    ],
   },
   {
     title: "Road trip en Islande",
@@ -726,11 +809,51 @@ const GALLERY_TRIPS = [
     startDate: "2024-08-03",
   },
   {
+    // **Le carnet lisible de la galerie** : c'est lui que le simulateur ouvre
+    // pour voir l'écran rempli, et le jeu d'essai de l'app le recopie.
     title: "Les Cyclades à la voile",
+    bookTitle: "D'île en île",
     summary: "3 semaines d’île en île",
     countries: [["Grèce", "GR"]],
     categories: ["voile", "plage-et-iles"],
     startDate: "2024-06-15",
+    endDate: "2024-07-05",
+    dayCount: 21,
+    distanceKilometres: 480,
+    pageCount: 92,
+    story: [
+      {
+        place: "Paros",
+        startDate: "2024-06-15",
+        endDate: "2024-06-22",
+        transport: "boat" as const,
+        paragraphs: [
+          "Nous sommes arrivés au port de Paros au petit matin, après une nuit de traversée que personne n'avait vraiment dormie. Le quai sentait le gasoil et le pain chaud.",
+          "Le deuxième jour, le vent est tombé d'un coup. On a passé l'après-midi à l'ancre devant une plage sans nom, à regarder l'eau ne rien faire.",
+        ],
+        photos: 3,
+      },
+      {
+        place: "Naxos",
+        startDate: "2024-06-22",
+        endDate: "2024-06-29",
+        transport: "boat" as const,
+        paragraphs: [
+          "Naxos sentait le thym. On a loué deux scooters pour monter jusqu'aux villages de l'intérieur, là où la mer disparaît derrière les oliviers et où plus personne ne parle anglais.",
+        ],
+        photos: 1,
+      },
+      {
+        place: "Amorgos",
+        startDate: "2024-06-29",
+        endDate: "2024-07-05",
+        transport: "walk" as const,
+        paragraphs: [
+          "La dernière île était la plus raide. Le monastère est accroché à la falaise comme s'il avait été posé là par erreur, et il faut trois cents marches pour s'en convaincre.",
+        ],
+        photos: 2,
+      },
+    ],
   },
   {
     // Volontairement **sans résumé** : l'agent n'a pas encore écrit le sien, et
@@ -741,6 +864,13 @@ const GALLERY_TRIPS = [
     countries: [["Japon", "JP"]],
     categories: ["city-trip"],
     startDate: "2024-03-28",
+    endDate: "2024-04-05",
+    // Des chiffres **sans** résumé écrit : c'est de là que le serveur déduit
+    // « 9 jours · 38 km », la phrase que la carte affiche à sa place (T236).
+    dayCount: 9,
+    distanceKilometres: 38,
+    // Et **pas de `story`** : c'est aussi ce carnet qui montre l'autre état de
+    // l'écran, « Ce carnet s'écrit encore ».
   },
 ];
 
@@ -780,11 +910,13 @@ async function seedGallery(): Promise<number> {
 
   for (const [index, trip] of GALLERY_TRIPS.entries()) {
     const [first, ...rest] = trip.countries;
+    const slug = slugOfTitle(trip.title);
 
     const memo = await prisma.memo.create({
       data: {
         ownerAccountId: community.id,
         title: trip.title,
+        bookTitle: "bookTitle" in trip ? trip.bookTitle : null,
         // Les carnets de la galerie ne se rejoignent pas, mais la colonne est
         // obligatoire : un code de rang suffit, et reste unique.
         accessCode: `GAL${String(index + 1).padStart(3, "0")}`,
@@ -795,28 +927,114 @@ async function seedGallery(): Promise<number> {
         destinationName: first?.[0],
         destinationCountryCode: first?.[1],
         startDate: new Date(`${trip.startDate}T00:00:00Z`),
+        endDate: "endDate" in trip ? new Date(`${trip.endDate}T00:00:00Z`) : null,
+        // Les chiffres que `refreshTripFacts` écrirait sur un vrai voyage. Ils
+        // servent la phrase déduite de la carte, et les deux pastilles de
+        // l'écran du carnet.
+        dayCount: "dayCount" in trip ? trip.dayCount : null,
+        distanceKilometres: "distanceKilometres" in trip ? trip.distanceKilometres : null,
+        pageCount: "pageCount" in trip ? trip.pageCount : 0,
+        // **La couverture de la carte** (T43). Elle était vide pour les neuf
+        // carnets, donc la mosaïque ne s'était jamais vue que sur des aplats.
+        coverPhotoUrl: galleryPhoto(slug, 1200, 900),
         isPrintable: true,
         categories: {
-          create: trip.categories.map((slug) => ({
+          create: trip.categories.map((categorySlug) => ({
             // Les slugs viennent de la liste juste au-dessus : une clé absente
             // est une faute de frappe, et vaut mieux qu'elle éclate ici.
-            categoryId: categories.get(slug) ?? "",
+            categoryId: categories.get(categorySlug) ?? "",
           })),
         },
       },
     });
 
-    // Les pays suivants deviennent des étapes : c'est de là que la carte tire
-    // son globe plutôt qu'un drapeau.
-    for (const [index, [name, code]] of rest.entries()) {
-      await prisma.memoStep.create({
+    const story = "story" in trip ? trip.story : undefined;
+
+    if (story) {
+      // **Un carnet lisible** : ses étapes viennent du récit, et chacune reçoit
+      // ses souvenirs. C'est ce que la route de lecture rend, et ce que l'écran
+      // déroule (T236).
+      for (const [rank, step] of story.entries()) {
+        const created = await prisma.memoStep.create({
+          data: {
+            memoId: memo.id,
+            number: rank + 1,
+            placeName: step.place,
+            // Le pays du carnet : ces récits-là ne traversent qu'un pays par
+            // étape, et c'est lui qui porte le drapeau de l'étape.
+            destinationName: first?.[0],
+            destinationCountryCode: first?.[1],
+            startDate: new Date(`${step.startDate}T00:00:00Z`),
+            endDate: new Date(`${step.endDate}T00:00:00Z`),
+            transport: step.transport,
+            photoUrl: galleryPhoto(`${slug}-${rank + 1}`),
+          },
+        });
+
+        for (const [paragraph, text] of step.paragraphs.entries()) {
+          await prisma.entry.create({
+            data: {
+              memoId: memo.id,
+              stepId: created.id,
+              kind: "audio",
+              status: "ready",
+              // **Le texte rédigé, pas une transcription brute** : c'est celui
+              // que le carnet imprime, et donc celui que la route publique rend.
+              redactedText: text,
+              capturedAt: new Date(`${step.startDate}T0${paragraph + 8}:00:00Z`),
+            },
+          });
+        }
+
+        // Les photos de l'étape, chacune avec son média publié : c'est `cdnUrl`
+        // qui les rend montrables sans compte.
+        for (let photo = 0; photo < step.photos; photo += 1) {
+          const media = await prisma.mediaAsset.create({
+            data: {
+              storageKey: `gallery/${slug}/${rank + 1}/${photo + 1}.jpg`,
+              mimeType: "image/jpeg",
+              bytes: 70_000,
+              cdnUrl: galleryPhoto(`${slug}-${rank + 1}-${photo + 1}`),
+            },
+          });
+
+          await prisma.entry.create({
+            data: {
+              memoId: memo.id,
+              stepId: created.id,
+              kind: "photo",
+              status: "ready",
+              mediaId: media.id,
+              capturedAt: new Date(`${step.startDate}T1${photo}:00:00Z`),
+            },
+          });
+        }
+      }
+
+      await prisma.memo.update({
+        where: { id: memo.id },
         data: {
-          memoId: memo.id,
-          number: index + 1,
-          destinationName: name,
-          destinationCountryCode: code,
+          memoryCount: story.reduce(
+            (total, step) => total + step.paragraphs.length + step.photos,
+            0,
+          ),
+          photoCount: story.reduce((total, step) => total + step.photos, 0),
         },
       });
+    } else {
+      // Les pays suivants deviennent des étapes : c'est de là que la carte tire
+      // son globe plutôt qu'un drapeau.
+      for (const [rank, [name, code]] of rest.entries()) {
+        await prisma.memoStep.create({
+          data: {
+            memoId: memo.id,
+            number: rank + 1,
+            destinationName: name,
+            destinationCountryCode: code,
+            photoUrl: galleryPhoto(`${slug}-${rank + 1}`),
+          },
+        });
+      }
     }
   }
 

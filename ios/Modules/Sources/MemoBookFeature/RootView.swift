@@ -803,6 +803,8 @@ public struct RootView: View {
             path.append(.trip(id: id))
         case .openGallery:
             path.append(.gallery)
+        case .openPublicBook(let trip, let resumableTripId):
+            path.append(.publicBook(trip: trip, resumableTripId: resumableTripId))
         case .createTrip:
             path.append(.tripCreation)
         case .orderPrint(let tripId):
@@ -1105,7 +1107,12 @@ public struct RootView: View {
                 return id
             case .chat(let tripId, _):
                 return tripId
-            case .profile, .manageSubscription, .gallery, .tripCreation, .memos, .support, .legal:
+            // ⚠️ `.publicBook` est dans cette liste et doit y rester : le carnet
+            // qu'on lit là est celui de **quelqu'un d'autre**. Le rendre ici
+            // ferait croire aux écrans du dessus — aperçu, commande, réglages —
+            // qu'on travaille sur un voyage à soi.
+            case .profile, .manageSubscription, .gallery, .publicBook, .tripCreation, .memos,
+                .support, .legal:
                 continue
             }
         }
@@ -1145,6 +1152,16 @@ public struct RootView: View {
             // carnet ou ramène au voyage en cours. Elles repassent donc par le
             // même routeur que celles de l'accueil, et non par un second.
             GalleryView(model: dependencies.galleryModel(), onIntent: handle)
+        case .publicBook(let trip, let resumableTripId):
+            // Il **réémet** des intentions comme la galerie : son bouton du bas
+            // crée un carnet ou ramène au voyage en cours.
+            PublicBookView(
+                model: dependencies.publicBookModel(
+                    trip: trip,
+                    resumableTripId: resumableTripId
+                ),
+                onIntent: handle
+            )
         case .tripCreation:
             // Elle **réémet** une intention, comme la galerie : « Commencer ! »
             // ouvre le voyage qui vient d'être créé, et c'est encore ce
@@ -1244,6 +1261,13 @@ enum HomeRoute: Hashable {
     case chat(tripId: String, stepId: String?)
     /// Les carnets de la communauté, ouverts par la carte de découverte.
     case gallery
+    /// **Un carnet de la communauté, ouvert** par sa carte dans la galerie
+    /// (T236).
+    ///
+    /// La carte voyage dans la destination, et pas seulement son identifiant :
+    /// l'écran s'ouvre sur le titre et la photo qu'elle montrait déjà, au lieu
+    /// d'ouvrir sur un vide le temps d'un aller-retour réseau.
+    case publicBook(trip: GalleryTrip, resumableTripId: String?)
     /// Les six étapes de « Créer un voyage ».
     case tripCreation
     case memos
