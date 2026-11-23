@@ -15,6 +15,7 @@ import { createPaymentGateway, type PaymentGateway } from "./services/payments.j
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
 import { createBeautyJudge, type BeautyJudge } from "./services/photoBeauty.js";
+import { createRelevanceJudge, type RelevanceJudge } from "./services/photoRelevance.js";
 import { createStickerSpotter, type StickerSpotter } from "./services/stickerVision.js";
 import { createTranscriber, type Transcriber } from "./services/transcription.js";
 import { createAssetPublisher, type AssetPublisher } from "./services/webflow.js";
@@ -48,6 +49,9 @@ export interface AppContext {
 
   /** L'œil qui note ce qu'une photo vaut à regarder — voir `services/photoBeauty.ts`. */
   beautyJudge: BeautyJudge;
+
+  /** Le même œil, sur une autre question : cette photo illustre-t-elle ce texte ? */
+  relevanceJudge: RelevanceJudge;
   publisher: AssetPublisher;
   renderer: BookRenderer;
   /** Encaissement Stripe : carnets imprimés (la cagnotte est retirée). Jamais l'abonnement. */
@@ -98,6 +102,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     structurer: createStructurer(env),
     stickerSpotter: createStickerSpotter(env),
     beautyJudge: createBeautyJudge(env),
+    relevanceJudge: createRelevanceJudge(env),
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),
     payments: createPaymentGateway(env),
