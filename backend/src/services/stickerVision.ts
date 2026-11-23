@@ -6,6 +6,14 @@ import { acceptableCorners, type StickerCorners } from "./stickerCut.js";
  * **Repérer ce qui se découpe dans une photo** (Hugo, 10/11/2026 — « stickers
  * découpés depuis tes vraies photos de billets et tampons »).
  *
+ * ⚠️ **`max_tokens` ne passera pas avec un modèle plus récent** : les
+ * modèles de la génération `gpt-5` et au-delà le refusent d'un
+ * `400 Unsupported parameter` et veulent `max_completion_tokens`. Ce fichier
+ * le garde parce que `gpt-4o-mini` l'accepte encore ; le jour où
+ * `OPENAI_STICKER_MODEL` change, c'est la première ligne à corriger. Trouvé
+ * en production le 23/11/2026 sur `services/photoBeauty.ts`, qui avait
+ * recopié ce motif.
+ *
  * ⚠️ **Rien ne l'appelle encore** (23/11/2026). `context.ts` le construit, et
  * aucun job ni aucune route ne s'en sert — c'est pour ça que la politique de
  * confidentialité peut écrire, au § 2.4, que « vos photos ne sont pas envoyées
