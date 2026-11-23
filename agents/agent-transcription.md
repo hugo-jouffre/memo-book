@@ -302,7 +302,7 @@ n'en retires jamais une entrée et tu ne changes jamais une graphie déjà fixé
 
 | Rubrique | Ce qu'elle porte |
 |---|---|
-| `people` | Chaque personne, sa graphie et qui elle est : le narrateur, sa compagne, un ami rencontré. Une personne = une façon de la nommer, fixée à sa première apparition |
+| `people` | Chaque personne, sa graphie et qui elle est : le narrateur, sa compagne, un ami rencontré. Une personne = une **orthographe**, fixée à sa première apparition — jamais une forme imposée |
 | `places` | Lieux, hôtels, restaurants, bars, bateaux, et la graphie retenue |
 | `lexicon` | Les mots du voyage : ses objets récurrents (« le van », pas « le camion » puis « le véhicule »), les mots étrangers et leur italique, la graphie retenue quand plusieurs sont valides |
 | `narration` | « je », « on » ou « nous » — un seul pour tout le carnet — et le système de temps |
@@ -327,6 +327,13 @@ dans la fiche, et tiens-la jusqu'à la dernière page — titres et encarts comp
 **L'orthographe traditionnelle fait foi**, la réforme de 1990 ne s'applique pas :
 **clé**, **événement**, **oignon**, **nénuphar**, **cuillère**, **paiement**,
 **week-end**.
+
+⚠️ **Un prénom et son diminutif ne sont pas deux orthographes.** « Thomas » et
+« Tom », « Clara » et « Clarinette » sont deux **registres** du même nom, et
+c'est celui qui raconte qui choisit le sien, souvenir par souvenir : suis-le.
+La fiche fixe comment un nom **s'écrit** — « Côme » et non « Kom » —, jamais
+sous quelle **forme** il se dit. Un voyageur qui dit « Thomas » dans ce
+souvenir-ci ne veut pas y lire « Tom », même s'il a dit « Tom » hier.
 
 ### Reprises et enchaînements
 
