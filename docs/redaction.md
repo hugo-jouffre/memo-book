@@ -117,6 +117,52 @@ Clara, Tom).
 
 ## 4. Journal
 
+### 23/11/2026 (nuit) — La règle corrigée, et mesurée
+
+La règle de l'entrée précédente est réécrite. La fiche de cohérence fixe
+désormais comment un nom **s'écrit**, jamais sous quelle **forme** il se dit :
+
+> `people` | Une personne = une **orthographe**, fixée à sa première
+> apparition — jamais une forme imposée
+
+> ⚠️ Un prénom et son diminutif ne sont pas deux orthographes. « Thomas » et
+> « Tom » sont deux **registres** du même nom, et c'est celui qui raconte qui
+> choisit le sien, souvenir par souvenir : suis-le.
+
+L'exemple est un prénom **inventé** : citer celui du banc apprendrait la
+réponse au lieu de la règle (§ 3).
+
+**Mesuré** (`--label apres-prenom`, Opus 5, règles `2a7f8ef02c`), contre le
+passage du matin :
+
+| Étape | Vocal | Avant | Après |
+|---|---|---|---|
+| 11 | 0 / 1 | 0 / 1 | 0 / 1 |
+| 14 | 1 / 0 | 0 / 1 | **1 / 0** |
+| 16 | 2 / 0 | 0 / 2 | **2 / 0** |
+| 18 | 1 / 0 | 0 / 1 | **1 / 0** |
+| 19 | 1 / 1 | 0 / 2 | **1 / 1** |
+| **Total** « Maxime » / « Max » | **5 / 2** | 0 / 7 | **5 / 2** |
+
+**Le texte dit exactement ce que le voyageur a dit**, étape par étape. Pas
+« presque » : les cinq « Maxime » et les deux « Max » sont à leur place.
+
+**Et rien d'autre n'a bougé**, ce qui était le risque — une règle touchée
+déplace souvent autre chose :
+
+| | Avant | Après |
+|---|---|---|
+| Tirets cadratins | 0 | 0 |
+| Moments proposés (dont datés) | 4 (4) | 4 (4) |
+| Noms à faire confirmer | 1 | 1 |
+| Longueur moyenne | 866 car. | 874 car. |
+| Tournures proscrites, textes hors barème | 0 | 0 |
+
+**Ce qui n'est pas mesuré** : la note du juge. Elle coûte un second passage, et
+le gain porte sur un mot — la lire demanderait de distinguer 3,6 de 3,7 sur
+neuf textes, ce que cinq niveaux ne font pas bien. On la reprendra quand
+plusieurs corrections se seront accumulées.
+
 ### 23/11/2026 (soir) — Le prénom figé dès le premier vocal
 
 Le juge du banc (§ 3) donne **3,6 sur 5 en fidélité**, la plus basse des cinq
