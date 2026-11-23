@@ -1969,27 +1969,47 @@ public final class ChatModel {
         }
     }
 
-    /// Poste les photos choisies.
+    /// Poste les photos choisies — **toutes**, en autant de messages qu'il
+    /// faut (T265, 23/11/2026).
     ///
     /// Les images sont écrites dans les caches avant d'entrer dans le fil : une
     /// bulle qui garderait ses octets en mémoire ferait grossir la conversation
     /// à chaque photo, et les perdrait au premier retour d'arrière-plan.
+    ///
+    /// ## Découper plutôt que couper
+    ///
+    /// La borne du serveur (``ChatMetrics/maxPhotosPerMessage``) n'a pas
+    /// bougé, et c'est voulu : un envoi de vingt photos est déjà de l'ordre de
+    /// trois mégaoctets, et le client abandonne à soixante secondes (T275). La
+    /// relever ferait échouer les gros envois au lieu de les refuser.
+    ///
+    /// Soixante photos partent donc en **trois tours** de vingt. Chacun a son
+    /// identifiant, sa bulle et son sort : la file hors ligne les reprend un à
+    /// un, et un tour qui échoue ne perd pas les autres.
+    ///
+    /// Avant, le surplus était **jeté** avec un bandeau d'erreur. On gardait
+    /// vingt photos sur soixante, et c'est précisément ce que T265 demandait
+    /// de ne plus faire : « sans limite ». Ce qui choisit maintenant, ce n'est
+    /// plus le hasard de l'ordre d'arrivée, c'est la page
+    /// (`services/photoPicking.ts`).
     public func sendPhotos(_ images: [PickedPhoto]) {
         guard !images.isEmpty else { return }
         hideExhaustedNotice()
+
+        var envoye = false
+        for lot in images.chunked(into: ChatMetrics.maxPhotosPerMessage) {
+            if envoiDUnLot(lot) { envoye = true }
+        }
+        if envoye { composer = .tools }
+    }
+
+    /// Un lot, un tour. Rend `false` quand aucune de ses photos n'a pu être
+    /// écrite sur le disque : les autres lots partent quand même.
+    private func envoiDUnLot(_ images: [PickedPhoto]) -> Bool {
         let id = UUID().uuidString.lowercased()
 
-        // ⚠️ **Couper, mais le dire.** La borne vient du serveur
-        // (``ChatMetrics/maxPhotosPerMessage``) ; la photothèque s'y arrête
-        // déjà, mais un partage depuis une autre app peut en apporter
-        // davantage. Ce qui ne part pas doit se savoir : c'est exactement ce
-        // qui manquait quand six photos sur dix disparaissaient sans un mot.
-        if images.count > ChatMetrics.maxPhotosPerMessage {
-            errorMessage = ChatCopy.tooManyPhotos(kept: ChatMetrics.maxPhotosPerMessage, sent: images.count)
-        }
-
         var uploads: [ChatPhotoUpload] = []
-        for (index, picked) in images.prefix(ChatMetrics.maxPhotosPerMessage).enumerated() {
+        for (index, picked) in images.enumerated() {
             let photoId = "\(id)-\(index)"
             guard let url = try? ChatPhotoFile.save(picked.data, id: photoId) else { continue }
             localPhotoUrls[photoId] = url
@@ -2008,11 +2028,11 @@ public final class ChatModel {
 
         guard !uploads.isEmpty else {
             errorMessage = ChatCopy.photosUnreadable
-            return
+            return false
         }
 
-        composer = .tools
         send(.photos(uploads, capturedAt: .now), id: id)
+        return true
     }
 
     /// « Modifier » : le texte revient dans le champ de saisie, le clavier
