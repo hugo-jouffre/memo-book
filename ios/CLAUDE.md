@@ -385,6 +385,22 @@ descendre le **crédit du jour** pendant qu'on parle
 pulsation à 5 s et l'arrêt net à zéro se règlent sur ce que le serveur mesurera
 dans le fichier.
 
+### Un vocal en cours n'est jeté que par la corbeille
+
+Quitter un écran l'arrête, ne l'efface pas. `ChatModel.teardown()` appelait
+`recorder.cancel()`, et le fichier partait avec : ouvrir les réglages du voyage
+depuis la conversation — ils se posent **par-dessus**, donc l'écran disparaît —
+effaçait ce qu'on venait de dire (T252). Il appelle maintenant
+`AudioRecorder.keepForLater()`, qui suspend la capture sans rien perdre : le
+micro n'enregistre pas les réglages, et le vocal est encore là au retour,
+puisque l'écran reste dans la pile et son modèle avec.
+
+Un seul geste perd un vocal, et il est explicite : la **corbeille** de la barre
+d'envoi, qui ne paraît qu'une fois l'enregistrement suspendu
+(`ChatModel.cancelRecording()`, `collapseComposer()`). C'est aussi pour ça que
+`cancel()` relâche la session audio comme `stop()` : un vocal jeté rend la main
+aux autres apps, qu'un `.duckOthers` laissait en sourdine.
+
 ### Aux tailles de texte accessibles
 
 Tout composant qui pose deux choses côte à côte doit savoir les empiler. Le
