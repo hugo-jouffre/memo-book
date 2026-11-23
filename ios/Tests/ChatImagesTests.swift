@@ -96,30 +96,43 @@ final class ChatImagesTests: XCTestCase {
         XCTAssertTrue(asked.isEmpty, "Rien ne part au serveur pour une photo sur le disque.")
     }
 
-    /// **Ce qui ne part pas se dit** (Hugo, 05/11/2026 — « on ne peut pas
-    /// ajouter plus de 6 photos »).
+    /// **Plus rien n'est coupé** (T265, 23/11/2026).
     ///
-    /// La photothèque s'arrêtait à ``ChatMetrics/visiblePhotoCount``, un
-    /// nombre de **vignettes**, et `sendPhotos` coupait le reste en silence :
-    /// dix photos choisies, six parties, rien à l'écran. La borne est
-    /// maintenant celle du serveur, et le surplus est **annoncé**.
-    func testPhotosBeyondTheServerLimitAreAnnouncedNotSwallowed() async throws {
-        let model = model(downloads: Downloads())
-        let trop = ChatMetrics.maxPhotosPerMessage + 5
+    /// Le surplus était jeté — vingt photos gardées sur soixante — avec un
+    /// bandeau pour le dire. Le ticket demandait l'inverse : « sans limite ».
+    /// Les photos partent donc en autant de messages qu'il faut, vingt par
+    /// tour, parce que c'est la borne du serveur et la taille qu'un envoi
+    /// passe en moins de soixante secondes (T275).
+    func testEveryPhotoLeavesInAsManyMessagesAsNeeded() async throws {
+        let sent = Sent()
+        let model = model(downloads: Downloads(), sent: sent)
+        await model.load()
+        let combien = ChatMetrics.maxPhotosPerMessage * 2 + 5
 
-        model.sendPhotos(Array(repeating: PickedPhoto(data: picture), count: trop))
+        model.sendPhotos(Array(repeating: PickedPhoto(data: picture), count: combien))
+        try await until { await sent.turns.count == 3 }
 
-        let dit = try XCTUnwrap(model.errorMessage, "Le surplus doit se dire.")
-        XCTAssertTrue(dit.contains("\(ChatMetrics.maxPhotosPerMessage)"), dit)
-        XCTAssertTrue(dit.contains("5"), "Et combien restent : \(dit)")
+        let tours = await sent.turns
+        let parties = tours.reduce(0) { total, tour in
+            if case .photos(let uploads, _) = tour.body { return total + uploads.count }
+            return total
+        }
+        XCTAssertEqual(parties, combien, "Aucune photo ne reste en route.")
+        XCTAssertNil(model.errorMessage, "Rien n'est coupé, donc rien à annoncer.")
+
+        // Chaque tour a son identifiant : la file les reprend un à un, et
+        // celui qui échoue ne perd pas les autres.
+        XCTAssertEqual(Set(tours.map(\.id)).count, 3)
     }
 
-    /// Juste en dessous de la borne, rien ne s'affiche : un avertissement qui
-    /// arrive quand tout est parti apprend à ne plus être lu.
-    func testTheLimitSaysNothingWhenEverythingFits() async throws {
-        let model = model(downloads: Downloads())
+    /// Juste à la borne, un seul message : on ne découpe pas pour rien.
+    func testOneMessageWhenEverythingFits() async throws {
+        let sent = Sent()
+        let model = model(downloads: Downloads(), sent: sent)
+        await model.load()
 
         model.sendPhotos(Array(repeating: PickedPhoto(data: picture), count: ChatMetrics.maxPhotosPerMessage))
+        try await until { await sent.turns.count == 1 }
 
         XCTAssertNil(model.errorMessage, "Tout est parti : rien à signaler.")
     }

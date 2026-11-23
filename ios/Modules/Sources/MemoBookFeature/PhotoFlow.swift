@@ -139,13 +139,16 @@ extension View {
     ///   - title: ce que la feuille de choix annonce — « Ajouter une photo »
     ///     dans la conversation, « Photo de profil » sur le profil.
     ///   - maxSelection: combien de photos la photothèque laisse choisir.
+    ///     `nil` — le défaut — n'en limite aucune : la conversation les envoie
+    ///     en autant de messages qu'il faut (T265, `ChatModel.sendPhotos`).
+    ///     La photo de profil, elle, en veut une seule.
     ///   - onRemove: **retirer la photo en place**, quand il y en a une — le
     ///     profil revient alors à ses initiales (Hugo, 29/09/2026). `nil`
     ///     n'ajoute rien à la feuille.
     func photoFlow(
         _ flow: PhotoFlow,
         title: String = ChatCopy.Photos.title,
-        maxSelection: Int = ChatMetrics.maxPhotosPerMessage,
+        maxSelection: Int? = nil,
         onRemove: (() -> Void)? = nil,
         onPicked: @escaping ([PickedPhoto]) -> Void
     ) -> some View {
@@ -164,7 +167,7 @@ extension View {
 private struct PhotoFlowModifier: ViewModifier {
     @Bindable var flow: PhotoFlow
     let title: String
-    let maxSelection: Int
+    let maxSelection: Int?
     let onRemove: (() -> Void)?
     let onPicked: ([PickedPhoto]) -> Void
 
