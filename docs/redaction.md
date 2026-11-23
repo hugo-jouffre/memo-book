@@ -170,6 +170,21 @@ décalage **entre** le vocal et ce qu'il raconte. Hors du ticket, mais à savoir
 **Le banc montre, il ne note pas** : le rapport cite la transcription sous
 chaque moment, et c'est en la lisant qu'on dit si « mardi » y était.
 
+**Et le tiret cadratin est confirmé** (T266). Le 18/11 avait corrigé la
+consigne et mesuré la production — 9 souvenirs sur 50, soit 18 %, en
+portaient un — mais le passage de contrôle du même jour n'avait tourné que
+sur **trois** étapes (`--until`). Sur les neuf :
+
+| Passage | Souvenirs porteurs | Tirets |
+|---|---|---|
+| 02/10/2026 (`apres-3`) | 4 sur 9 | 6 |
+| 18/11/2026 (`apres-t266`, 3 étapes) | 0 sur 3 | 0 |
+| **23/11/2026 (`t279-t282`)** | **0 sur 9** | **0** |
+
+Zéro tournure proscrite et zéro texte hors barème au même passage. Ce qui
+reste de T266 — « la qualité du texte rendu » — ne se mesure plus au compte
+d'un caractère : il faut relire, ou faire relire (`--judge`).
+
 ### 20/11/2026 — Un prénom ne se devine pas
 
 Hugo, le 05/11 : « faire valider les noms propres, surtout ceux des amis,
