@@ -456,6 +456,7 @@ public enum Faq {
                 answer: [
                     "Les photos prises avec un téléphone récent conviennent.",
                     "Choisis toujours la version la plus grande que tu as : une photo récupérée d’une messagerie ou d’une capture d’écran est souvent trop compressée. Feuillette l’aperçu avant de commander pour vérifier qu’elle rend bien.",
+                    "Et si tu en envoies plus que la page n’en montre, ce sont les plus nettes qui sont gardées : une photo floue passe derrière les autres.",
                 ]
             ),
             FaqEntry(
