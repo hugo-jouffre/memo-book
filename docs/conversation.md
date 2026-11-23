@@ -575,6 +575,43 @@ se pose que sur un **nom propre**, jamais sur un que le carnet connaît déjà,
 jamais sur un que personne n'a prononcé, **un seul à la fois**, et jamais sur
 un souvenir déjà validé.
 
+### « On était où ? » (T267, 23/11/2026)
+
+Le carnet imprime le lieu en tête de chaque journée. Quand personne ne le
+sait, il n'imprime qu'une date — et c'est ce que Hugo a vu revenir du Japon
+(05/11/2026). Mesuré le 18/11 sur un vrai carnet : **15 journées sur 35** sans
+lieu, dont **7 rattrapées** en retombant sur celui de l'étape qui les porte
+(T227). Les 6 autres, personne ne peut les deviner : ni le récit, qui ne dit
+pas où, ni les photos, qui n'ont pas de position.
+
+La ville du voyage a été **écartée** comme repli : elle imprimerait « Tokyo »
+sur une journée passée à Kyoto, soit très exactement T280. Reste à demander :
+
+> Une chose m'a échappé : je ne sais pas où on était, pour cette étape. Tu me
+> dis la ville, ou l'endroit ? Sinon elle s'imprimera avec sa date seule.
+
+Elle **annonce ce qui se passe sinon** : une question sans enjeu se remet à
+plus tard. Elle ne porte **aucune puce** — un lieu ne se choisit pas dans une
+liste —, et la réponse revient comme une **précision** ordinaire (§ 4), qui
+relance la rédaction. Le récit nomme alors son lieu, et l'étape le prend.
+
+**Une fois par journée, jamais par étape.** Un jour sans lieu n'a rien qui
+tienne ses souvenirs ensemble : chacun ouvre son étape, et demander par étape
+reviendrait à demander à chaque souvenir. La journée, elle, ne bouge pas d'un
+recalcul à l'autre — et c'est elle que le carnet imprime en en-tête.
+
+⚠️ **Elle se pose à la place de la bulle « Voilà ton texte »**, comme le
+prénom et pour la même raison : cette bulle **valide** le souvenir, et un
+souvenir validé n'accepte plus de précision. Posée après elle, la question
+n'aurait eu nulle part où ranger la réponse. Le texte est gardé juste après,
+quand l'étape a un nom.
+
+⚠️ **Et les étapes se recalculent avant les questions** (`jobs/redact.ts`).
+Elles tournaient après les bulles depuis T227 — « une transaction verrouillée
+qui la retardait sans rien lui apporter ». Elles lui apportent désormais le
+lieu de l'étape, sans lequel on demanderait un lieu que le texte qu'on vient
+d'écrire est peut-être en train de donner.
+
 ### Plusieurs moments dans un seul vocal
 
 **Le problème** : quelqu'un qui rattrape trois jours les raconte d'un coup, et

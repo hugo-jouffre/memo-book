@@ -207,6 +207,29 @@ export function nameQuestionFor(name: string): string {
   );
 }
 
+/**
+ * **Où on était**, quand personne ne le sait (T267).
+ *
+ * Une étape sans lieu s'imprime avec sa date seule, et c'est ce que Hugo a vu
+ * revenir du Japon : des en-têtes muets. Sur un vrai carnet, 15 journées sur
+ * 35 n'avaient pas de lieu ; 7 ont été rattrapées en retombant sur celui de
+ * **l'étape** qui les porte (T227, 18/11/2026). Les 6 autres, personne ne peut
+ * les deviner — ni le récit, qui ne dit pas où, ni les photos, qui n'ont pas
+ * de position. C'est là, et seulement là, que MEMO demande.
+ *
+ * Elle **dit ce qu'il se passe sinon** : une question qui n'annonce pas son
+ * enjeu se remet à plus tard. Et elle ne porte **aucune puce** — la réponse
+ * est un nom de lieu, qu'aucun bouton ne peut écrire à la place du voyageur.
+ * Elle revient alors comme une précision ordinaire, et la rédaction repasse
+ * avec (`disposition: context`), exactement comme pour un prénom.
+ */
+export function placeQuestionFor(): string {
+  return (
+    "Une chose m’a échappé : je ne sais pas où on était, pour cette étape. " +
+    "Tu me dis la ville, ou l’endroit ? Sinon elle s’imprimera avec sa date seule."
+  );
+}
+
 /** « Découpe en deux étapes » : les étapes arrivent, chacune avec son texte. */
 export function splitAccepted(count: number): string {
   return `C’est fait : j’en ai fait ${count} étapes. Je te les écris, une par une.`;
