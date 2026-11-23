@@ -185,6 +185,30 @@ Zéro tournure proscrite et zéro texte hors barème au même passage. Ce qui
 reste de T266 — « la qualité du texte rendu » — ne se mesure plus au compte
 d'un caractère : il faut relire, ou faire relire (`--judge`).
 
+**Et le juge a relu** (`--compare apres-3 t279-t282 --judge`, 23/11/2026) :
+les mêmes neuf vocaux, le même modèle, deux consignes à sept semaines
+d'écart.
+
+| Critère | 02/10 | 23/11 |
+|---|---|---|
+| intention | 4,0 | 4,0 |
+| fluidité | 4,0 | 3,9 |
+| fidélité | 3,6 | 3,6 |
+| **voix** | 3,7 | **4,1** |
+| français | 4,4 | 4,1 |
+
+Pièges ratés : 7 → 6.
+
+**La voix a gagné, le français a reculé**, et c'est très exactement l'échange
+qu'on a fait en retirant le tiret cadratin et les tournures de livre composé :
+le texte sonne davantage comme quelqu'un qui raconte, un peu moins comme une
+page imprimée. C'est la direction voulue ; la question ouverte est de savoir
+si 4,1 en français est un prix acceptable, et elle est à Hugo.
+
+⚠️ **La fidélité est le point faible, et elle n'a pas bougé** depuis octobre
+(3,6, la plus basse des cinq). C'est là qu'il faut chercher ensuite — pas dans
+la ponctuation.
+
 ### 20/11/2026 — Un prénom ne se devine pas
 
 Hugo, le 05/11 : « faire valider les noms propres, surtout ceux des amis,
