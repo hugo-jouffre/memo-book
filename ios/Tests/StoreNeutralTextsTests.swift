@@ -80,6 +80,34 @@ final class StoreNeutralTextsTests: XCTestCase {
         XCTAssertTrue(recipients.contains { $0.contains("Google Play") && $0.contains("Android") })
     }
 
+    /// **Ce que l'app lit d'une photo, la politique le dit** (T203) : sa date
+    /// de prise de vue et le nom du lieu — jamais la position, qui ne quitte
+    /// pas le téléphone (T280). Et le même texte sur les deux stores : c'est
+    /// « le service de cartographie de votre téléphone », pas celui d'Apple.
+    func testThePolicyNamesWhatAPhotoCarries() throws {
+        let section = PrivacyPolicy.collectedData.blocks.flatMap(texts)
+
+        let collecte = try XCTUnwrap(section.first { $0.contains("Données collectées") && $0.contains("vos photos") })
+        XCTAssertTrue(collecte.contains("date de prise de vue"), collecte)
+        XCTAssertTrue(collecte.contains("nom de l’endroit"), collecte)
+
+        let comment = try XCTUnwrap(section.first { $0.contains("sur votre téléphone") })
+        XCTAssertTrue(comment.contains("jamais des coordonnées"), comment)
+        XCTAssertFalse(comment.contains("Apple") || comment.contains("Google"), comment)
+    }
+
+    /// La FAQ promet cinq ans ; la politique doit dire la même chose.
+    func testThePolicyAndTheFaqAgreeOnFiveYears() throws {
+        let conservation = try XCTUnwrap(
+            PrivacyPolicy.collectedData.blocks.flatMap(texts)
+                .first { $0.contains("Durée de conservation") && $0.contains("tant que le voyage existe") }
+        )
+        XCTAssertTrue(conservation.contains("au moins cinq ans"), conservation)
+
+        let faq = Faq.entry(id: "faq.donnees.conservation")?.answer() ?? []
+        XCTAssertTrue(faq.contains { $0.contains("5 ans") }, "\(faq)")
+    }
+
     /// Le sélecteur de photos est celui du téléphone, quel qu'il soit.
     func testThePhotoAnswerSpeaksOfThePhone() {
         let answer = Faq.entry(id: "faq.photos.provenance")?.answer() ?? []
