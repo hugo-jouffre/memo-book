@@ -118,7 +118,14 @@ export class LlmBeautyJudge implements BeautyJudge {
 
     const reponse = await this.client.chat.completions.create({
       model: this.model,
-      max_tokens: 60 * photos.length + 100,
+      // ⚠️ **`max_completion_tokens`, et pas `max_tokens`** (24/11/2026). Les
+      // modèles récents refusent le second d'un `400 Unsupported parameter`,
+      // et `services/stickerVision.ts` l'emploie encore parce que
+      // `gpt-4o-mini` l'accepte : le motif recopié de là était juste pour son
+      // modèle et faux pour celui-ci. Trouvé en production, sur la première
+      // composition réelle — le repli a tenu, le carnet est sorti classé sur
+      // la netteté, et le journal a nommé la cause.
+      max_completion_tokens: 60 * photos.length + 100,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM },

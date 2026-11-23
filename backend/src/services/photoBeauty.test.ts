@@ -1,6 +1,8 @@
+import type OpenAI from "openai";
 import { describe, expect, it } from "vitest";
-import { readScores } from "./photoBeauty.js";
+import { LlmBeautyJudge, readScores } from "./photoBeauty.js";
 import { photosLesPlusNettes, type PhotoQuality } from "./photoPicking.js";
+import { LlmRelevanceJudge } from "./photoRelevance.js";
 
 /**
  * **Ce que vaut une photo à regarder** (T265, 23/11/2026) : ce que le modèle
@@ -103,5 +105,66 @@ describe("la note du juge dans le choix", () => {
       { nom: "nette", sharpness: 180 },
     ];
     expect(choisir(photos, 1)[0]).toBe("nette");
+  });
+});
+
+/**
+ * **Ce que le juge envoie vraiment** — le test qui manquait le 23/11/2026.
+ *
+ * La première composition réelle a rendu zéro note : les modèles récents
+ * refusent `max_tokens` d'un `400 Unsupported parameter`, et le motif recopié
+ * de `stickerVision.ts` l'employait, parce que `gpt-4o-mini` l'accepte
+ * encore. Rien ne l'avait vu — les tests relisaient la réponse du modèle,
+ * jamais la requête.
+ *
+ * Un faux client suffit : on ne vérifie pas que le modèle répond, on vérifie
+ * ce qu'on lui demande.
+ */
+describe("la requête envoyée au modèle", () => {
+  function clientQuiNote(): { client: OpenAI; vus: Record<string, unknown>[] } {
+    const vus: Record<string, unknown>[] = [];
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: Record<string, unknown>) => {
+            vus.push(params);
+            return { choices: [{ message: { content: '{"photos":[]}' } }] };
+          },
+        },
+      },
+    } as unknown as OpenAI;
+    return { client, vus };
+  }
+
+  const photo = { id: "a", jpeg: Buffer.from([0xff, 0xd8, 0xff]) };
+
+  it("borne la réponse avec `max_completion_tokens`, jamais `max_tokens`", async () => {
+    const { client, vus } = clientQuiNote();
+    await new LlmBeautyJudge(client, "gpt-5.6-luna").score([photo]);
+
+    const params = vus[0] ?? {};
+    expect(params["max_completion_tokens"], "Le paramètre que les modèles récents acceptent.").toBeTypeOf(
+      "number",
+    );
+    expect(params["max_tokens"], "Celui qu'ils refusent d'un 400.").toBeUndefined();
+  });
+
+  it("le juge de la pertinence envoie la même chose", async () => {
+    const { client, vus } = clientQuiNote();
+    await new LlmRelevanceJudge(client, "gpt-5.6-luna").score("Une journée à Naxos.", [photo]);
+
+    const params = vus[0] ?? {};
+    expect(params["max_completion_tokens"]).toBeTypeOf("number");
+    expect(params["max_tokens"]).toBeUndefined();
+  });
+
+  /** La photo part réduite et en `detail: "low"` : c'est ce qui tient le prix. */
+  it("montre la photo en basse définition", async () => {
+    const { client, vus } = clientQuiNote();
+    await new LlmBeautyJudge(client, "gpt-5.6-luna").score([photo]);
+
+    const messages = (vus[0]?.["messages"] ?? []) as { role: string; content: unknown }[];
+    const contenu = JSON.stringify(messages.find((message) => message.role === "user")?.content ?? "");
+    expect(contenu).toContain('"detail":"low"');
   });
 });

@@ -80,7 +80,9 @@ export class LlmRelevanceJudge implements RelevanceJudge {
 
     const reponse = await this.client.chat.completions.create({
       model: this.model,
-      max_tokens: 60 * photos.length + 100,
+      // `max_completion_tokens` — voir ``LlmBeautyJudge``, même modèle, même
+      // refus de `max_tokens`.
+      max_completion_tokens: 60 * photos.length + 100,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM },
