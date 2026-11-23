@@ -134,6 +134,11 @@ class ScriptedRedactor extends FakeRedactor {
   doubts: string[] = [];
   /** Les noms propres dont l'écrivain doute, sur commande (T282). */
   namesToConfirm: string[] = [];
+  /**
+   * Le lieu que le **récit** nomme, sur commande (T267). `null` : le vocal ne
+   * dit pas où on est — le cas de 15 journées sur 35 d'un vrai carnet.
+   */
+  place: string | null = null;
   inputs: RedactionInput[] = [];
   /**
    * **La panne de l'écrivain, sur commande.** Le crédit Anthropic épuisé
@@ -145,10 +150,14 @@ class ScriptedRedactor extends FakeRedactor {
   override async redact(input: RedactionInput): Promise<RedactionResult> {
     this.inputs.push(input);
     if (this.fails) throw new Error(this.fails);
+    const base = await super.redact(input);
     return {
-      ...(await super.redact(input)),
+      ...base,
       doubts: this.doubts,
       namesToConfirm: this.namesToConfirm,
+      insights: this.place
+        ? { ...base.insights, currentPlace: this.place, cities: [this.place] }
+        : base.insights,
     };
   }
 }
@@ -179,6 +188,11 @@ beforeEach(async () => {
   responder.inputs = [];
   redactor.doubts = [];
   redactor.namesToConfirm = [];
+  // **Le cas courant : le récit dit où on est.** Un vocal de voyage nomme
+  // presque toujours sa ville, et l'écrivain la relève (`insights`). Les
+  // tests qui veulent une journée muette — celle qui fait demander le lieu
+  // (T267) — posent `place = null` eux-mêmes.
+  redactor.place = "Rome";
   redactor.inputs = [];
   redactor.fails = null;
 });
@@ -2281,5 +2295,84 @@ describe("faire valider un nom propre", () => {
     // Le faux rédacteur recopie les précisions dans le texte : c'est ainsi
     // qu'on voit qu'elle a bien atteint la rédaction.
     expect(entry.redactedText ?? "").toContain("Côme");
+  });
+});
+
+/**
+ * **« On était où ? »** (T267, Hugo, 05/11/2026 — « des en-têtes sans lieu »).
+ *
+ * Mesuré le 18/11 sur un vrai carnet : 15 journées sur 35 sans lieu, dont 7
+ * rattrapées en retombant sur celui de l'étape (T227). Les 6 autres, personne
+ * ne peut les deviner — et c'est là que MEMO doit demander, au lieu
+ * d'imprimer une date seule.
+ */
+describe("demander où on était", () => {
+  const textOf = (thread: ChatThreadJson) =>
+    memoBubbles(thread).map((message) => (message.body.kind === "text" ? message.body.text : ""));
+  const laQuestion = (bulles: string[]) => bulles.find((text) => text.includes("je ne sais pas où on était"));
+
+  it("demande le lieu quand ni le récit ni les photos ne le disent", async () => {
+    const memo = await seedTrip(owner.accountId);
+    redactor.place = null;
+
+    await say(memo.id, "On s’est levés tard, on a traîné au marché et on a mangé des beignets.");
+
+    const bulles = textOf(await readThread(memo.id));
+    const question = laQuestion(bulles);
+    expect(question, `Aucune question sur le lieu : ${bulles.join(" | ")}`).toBeTruthy();
+    expect(question).toContain("Tu me dis la ville");
+    // Elle dit ce qui se passe sinon : une question sans enjeu se remet à
+    // plus tard.
+    expect(question).toContain("sa date seule");
+    // Et la bulle « Voilà ton texte » ne se pose pas : elle **valide** le
+    // souvenir, et un souvenir validé n'accepte plus de précision — la réponse
+    // n'aurait alors nulle part où aller. Elle vient après, quand l'étape a un
+    // nom. C'est la règle du prénom (T282), pour la même raison.
+    expect(bulles).not.toContain(redactionKept());
+  });
+
+  it("ne demande rien quand le récit dit où on était", async () => {
+    const memo = await seedTrip(owner.accountId);
+    redactor.place = "Kanazawa";
+
+    await say(memo.id, "Journée à flâner dans les ruelles, c’était magnifique.");
+
+    const bulles = textOf(await readThread(memo.id));
+    expect(laQuestion(bulles), `Question de trop : ${bulles.join(" | ")}`).toBeUndefined();
+    const step = await harness.prisma.memoStep.findFirstOrThrow({ where: { memoId: memo.id } });
+    expect(step.placeName).toBe("Kanazawa");
+  });
+
+  it("ne la pose qu’une fois, même si l’étape reçoit d’autres souvenirs", async () => {
+    const memo = await seedTrip(owner.accountId);
+    redactor.place = null;
+
+    await say(memo.id, "On s’est levés tard et on a traîné au marché.");
+    await say(memo.id, "Et le soir on a mangé des beignets, encore.");
+
+    const bulles = textOf(await readThread(memo.id));
+    const posees = bulles.filter((text) => text.includes("je ne sais pas où on était"));
+    expect(posees.length, `Posée ${posees.length} fois : ${bulles.join(" | ")}`).toBe(1);
+  });
+
+  it("la réponse du voyageur nomme l’étape, comme une précision", async () => {
+    const memo = await seedTrip(owner.accountId);
+    redactor.place = null;
+    await say(memo.id, "On s’est levés tard et on a traîné au marché.");
+    expect(laQuestion(textOf(await readThread(memo.id)))).toBeTruthy();
+
+    // Le voyageur répond : la rédaction repasse, et cette fois le récit sait
+    // où il se passe.
+    redactor.place = "Kanazawa";
+    await say(memo.id, "On était à Kanazawa.");
+
+    const steps = await harness.prisma.memoStep.findMany({ where: { memoId: memo.id } });
+    expect(
+      steps.some((step) => step.placeName === "Kanazawa"),
+      `Aucune étape nommée : ${JSON.stringify(steps.map((step) => step.placeName))}`,
+    ).toBe(true);
+    // Et le souvenir est gardé, maintenant que l'étape a un nom.
+    const bulles = textOf(await readThread(memo.id));
+    expect(bulles).toContain(redactionKept());
   });
 });

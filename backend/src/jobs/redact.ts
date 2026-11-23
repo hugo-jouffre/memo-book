@@ -12,6 +12,7 @@ import {
 
 import { describeTripContext, parseTripContext } from "../services/tripContext.js";
 import {
+  askForPlace,
   askToConfirmName,
   askToSplit,
   confirmRedaction,
@@ -332,24 +333,35 @@ export async function redactEntry(
     // photos (`confirmRedaction`, 03/11/2026) : c'est la bulle que le
     // voyageur attend, sans la question qu'il devait cocher.
     //
-    // Les étapes et les chiffres du voyage (T227) se recalculent ensuite —
-    // une transaction verrouillée qui la retardait sans rien lui apporter ;
-    // la fiche de l'étape se met à jour au tour de relecture suivant de
-    // l'app.
+    // ⚠️ **Les étapes se recalculent d'abord** (T267, 23/11/2026). Elles
+    // tournaient après les bulles depuis T227 — « une transaction verrouillée
+    // qui la retardait sans rien lui apporter ». Elles lui apportent désormais
+    // quelque chose : le **lieu de l'étape**, que la question du lieu doit
+    // connaître pour savoir s'il faut la poser. Avant le recalcul, un souvenir
+    // tout neuf n'a pas encore d'étape, et l'on demanderait un lieu que le
+    // texte qu'on vient d'écrire est peut-être en train de donner.
+    await refreshTripFactsQuietly(context, entry.memoId);
     if (!rewrite) {
       // Le découpage d'abord : s'il a lieu, les textes changent entièrement,
       // et l'orthographe d'un prénom se redemandera sur la part qui le porte.
       const split = await askToSplit(prisma, entryId, result.moments);
-      // Puis le nom propre dont l'écrivain doute (T282) — la seule question
-      // qui reste. Les doutes ordinaires, eux, ne passent plus dans la bulle
-      // (Hugo, 16/11/2026) : ils restent dans `doubts`, qui dit pourquoi un
-      // passage n'est pas dans le texte, et se lisent dans « Mot pour mot ».
-      // Un prénom est à part : ce n'est pas un passage écarté, c'est un mot
-      // imprimé soixante fois, et faux.
-      const asked = split || (await askToConfirmName(prisma, entryId, result.namesToConfirm));
+      // Puis le nom propre dont l'écrivain doute (T282). Les doutes
+      // ordinaires, eux, ne passent plus dans la bulle (Hugo, 16/11/2026) :
+      // ils restent dans `doubts`, qui dit pourquoi un passage n'est pas dans
+      // le texte, et se lisent dans « Mot pour mot ». Un prénom est à part :
+      // ce n'est pas un passage écarté, c'est un mot imprimé soixante fois,
+      // et faux.
+      //
+      // Puis le lieu, quand personne ne peut nommer la journée (T267). Il
+      // vient **dans la chaîne**, et non après la bulle qui garde le texte :
+      // elle valide le souvenir, et un souvenir validé n'accepte plus de
+      // précision — la réponse du voyageur n'atteindrait alors rien.
+      const asked =
+        split ||
+        (await askToConfirmName(prisma, entryId, result.namesToConfirm)) ||
+        (await askForPlace(prisma, entryId));
       if (!asked) await confirmRedaction(prisma, entryId);
     }
-    await refreshTripFactsQuietly(context, entry.memoId);
     // **Après** le recalcul des étapes, et hors de sa transaction (T263) :
     // c'est lui qui vient de leur donner leur lieu et leurs dates, et un
     // appel réseau de huit secondes ferait expirer sa transaction de vingt.

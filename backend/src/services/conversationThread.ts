@@ -19,9 +19,11 @@ import {
   photosWanted,
   redactionKept,
   nameQuestionFor,
+  placeQuestionFor,
   splitQuestionFor,
   validationQuestion,
 } from "./conversationCopy.js";
+import { localDate } from "./localCalendar.js";
 import { forTargetOf, photoRequestFor } from "./photoRequest.js";
 import type { RedactedNeighbour } from "./redaction.js";
 import { contextVoiceOf } from "./tripContext.js";
@@ -505,6 +507,91 @@ export async function askToConfirmName(
       stepId: card.stepId,
       pauseMilliseconds: pauseBeforeSaying(question),
       model: "scripted",
+    },
+  });
+  return true;
+}
+
+/**
+ * **« On était où ? »** (T267, 23/11/2026).
+ *
+ * Posée quand l'étape de ce souvenir n'a **aucun lieu** : ni son récit, ni
+ * ceux qui l'accompagnent, ni la position d'une de ses photos. Le carnet
+ * imprimerait alors un en-tête avec sa date seule — ce que Hugo a vu revenir
+ * du Japon.
+ *
+ * ⚠️ **Elle suppose les étapes à jour** : c'est le recalcul des faits qui
+ * vient de ranger ce souvenir dans une étape et de lui donner son lieu
+ * (`services/tripFacts.ts`), et `jobs/redact.ts` l'appelle désormais avant
+ * ses questions pour cette seule raison. Demandée avant lui, elle demanderait
+ * un lieu que le texte qu'on vient d'écrire est peut-être en train de donner.
+ *
+ * **Elle est un barreau de la chaîne**, posée à la place de la bulle qui garde
+ * le texte — comme le découpage et le prénom. Ce n'est pas un détail d'ordre :
+ * cette bulle **valide** le souvenir, et un souvenir validé n'accepte plus de
+ * précision. Posée après elle, la question n'aurait eu nulle part où ranger la
+ * réponse.
+ *
+ * **Une fois par étape, et jamais deux** (`payload.asksPlaceFor`) : une étape
+ * muette reçoit dix souvenirs, elle ne reçoit pas dix questions. Si le
+ * voyageur ne répond pas, le carnet s'imprime avec sa date — c'est ce que la
+ * question annonce, et c'est une réponse comme une autre.
+ *
+ * - Returns: `true` quand la question a été posée.
+ */
+export async function askForPlace(db: Db, entryId: string): Promise<boolean> {
+  const entry = await db.entry.findUnique({
+    where: { id: entryId },
+    select: { memoId: true, stepId: true, capturedAt: true },
+  });
+  // Sans étape, il n'y a pas encore d'en-tête à nommer : le prochain passage
+  // des faits en ouvrira une, et c'est lui qui demandera s'il le faut.
+  if (!entry?.stepId) return false;
+
+  const step = await db.memoStep.findUnique({
+    where: { id: entry.stepId },
+    select: { placeName: true },
+  });
+  if (!step || (step.placeName ?? "").trim() !== "") return false;
+
+  // **Une question par journée, et non par étape.** Un jour sans lieu n'a rien
+  // qui tienne ses souvenirs ensemble : sans lieu commun et sans continuité,
+  // chacun ouvre son étape (`groupIntoSteps`), et demander par étape
+  // reviendrait à demander à chaque souvenir. La journée, elle, ne bouge pas
+  // d'un recalcul à l'autre — et c'est elle que le carnet imprime en en-tête,
+  // c'est elle que le ticket compte.
+  const jour = localDate(entry.capturedAt);
+  const dejaDemande = await db.chatMessage.findFirst({
+    where: {
+      memoId: entry.memoId,
+      author: "memo",
+      kind: "text",
+      payload: { path: ["asksPlaceFor"], equals: jour },
+    },
+    select: { id: true },
+  });
+  if (dejaDemande) return false;
+
+
+  const card = await db.chatMessage.findFirst({
+    where: { entryId, author: "memo", kind: "transcript" },
+    orderBy: { seq: "desc" },
+    select: { memoId: true, replyToId: true },
+  });
+  if (!card) return false;
+
+  const question = placeQuestionFor();
+  await db.chatMessage.create({
+    data: {
+      memoId: card.memoId,
+      author: "memo",
+      kind: "text",
+      text: question,
+      replyToId: card.replyToId,
+      stepId: entry.stepId,
+      pauseMilliseconds: pauseBeforeSaying(question),
+      model: "scripted",
+      payload: { asksPlaceFor: jour },
     },
   });
   return true;
