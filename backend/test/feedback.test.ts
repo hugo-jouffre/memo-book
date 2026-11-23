@@ -92,15 +92,21 @@ describe("la modale d'avis", () => {
   });
 
   /**
-   * ⚠️ Tant que `audience` n'est pas évalué, une campagne qui en porte un ne
-   * se sert à personne : servie à tout le monde, elle manquerait sa cible
-   * **sans le dire**.
+   * ⚠️ Une audience **illisible** ne se sert à personne : servie à tout le
+   * monde, elle manquerait sa cible **sans le dire**.
    */
-  it("ne sert pas une campagne qui vise une audience", async () => {
+  it("ne sert pas une campagne dont l'audience est illisible", async () => {
     const me = await registerAccount(harness.app);
-    await seedCampaign({ audience: { hasOrdered: true } });
+    await seedCampaign({ audience: { aDejaVoyageEnGrece: true } });
 
     expect((await read(me.authorization)).campaign).toBeNull();
+  });
+
+  it("sert une campagne dont l'audience est vide", async () => {
+    const me = await registerAccount(harness.app);
+    await seedCampaign({ audience: {} });
+
+    expect((await read(me.authorization)).campaign).not.toBeNull();
   });
 
   it("ne la montre pas plus que `maxDisplays`", async () => {
@@ -122,6 +128,94 @@ describe("la modale d'avis", () => {
     expect((await read(moi.authorization)).campaign).not.toBeNull();
     expect((await read(moi.authorization)).campaign).toBeNull();
     expect((await read(autre.authorization)).campaign).not.toBeNull();
+  });
+});
+
+/**
+ * **À qui elle s'adresse** (T273, reste du 23/11/2026).
+ *
+ * Les quatre critères se cumulent, et ce qui se teste ici est ce qui coûte
+ * cher à se tromper : une campagne servie à côté de sa cible rend un avis
+ * qu'on croira représentatif.
+ */
+describe("l'audience d'une campagne", () => {
+  it("attend que le compte ait l'âge demandé", async () => {
+    const me = await registerAccount(harness.app);
+    await seedCampaign({ audience: { registeredForDays: 7 } });
+
+    expect((await read(me.authorization)).campaign, "Un compte du jour n'a pas 7 jours.").toBeNull();
+
+    await harness.prisma.account.update({
+      where: { id: me.accountId },
+      data: { createdAt: new Date(Date.now() - 8 * 86_400_000) },
+    });
+    expect((await read(me.authorization)).campaign).not.toBeNull();
+  });
+
+  it("distingue celui qui a commandé de celui qui a un brouillon", async () => {
+    const me = await registerAccount(harness.app);
+    await seedCampaign({ audience: { hasOrdered: true } });
+    const memo = await harness.prisma.memo.create({
+      data: { ownerAccountId: me.accountId, title: "Rome 2026", accessCode: "AUD001" },
+    });
+    const render = await harness.prisma.render.create({ data: { memoId: memo.id, status: "ready" } });
+
+    // Un panier abandonné n'est pas une commande.
+    await harness.prisma.printOrder.create({
+      data: {
+        memoId: memo.id,
+        renderId: render.id,
+        orderedByAccountId: me.accountId,
+        status: "draft",
+        shippingName: "Hugo Jouffre",
+        shippingLine1: "12 rue du Carnet",
+        shippingPostalCode: "75011",
+        shippingCity: "Paris",
+        shippingCountry: "FR",
+      },
+    });
+    expect((await read(me.authorization)).campaign, "Un brouillon ne compte pas.").toBeNull();
+
+    await harness.prisma.printOrder.updateMany({
+      where: { memoId: memo.id },
+      data: { status: "shipped" },
+    });
+    expect((await read(me.authorization)).campaign).not.toBeNull();
+  });
+
+  it("compte les souvenirs racontés, pas les photos", async () => {
+    const me = await registerAccount(harness.app);
+    await seedCampaign({ audience: { minMemories: 2 } });
+    const memo = await harness.prisma.memo.create({
+      data: { ownerAccountId: me.accountId, title: "Rome 2026", accessCode: "AUD002" },
+    });
+    await harness.prisma.entry.createMany({
+      data: [
+        { memoId: memo.id, kind: "text", capturedAt: new Date() },
+        { memoId: memo.id, kind: "photo", capturedAt: new Date() },
+      ],
+    });
+    expect((await read(me.authorization)).campaign, "Une photo n'est pas un récit.").toBeNull();
+
+    await harness.prisma.entry.create({ data: { memoId: memo.id, kind: "text", capturedAt: new Date() } });
+    expect((await read(me.authorization)).campaign).not.toBeNull();
+  });
+
+  it("cumule les critères : il faut les remplir tous", async () => {
+    const me = await registerAccount(harness.app);
+    await seedCampaign({ audience: { registeredForDays: 7, minMemories: 1 } });
+    await harness.prisma.account.update({
+      where: { id: me.accountId },
+      data: { createdAt: new Date(Date.now() - 8 * 86_400_000) },
+    });
+
+    expect((await read(me.authorization)).campaign, "L'âge y est, pas les souvenirs.").toBeNull();
+
+    const memo = await harness.prisma.memo.create({
+      data: { ownerAccountId: me.accountId, title: "Rome 2026", accessCode: "AUD003" },
+    });
+    await harness.prisma.entry.create({ data: { memoId: memo.id, kind: "text", capturedAt: new Date() } });
+    expect((await read(me.authorization)).campaign).not.toBeNull();
   });
 });
 

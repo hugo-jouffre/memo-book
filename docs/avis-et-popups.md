@@ -42,29 +42,70 @@ cette personne ne l'a pas vue plus de `maxDisplays` fois. Une campagne
 **répondue ou fermée** ne revient jamais — répondre, c'est en avoir fini avec
 elle. L'app ne la demande qu'**une fois par lancement**, sur l'accueil.
 
-⚠️ **`audience` n'est pas encore évalué.** La colonne existe (« a déjà
-commandé », « inscrit depuis 7 jours ») mais sa structure est libre le temps
-que les critères se stabilisent. Tant que rien ne la lit, le serveur **refuse**
-de servir une campagne qui en porte une : mieux vaut une modale qui ne paraît
-pas qu'une modale servie à côté de sa cible, sans que personne ne le voie.
+**`audience` se lit depuis le 23/11/2026** (`services/feedbackAudience.ts`).
+Quatre critères, qui **se cumulent** — une campagne qui en porte deux ne paraît
+qu'à ceux qui remplissent les deux :
+
+| Critère | Ce qu'il vaut |
+|---|---|
+| `registeredForDays` | Le compte existe depuis au moins tant de jours |
+| `hasOrdered` | Il a déjà commandé un carnet imprimé — un brouillon ne compte pas |
+| `isSubscriber` | Il raconte sans limite, aujourd'hui |
+| `minMemories` | Il a déjà raconté au moins tant de souvenirs — photos exclues |
+
+```sql
+UPDATE feedback_campaigns
+SET audience = '{"registeredForDays": 7, "hasOrdered": true}'::jsonb
+WHERE key = 'avis-v1';
+```
+
+Une audience **vide** (`{}`) ou absente s'adresse à tout le monde : c'est le
+même sens, écrit autrement.
+
+⚠️ **Un critère inconnu ferme la campagne**, comme avant qu'on lise la colonne :
+une audience qu'on ne sait pas lire ne vaut pas une audience vide, et le
+serveur le dit dans ses journaux (« audience illisible », avec la clé de la
+campagne). C'est ce qui permet d'en inventer un en base sans risquer qu'il soit
+ignoré en silence — mieux vaut une modale qui ne paraît pas qu'une modale
+servie à côté de sa cible.
 
 ## 4. Les formes de question
 
-| Forme | Dessinée ? | Ce qu'elle demande en `config` |
-|---|---|---|
-| `text` | **Oui** | Rien — `placeholder` suffit |
-| `choice` | **Oui** | `{ "options": [{ "key": "…", "label": "…", "hint": "…" }] }` |
-| `slider` | Pas encore | `{ "min": 0, "max": 4, "step": 1, … }` |
-| `rating` | Pas encore | `{ "max": 5 }` |
+| Forme | Ce qu'elle demande en `config` |
+|---|---|
+| `text` | Rien — `placeholder` suffit |
+| `choice` | `{ "options": [{ "key": "…", "label": "…", "hint": "…" }] }` |
+| `slider` | `{ "min": 0, "max": 4, "step": 1, "ticks": […], "minLabel": "…", "maxLabel": "…" }` |
+| `rating` | `{ "max": 5 }` |
 
-Le curseur et les étoiles attendent leur dessin : la marque n'a pas de curseur,
-et `BrandGauge` se lit sans se régler.
+**Les quatre se dessinent** depuis le 23/11/2026. Le curseur est celui du
+ratio photo/texte (`BrandSlider`) : même rail, même poignée, mêmes crans
+écrits dessous, même réglage au balayage pour VoiceOver. La note est une
+rangée d'étoiles de la marque, pleines jusqu'à la note, au trait ensuite.
+
+Deux choses à savoir en écrivant une campagne :
+
+- **Des crans courts.** Le cran du moment s'écrit en gras, donc plus large, et
+  le curseur le tronque au-delà d'environ six caractères : « Souvent » devient
+  « Souv… ». C'est une contrainte d'écriture, pas de dessin — le même curseur
+  sert le ratio, dont les crans sont des pourcentages.
+- **Une note part de 1.** Zéro étoile serait une absence de réponse, pas un
+  avis ; `min` est donc ignoré pour un `rating`.
+
+⚠️ **Rien ne part avec une valeur par défaut.** Le curseur se pose au milieu
+pour qu'on voie l'échelle, mais **pâli** tant que le doigt n'a rien bougé, et
+le modèle ne retient rien : une note de 3 sur 5 que personne n'a touchée serait
+un avis inventé. Sur une question obligatoire, c'est aussi ce qui tient le
+bouton d'envoi fermé.
 
 ⚠️ **Une campagne qu'on ne sait pas dessiner entière ne se montre pas du tout**
-(`FeedbackCampaign.isDrawable`). Une modale à trous rendrait un avis qui ne
+(`FeedbackQuestion.isDrawable`). Une modale à trous rendrait un avis qui ne
 répond pas à ce qu'on a demandé — et la question sautée serait peut-être celle
-qui comptait. Elle paraîtra d'elle-même quand l'app saura la dessiner, sans
-qu'on touche à la base.
+qui comptait. Trois cas : une forme que cette version ne connaît pas, une liste
+**sans option**, et une échelle impossible — bornes à l'envers, pas qui ne
+tombe pas juste sur la borne haute, plus de onze crans, ou des étiquettes en
+nombre différent des crans. Elle paraîtra d'elle-même quand l'app saura la
+dessiner, sans qu'on touche à la base.
 
 ## 5. Poser une campagne
 
@@ -122,7 +163,9 @@ des endroits différents et ne se remplacent pas.
 
 ## 7. Ce qui n'est toujours pas fait
 
-- Le **curseur** et les **étoiles** (§ 4).
-- Le filtre d'**audience** (§ 3).
+- Un **bouton** sous une bulle de MEMO : le catalogue des puces est fermé côté
+  app (§ 2), donc en poser une neuve demande encore une livraison.
 - Une **note sur l'App Store** : écartée par Hugo pour le moment, et ce n'est
   pas un oubli — on demande un avis, pas une étoile.
+
+Le curseur, les étoiles et le filtre d'audience sont faits le 23/11/2026.

@@ -2,6 +2,7 @@ import type { FeedbackCampaign, FeedbackQuestion } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
+import { matchesAudience, parseAudience } from "../services/feedbackAudience.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 
@@ -60,13 +61,11 @@ type CampaignWithQuestions = FeedbackCampaign & { questions: FeedbackQuestion[] 
  * campagne déjà **envoyée ou fermée** ne revient jamais, quel que soit le
  * compteur : répondre, c'est en avoir fini avec elle.
  *
- * ⚠️ `audience` n'est **pas** encore évalué : la colonne existe (« a déjà
- * commandé », « inscrit depuis 7 jours »), mais sa structure est libre le
- * temps que les critères se stabilisent, et une campagne qui citerait un
- * critère inconnu serait servie à tout le monde sans le dire. Tant que rien
- * ne le lit, le serveur **refuse** de servir une campagne qui en porte un :
- * mieux vaut une modale qui ne paraît pas qu'une modale servie à côté de sa
- * cible.
+ * `audience` se lit depuis le 23/11/2026 (`services/feedbackAudience.ts`) :
+ * quatre critères, qui se cumulent. Un critère **inconnu** ferme encore la
+ * campagne, et c'est la même prudence qu'avant — mieux vaut une modale qui ne
+ * paraît pas qu'une modale servie à côté de sa cible, sans que personne ne le
+ * voie.
  */
 async function campaignFor(
   context: AppContext,
@@ -85,7 +84,19 @@ async function campaignFor(
 
   for (const campaign of open) {
     if (campaign.questions.length === 0) continue;
-    if (campaign.audience !== null) continue;
+
+    const audience = parseAudience(campaign.audience);
+    if (audience === null) {
+      // Une audience illisible — un critère qu'on ne connaît pas, une faute
+      // de frappe — ne vaut pas une audience vide : la campagne attend la
+      // version qui la comprend, et le journal dit laquelle.
+      context.logger.warn(
+        { campaign: campaign.key },
+        "Campagne d'avis écartée : audience illisible",
+      );
+      continue;
+    }
+    if (!(await matchesAudience(context, audience, accountId, now))) continue;
 
     const seen = await context.prisma.feedbackResponse.findUnique({
       where: { campaignId_accountId: { campaignId: campaign.id, accountId } },
