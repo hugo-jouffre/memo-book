@@ -56,6 +56,24 @@ export const coverPhotoOrder: Prisma.EntryOrderByWithRelationInput[] = [
 ];
 
 /**
+ * **L'image qu'on peut montrer à quelqu'un qui n'a pas de compte** : une
+ * adresse `https` déjà publiée, et rien d'autre.
+ *
+ * La règle vient de la page d'un carnet partagé (`routes/sharePage.ts`, Hugo
+ * 06/10/2026) : un lecteur sans compte voit la couverture et les photos
+ * d'étape **publiées au CDN**, jamais une photo servie par notre seau — d'où
+ * l'exclusion de `tripPhotoUrl`, qui fabrique une adresse sur notre API.
+ *
+ * Elle vit ici, à côté de ``displayablePhotoUrl``, parce que les deux répondent
+ * à la même question pour deux lecteurs différents : celui qui est entré, et
+ * celui qui passe. La galerie de la communauté lit la seconde — ses cartes
+ * s'affichent sans compte (T43).
+ */
+export function publiclyServableImageUrl(url: string | null | undefined): string | null {
+  return url && /^https:\/\//.test(url) ? url : null;
+}
+
+/**
  * À inclure dans la requête d'un voyage pour que `serializeTrip` et
  * `serializeChatThread` aient la photo élue sous la main — voir
  * ``coverPhotoOrder``. Une seule photo remonte : celle qui gagne.

@@ -114,7 +114,10 @@ struct GalleryTripCard: View {
             if let image = phase.image {
                 image.resizable().scaledToFill()
             } else {
-                // Aucune photo n'est encore remontée du serveur : l'aplat de
+                // Le carnet n'a pas de photo montrable : ni couverture composée
+                // dans l'atelier, ni photo d'étape publiée au CDN — la galerie
+                // se regarde sans compte, et elle ne sert donc jamais une photo
+                // de notre seau (T43, `publiclyServableImageUrl`). L'aplat de
                 // marque des couvertures fait l'affaire, et donne à la grille
                 // ses couleurs.
                 TripCoverPlaceholder(seed: trip.id)
