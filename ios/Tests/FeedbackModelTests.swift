@@ -190,3 +190,85 @@ final class FeedbackModelTests: XCTestCase {
         XCTFail("Jamais atteint : \(what)", file: file, line: line)
     }
 }
+
+/// **Le curseur et les étoiles** (T273, reste du 23/11/2026).
+///
+/// Les deux formes manquaient, et une campagne qui les employait ne se
+/// montrait pas du tout. Ce qui se teste ici est ce que l'app comprend de ce
+/// que la base écrit — et ce qu'elle refuse de dessiner.
+@MainActor
+final class FeedbackScaleTests: XCTestCase {
+    private func question(_ json: String) throws -> FeedbackQuestion {
+        try JSONDecoder().decode(FeedbackQuestion.self, from: Data(json.utf8))
+    }
+
+    func testUneNoteNeLitQueSonMaximum() throws {
+        let note = try question(#"{"id":"q","kind":"rating","config":{"max":5}}"#)
+        XCTAssertEqual(note.scale?.min, 1, "Une note part de 1 : zéro étoile serait une absence de réponse.")
+        XCTAssertEqual(note.scale?.max, 5)
+        XCTAssertEqual(note.scale?.steps, [1, 2, 3, 4, 5])
+        XCTAssertTrue(note.isDrawable)
+    }
+
+    func testUnCurseurLitSesBornesEtSesCrans() throws {
+        let curseur = try question(
+            #"{"id":"q","kind":"slider","config":{"min":0,"max":4,"step":1,"ticks":["Jamais","Peu","Bien","Assez","Trop"],"minLabel":"Pas assez"}}"#
+        )
+        XCTAssertEqual(curseur.scale?.steps, [0, 1, 2, 3, 4])
+        XCTAssertEqual(curseur.scale?.ticks.count, 5)
+        XCTAssertEqual(curseur.scale?.minLabel, "Pas assez")
+        XCTAssertTrue(curseur.isDrawable)
+    }
+
+    /// Une échelle impossible ne se dessine pas de travers : elle ferme la
+    /// campagne entière, le temps d'un `UPDATE`.
+    func testUneEchelleImpossibleNeSeDessinePas() throws {
+        let bornesInversees = try question(#"{"id":"q","kind":"slider","config":{"min":5,"max":1}}"#)
+        XCTAssertFalse(bornesInversees.isDrawable)
+
+        let pasQuiNeTombePasJuste = try question(#"{"id":"q","kind":"slider","config":{"min":0,"max":5,"step":2}}"#)
+        XCTAssertFalse(pasQuiNeTombePasJuste.isDrawable, "Le dernier cran tomberait entre deux étiquettes.")
+
+        let tropDeCrans = try question(#"{"id":"q","kind":"slider","config":{"min":0,"max":50,"step":1}}"#)
+        XCTAssertFalse(tropDeCrans.isDrawable, "Cinquante et un crans ne se touchent pas du pouce.")
+
+        let etiquettesEnMoins = try question(
+            #"{"id":"q","kind":"slider","config":{"min":0,"max":2,"step":1,"ticks":["Peu","Trop"]}}"#
+        )
+        XCTAssertFalse(etiquettesEnMoins.isDrawable, "Trois crans, deux étiquettes : on ne sait pas laquelle manque.")
+
+        let sansBornes = try question(#"{"id":"q","kind":"slider"}"#)
+        XCTAssertFalse(sansBornes.isDrawable)
+    }
+
+    /// Le trou que le ticket laissait : une liste **sans option** se dessinait
+    /// comme un cadre vide, parce que seule la forme était regardée.
+    func testUneListeSansOptionNeSeDessinePas() throws {
+        let vide = try question(#"{"id":"q","kind":"choice","config":{"options":[]}}"#)
+        XCTAssertFalse(vide.isDrawable)
+
+        let campagne = FeedbackCampaign(id: "c", key: "k", title: "T", questions: [vide])
+        XCTAssertFalse(campagne.isDrawable, "Une seule question indessinable ferme la campagne.")
+    }
+
+    /// Ce que le modèle retient d'un curseur — et ce qu'il ne retient pas.
+    func testUnCurseurNonTouchéNeRépondPas() async throws {
+        let curseur = try question(#"{"id":"rythme","kind":"slider","isRequired":true,"config":{"min":0,"max":4}}"#)
+        let campagne = FeedbackCampaign(id: "c", key: "k", title: "T", questions: [curseur])
+        let model = FeedbackModel(load: { campagne }, submit: { _, _ in })
+        await model.askOnce()
+
+        XCTAssertNil(model.number(for: curseur), "Rien tant que le doigt n'a rien bougé.")
+        XCTAssertFalse(model.canSubmit, "Une question obligatoire sans réponse ferme l'envoi.")
+
+        model.answer(curseur, number: 3)
+        XCTAssertEqual(model.number(for: curseur), 3)
+        XCTAssertTrue(model.canSubmit)
+    }
+
+    func testCeQueVoiceOverDitDUneNote() {
+        XCTAssertEqual(FeedbackCopy.ratingValue(nil, max: 5), "Pas encore noté")
+        XCTAssertEqual(FeedbackCopy.ratingValue(1, max: 5), "1 étoile sur 5")
+        XCTAssertEqual(FeedbackCopy.ratingValue(4, max: 5), "4 étoiles sur 5")
+    }
+}

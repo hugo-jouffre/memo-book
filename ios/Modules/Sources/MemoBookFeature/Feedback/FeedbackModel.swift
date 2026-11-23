@@ -69,6 +69,21 @@ public final class FeedbackModel {
         answers[question.id]?.choiceKey
     }
 
+    /// Un curseur ou une note : la valeur retenue part dans `number`.
+    public func answer(_ question: FeedbackQuestion, number: Int) {
+        answers[question.id] = FeedbackAnswer(questionId: question.id, number: Double(number))
+    }
+
+    /// Ce qui a été réglé, ou `nil` — **et `nil` veut dire « pas répondu »**.
+    ///
+    /// C'est pour ça qu'un curseur ne part pas avec une valeur par défaut :
+    /// une note de 3 sur 5 que personne n'a touchée serait un avis inventé.
+    /// La vue montre une position de départ, le modèle n'en retient aucune
+    /// tant que le doigt n'a rien bougé.
+    public func number(for question: FeedbackQuestion) -> Int? {
+        answers[question.id]?.number.map { Int($0.rounded()) }
+    }
+
     /// Le bouton d'envoi est-il ouvert ? Toutes les questions **obligatoires**
     /// doivent avoir leur réponse — les autres peuvent rester vides, et c'est
     /// ce qui permet de n'écrire qu'un mot.
