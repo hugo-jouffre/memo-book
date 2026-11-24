@@ -691,6 +691,23 @@ struct BookPageStepper: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, MemoBookSpacing.xs)
         .accessibilityElement(children: .contain)
+
+        // **Combien de fois ce carnet a été fabriqué** (T262, Hugo,
+        // 24/11/2026). Sous les flèches et non dedans : cette ligne-là sert à
+        // tourner les pages, et un chiffre de plus au milieu s'y lirait comme
+        // une commande. Discret, parce qu'on ne le cherche pas — on tombe
+        // dessus.
+        //
+        // Rien tant que le serveur ne le dit pas : un serveur d'avant
+        // aujourd'hui n'envoie pas le champ, et une ligne « Composé une fois »
+        // posée par défaut mentirait.
+        if let compositions = model.preview?.compositionCount, compositions > 0 {
+            Text(BookCopy.Preview.compositionCount(compositions))
+                .font(MemoBookFont.label)
+                .foregroundStyle(MemoBookColor.inkMuted)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, MemoBookSpacing.xs)
+        }
     }
 }
 
