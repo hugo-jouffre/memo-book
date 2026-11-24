@@ -1284,6 +1284,21 @@ export interface PreviewComposition {
   currentFingerprint: string | null;
   /** Les souvenirs que MEMO n'a pas fini d'écrire. */
   pendingMemoryCount: number;
+  /**
+   * **Combien de fois ce carnet a été composé** (T262, Hugo, 24/11/2026 —
+   * « savoir combien de carnets ont été générés »).
+   *
+   * Les compositions **abouties**, pas les tentatives : une composition qui
+   * échoue n'a rien fabriqué, et la compter ferait d'une panne une édition.
+   *
+   * ⚠️ **Ce nombre monte tout seul.** L'aperçu se recompose à chaque
+   * changement du carnet — un souvenir, une photo, un réglage —, et un carnet
+   * de la production en est à trente et une compositions sans que personne
+   * ne l'ait demandé. C'est le chiffre que Hugo a choisi en connaissance de
+   * cause : il dit ce que la machine a fabriqué, pas ce qui a été imprimé.
+   * Le nombre d'exemplaires commandés, lui, vit dans `print_orders`.
+   */
+  compositionCount: number;
 }
 
 /**
@@ -1343,6 +1358,9 @@ export function serializeBookPreview(
       : null,
     // Le rendu derrière `pdfUrl` : c'est lui qu'on commande.
     readyRenderId: lastReady?.id ?? null,
+    // Combien de fois ce carnet a été composé (T262) — voir
+    // ``PreviewComposition/compositionCount``.
+    compositionCount: composition.compositionCount,
     // **Les chapitres de ce PDF-là**, pour n'en partager que quelques-uns
     // (T285). Vides pour un rendu d'avant le 21/11/2026 : l'app propose alors
     // le carnet entier, comme elle le faisait.

@@ -70,7 +70,7 @@ async function readPreview(context: AppContext, accountId: string, memoId: strin
   // L'empreinte du carnet et les souvenirs en rédaction (T224) : de quoi dire
   // si le PDF est à jour, et ce que la composition attend. Quatre petites
   // requêtes agrégées, pas une relecture des textes.
-  const [memo, lastReady, currentFingerprint, pendingMemoryCount] = await Promise.all([
+  const [memo, lastReady, currentFingerprint, pendingMemoryCount, compositionCount] = await Promise.all([
     context.prisma.memo.findFirst({
       where: { id: memoId, ...visibleToAccount(accountId) },
       include: previewInclude,
@@ -84,12 +84,15 @@ async function readPreview(context: AppContext, accountId: string, memoId: strin
     }),
     currentBookFingerprint(context.prisma, memoId),
     pendingRedactionCount(context.prisma, memoId),
+    // Les compositions abouties de ce carnet (T262) : une de plus par
+    // recomposition, et l'aperçu en déclenche une à chaque changement.
+    context.prisma.render.count({ where: { memoId, status: "ready" } }),
   ]);
 
   if (!memo) throw new HttpError(404, "Ce carnet n’existe pas.");
   return serializeBookPreview(
     memo,
-    { lastReady, currentFingerprint, pendingMemoryCount },
+    { lastReady, currentFingerprint, pendingMemoryCount, compositionCount },
     shareBaseUrl(context.env),
   );
 }

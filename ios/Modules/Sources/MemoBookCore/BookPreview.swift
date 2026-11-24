@@ -277,6 +277,23 @@ public struct BookPreview: Codable, Sendable, Hashable {
     /// `nil` comme vide : le partage propose le carnet entier, comme avant.
     public let chapters: [BookChapter]?
 
+    /// **Combien de fois ce carnet a été composé** (T262, Hugo, 24/11/2026 —
+    /// « savoir combien de carnets ont été générés »).
+    ///
+    /// Les compositions abouties, pas les tentatives. Le **livre**, lui, n'en
+    /// porte rien : Hugo ne veut pas de numéro d'édition sur la couverture,
+    /// le chiffre se lit sur l'écran qui montre le PDF.
+    ///
+    /// ⚠️ **Il monte tout seul** : l'aperçu se recompose à chaque changement
+    /// du carnet, et un carnet de la production en est à trente et une
+    /// compositions sans que personne ne l'ait demandé. C'est assumé — il dit
+    /// ce que la machine a fabriqué, pas ce qui a été imprimé.
+    ///
+    /// Optionnel, comme ``chapters`` et pour la même raison : un serveur
+    /// d'avant le 24/11/2026 ne l'envoie pas, et un champ obligatoire absent
+    /// ferait cesser de décoder tout l'écran.
+    public let compositionCount: Int?
+
     public init(
         memoId: String,
         title: String,
@@ -292,7 +309,8 @@ public struct BookPreview: Codable, Sendable, Hashable {
         readyRenderId: String? = nil,
         isUpToDate: Bool? = nil,
         pendingMemoryCount: Int? = nil,
-        chapters: [BookChapter]? = nil
+        chapters: [BookChapter]? = nil,
+        compositionCount: Int? = nil
     ) {
         self.memoId = memoId
         self.title = title
@@ -309,6 +327,7 @@ public struct BookPreview: Codable, Sendable, Hashable {
         self.isUpToDate = isUpToDate
         self.pendingMemoryCount = pendingMemoryCount
         self.chapters = chapters
+        self.compositionCount = compositionCount
     }
 
     /// Le lien des jeux d'essai — bac à sable, aperçus Xcode —, à la forme de

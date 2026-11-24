@@ -497,6 +497,7 @@ describe("garde-fous de l'API", () => {
       pendingMemoryCount: number;
       pdfUrl: string | null;
       pageCount: number;
+      compositionCount: number;
     };
     const preview = async () =>
       (
@@ -505,6 +506,9 @@ describe("garde-fous de l'API", () => {
 
     const before = await preview();
     expect(before).toMatchObject({ render: null, readyRenderId: null, isUpToDate: false, pdfUrl: null });
+    // **Aucune composition encore** (T262) : le compteur part de zéro, et
+    // l'écran ne dit donc rien.
+    expect(before.compositionCount).toBe(0);
     expect((await harness.prisma.memo.findUniqueOrThrow({ where: { id: memoId } })).isPrintable).toBe(false);
 
     const composed = await harness.app.inject({
@@ -517,6 +521,9 @@ describe("garde-fous de l'API", () => {
     const after = await preview();
     expect(after.render).toMatchObject({ id: renderId, phase: "ready" });
     expect(after).toMatchObject({ readyRenderId: renderId, isUpToDate: true, pendingMemoryCount: 0 });
+    // Une composition aboutie, une de comptée — c'est ce que l'écran montre
+    // sous l'indicateur de pages, et jamais le livre (T262).
+    expect(after.compositionCount).toBe(1);
     expect(after.pdfUrl).toMatch(/^https:\/\//);
 
     // Le carnet existe : l'imprimante de l'accueil peut paraître, et ses pages

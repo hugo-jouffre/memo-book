@@ -339,6 +339,18 @@ public enum BookCopy {
             "Page \(index) / \(total)"
         }
 
+        /// **Combien de fois le carnet a été composé** (T262, Hugo,
+        /// 24/11/2026 — « savoir combien de carnets ont été générés »).
+        ///
+        /// Pas « édition n° 4 » : le mot *édition* promet un objet, et ce
+        /// chiffre compte des fabrications, recompositions automatiques
+        /// comprises. « Composé 4 fois » dit ce qu'il est.
+        ///
+        /// Le livre, lui, n'en porte rien — c'est l'écran qui le dit.
+        public static func compositionCount(_ count: Int) -> String {
+            count <= 1 ? "Composé une fois" : "Composé \(count) fois"
+        }
+
         /// « 1 sur 24 » — le compteur de l'aperçu plein écran. Il compte les
         /// **feuilles du PDF**, là où l'indicateur du bas compte les pages du
         /// carnet : les deux diffèrent dès qu'une page tient sur deux feuilles.
