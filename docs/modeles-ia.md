@@ -163,6 +163,33 @@ Les deux notes **pèsent autant** au moment de choisir : leur moyenne, et celle
 qui manque laisse l'autre décider seule. Une belle photo qui ne raconte pas la
 page n'a pas sa place ; une photo juste mais ratée non plus.
 
+#### Ce que le juge a donné, sur de vraies photos (24/11/2026)
+
+Première passe en production, sur « 100 jours de miel » — 60 photos notées,
+le plafond d'une passe (`BEAUTY_PER_PASS`) :
+
+| min | q1 | médiane | q3 | max | moyenne |
+|---|---|---|---|---|---|
+| 15 | 68 | 73 | 80 | 91 | 70 |
+
+**Il discrimine** : 76 points d'écart, et une queue basse franche — 15, 22,
+25. Il y a bien des photos qu'il écarte nettement, et c'est le travail
+demandé.
+
+⚠️ **Mais il note serré vers le haut** : les trois quarts tiennent entre 68 et
+80. Sur une étape qui déborde de deux photos, c'est donc souvent la **netteté**
+qui tranchera, la beauté les ayant jugées équivalentes. C'est le comportement
+d'un modèle sans repères de calibration. Si ça ne suffit pas, la consigne peut
+lui donner des exemples chiffrés — une ligne à changer, et un passage à
+remesurer contre ce tableau.
+
+**Et ce qu'il faut retenir du premier essai** : il a rendu **zéro note**. Les
+modèles récents refusent `max_tokens` et veulent `max_completion_tokens`, et
+le motif venait de `stickerVision.ts`, écrit pour `gpt-4o-mini` qui l'accepte
+encore. Le repli a tenu — carnet composé, 99 pages, classement sur la netteté,
+cause nommée dans le journal — et aucun test ne l'avait vu parce qu'ils
+relisaient tous la **réponse** du modèle, jamais la **requête**.
+
 Trois leviers, dans cet ordre :
 
 1. **Ne noter que le surplus.** Une étape dont toutes les photos tiennent dans
