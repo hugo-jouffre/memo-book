@@ -302,6 +302,14 @@ police ou marge codée en dur ailleurs.
 - `BrandFooterScrim` (`.brandFooterScrim()`) est **le** voile sous un pied
   d'écran — CTA, mention : un fondu au-dessus, un aplat crème à 90 % dessous,
   jusqu'au bord de la dalle. Aucun écran ne redessine son dégradé.
+  ⚠️ **Une exception depuis T251** (24/11/2026) : le pied du **paywall** pose
+  l'aplat **plein** (`.brandFooterScrim(isOpaque: true)`). Aux tailles de texte
+  accessibles, les 90 % ne suffisaient plus — les mots qui passent dessous
+  restent lisibles, et le texte des cartes se lisait sous « S'abonner ». Le
+  voile faisait alors l'inverse de ce qu'il promet. Un paywall est le moment où
+  l'on décide de payer, et ce qui transparaît sous le bouton y coûte plus cher
+  qu'ailleurs. L'opacité est un **paramètre**, pas une constante changée :
+  partout ailleurs, le voile reste translucide.
 - `ErrorBanner` porte un conseil (`advice:`) et une porte vers le support
   (`help:`) en plus de « Réessayer » : `APIError.recoveryAdvice` donne le
   conseil par famille d'erreur. Un bandeau qui ne propose rien laisse chercher

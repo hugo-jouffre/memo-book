@@ -635,7 +635,13 @@ struct PaywallOffer: View {
         .padding(.horizontal, PaywallMetrics.margin)
         .padding(.top, MemoBookSpacing.s)
         .padding(.bottom, MemoBookSpacing.xs)
-        .brandFooterScrim()
+        // **Aplat plein ici, et nulle part ailleurs** (T251, Hugo,
+        // 24/11/2026). Aux tailles accessibles, les 90 % du voile laissaient
+        // *lire* le texte des cartes sous « S'abonner » : le voile faisait
+        // alors l'inverse de ce qu'il promet. Un paywall est le moment où
+        // l'on décide de payer, et ce qui transparaît sous le bouton y coûte
+        // plus cher qu'ailleurs.
+        .brandFooterScrim(isOpaque: true)
     }
 
     /// **Sous les cartes** (Hugo, 01/10/2026) : « Restaurer mes achats »,
