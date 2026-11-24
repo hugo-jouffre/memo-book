@@ -27,10 +27,19 @@ object BrandFooterScrim {
     internal const val OPACITY = 0.9f
 }
 
-/** Pose le voile de la marque derrière un pied d'écran — voir [BrandFooterScrim]. */
-fun Modifier.brandFooterScrim(): Modifier = drawBehind {
+/**
+ * Pose le voile de la marque derrière un pied d'écran — voir [BrandFooterScrim].
+ *
+ * @param isOpaque l'aplat plein, **réservé au paywall** (T251, Hugo,
+ *   24/11/2026). Aux tailles de texte accessibles, les 90 % ne suffisent plus :
+ *   les mots qui passent dessous restent lisibles, et le pied du paywall
+ *   laissait lire le texte des cartes sous « S'abonner » — le voile faisait
+ *   l'inverse de ce qu'il promet. Partout ailleurs la règle tient, d'où un
+ *   paramètre plutôt qu'une constante changée.
+ */
+fun Modifier.brandFooterScrim(isOpaque: Boolean = false): Modifier = drawBehind {
     val fade = BrandFooterScrim.FADE_HEIGHT.toPx()
-    val veil = MemoBookColor.background.copy(alpha = BrandFooterScrim.OPACITY)
+    val veil = MemoBookColor.background.copy(alpha = if (isOpaque) 1f else BrandFooterScrim.OPACITY)
     drawRect(
         brush = Brush.verticalGradient(
             colors = listOf(MemoBookColor.background.copy(alpha = 0f), veil),

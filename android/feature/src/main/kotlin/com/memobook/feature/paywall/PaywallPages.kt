@@ -623,7 +623,10 @@ private fun PaywallOfferFooter(price: String, period: String, isPurchasing: Bool
         Column(
             modifier
                 .fillMaxWidth()
-                .brandFooterScrim()
+                // **Aplat plein ici, et nulle part ailleurs** (T251, Hugo,
+                // 24/11/2026) : aux tailles accessibles, les 90 % du voile
+                // laissaient *lire* le texte des cartes sous « S'abonner ».
+                .brandFooterScrim(isOpaque = true)
                 .navigationBarsPadding()
                 .padding(horizontal = PaywallMetrics.margin)
                 .padding(top = MemoBookSpacing.s, bottom = MemoBookSpacing.xs),

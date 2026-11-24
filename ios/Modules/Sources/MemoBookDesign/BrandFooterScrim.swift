@@ -33,21 +33,40 @@ public struct BrandFooterScrim: View {
     /// Ce que le pied garde du crème. Sous 1, pour laisser deviner ce qui passe.
     static let opacity: Double = 0.9
 
-    public init() {}
+    /// **L'exception du paywall** (T251, Hugo, 24/11/2026).
+    ///
+    /// Aux tailles de texte accessibles, les 90 % ne suffisent plus : les mots
+    /// qui passent dessous sont assez gros pour rester **lisibles**, et le
+    /// pied du paywall laissait lire le texte des cartes sous « S'abonner ».
+    /// Le voile fait alors exactement l'inverse de ce qu'il promet — « on voit
+    /// passer ce qui défile, on ne le lit plus ».
+    ///
+    /// Hugo a tranché pour l'aplat plein **sur ce seul écran** : un paywall
+    /// est le moment où l'on décide de payer, et ce qui transparaît sous le
+    /// bouton y coûte plus cher qu'ailleurs. Partout ailleurs la règle tient,
+    /// et c'est pour ça que l'opacité est un paramètre et non une constante
+    /// changée.
+    private let isOpaque: Bool
+
+    public init(isOpaque: Bool = false) {
+        self.isOpaque = isOpaque
+    }
+
+    private var veil: Double { isOpaque ? 1 : Self.opacity }
 
     public var body: some View {
         VStack(spacing: 0) {
             LinearGradient(
                 colors: [
                     MemoBookColor.background.opacity(0),
-                    MemoBookColor.background.opacity(Self.opacity),
+                    MemoBookColor.background.opacity(veil),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .frame(height: Self.fadeHeight)
 
-            MemoBookColor.background.opacity(Self.opacity)
+            MemoBookColor.background.opacity(veil)
         }
         .padding(.top, -Self.fadeHeight)
         .ignoresSafeArea(edges: .bottom)
@@ -59,7 +78,10 @@ public struct BrandFooterScrim: View {
 extension View {
     /// Pose le voile de la marque derrière un pied d'écran — voir
     /// ``BrandFooterScrim``. À appliquer sur le pied lui-même, marges comprises.
-    public func brandFooterScrim() -> some View {
-        background { BrandFooterScrim() }
+    ///
+    /// - Parameter isOpaque: l'aplat plein, **réservé au paywall** (T251).
+    ///   Ailleurs, le voile reste translucide : c'est la règle de la marque.
+    public func brandFooterScrim(isOpaque: Bool = false) -> some View {
+        background { BrandFooterScrim(isOpaque: isOpaque) }
     }
 }
