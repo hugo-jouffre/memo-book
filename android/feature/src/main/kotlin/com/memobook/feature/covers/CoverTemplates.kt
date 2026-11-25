@@ -138,7 +138,7 @@ fun CoverTemplate(
     subtitleBadge: (@Composable () -> Unit)? = null,
     statsBadge: (@Composable () -> Unit)? = null,
 ) {
-    val m = rememberCoverMetrics(width)
+    val m = rememberCoverMetrics(width, family)
     val reading = remember(cover, companion, face, photo, gallery) { CoverReading(face, cover, companion, photo, gallery) }
     val scope = CoverTemplateScope(m, reading, cover, photo, stats, titleBadge, subtitleBadge, statsBadge)
     Box(Modifier.size(width, width / CoverPlate.ratio)) {
@@ -183,8 +183,25 @@ internal class CoverReading(face: CoverFace, cover: BookCover, companion: BookCo
     val photos: List<CoverPhoto> = if (photo == null) gallery else listOf(photo) + gallery.filter { it.id != photo.id }
 }
 
-/** Les mesures d'un plat : des fractions de sa largeur, et des tailles de texte qui n'en suivent que la largeur. */
-internal class CoverMetrics(val width: Dp, private val density: Density) {
+/**
+ * Les mesures d'un plat : des fractions de sa largeur, et des tailles de texte qui n'en suivent que la largeur.
+ *
+ * @param family le plat dessiné, dont dépendent ses polices. `null` pour la
+ *   composition d'avant les gabarits ([TreatmentCover]), qui n'écrit qu'en
+ *   polices de la marque : les familles ci-dessous retombent alors sur celles
+ *   de « Par défaut ».
+ */
+internal class CoverMetrics(val width: Dp, private val density: Density, private val family: CoverFamily? = null) {
+    /**
+     * Ce que l'atelier distingue dans un plat : ce qui le **porte** — un titre,
+     * un chiffre — et ce qui l'**accompagne** — une signature, une date, un
+     * récit, une légende. Le jumeau Swift l'appelle `Role`.
+     */
+    enum class Role {
+        Display,
+        Text,
+    }
+
     fun u(fraction: Float): Dp = width * fraction
 
     fun px(fraction: Float): Float = with(density) { u(fraction).toPx() }
@@ -194,22 +211,58 @@ internal class CoverMetrics(val width: Dp, private val density: Density) {
 
     fun font(family: FontFamily, weight: FontWeight, size: Float) = TextStyle(fontFamily = family, fontWeight = weight, fontSize = sp(size))
 
-    /** Les capitales à empattements de « Par défaut » et d'« Élégant ». */
-    fun serif(size: Float, weight: FontWeight = FontWeight.Bold) = font(FontFamily.Serif, weight, size)
+    /** Une police de plat : son dessin porte déjà sa graisse, on ne la demande pas. */
+    private fun cover(family: FontFamily, size: Float) = font(family, FontWeight.Normal, size)
 
-    /** Le grotesque épais d'« Aquarelle », d'« Assouline » et de « Travel book ». */
-    fun heavy(size: Float) = font(FontFamily.SansSerif, FontWeight.Black, size)
+    /** Les empattements de « Par défaut », d'« Élégant » et d'« Assouline ». */
+    fun serif(size: Float, role: Role = Role.Display) =
+        cover(
+            when {
+                // Élégant est le seul à ne pas crier : son titre est un
+                // Garamond de corps, et le reste sa variante Infant.
+                family == CoverFamily.Elegant && role == Role.Display -> BrandFonts.Cover.cormorantGaramond
+                family == CoverFamily.Elegant -> BrandFonts.Cover.cormorantInfant
+                role == Role.Display -> BrandFonts.Cover.playfairBlack
+                else -> BrandFonts.Cover.playfairRegular
+            },
+            size,
+        )
 
-    /** L'écriture à la main de « Dessin » et de « Photo-dessin ». */
-    fun hand(size: Float) = font(BrandFonts.gloriaHallelujah, FontWeight.Normal, size)
+    /**
+     * Le grotesque épais d'« Aquarelle », d'« Assouline » et de « Travel book »
+     * — trois dessins différents, et non une seule graisse noire.
+     */
+    fun heavy(size: Float) =
+        cover(
+            when (family) {
+                CoverFamily.Watercolor -> BrandFonts.Cover.poppinsBlack
+                CoverFamily.TravelBook -> BrandFonts.Cover.lilitaOne
+                else -> BrandFonts.Cover.archivoBlack
+            },
+            size,
+        )
 
+    /**
+     * L'écriture à la main de « Dessin » et de « Photo-dessin ». Deux mains
+     * différentes : le feutre de Gloria Hallelujah, le pinceau de Caveat Brush.
+     */
+    fun hand(size: Float) =
+        cover(
+            if (family == CoverFamily.PhotoDrawing) BrandFonts.Cover.caveatBrush else BrandFonts.gloriaHallelujah,
+            size,
+        )
+
+    /** Le texte courant d'« Aquarelle ». */
+    fun manrope(size: Float) = cover(BrandFonts.Cover.manrope, size)
+
+    /** Le corps de texte de la marque — celui de [TreatmentCover], pas des gabarits. */
     fun sans(size: Float) = font(BrandFonts.generalSans, FontWeight.Normal, size)
 }
 
 @Composable
-internal fun rememberCoverMetrics(width: Dp): CoverMetrics {
+internal fun rememberCoverMetrics(width: Dp, family: CoverFamily? = null): CoverMetrics {
     val density = LocalDensity.current
-    return remember(width, density) { CoverMetrics(width, density) }
+    return remember(width, density, family) { CoverMetrics(width, density, family) }
 }
 
 /**
@@ -353,7 +406,7 @@ internal class CoverTemplateScope(
                 verticalArrangement = Arrangement.spacedBy(m.u(0.025f)),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                CoverText(BookCopy.Covers.Stats.heading, m.serif(0.036f, FontWeight.SemiBold), ink)
+                CoverText(BookCopy.Covers.Stats.heading, m.serif(0.036f, CoverMetrics.Role.Text), ink)
                 Row(horizontalArrangement = Arrangement.spacedBy(m.u(0.025f)), verticalAlignment = Alignment.Top) {
                     stats.forEach { stat ->
                         Column(
@@ -361,8 +414,8 @@ internal class CoverTemplateScope(
                             verticalArrangement = Arrangement.spacedBy(m.u(0.008f)),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            CoverText(stat.value, m.serif(0.075f, FontWeight.SemiBold), ink, maxLines = 1, minimumScaleFactor = 0.5f)
-                            CoverText(stat.label, m.serif(0.028f, FontWeight.Normal), ink, minimumScaleFactor = 0.5f)
+                            CoverText(stat.value, m.serif(0.075f, CoverMetrics.Role.Display), ink, maxLines = 1, minimumScaleFactor = 0.5f)
+                            CoverText(stat.label, m.serif(0.028f, CoverMetrics.Role.Text), ink, minimumScaleFactor = 0.5f)
                         }
                     }
                 }
@@ -394,7 +447,7 @@ internal class CoverTemplateScope(
             CoverBadged(titleBadge, Alignment.TopEnd, Modifier.fillMaxWidth()) {
                 CoverText(
                     cover.title,
-                    m.serif(0.14f),
+                    m.serif(0.14f, CoverMetrics.Role.Display),
                     MemoBookColor.paper,
                     Modifier.fillMaxWidth(),
                     maxLines = 2,
@@ -406,7 +459,7 @@ internal class CoverTemplateScope(
             CoverBadged(subtitleBadge, Alignment.BottomEnd, Modifier.fillMaxWidth()) {
                 CoverText(
                     cover.subtitle,
-                    m.serif(0.05f, FontWeight.Normal),
+                    m.serif(0.05f, CoverMetrics.Role.Text),
                     MemoBookColor.paper,
                     Modifier.fillMaxWidth(),
                     maxLines = 3,
@@ -555,7 +608,7 @@ internal class CoverTemplateScope(
                             if (index % 2 == 0) Vignette(image)
                             CoverText(
                                 paragraph,
-                                m.sans(0.03f),
+                                m.manrope(0.03f),
                                 MemoBookColor.ink,
                                 Modifier.weight(1f),
                                 minimumScaleFactor = 0.6f,
@@ -638,7 +691,7 @@ internal class CoverTemplateScope(
                 } else {
                     CoverText(
                         cover.subtitle,
-                        m.serif(0.03f, FontWeight.Normal),
+                        m.serif(0.03f, CoverMetrics.Role.Text),
                         MemoBookColor.ink,
                         Modifier.fillMaxWidth(),
                         minimumScaleFactor = 0.5f,
@@ -934,7 +987,7 @@ internal class CoverTemplateScope(
             CoverBadged(titleBadge, Alignment.TopEnd, Modifier.fillMaxWidth()) {
                 CoverText(
                     cover.title.uppercase(),
-                    m.serif(0.1f, FontWeight.Normal),
+                    m.serif(0.1f, CoverMetrics.Role.Display),
                     MemoBookColor.ink,
                     Modifier.fillMaxWidth(),
                     maxLines = 1,
@@ -947,7 +1000,7 @@ internal class CoverTemplateScope(
             CoverBadged(subtitleBadge, Alignment.BottomEnd, Modifier.fillMaxWidth()) {
                 CoverText(
                     reading.`when`.orEmpty().uppercase(),
-                    m.serif(0.04f, FontWeight.Normal),
+                    m.serif(0.04f, CoverMetrics.Role.Text),
                     MemoBookColor.ink,
                     Modifier.fillMaxWidth(),
                     maxLines = 1,
@@ -979,7 +1032,7 @@ internal class CoverTemplateScope(
                 } else {
                     CoverText(
                         cover.subtitle,
-                        m.serif(0.032f, FontWeight.Normal),
+                        m.serif(0.032f, CoverMetrics.Role.Text),
                         MemoBookColor.ink,
                         Modifier.fillMaxWidth(),
                         minimumScaleFactor = 0.5f,

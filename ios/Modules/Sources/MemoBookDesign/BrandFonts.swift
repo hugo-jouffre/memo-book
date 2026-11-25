@@ -38,6 +38,49 @@ public enum BrandFonts {
     /// `Font.custom` attend, et il diffère du nom de fichier.
     public static let gloriaHallelujah = "GloriaHallelujah"
 
+    // MARK: - Les polices des couvertures
+
+    /// **Les typographies des sept plats**, celles de l'atelier d'impression
+    /// (`MemoBook Generator/public/couverture-styles.js`, § `POLICES`).
+    ///
+    /// Elles ne servent **qu'aux plats** : l'app n'écrit rien d'autre avec.
+    /// Jusqu'au 25/11/2026 elle les approchait par les polices du système — un
+    /// empattement pour « Par défaut » et « Élégant », le grotesque le plus
+    /// lourd pour les trois autres —, si bien qu'un même plat sortait en trois
+    /// typographies selon qu'on le regardait à l'écran, dans le PDF du carnet
+    /// ou sur le livre imprimé. On choisit une couverture en la regardant
+    /// (T256, Hugo).
+    ///
+    /// Toutes sont sous licence libre (OFL), livrées avec l'atelier et
+    /// converties par `ios/Tools/make-brand-fonts.py` — **le même dessin**, pas
+    /// une seconde police. ⚠️ Au sous-ensemble latin : une lettre d'Europe
+    /// centrale dans un titre tomberait sur la police du système.
+    public enum Cover {
+        /// « Par défaut » : le titre en capitales. Et « Assouline » pour tout
+        /// ce qui n'est pas son titre.
+        public static let playfairBlack = "PlayfairDisplay-Black"
+        public static let playfairRegular = "PlayfairDisplay-Regular"
+
+        /// « Élégant » : le titre, puis le reste dans la variante Infant.
+        public static let cormorantGaramond = "CormorantGaramond-Regular"
+        public static let cormorantInfant = "CormorantInfant-Medium"
+
+        /// « Assouline » : le titre, large et noir.
+        public static let archivoBlack = "ArchivoBlack-Regular"
+
+        /// « Aquarelle » : le titre, puis le reste en Manrope.
+        public static let poppinsBlack = "Poppins-Black"
+        public static let manrope = "Manrope-Regular"
+
+        /// « Travel book » : une seule police pour tout le plat.
+        public static let lilitaOne = "LilitaOne"
+
+        /// « Photo-dessin » : le pinceau. « Dessin », lui, garde
+        /// ``BrandFonts/gloriaHallelujah`` — c'est la police que l'atelier lui
+        /// donne aussi.
+        public static let caveatBrush = "CaveatBrush-Regular"
+    }
+
     private static let register: Void = {
         let fonts =
             (Bundle.module.urls(forResourcesWithExtension: "ttf", subdirectory: "Fonts") ?? [])
