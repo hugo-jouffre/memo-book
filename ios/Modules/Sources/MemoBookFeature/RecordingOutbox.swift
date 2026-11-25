@@ -471,7 +471,23 @@ public final class RecordingOutbox {
                 continue
             }
 
-            switch await deliver(turn, to: record.tripId) {
+            // Une fiche écrite avant le 19/11 porte ses photos **à leur
+            // taille d'origine** : `PhotoEncoding` les ramène à 2400 px au
+            // moment du choix (T275), pas à l'envoi, et ce qui était déjà
+            // sur le disque n'a jamais été repris. Trois à six Mo pièce, le
+            // client abandonne à 60 s, le tour retombe dans la file — et
+            // recommence, indéfiniment. C'est ce qui laisse des photos en
+            // attente pendant des jours (T295, Maÿlis).
+            //
+            // Ce qui **sort** de la file passe donc par la même borne que ce
+            // qui y entre. Une photo déjà assez petite revient octet pour
+            // octet : pour tout ce qui a été mis en file depuis, cette ligne
+            // ne change rien. La fiche sur le disque, elle, n'est pas
+            // réécrite — son format est relu par la version d'avant, et on
+            // n'y touche pas pour une taille qui se recalcule.
+            let ready = Self.reducingPhotos(turn)
+
+            switch await deliver(ready, to: record.tripId) {
             case .sent(let receipt):
                 await store.remove(record)
                 delivered += 1
@@ -500,7 +516,7 @@ public final class RecordingOutbox {
                 publish(ChatTurnDelivery(id: record.id, tripId: record.tripId, state: .waitingForUnlimited, credit: credit))
             case .rejected(let reason):
                 await store.remove(record)
-                let message = Self.message(for: turn, reason: reason)
+                let message = Self.message(for: ready, reason: reason)
                 rejection = message
                 note(.rejected(message), of: record.id, to: record.tripId)
             case .deferred:
@@ -923,6 +939,36 @@ public final class RecordingOutbox {
     /// date jusqu'au prochain envoi, mais le tour, lui, n'attend plus rien —
     /// la conversation le rouvre « en cours d'envoi » et le décompte du jour
     /// où il partira, au lieu de « Partira demain » (03/10/2026).
+    /// Le même tour, ses photos **ramenées à la taille d'envoi**.
+    ///
+    /// Sans objet pour un texte ou un vocal, et sans effet sur une photo qui
+    /// tient déjà dans la borne — ``PhotoEncoding/jpeg(from:quality:maxSide:)``
+    /// la rend alors telle quelle. Une photo que l'encodeur ne sait pas lire
+    /// part comme elle est : mieux vaut un envoi lourd qu'un souvenir jeté.
+    nonisolated private static func reducingPhotos(_ turn: OutgoingTurn) -> OutgoingTurn {
+        guard case .photos(let photos, let capturedAt) = turn.body else { return turn }
+
+        let reduced = photos.map { photo in
+            guard let data = PhotoEncoding.jpeg(from: photo.data), data.count < photo.data.count
+            else { return photo }
+            return ChatPhotoUpload(
+                data: data,
+                filename: photo.filename,
+                mimeType: photo.mimeType,
+                capturedAt: photo.capturedAt,
+                capturedPlaceName: photo.capturedPlaceName
+            )
+        }
+
+        return OutgoingTurn(
+            id: turn.id,
+            stepId: turn.stepId,
+            body: .photos(reduced, capturedAt: capturedAt),
+            waitingForCreditUntil: turn.waitingForCreditUntil,
+            waitingForUnlimited: turn.waitingForUnlimited
+        )
+    }
+
     nonisolated private static func turn(from record: PendingTurn, files: [Data], now: Date = .now) -> OutgoingTurn? {
         let waitingForCreditUntil = record.isWaitingForCredit(at: now) ? record.waitingForCreditUntil : nil
         switch record.kind {

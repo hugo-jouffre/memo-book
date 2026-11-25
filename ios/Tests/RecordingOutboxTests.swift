@@ -2,6 +2,8 @@
 import MemoBookCore
 import MemoBookNetworking
 import MemoBookRecording
+import ImageIO
+import UniformTypeIdentifiers
 import XCTest
 
 /// La promesse écrite dans la boîte d'information de l'accueil : « tes vocaux
@@ -51,6 +53,98 @@ final class RecordingOutboxTests: XCTestCase {
         let sent = await sender.sent
         XCTAssertEqual(sent, ["trip-1"])
         XCTAssertEqual(outbox.justDelivered, 1, "L'arrivée se dit, le temps d'être lue.")
+    }
+
+    /// **Une photo mise en file avant le 19/11 part quand même** (T295,
+    /// Maÿlis).
+    ///
+    /// `PhotoEncoding` ramène les photos à 2400 px au moment du **choix**
+    /// (T275) : celles qui étaient déjà sur le disque gardaient leur taille
+    /// d'origine, dépassaient les 60 s du client à chaque tentative, et
+    /// repartaient dans la file — pendant des jours. Ce qui sort de la file
+    /// passe maintenant par la même borne que ce qui y entre.
+    func testAPhotoQueuedBeforeTheBoundStillLeavesWithinIt() async throws {
+        let sender = Sender()
+        let network = AsyncStream.makeStream(of: Bool.self)
+        let outbox = outbox(sender: sender, connectivity: Connectivity { network.stream })
+        outbox.start()
+
+        network.continuation.yield(false)
+        try await until("la file se sait hors ligne") { !outbox.isOnline }
+
+        // Une photo telle qu'une version d'avant la mettait en file : pleine
+        // taille, bien au-delà de la borne d'envoi.
+        let enorme = try image(width: 3_600, height: 2_400)
+        await outbox.submit(
+            OutgoingTurn(
+                id: "turn-photo",
+                body: .photos(
+                    [ChatPhotoUpload(data: enorme, filename: "p.jpg", mimeType: "image/jpeg")],
+                    capturedAt: .now
+                )
+            ),
+            to: "trip-1"
+        )
+        XCTAssertEqual(outbox.pending, 1)
+
+        network.continuation.yield(true)
+        try await until("la file se vide") { outbox.pending == 0 }
+
+        let sides = await sender.sentPhotoSides
+        XCTAssertEqual(sides.count, 1)
+        XCTAssertEqual(
+            sides.first,
+            PhotoEncoding.maxSide,
+            "Ce qui sort de la file doit tenir dans la borne d'envoi, même mis en file avant elle."
+        )
+    }
+
+    /// **Une photo déjà assez petite n'est pas retouchée** : la ramener
+    /// coûterait de la matière pour rien.
+    func testAPhotoAlreadyWithinTheBoundLeavesUntouched() async throws {
+        let sender = Sender()
+        let outbox = outbox(sender: sender)
+
+        let petite = try image(width: 800, height: 600)
+        await outbox.submit(
+            OutgoingTurn(
+                id: "turn-petite",
+                body: .photos(
+                    [ChatPhotoUpload(data: petite, filename: "p.jpg", mimeType: "image/jpeg")],
+                    capturedAt: .now
+                )
+            ),
+            to: "trip-1"
+        )
+
+        let sides = await sender.sentPhotoSides
+        XCTAssertEqual(sides, [800])
+    }
+
+    /// Une image JPEG de la taille demandée.
+    private func image(width: Int, height: Int) throws -> Data {
+        let context = try XCTUnwrap(
+            CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        )
+        context.setFillColor(red: 0.2, green: 0.6, blue: 0.4, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let cgImage = try XCTUnwrap(context.makeImage())
+
+        let output = NSMutableData()
+        let destination = try XCTUnwrap(
+            CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)
+        )
+        CGImageDestinationAddImage(destination, cgImage, [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return output as Data
     }
 
     /// Le cas qui compte vraiment : l'app a été fermée entre les deux.
@@ -893,6 +987,10 @@ private actor Sender {
     /// Tous les tours présentés, refusés compris : ce qu'on n'a pas eu
     /// besoin d'essayer n'y est pas.
     private(set) var attempts: [String] = []
+
+    /// Le plus grand côté de chaque photo reçue, pour vérifier ce qui part
+    /// vraiment sur le réseau et pas seulement ce que la file garde.
+    private(set) var sentPhotoSides: [Int] = []
     private var unreachable: Set<String> = []
     private var refused: Set<String> = []
     private var signedOut: Set<String> = []
@@ -954,13 +1052,26 @@ private actor Sender {
         switch turn.body {
         case .text(let text, _, _): body = .text(text)
         case .voice(let audio): body = .voice(VoiceNote(id: turn.id, duration: audio.durationSeconds, levels: audio.levels))
-        case .photos(let photos, _): body = .photos(photos.indices.map { PhotoAttachment(id: "\(turn.id)-\($0)") })
+        case .photos(let photos, _):
+            sentPhotoSides += photos.map(Self.largestSide)
+            body = .photos(photos.indices.map { PhotoAttachment(id: "\(turn.id)-\($0)") })
         }
         return ChatTurnReceipt(
             messages: [ChatMessage(id: turn.id, author: .traveller, body: body, sentAt: .now, seq: sentIds.count)],
             turn: .idle,
             now: .now
         )
+    }
+
+    /// Le plus grand côté d'une image, lu dans ses octets.
+    private static func largestSide(of photo: ChatPhotoUpload) -> Int {
+        guard
+            let source = CGImageSourceCreateWithData(photo.data as CFData, nil),
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+            let width = properties[kCGImagePropertyPixelWidth] as? Int,
+            let height = properties[kCGImagePropertyPixelHeight] as? Int
+        else { return 0 }
+        return max(width, height)
     }
 }
 
