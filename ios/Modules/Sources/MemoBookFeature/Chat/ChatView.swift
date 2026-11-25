@@ -262,6 +262,23 @@ public struct ChatView: View {
         .awaitingServerNotice(isPresented: $showsAwaitingServer, below: headerBottom)
         .background(BrandBackdrop())
         .photoFlow(photos) { model.sendPhotos($0) }
+        // **Où et quand, pour les photos qui ne le savent plus** (T315). Toute
+        // fermeture de la feuille — le glissé compris — envoie le lot : les
+        // photos sont déjà choisies, et les perdre pour une question sans
+        // réponse serait le pire des sorts.
+        .brandSheet(
+            isPresented: Binding(
+                get: { model.photosAwaitingOrigin != nil },
+                set: { if !$0 { model.sendAwaitingPhotosAsIs() } }
+            )
+        ) {
+            PhotoOriginSheet(
+                count: model.forwardedPhotoCount,
+                suggestedPlace: model.thread?.context.placeName,
+                onConfirm: { day, place in model.placeAwaitingPhotos(day: day, place: place) },
+                onSkip: { model.sendAwaitingPhotosAsIs() }
+            )
+        }
         .brandHiddenNavigationBar()
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.

@@ -551,6 +551,40 @@ public enum ChatCopy {
             MemoBook a besoin de l’appareil photo pour prendre une photo. \
             Autorise l’accès dans Réglages.
             """
+
+        /// **La question posée à une photo sans mémoire** (T315) : une photo
+        /// passée par une messagerie n'a plus ni date de prise de vue ni
+        /// position — voir ``PhotoFilename``. Sans elles, le carnet la range
+        /// au jour où elle est arrivée sur le téléphone.
+        public enum Origin {
+            public static let title = "Où et quand ?"
+
+            /// Ce que la feuille explique avant de demander. Elle dit le
+            /// défaut **et** ce qu'il coûte : sans ça, la question a l'air
+            /// d'une formalité qu'on passe.
+            public static func lead(_ count: Int) -> String {
+                guard count > 1 else {
+                    return "Cette photo est passée par une autre app : sa date et son lieu "
+                        + "sont restés en route. Sans eux, MemoBook la rangera au jour où "
+                        + "elle est arrivée sur ton téléphone."
+                }
+                return "\(count) de ces photos sont passées par une autre app : leur date "
+                    + "et leur lieu sont restés en route. Sans eux, MemoBook les rangera au "
+                    + "jour où elles sont arrivées sur ton téléphone."
+            }
+
+            public static let day = "Le jour de la photo"
+            public static let place = "L’endroit"
+            public static let placePlaceholder = "Une ville, un quartier, un lieu-dit"
+
+            /// Le libellé dit **ce qui se passe** : les photos partent, et
+            /// elles partent à leur place.
+            public static let confirm = "Ranger et envoyer"
+
+            /// La sortie, et elle est honnête : les photos partent quand
+            /// même, c'est leur rangement qui restera approximatif.
+            public static let skip = "Envoyer sans préciser"
+        }
     }
 
     // MARK: - Les échecs
