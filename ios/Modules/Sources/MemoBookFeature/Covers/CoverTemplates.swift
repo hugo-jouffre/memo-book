@@ -125,23 +125,58 @@ struct CoverTemplate: View {
 
     // MARK: - Les polices
 
-    /// Les capitales à empattements de « Par défaut » et d'« Élégant ».
-    private func serif(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
-        .system(size: unit(size), weight: weight, design: .serif)
+    /// **Chaque famille écrit dans la police de son plat imprimé**
+    /// (T256, Hugo, 25/11/2026). Jusque-là, l'app les approchait par les
+    /// polices du système — un empattement pour les unes, le grotesque le plus
+    /// lourd pour les autres —, et le même plat sortait donc en trois
+    /// typographies : celle de l'écran, celle du PDF du carnet, celle du livre.
+    /// L'attribution ci-dessous est celle de l'atelier
+    /// (`couverture-styles.js`, § `POLICES`), et le gabarit du carnet l'a
+    /// reprise (`style.css`, § « Les titres et les textes, par police »).
+    private enum Role {
+        /// Ce qui porte le plat : le titre, un chiffre.
+        case display
+        /// Ce qui l'accompagne : une signature, une date, un récit, une
+        /// légende.
+        case text
     }
 
-    /// Le grotesque épais d'« Aquarelle », d'« Assouline » et de « Travel book ».
+    /// Les empattements de « Par défaut », d'« Élégant » et d'« Assouline ».
+    private func serif(_ size: CGFloat, _ role: Role = .display) -> Font {
+        let name =
+            switch (family, role) {
+            // Élégant est le seul à ne pas crier : son titre est un Garamond
+            // de corps, et le reste sa variante Infant.
+            case (.elegant, .display): BrandFonts.Cover.cormorantGaramond
+            case (.elegant, .text): BrandFonts.Cover.cormorantInfant
+            case (_, .display): BrandFonts.Cover.playfairBlack
+            case (_, .text): BrandFonts.Cover.playfairRegular
+            }
+        return .custom(name, fixedSize: unit(size))
+    }
+
+    /// Le grotesque épais d'« Aquarelle », d'« Assouline » et de « Travel book »
+    /// — trois dessins différents, et non une seule graisse noire.
     private func heavy(_ size: CGFloat) -> Font {
-        .system(size: unit(size), weight: .black)
+        let name =
+            switch family {
+            case .watercolor: BrandFonts.Cover.poppinsBlack
+            case .travelBook: BrandFonts.Cover.lilitaOne
+            default: BrandFonts.Cover.archivoBlack
+            }
+        return .custom(name, fixedSize: unit(size))
     }
 
-    /// L'écriture à la main de « Dessin » et de « Photo-dessin ».
+    /// L'écriture à la main de « Dessin » et de « Photo-dessin ». Deux mains
+    /// différentes : le feutre de Gloria Hallelujah, le pinceau de Caveat Brush.
     private func hand(_ size: CGFloat) -> Font {
-        .custom(BrandFonts.gloriaHallelujah, fixedSize: unit(size))
+        let name = family == .photoDrawing ? BrandFonts.Cover.caveatBrush : BrandFonts.gloriaHallelujah
+        return .custom(name, fixedSize: unit(size))
     }
 
-    private func sans(_ size: CGFloat) -> Font {
-        .custom(BrandFonts.generalSansRegular, fixedSize: unit(size))
+    /// Le texte courant d'« Aquarelle ».
+    private func manrope(_ size: CGFloat) -> Font {
+        .custom(BrandFonts.Cover.manrope, fixedSize: unit(size))
     }
 
     // MARK: - Pièces communes
@@ -179,17 +214,17 @@ struct CoverTemplate: View {
     private func statsBox(ink: Color, fill: Color?, border: Color) -> some View {
         VStack(spacing: unit(0.025)) {
             Text(BookCopy.Covers.Stats.heading)
-                .font(serif(0.036, .semibold))
+                .font(serif(0.036, .text))
                 .foregroundStyle(ink)
             HStack(alignment: .top, spacing: unit(0.025)) {
                 ForEach(stats) { stat in
                     VStack(spacing: unit(0.008)) {
                         Text(stat.value)
-                            .font(serif(0.075, .semibold))
+                            .font(serif(0.075, .display))
                             .lineLimit(1)
                             .minimumScaleFactor(0.5)
                         Text(stat.label)
-                            .font(serif(0.028, .regular))
+                            .font(serif(0.028, .text))
                             .multilineTextAlignment(.center)
                     }
                     .foregroundStyle(ink)
@@ -224,7 +259,7 @@ struct CoverTemplate: View {
             )
             VStack(spacing: 0) {
                 Text(cover.title)
-                    .font(serif(0.14))
+                    .font(serif(0.14, .display))
                     .foregroundStyle(MemoBookColor.paper)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -234,7 +269,7 @@ struct CoverTemplate: View {
                     .overlay(alignment: .topTrailing) { titleBadge }
                 Spacer(minLength: 0)
                 Text(cover.subtitle)
-                    .font(serif(0.05, .regular))
+                    .font(serif(0.05, .text))
                     .foregroundStyle(MemoBookColor.paper)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
@@ -345,7 +380,7 @@ struct CoverTemplate: View {
                         HStack(alignment: .center, spacing: unit(0.04)) {
                             if index.isMultiple(of: 2) { vignette(image) }
                             Text(paragraph)
-                                .font(sans(0.03))
+                                .font(manrope(0.03))
                                 .foregroundStyle(MemoBookColor.ink)
                                 .lineSpacing(unit(0.004))
                                 .minimumScaleFactor(0.6)
@@ -425,7 +460,7 @@ struct CoverTemplate: View {
                         placeholderFrame(minHeight: 0.3)
                     } else {
                         Text(cover.subtitle)
-                            .font(serif(0.03, .regular))
+                            .font(serif(0.03, .text))
                             .foregroundStyle(MemoBookColor.ink)
                             .multilineTextAlignment(.center)
                             .lineSpacing(unit(0.004))
@@ -721,7 +756,7 @@ struct CoverTemplate: View {
             MemoBookColor.coverCream
             VStack(spacing: unit(0.05)) {
                 Text(cover.title.uppercased())
-                    .font(serif(0.1, .regular))
+                    .font(serif(0.1, .display))
                     .tracking(unit(0.004))
                     .foregroundStyle(MemoBookColor.ink)
                     .lineLimit(1)
@@ -733,7 +768,7 @@ struct CoverTemplate: View {
                     .clipped()
                 Spacer(minLength: 0)
                 Text((when ?? "").uppercased())
-                    .font(serif(0.04, .regular))
+                    .font(serif(0.04, .text))
                     .tracking(unit(0.003))
                     .foregroundStyle(MemoBookColor.ink)
                     .lineLimit(1)
@@ -763,7 +798,7 @@ struct CoverTemplate: View {
                         placeholderFrame(minHeight: 0.2)
                     } else {
                         Text(cover.subtitle)
-                            .font(serif(0.032, .regular))
+                            .font(serif(0.032, .text))
                             .foregroundStyle(MemoBookColor.ink)
                             .multilineTextAlignment(.center)
                             .lineSpacing(unit(0.006))
@@ -887,7 +922,9 @@ private struct CoverPostmark: View {
                 )
                 .padding(side * 0.12)
             Text(year.uppercased())
-                .font(.system(size: side * 0.13, weight: .heavy, design: .serif))
+                // Le cachet n'appartient qu'à « Travel book », dont l'atelier
+                // n'emploie qu'une police (T256).
+                .font(.custom(BrandFonts.Cover.lilitaOne, fixedSize: side * 0.13))
                 .foregroundStyle(MemoBookColor.coverPostmark)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
