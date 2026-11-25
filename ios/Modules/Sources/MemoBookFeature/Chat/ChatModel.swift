@@ -104,6 +104,33 @@ public final class ChatModel {
     /// déjà, depuis l'ouverture.
     public var showsQueuedNotice: Bool { !queuedTurnIds.isEmpty && !isOffline }
 
+    /// **Ce que le moniteur réseau dit maintenant** (T318).
+    ///
+    /// Vrai alors qu'un tour attend dans la file : le réseau va bien, et ce
+    /// qu'on attend est le **serveur**. C'est l'état présent qui parle, et non
+    /// la raison du départ en file : si le réseau revient pendant qu'un tour
+    /// attend, la phrase change avec lui.
+    public private(set) var networkIsUp = true
+
+    /// Ce que la barre d'envoi dit d'un tour qui attend — voir
+    /// ``showsQueuedNotice``.
+    public var queuedNotice: String {
+        networkIsUp ? ChatCopy.queuedWhileServerWorks : ChatCopy.queuedOffline
+    }
+
+    /// Ce que le fil dit de lui-même quand il s'est ouvert sans le serveur —
+    /// voir ``isOffline``.
+    public var threadNotice: String {
+        networkIsUp ? ChatCopy.threadWhileServerWorks : ChatCopy.offline
+    }
+
+    /// Relit le moniteur. Appelé aux moments où la phrase peut changer : à
+    /// l'ouverture, quand un tour part dans la file, quand la file rend son
+    /// verdict, et au retour au premier plan.
+    public func refreshNetworkState() async {
+        networkIsUp = await transport.isOnline()
+    }
+
     /// L'enregistrement a été refusé par iOS. La demande ne se présente qu'une
     /// fois : le seul recours est l'app Réglages, et l'écran doit le dire au
     /// lieu de redemander en boucle.
@@ -347,6 +374,9 @@ public final class ChatModel {
             thread = loaded
             cursor = loaded.now
             errorMessage = nil
+            // Un fil local ne dit « hors ligne » que si le réseau manque
+            // vraiment : sinon, c'est le serveur qui met du temps (T318).
+            await refreshNetworkState()
             // Le bonjour de MEMO **arrive** au lieu d'être déjà là — voir
             // ``revealOpening(of:)``.
             let opening = openingToReveal(in: loaded)
@@ -1049,8 +1079,12 @@ public final class ChatModel {
                 // identifiant, voir ``markDelivery(_:)``.
                 turn = .idle
                 // Et l'écran **le dit** (Hugo, 12/10/2026) : sans ça, on
-                // envoyait hors ligne sans savoir que c'était gardé.
+                // envoyait hors ligne sans savoir que c'était gardé. Reste à
+                // savoir **ce qu'on attend** — le réseau, ou le serveur
+                // (T318) : la phrase se choisit sur l'état présent du
+                // moniteur, qu'on relit ici.
                 queuedTurnIds.insert(outgoing.id)
+                await refreshNetworkState()
                 // Le vocal que la limite a coupé, parti dans la file : pas de
                 // reçu pour apporter la bulle de MEMO, l'app pose la sienne.
                 if limitTurnId == outgoing.id {
@@ -1517,6 +1551,10 @@ public final class ChatModel {
         if case .sending = delivery.state {} else if queuedTurnIds.contains(delivery.id) {
             queuedTurnIds.remove(delivery.id)
         }
+
+        // Ce que la file vient de dire d'un tour peut changer la phrase de
+        // la barre : le réseau est peut-être revenu depuis (T318).
+        Task { await refreshNetworkState() }
 
         switch delivery.state {
         case .sending:

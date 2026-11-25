@@ -296,6 +296,12 @@ class ChatModel(
         val errorMessage: String? = null,
         val turn: ChatTurnState = ChatTurnState.Idle,
         val isOffline: Boolean = false,
+        /**
+         * **Ce que le moniteur réseau dit maintenant** (T318). Vrai alors
+         * qu'un tour attend dans la file : le réseau va bien, et ce qu'on
+         * attend est le **serveur**.
+         */
+        val networkIsUp: Boolean = true,
         val microphoneIsDenied: Boolean = false,
         val copiedMessageId: String? = null,
         val showsExhaustedNotice: Boolean = false,
@@ -432,6 +438,31 @@ class ChatModel(
      */
     val showsQueuedNotice: Boolean get() = current.queuedTurnIds.isNotEmpty() && !current.isOffline
 
+    val networkIsUp: Boolean get() = current.networkIsUp
+
+    /**
+     * Ce que la barre d'envoi dit d'un tour qui attend — voir
+     * [showsQueuedNotice]. C'est l'état **présent** du moniteur qui choisit,
+     * et non la raison du départ en file : si le réseau revient pendant que le
+     * tour attend, la phrase change avec lui (T318).
+     */
+    val queuedNotice: String
+        get() = if (current.networkIsUp) ChatCopy.queuedWhileServerWorks else ChatCopy.queuedOffline
+
+    /** Ce que le fil dit de lui-même quand il s'est ouvert sans le serveur. */
+    val threadNotice: String
+        get() = if (current.networkIsUp) ChatCopy.threadWhileServerWorks else ChatCopy.offline
+
+    /**
+     * Relit le moniteur. Appelé aux moments où la phrase peut changer : à
+     * l'ouverture, quand un tour part dans la file, quand la file rend son
+     * verdict, et au retour au premier plan.
+     */
+    suspend fun refreshNetworkState() {
+        val up = transport.isOnline()
+        if (up != current.networkIsUp) change { copy(networkIsUp = up) }
+    }
+
     // MARK: - Le crédit du jour
 
     /**
@@ -563,6 +594,9 @@ class ChatModel(
                 (transport.offlineThread(error) ?: throw error) to true
             }
             change { copy(thread = loaded, isOffline = offline, errorMessage = null) }
+            // Un fil local ne dit « hors ligne » que si le réseau manque
+            // vraiment : sinon, c'est le serveur qui met du temps (T318).
+            refreshNetworkState()
             cursor = loaded.now
             // Ce que le serveur rend, il l'a reçu : son crédit le compte déjà.
             // Et le téléphone le garde, pour rouvrir le fil sans réseau.
@@ -1253,6 +1287,10 @@ class ChatModel(
                     // Et l'écran **le dit** (Hugo, 12/10/2026) : sans ça, on
                     // envoyait hors ligne sans savoir que c'était gardé.
                     change { copy(turn = ChatTurnState.Idle, queuedTurnIds = queuedTurnIds + outgoing.id) }
+                    // Reste à savoir **ce qu'on attend** — le réseau, ou le
+                    // serveur (T318) : la phrase se choisit sur l'état présent
+                    // du moniteur, qu'on relit ici.
+                    refreshNetworkState()
                     // Le vocal que la limite a coupé, parti dans la file : pas
                     // de reçu pour apporter la bulle de MEMO, l'app pose la sienne.
                     if (limitTurnId == outgoing.id) {
@@ -1680,6 +1718,10 @@ class ChatModel(
         if (delivery.state != ChatDelivery.Sending && delivery.id in current.queuedTurnIds) {
             change { copy(queuedTurnIds = queuedTurnIds - delivery.id) }
         }
+
+        // Ce que la file vient de dire d'un tour peut changer la phrase de la
+        // barre : le réseau est peut-être revenu depuis (T318).
+        viewModelScope.launch { refreshNetworkState() }
 
         when (val state = delivery.state) {
             ChatDelivery.Sending -> mark(delivery.id, ChatDelivery.Sending)

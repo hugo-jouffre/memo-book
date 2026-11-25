@@ -46,7 +46,9 @@ struct ChatComposer: View {
             // barre le dit, et dit qu'on peut continuer (Hugo, 12/10/2026).
             // **Dans la pile**, comme le bandeau du crédit.
             if model.showsQueuedNotice, !model.recorder.isRecording {
-                BrandNotice(ChatCopy.queuedOffline)
+                // Le réseau, ou le serveur : la phrase se choisit sur l'état
+                // présent du moniteur (T318).
+                BrandNotice(model.queuedNotice)
                     .padding(.horizontal, MemoBookSpacing.snug)
                     .padding(.top, MemoBookSpacing.xs)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))

@@ -129,6 +129,26 @@ sealed class ApiError(cause: Throwable? = null) : Exception(cause) {
     val isTransport: Boolean get() = this is Transport
 
     /**
+     * **Le serveur n'a pas répondu à temps**, et ce n'est pas une panne de
+     * réseau (T318, Hugo, 08/11/2026 — « “Hors ligne” s'affiche après un vocal
+     * alors que le réseau va bien ; le serveur est simplement en train de
+     * travailler »).
+     *
+     * [isTransport] confond les deux : l'appel n'a pas abouti, et c'est tout
+     * ce qu'il dit. Or un vocal de quatre minutes passe par la transcription
+     * puis la rédaction, et le client abandonne à
+     * [ApiConfiguration.timeoutSeconds] — l'app annonçait alors « hors ligne »
+     * à quelqu'un dont le wifi va très bien. Le tour repart tout seul : il est
+     * gardé sur le téléphone, et le serveur reprend le même identifiant.
+     *
+     * OkHttp lève une [java.net.SocketTimeoutException] pour les trois délais
+     * (connexion, lecture, écriture), là où `URLError.timedOut` les réunit
+     * déjà côté iOS.
+     */
+    val isTimeout: Boolean
+        get() = this is Transport && error is java.net.SocketTimeoutException
+
+    /**
      * La panne est **du côté du serveur** — un 5xx —, pas de l'appareil ni de
      * la requête. C'est ce qui décide de proposer le support à côté de
      * « Réessayer » : contre un bogue de notre côté, réessayer ne suffit pas.

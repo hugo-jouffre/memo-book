@@ -165,7 +165,9 @@ fun ChatComposer(
             exit = if (reduceMotion) fadeOut(snap()) else fadeOut() + slideOutVertically { it / 2 },
         ) {
             BrandNotice(
-                ChatCopy.queuedOffline,
+                // Le réseau, ou le serveur : la phrase se choisit sur l'état
+                // présent du moniteur (T318).
+                model.queuedNotice,
                 Modifier
                     .padding(horizontal = MemoBookSpacing.snug)
                     .padding(top = MemoBookSpacing.xs),

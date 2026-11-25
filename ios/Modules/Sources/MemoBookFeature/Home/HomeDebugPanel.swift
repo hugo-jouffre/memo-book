@@ -62,6 +62,14 @@
                     // un état passager qu'on n'aurait sinon le temps de voir
                     // qu'avec un très mauvais réseau.
                     action(model.isOffline ? "Repasser en ligne" : "Passer hors ligne", model.debugToggleOffline)
+                    // Et le cas voisin, qu'on confondait avec lui (T318) : le
+                    // réseau va bien, c'est le serveur qui met du temps. Les
+                    // appels expirent, le vocal retombe dans la file, et la
+                    // barre doit le dire autrement.
+                    action(
+                        model.isServerSlow ? "Serveur de nouveau rapide" : "Serveur qui met du temps",
+                        model.debugToggleSlowServer
+                    )
                     action("+ vocal en attente") { Task { await model.debugQueueRecording() } }
                     action("Envoi en cours", model.debugShowSending)
                     action("Vocal envoyé", model.debugShowDelivered)

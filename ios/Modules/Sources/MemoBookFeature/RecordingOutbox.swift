@@ -180,6 +180,12 @@ public final class RecordingOutbox {
         /// moniteur, et le reste — file, envois, reprise — se comporte
         /// exactement comme sous un vrai tunnel. Absent de l'app livrée.
         private var forcedOffline = false
+
+        /// **Le serveur met du temps** (T318) : les appels expirent, le
+        /// moniteur reste en ligne. Observable, pour que l'interrupteur du
+        /// bac à sable sache dire dans quel sens il va. Absent de l'app
+        /// livrée.
+        public private(set) var isServerSlow = false
     #endif
 
     /// Combien de temps la confirmation d'arrivée reste à l'écran. Assez pour
@@ -1180,6 +1186,18 @@ struct TripSyncEvent: Sendable {
             if isOnline { Task { await flush() } }
         }
 
+        /// **Le serveur met du temps, le réseau va bien** (T318).
+        ///
+        /// Le moniteur reste en ligne — c'est tout l'intérêt : le tour part,
+        /// l'appel expire, il retombe dans la file, et l'écran doit dire que
+        /// le serveur travaille au lieu d'annoncer une panne de réseau. Sans
+        /// cet interrupteur, l'état ne se regarde qu'en ralentissant un vrai
+        /// serveur.
+        public func debugSetServerSlow(_ slow: Bool) {
+            isServerSlow = slow
+            SandboxNetwork.isSlow.withLock { $0 = slow }
+        }
+
         /// Met un vocal en file sans passer par le micro.
         public func debugQueue(_ audio: RecordedAudio, for tripId: String) async {
             _ = await queue(OutgoingTurn.voice(audio, levels: []), for: tripId)
@@ -1202,7 +1220,9 @@ struct TripSyncEvent: Sendable {
         /// Repart d'une file vide, en ligne, sans message.
         public func debugReset() async {
             forcedOffline = false
+            isServerSlow = false
             SandboxNetwork.isOffline.withLock { $0 = false }
+            SandboxNetwork.isSlow.withLock { $0 = false }
             refreshOnline()
             confirmation?.cancel()
             justDelivered = nil

@@ -259,20 +259,25 @@ extension PreviewAPI {
     // comme sur le serveur — voir `SandboxCredit` (PreviewSupport.swift).
 
     public func chatThread(tripId: String) async throws -> ChatThread {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         var thread = await chat.read(tripId: tripId)
         thread.dailyCredit = sandboxCredit(tripId: tripId)
         return thread
     }
 
     public func chatUpdates(tripId: String, since: Date) async throws -> ChatThreadUpdate {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         var update = await chat.updates(tripId: tripId, since: since)
         update.dailyCredit = sandboxCredit(tripId: tripId)
         return update
     }
 
     public func sendChatText(tripId: String, turn: ChatTextTurn) async throws -> ChatTurnReceipt {
+        // **Un envoi qui expire** (T318), quand le bac à sable joue le serveur
+        // qui met du temps : le réseau est debout, l'appel n'aboutit pas, et
+        // le tour retombe dans la file. Hors ligne, on n'arrive même pas ici —
+        // la file garde le tour sans rien tenter.
+        try SandboxNetwork.failIfUnreachable()
         let credit = try await chargingCredit(tripId: tripId) {
             try chargeSandboxText(turn.text, suggestionId: turn.suggestionId, turnId: turn.id, tripId: tripId)
         }
@@ -291,6 +296,11 @@ extension PreviewAPI {
     }
 
     public func sendChatVoice(tripId: String, turn: ChatVoiceTurn) async throws -> ChatTurnReceipt {
+        // **Un envoi qui expire** (T318), quand le bac à sable joue le serveur
+        // qui met du temps : le réseau est debout, l'appel n'aboutit pas, et
+        // le tour retombe dans la file. Hors ligne, on n'arrive même pas ici —
+        // la file garde le tour sans rien tenter.
+        try SandboxNetwork.failIfUnreachable()
         let credit = try await chargingCredit(tripId: tripId) {
             try chargeSandboxVoice(seconds: turn.durationSeconds, turnId: turn.id, tripId: tripId)
         }
@@ -331,6 +341,11 @@ extension PreviewAPI {
     }
 
     public func sendChatPhotos(tripId: String, turn: ChatPhotosTurn) async throws -> ChatTurnReceipt {
+        // **Un envoi qui expire** (T318), quand le bac à sable joue le serveur
+        // qui met du temps : le réseau est debout, l'appel n'aboutit pas, et
+        // le tour retombe dans la file. Hors ligne, on n'arrive même pas ici —
+        // la file garde le tour sans rien tenter.
+        try SandboxNetwork.failIfUnreachable()
         let attachments = turn.photos.enumerated().map { index, _ in
             PhotoAttachment(id: "\(turn.id)-\(index)")
         }

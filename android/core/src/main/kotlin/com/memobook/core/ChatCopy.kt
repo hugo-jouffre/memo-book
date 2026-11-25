@@ -59,6 +59,26 @@ object ChatCopy {
     const val queuedOffline =
         "Tu es hors ligne, mais tu peux continuer à raconter : **tes messages sont gardés sur ton téléphone**, et partiront dès que la connexion reviendra."
 
+    /**
+     * **Le réseau va bien, c'est le serveur qui met du temps** (T318, Hugo,
+     * 08/11/2026 — « “Hors ligne” s'affiche après un vocal alors que le réseau
+     * va bien »).
+     *
+     * Un vocal de quatre minutes passe par la transcription puis la rédaction,
+     * et le client abandonne à 60 s : le tour retombe dans la file, exactement
+     * comme sans réseau. Les deux situations ne se disent pourtant pas pareil
+     * — l'une se répare en cherchant du réseau, l'autre en attendant.
+     */
+    const val queuedWhileServerWorks =
+        "Le serveur met du temps à répondre. **Ce que tu viens de raconter est gardé sur ton téléphone**, et repart tout seul — tu peux continuer."
+
+    /**
+     * Le même cas, mais en tête du fil : il n'a pas pu se lire, et ce n'est pas
+     * le réseau.
+     */
+    const val threadWhileServerWorks =
+        "Le serveur met du temps à répondre. **Ce que tu racontes est gardé sur ton téléphone**, et partira dès qu'il aura repris."
+
     // MARK: - La mention de confidentialité
 
     /**

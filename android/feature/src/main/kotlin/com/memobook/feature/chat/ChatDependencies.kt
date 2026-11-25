@@ -74,6 +74,9 @@ fun AppDependencies.chatModel(tripId: String, stepId: String? = null, audio: Cha
         // un fil **local** — les derniers messages gardés s'il y en a, sinon
         // l'accueil de MEMO —, et ce qui attend d'être envoyé.
         offlineThread = { error -> offlineThread(tripId, error) },
+        // **Le réseau, maintenant** (T318) : un tour qui attend pendant que le
+        // moniteur dit « en ligne » attend le serveur, pas la connexion.
+        isOnline = { outbox.isOnline.value },
     )
     return ChatModel(
         transport = transport,

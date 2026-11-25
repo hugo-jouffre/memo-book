@@ -504,6 +504,9 @@ public final class AppDependencies {
                 throw RecordingOutbox.Rejection(message: message)
             }
         }
+        // **Le réseau, maintenant** (T318) : un tour qui attend pendant que
+        // le moniteur dit « en ligne » attend le serveur, pas la connexion.
+        transport.isOnline = { [outbox] in await outbox.isOnline }
         transport.waiting = { [outbox] in await outbox.waiting(for: tripId) }
         transport.deliveries = { [outbox] in await outbox.turnDeliveries() }
         // « Supprimer », sous une bulle qui attend l'illimité : le tour quitte

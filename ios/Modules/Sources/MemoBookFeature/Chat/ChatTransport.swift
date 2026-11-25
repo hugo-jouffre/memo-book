@@ -225,6 +225,15 @@ public struct ChatTransport: Sendable {
     /// fil local.
     public var offlineThread: @Sendable (any Error) async -> ChatThread?
 
+    /// **Le réseau est là, maintenant** (T318).
+    ///
+    /// Ce que le moniteur en dit à l'instant où on le demande, et non la
+    /// raison pour laquelle un tour est parti dans la file : un tour qui
+    /// attend pendant que le réseau va bien attend le **serveur**, et l'écran
+    /// ne doit pas dire « hors ligne ». Vrai par défaut — un double qui ne
+    /// s'en occupe pas n'a pas de panne de réseau à annoncer.
+    public var isOnline: @Sendable () async -> Bool = { true }
+
     /// Oublie un tour qui attend sur le disque — « Supprimer », sous une
     /// bulle qui attend l'illimité (03/10/2026) : sans abonnement, rien ne le
     /// ferait jamais partir, et sa bulle se reposerait à chaque ouverture.
