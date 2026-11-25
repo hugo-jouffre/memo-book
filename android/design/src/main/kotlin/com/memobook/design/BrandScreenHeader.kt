@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
@@ -169,7 +170,14 @@ private fun BackButton(onBack: () -> Unit) {
  * @param label ce que TalkBack annonce.
  */
 @Composable
-fun BrandHeaderAction(@DrawableRes icon: Int, label: String, modifier: Modifier = Modifier, action: () -> Unit) {
+fun BrandHeaderAction(
+    @DrawableRes icon: Int,
+    label: String,
+    modifier: Modifier = Modifier,
+    isAvailable: Boolean = true,
+    onUnavailable: (() -> Unit)? = null,
+    action: () -> Unit,
+) {
     // L'icône suit le texte, la cible non : une commande qui grandit à l'infini
     // pousserait le titre hors de sa ligne. 24 et non 28 (Hugo, 19/09/2026) :
     // le tracé du partage remplit sa boîte bien plus que le crayon ou
@@ -185,8 +193,20 @@ fun BrandHeaderAction(@DrawableRes icon: Int, label: String, modifier: Modifier 
             // l'app (`Stroke/Border Width`) : un second filet plus fin ne se
             // verrait pas, il ne ferait que se distinguer à l'export.
             .border(1.dp, MemoBookColor.ink, shape)
-            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = action)
-            .semantics { contentDescription = label },
+            // Le dessin pâlit, la cible non : le geste reste entier, c'est lui
+            // qui va chercher l'explication — « ce qu'on ne peut pas faire
+            // pâlit, ça ne se désactive pas » (`ios/CLAUDE.md`).
+            .alpha(if (isAvailable) 1f else 0.45f)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClick = if (isAvailable) action else ({ onUnavailable?.invoke(); Unit }),
+            )
+            .semantics {
+                contentDescription = label
+                if (!isAvailable) stateDescription = "Non disponible"
+            },
         contentAlignment = Alignment.Center,
     ) {
         Image(

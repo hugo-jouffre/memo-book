@@ -167,11 +167,29 @@ extension BrandScreenHeader where Trailing == EmptyView {
 public struct BrandHeaderAction: View {
     private let icon: String
     private let label: String
+    private let isAvailable: Bool
+    private let onUnavailable: (() -> Void)?
     private let action: () -> Void
 
-    public init(icon: String, label: String, action: @escaping () -> Void) {
+    /// - Parameters:
+    ///   - isAvailable: la commande mène-t-elle quelque part. Fermée, elle
+    ///     **pâlit et reste tapable** : l'appui appelle `onUnavailable` au lieu
+    ///     d'`action` — même contrat que ``BrandToggleCard`` et
+    ///     ``BrandSegmentedPicker``, et pour la même raison : un `disabled`
+    ///     avale le geste et n'explique rien.
+    ///   - onUnavailable: ce qu'on fait de cet appui. Poser un message,
+    ///     toujours.
+    public init(
+        icon: String,
+        label: String,
+        isAvailable: Bool = true,
+        onUnavailable: (() -> Void)? = nil,
+        action: @escaping () -> Void
+    ) {
         self.icon = icon
         self.label = label
+        self.isAvailable = isAvailable
+        self.onUnavailable = onUnavailable
         self.action = action
     }
 
@@ -186,7 +204,7 @@ public struct BrandHeaderAction: View {
     public var body: some View {
         let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.snug)
 
-        return Button(action: action) {
+        return Button(action: isAvailable ? action : { onUnavailable?() }) {
             Image(brand: icon)
                 .resizable()
                 .renderingMode(.template)
@@ -202,10 +220,14 @@ public struct BrandHeaderAction: View {
                 // (`Stroke/Border Width`) : un second filet plus fin ne se
                 // verrait pas, il ne ferait que se distinguer à l'export.
                 .overlay { shape.strokeBorder(MemoBookColor.ink, lineWidth: 1) }
+                // Le dessin pâlit, la cible non : le geste reste entier, c'est
+                // lui qui va chercher l'explication.
+                .opacity(isAvailable ? 1 : 0.45)
                 .contentShape(shape)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+        .accessibilityValue(isAvailable ? "" : "Non disponible")
     }
 }
 

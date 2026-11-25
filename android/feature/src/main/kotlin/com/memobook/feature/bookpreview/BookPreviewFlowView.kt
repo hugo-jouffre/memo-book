@@ -201,7 +201,16 @@ fun BookPreviewFlowView(
 
             when (kind) {
                 BookShareKind.Pdf -> {
-                    val file = model.exportPdf() ?: return@launch
+                    // Le carnet est composé mais son PDF n'est pas là : la
+                    // feuille se referme sur le bandeau qui propose de le
+                    // recharger (T302). Depuis que l'app n'invente plus de
+                    // fichier, ce chemin existe — et il ne doit surtout pas
+                    // être silencieux.
+                    val file = model.exportPdf() ?: run {
+                        showsShareChoice = false
+                        model.reportMissingDocument()
+                        return@launch
+                    }
                     // **Le fichier seul** (Hugo, 10/11/2026) : « c'est soit on
                     // partage direct le fichier PDF, soit on partage le lien de
                     // prévisualisation ». Le lien l'accompagnait, si bien que
@@ -256,6 +265,7 @@ fun BookPreviewFlowView(
                     model = model,
                     state = state,
                     onIntent = handle,
+                    onShare = openShare,
                     onBack = onBack,
                     isAwaitingServer = isAwaitingServer,
                     onHeaderPlaced = { headerBottom = it },
@@ -393,6 +403,7 @@ private fun BookCompositionView(
     model: BookPreviewModel,
     state: BookPreviewModel.State,
     onIntent: (BookPreviewIntent) -> Unit,
+    onShare: () -> Unit,
     onBack: () -> Unit,
     isAwaitingServer: Boolean,
     onHeaderPlaced: (Dp) -> Unit,
@@ -419,14 +430,17 @@ private fun BookCompositionView(
             subtitle = BookCopy.Composition.message,
             // Le partage n'a rien à partager tant que le carnet n'est pas
             // composé. Le bouton reste à sa place — il déciderait sinon de la
-            // hauteur de l'en-tête en apparaissant.
+            // hauteur de l'en-tête en apparaissant — et il **pâlit** au lieu
+            // d'être mort (T302) : son appui pose l'explication juste dessous.
             //
-            // ⚠️ **Désactivé ici, et pas sur l'en-tête** (Hugo, 19/09/2026) :
-            // posé sur l'en-tête entier, le `disabled` emportait la flèche de
-            // retour avec lui, et on restait bloqué sur l'écran de composition
-            // jusqu'à la fin du chargement.
-            trailing = { DisabledHeaderAction() },
+            // ⚠️ La fermeture est sur le bouton, et pas sur l'en-tête (Hugo,
+            // 19/09/2026) : posé sur l'en-tête entier, le `disabled` d'alors
+            // emportait la flèche de retour avec lui, et on restait bloqué sur
+            // l'écran de composition jusqu'à la fin du chargement.
+            trailing = { BookShareAction(model, state, onShare) },
         )
+
+        BookPreviewNotice(state)
 
         // **La page se monte, puis la suivante** (Hugo, 08/10/2026), et ce qui
         // se passe s'écrit **par-dessus**, en corps de texte, avec un sablier :
@@ -493,31 +507,6 @@ private fun CompositionStatusOverlay(visible: Boolean, state: BookPreviewModel.S
     }
 }
 
-/**
- * Le partage de l'en-tête, fermé : à sa place, pâli, sans geste. Le
- * `.disabled(true)` d'iOS, que `BrandHeaderAction` n'a pas.
- */
-@Composable
-private fun DisabledHeaderAction() {
-    Box(
-        Modifier
-            .alpha(0.4f)
-            .clearAndSetSemantics {
-                contentDescription = BookCopy.Preview.Voice.share
-                role = Role.Button
-                disabled()
-            },
-    ) {
-        BrandHeaderAction(R.drawable.icon_share_system, BookCopy.Preview.Voice.share, action = {})
-        // Le toucher s'arrête ici : il ne doit pas même faire pâlir la commande.
-        Box(
-            Modifier
-                .matchParentSize()
-                .pointerInput(Unit) { detectTapGestures { } },
-        )
-    }
-}
-
 // MARK: - Aperçu PDF
 
 /**
@@ -550,21 +539,18 @@ private fun BookReaderView(
         BrandScreenHeader(
             BookCopy.Preview.title,
             onBack = onBack,
-            subtitle = BookCopy.Preview.subtitle(title = state.preview?.title ?: "", pages = state.sheetCount),
+            subtitle = state.headerSubtitle,
             isSubtitleLoading = state.preview == null,
-            trailing = { BrandHeaderAction(R.drawable.icon_share_system, BookCopy.Preview.Voice.share, action = onShare) },
+            trailing = { BookShareAction(model, state, onShare) },
         )
 
-        // Une régénération en fond (étape validée) ne doit jamais reprendre
-        // l'écran plein de composition : les pages déjà là restent
-        // feuilletables, ce bandeau discret suffit à le dire.
-        AnimatedVisibility(
-            visible = state.isRecomposing,
-            enter = fadeIn(SwiftMotion.snappy(0.25f)) + expandVertically(SwiftMotion.snappy(0.25f), expandFrom = Alignment.Top),
-            exit = fadeOut(SwiftMotion.snappy(0.25f)) + shrinkVertically(SwiftMotion.snappy(0.25f), shrinkTowards = Alignment.Top),
-        ) {
-            BrandNotice(BookCopy.Preview.recomposing)
-        }
+        // Ce que l'écran dit de lui-même : une régénération en fond (étape
+        // validée) ne doit jamais reprendre l'écran plein de composition — les
+        // pages déjà là restent feuilletables, ce bandeau discret suffit à le
+        // dire —, et **un carnet qui n'est pas composé le dit aussi** (T302) :
+        // la page crème ne s'explique pas toute seule, elle se lit comme une
+        // page blanche composée.
+        BookPreviewNotice(state)
 
         // Le crochet réservé pour « l'aperçu PDF qui se recompose » — voir
         // `BrandRefreshFlash`. Ne se joue jamais à la première arrivée ni sur un

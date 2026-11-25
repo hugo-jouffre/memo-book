@@ -76,6 +76,78 @@ public final class BookPreviewModel {
     /// feuillette.
     public var isComposed: Bool { preview?.hasReadyRender ?? false }
 
+    /// **Le carnet se partage** : une composition a abouti, il y a donc un
+    /// carnet derrière la page (T302).
+    ///
+    /// Ce n'est pas ``isComposed``, qui croit un statut « prêt » sur parole —
+    /// voir ``BookPreview/hasComposedDocument``. Un carnet que le serveur
+    /// annonce prêt sans PDF n'a ni fichier ni lien à envoyer, et c'est
+    /// exactement l'état dans lequel « Partager » envoyait un faux carnet.
+    public var canShare: Bool { preview?.hasComposedDocument ?? false }
+
+    /// **Le sous-titre de l'en-tête** : « Rome et la Dolce Vita - 10 pages
+    /// composées », ou le **titre seul** tant que rien n'est composé (T302).
+    ///
+    /// Le compte de pages vient du serveur, et il survit à un rendu qui n'a
+    /// pas abouti : annoncer « 10 pages composées » au-dessus d'une page vide
+    /// est la première chose qui fait prendre ce carnet pour un carnet prêt.
+    public var headerSubtitle: String {
+        let titre = preview?.title ?? ""
+        guard canShare else { return titre }
+        return BookCopy.Preview.subtitle(title: titre, pages: sheetCount)
+    }
+
+    /// Quelqu'un a touché « Partager » alors qu'il était fermé. Retombe dès
+    /// que le carnet est composé — voir ``apply(_:)``.
+    public private(set) var hasAskedToShare = false
+
+    /// Ce que l'aperçu dit de lui-même, sous son en-tête.
+    public struct Notice: Equatable {
+        public let message: String
+        /// Vrai quand la phrase **répond à un geste** — un appui sur
+        /// « Partager » fermé : c'est le ton `.information` de la marque. Faux
+        /// pour l'état des choses, qui reste au beige.
+        public let answersAGesture: Bool
+    }
+
+    /// Le mot posé sous l'en-tête des trois écrans de l'aperçu, ou `nil` quand
+    /// la page qu'on regarde est bien celle du carnet.
+    ///
+    /// Un seul à la fois, et dans cet ordre : la réponse à un geste d'abord —
+    /// on vient de la demander —, la remise à jour ensuite, et enfin l'état des
+    /// choses.
+    public var notice: Notice? {
+        if hasAskedToShare {
+            return Notice(message: BookCopy.Share.notComposedYet, answersAGesture: true)
+        }
+        // L'écran de composition dit déjà tout sous sa page, et mieux que ce
+        // bandeau : la phase en cours, et les souvenirs qu'elle attend. Le
+        // doubler ferait dire deux fois la même chose au même écran — et
+        // « On remet à jour ton carnet… » y serait faux : rien n'est à
+        // remettre à jour, c'est la première composition.
+        guard stage == .preview else { return nil }
+        if isRecomposing {
+            return Notice(message: BookCopy.Preview.recomposing, answersAGesture: false)
+        }
+        guard !canShare else { return nil }
+        return Notice(message: BookCopy.Preview.notComposed, answersAGesture: false)
+    }
+
+    /// Dit pourquoi « Partager » ne mène nulle part. Appelé par le bouton
+    /// pâli, qui reste tapable : « ce qu'on ne peut pas faire pâlit, ça ne se
+    /// désactive pas » (`ios/CLAUDE.md`).
+    public func explainShareIsClosed() { hasAskedToShare = true }
+
+    /// Le fichier n'a pas pu être fabriqué : le carnet est composé — sinon
+    /// « Partager » serait resté fermé —, mais son PDF n'est pas descendu.
+    ///
+    /// Ce n'est donc pas une composition qui manque, et le message le dit :
+    /// ``BookCopy/Preview/loadFailed`` propose de reprendre le téléchargement.
+    /// Sans lui, l'appui sur « Partager le fichier pdf » ne faisait plus rien
+    /// du tout — c'est le défaut que le PDF d'attente était venu couvrir en
+    /// septembre, et il n'est pas question de le laisser revenir.
+    public func reportMissingDocument() { errorMessage = BookCopy.Preview.loadFailed }
+
     /// Où en est la composition qui tourne — ce que l'écran de composition dit
     /// sous sa page. `nil` avant le premier sondage, et sur un serveur qui ne
     /// le dit pas.
@@ -502,6 +574,10 @@ public final class BookPreviewModel {
         )
         preview = loaded
 
+        // Le carnet est arrivé : l'explication n'a plus d'objet, et le bouton
+        // qu'elle désignait vient de s'ouvrir.
+        if canShare { hasAskedToShare = false }
+
         switch loaded.status {
         case .ready, .failed:
             isRecomposing = false
@@ -760,13 +836,18 @@ public final class BookPreviewModel {
     public func exportPdf(chapters choisis: Set<Int>? = nil) -> URL? {
         let title = preview?.title ?? "Carnet MemoBook"
 
-        // **Il y a toujours un fichier à partager** (Hugo, 19/09/2026). Quand
-        // le PDF du serveur n'est pas chargé — aperçu du jeu d'essai, réseau
-        // absent, carnet pas encore composé —, `documentData` est nul et le
-        // bouton ne faisait rien du tout : on touchait « Partager le fichier
-        // PDF » et la feuille du système n'arrivait jamais. On en compose donc
-        // un, d'une page, qui dit ce qu'il est.
-        let complet = renderer.documentData ?? Self.placeholderPdf(title: title)
+        // **L'app n'invente plus de carnet** (T302, Hugo, 08/11/2026).
+        //
+        // Elle en composait un, d'une page, qui disait qu'il n'était pas le
+        // carnet : c'était la réponse à « il y a toujours un fichier à
+        // partager » (Hugo, 19/09/2026), quand toucher « Partager le fichier
+        // PDF » sans document n'ouvrait rien du tout. Mais c'est ce
+        // fichier-là que Hugo a reçu en croyant partager son carnet, et un
+        // faux carnet est pire qu'un bouton qui n'ouvre rien.
+        //
+        // Le geste est fermé en amont — voir ``canShare``, qui pâlit le bouton
+        // et explique —, donc on n'arrive plus ici sans document.
+        guard let complet = documentToShare(title: title) else { return nil }
         // **Quelques étapes seulement** (T285) : le PDF est déjà là, on le
         // découpe sur place. Rien ne repart au serveur, et ça marche hors
         // ligne. Un découpage qui échoue rend le carnet entier — mieux vaut
@@ -786,6 +867,23 @@ public final class BookPreviewModel {
         } catch {
             return nil
         }
+    }
+
+    /// Le document qui part. `nil` quand le PDF du serveur n'est pas chargé.
+    ///
+    /// ⚠️ **Le bac à sable garde son fichier d'attente.** Le jeu d'essai n'a
+    /// pas de PDF — ``BookPreview/fixture`` le dit nommément —, et sans lui la
+    /// feuille de partage et le choix des étapes (T285) ne se regarderaient
+    /// plus du tout hors serveur. Il n'est compilé qu'en debug : un TestFlight
+    /// est un build release, il n'en a pas, et personne ne peut donc recevoir
+    /// ce fichier.
+    private func documentToShare(title: String) -> Data? {
+        if let data = renderer.documentData { return data }
+        #if DEBUG
+            return Self.placeholderPdf(title: title)
+        #else
+            return nil
+        #endif
     }
 
     /**
@@ -828,11 +926,15 @@ public final class BookPreviewModel {
         return place > 0 ? extrait.dataRepresentation() : nil
     }
 
+    #if DEBUG
     /// Un PDF d'une page, composé par l'app, à la place du carnet.
     ///
     /// Il **dit qu'il n'est pas le carnet** : partager un fichier vide ou une
     /// page blanche laisserait croire à un carnet raté. Une page A5 au format
     /// du carnet, le titre, et la phrase qui explique.
+    ///
+    /// ⚠️ **Debug seulement depuis T302** : il ne sert plus qu'au bac à sable
+    /// — voir ``documentToShare(title:)``.
     private static func placeholderPdf(title: String) -> Data {
         // A5 en points PostScript : le format du carnet.
         let page = CGRect(x: 0, y: 0, width: 420, height: 595)
@@ -863,6 +965,7 @@ public final class BookPreviewModel {
             body.draw(in: CGRect(x: margin, y: margin + 120, width: width, height: 200))
         }
     }
+    #endif
 
     #if DEBUG
         /// Rejoue la composition depuis le début. Absent de l'app livrée.

@@ -423,6 +423,17 @@ object BookCopy {
         const val recomposing = "On remet à jour ton carnet…"
 
         /**
+         * **Sous l'en-tête, quand il n'y a pas de carnet derrière la page**
+         * (T302) : le serveur annonce un carnet prêt, mais aucun PDF n'existe.
+         *
+         * L'écran ne doit pas se présenter comme prêt. La page crème ne dit
+         * rien d'elle-même — c'est le papier du carnet, et on la prend pour
+         * une page blanche composée.
+         */
+        const val notComposed =
+            "Ce carnet n’est pas encore composé : **ses pages arrivent** dès que MemoBook a fini de les mettre en page."
+
+        /**
          * Ce qu'on lit dans le PDF d'attente, celui que l'app compose quand le
          * carnet du serveur n'est pas chargé — voir `BookPreviewModel`. Les
          * treize espaces du milieu sont ceux de la chaîne Swift, au caractère près.
@@ -525,6 +536,17 @@ object BookCopy {
             "Partage un fichier PDF accessible hors connexion et sur l’outil de ton choix ou partage un lien de prévisualisation permettant de suivre l’avancée de ton carnet en direct."
 
         const val sharePdf = "Partager le fichier pdf"
+
+        /**
+         * **La réponse à un appui sur « Partager » fermé** (T302).
+         *
+         * Le bouton pâlit et reste tapable — « ce qu'on ne peut pas faire
+         * pâlit, ça ne se désactive pas » (`ios/CLAUDE.md`) —, et voilà ce
+         * qu'il répond. La sortie qu'il nomme est vraie : l'aperçu relance la
+         * composition à chaque ouverture (`POST /v1/memos/:id/renders`).
+         */
+        const val notComposedYet =
+            "Il n’y a rien à partager tant que ton carnet n’est pas composé. **La composition repart à chaque ouverture de cet écran** — « Partager » s’ouvrira dès qu’elle aboutit."
         const val shareLink = "Partager le lien de prévisualisation"
 
         /**

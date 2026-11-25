@@ -383,11 +383,28 @@ public enum BookCopy {
         /// temps.
         public static let recomposing = "On remet à jour ton carnet…"
 
-        /// Ce qu'on lit dans le PDF d'attente, celui que l'app compose quand le
-        /// carnet du serveur n'est pas chargé — voir `BookPreviewModel`.
-        public static let placeholderPdfBody = """
-            Ce carnet n’est pas encore composé : ce fichier tient sa place,             le temps que MemoBook mette en page tes souvenirs.
-            """
+        /// **Sous l'en-tête, quand il n'y a pas de carnet derrière la page**
+        /// (T302) : le serveur annonce un carnet prêt, mais aucun PDF n'existe.
+        ///
+        /// L'écran ne doit pas se présenter comme prêt. La page crème de
+        /// `BookSheetImage` ne dit rien d'elle-même — c'est le papier du
+        /// carnet, et on la prend pour une page blanche composée.
+        public static let notComposed =
+            "Ce carnet n’est pas encore composé : **ses pages arrivent** dès que MemoBook a fini de les mettre en page."
+
+        #if DEBUG
+            /// Ce qu'on lit dans le PDF d'attente, celui que l'app compose
+            /// quand le carnet du serveur n'est pas chargé — voir
+            /// `BookPreviewModel`.
+            ///
+            /// ⚠️ **Debug seulement depuis T302** : ce fichier est celui que
+            /// Hugo a reçu en croyant partager son carnet. Il ne reste que
+            /// pour le bac à sable, dont le jeu d'essai n'a pas de PDF.
+            public static let placeholderPdfBody = """
+                Ce carnet n’est pas encore composé : ce fichier tient sa place, le temps que MemoBook mette en page tes souvenirs.
+                """
+        #endif
+
         public static let order = "Commander ce carnet"
 
         /// La porte de service, sous le bouton grisé : commander alors que le
@@ -472,6 +489,17 @@ public enum BookCopy {
             "Partage un fichier PDF accessible hors connexion et sur l’outil de ton choix ou partage un lien de prévisualisation permettant de suivre l’avancée de ton carnet en direct."
 
         public static let sharePdf = "Partager le fichier pdf"
+
+        /// **La réponse à un appui sur « Partager » fermé** (T302).
+        ///
+        /// Le bouton pâlit et reste tapable — « ce qu'on ne peut pas faire
+        /// pâlit, ça ne se désactive pas » (`ios/CLAUDE.md`) —, et voilà ce
+        /// qu'il répond. La sortie qu'il nomme est vraie : l'aperçu relance la
+        /// composition à chaque ouverture (`POST /v1/memos/:id/renders`), il
+        /// n'y a donc rien d'autre à faire qu'attendre, et surtout rien à aller
+        /// chercher ailleurs.
+        public static let notComposedYet =
+            "Il n’y a rien à partager tant que ton carnet n’est pas composé. **La composition repart à chaque ouverture de cet écran** — « Partager » s’ouvrira dès qu’elle aboutit."
 
         // MARK: Choisir les étapes (T285, 21/11/2026)
 

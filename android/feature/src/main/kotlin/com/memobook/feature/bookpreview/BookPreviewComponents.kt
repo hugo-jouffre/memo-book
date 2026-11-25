@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -37,6 +40,8 @@ import com.memobook.core.BookCopy
 import com.memobook.core.BookCovers
 import com.memobook.core.CoverFace
 import com.memobook.design.BrandButton
+import com.memobook.design.BrandHeaderAction
+import com.memobook.design.BrandNotice
 import com.memobook.design.BrandText
 import com.memobook.design.MemoBookColor
 import com.memobook.design.MemoBookFont
@@ -288,3 +293,54 @@ internal fun BookScreenModeButton(@DrawableRes icon: Int, label: String, action:
     }
 }
 
+/**
+ * **Le bouton « Partager » des trois écrans de l'aperçu** (T302).
+ *
+ * Il est ici et non recopié dans chacun pour la raison qui vaut pour tout ce
+ * fichier — les trois doivent poser le même bouton au même endroit — et pour
+ * une seconde : sa règle est une. On ne partage pas un carnet qui n'existe pas
+ * encore.
+ *
+ * Fermé, il **pâlit et reste tapable**, et l'appui pose l'explication sous
+ * l'en-tête ([BookPreviewModel.State.notice]). L'écran de composition posait
+ * jusqu'ici un bouton mort, sans un mot : ce que le design system interdit.
+ */
+@Composable
+internal fun BookShareAction(model: BookPreviewModel, state: BookPreviewModel.State, onShare: () -> Unit) {
+    BrandHeaderAction(
+        R.drawable.icon_share_system,
+        BookCopy.Preview.Voice.share,
+        isAvailable = state.canShare,
+        onUnavailable = model::explainShareIsClosed,
+        action = onShare,
+    )
+}
+
+/**
+ * **Ce que l'aperçu dit de lui-même, sous son en-tête** — voir
+ * [BookPreviewModel.State.notice] pour ce qui parle et dans quel ordre.
+ *
+ * Un seul bloc pour les trois écrans, et un seul mot à la fois : deux bandeaux
+ * empilés sous un en-tête ne se lisent plus, ils se sautent.
+ */
+@Composable
+internal fun BookPreviewNotice(state: BookPreviewModel.State, modifier: Modifier = Modifier) {
+    val notice = state.notice
+    // Le dernier mot connu tient la place pendant que la sortie s'anime :
+    // sans lui, la phrase disparaîtrait d'un coup au lieu de s'effacer.
+    var shown by remember { mutableStateOf(notice) }
+    if (notice != null) shown = notice
+    AnimatedVisibility(
+        visible = notice != null,
+        modifier = modifier,
+        enter = fadeIn(SwiftMotion.snappy(0.25f)) + expandVertically(SwiftMotion.snappy(0.25f), expandFrom = Alignment.Top),
+        exit = fadeOut(SwiftMotion.snappy(0.25f)) + shrinkVertically(SwiftMotion.snappy(0.25f), shrinkTowards = Alignment.Top),
+    ) {
+        shown?.let {
+            BrandNotice(
+                it.message,
+                tone = if (it.answersAGesture) BrandNotice.Tone.Information else BrandNotice.Tone.Neutral,
+            )
+        }
+    }
+}

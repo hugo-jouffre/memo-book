@@ -104,6 +104,13 @@ internal val BookCustomisation.Companion.fixture: BookCustomisation
  * **Sans PDF** : un aperçu n'a pas de document dans un jeu d'essai, et c'est
  * très bien — c'est l'état « le carnet existe, le fichier n'est pas encore là »
  * que R11 réclame et que la maquette ne dessine pas.
+ *
+ * Il porte en revanche un `readyRenderId` depuis T302, et c'est ce qui fait de
+ * lui un carnet **composé** : le partage se ferme désormais sur
+ * [BookPreview.hasComposedDocument], et sans ce champ le bac à sable n'aurait
+ * plus montré ni la feuille de partage ni le choix des étapes. Un carnet du jeu
+ * d'essai est composé — c'est son fichier qui n'est pas descendu, pas sa
+ * composition qui manque.
  */
 internal val BookPreview.Companion.fixture: BookPreview
     get() = BookPreview(
@@ -117,6 +124,7 @@ internal val BookPreview.Companion.fixture: BookPreview
             detail = "Les ruines dorées du Colisée nous rappellent la grandeur de l’histoire à chaque coin de rue.",
         ),
         hasConfiguredCovers = false,
+        readyRenderId = "render-rome",
     )
 
 /** Le carnet en train de se composer — l'écran « On compose ton Carnet ». */
