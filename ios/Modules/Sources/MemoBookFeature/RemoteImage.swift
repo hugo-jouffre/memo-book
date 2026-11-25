@@ -63,15 +63,39 @@ struct RemoteImage<Placeholder: View>: View {
         .task(id: url) { await load(url) }
     }
 
+    /// **L'image qui revient à cette URL-là**, et rien d'autre : celle du
+    /// cache, ou aucune.
+    ///
+    /// Rendre l'image courante quand l'URL n'a pas changé évite de redessiner
+    /// pour rien ; la rendre **nulle** quand l'URL change ou disparaît est
+    /// tout l'objet de la fonction — voir ``load(_:)``.
+    static func resynchronised(_ current: UIImage?, for url: URL?) -> UIImage? {
+        guard let url else { return nil }
+        let known = RemoteImageCache.shared.image(for: url)
+        // Même image : on rend l'instance en place, pour que l'affectation
+        // appelante n'écrive rien de nouveau.
+        return known === current ? current : known
+    }
+
     /// Charge une fois. Un échec n'est pas retenu : la vue garde son
     /// remplacement et redemandera en réapparaissant — même règle que les
     /// vignettes du fil.
     private func load(_ url: URL?) async {
+        // **D'abord remettre l'image en face de son URL.** SwiftUI réutilise
+        // l'identité d'une vue d'un élément à l'autre, et `@State` ne se
+        // repose qu'à la construction : la carte qui passe en tête de
+        // l'accueil — un voyage créé hors ligne, posé devant les autres par
+        // `mergingLocalTrips` — hérite de la vue de l'ancienne première, donc
+        // de **sa photo**. Un voyage qui n'en a pas encore affichait ainsi
+        // celle du voyage d'avant, ce qui ressemblait à une couverture
+        // partagée entre deux carnets (T301, Hugo, 08/11/2026).
+        //
+        // La ligne d'après revenait sans rien faire — `image` n'était pas
+        // nul, ou l'URL l'était —, et rien n'effaçait jamais ce qui restait
+        // à l'écran.
+        image = Self.resynchronised(image, for: url)
+
         guard let url, image == nil else { return }
-        if let cached = RemoteImageCache.shared.image(for: url) {
-            image = cached
-            return
-        }
 
         // `URLSession.shared` et non le client d'API : c'est lui qui porte
         // `URLCache`, et ces photos-là se servent sans session.
