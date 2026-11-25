@@ -281,14 +281,22 @@ police ou marge codée en dur ailleurs.
   du nombre de coches aurait fait deux dessins pour une même idée, ce que la
   règle cherche justement à éviter. La règle vise donc l'usage, pas le
   composant — à relire le jour où un vrai groupe à cocher naîtra ailleurs.
-- **Un enchaînement de feuilles ne s'empile pas.** Une confirmation en plusieurs
-  temps se fait dans **une seule** `BrandSheet` dont le contenu change (voir
-  `SubscriptionSheet`) : chaque feuille ouverte par-dessus une autre fait
-  reculer celle du dessous, et trois reculs de suite se lisent comme un
-  empilement de fenêtres au lieu d'un chemin. **Une exception, voulue** :
-  l'aperçu du carnet se pose *sur* la feuille d'abonnement (`BookPreviewSheet`
-  depuis `SubscriptionSheet`), parce qu'on y va voir et qu'on revient — un seul
-  recul, pas un chemin (Hugo, 16/09/2026 ; `docs/archive/ui-development-journal.md` § 16.9).
+- **Un enchaînement de feuilles ne s'empile pas, et n'a plus d'exception.** Une
+  confirmation en plusieurs temps se fait dans **une seule** `BrandSheet` dont
+  le contenu change — `SubscriptionSheet` et ses quatre temps, `NewNotebookSheet`
+  et ses deux : chaque feuille ouverte par-dessus une autre fait reculer celle
+  du dessous, et des reculs de suite se lisent comme un empilement de fenêtres
+  au lieu d'un chemin.
+
+  La règle a porté une exception un temps — l'aperçu posé sur la feuille
+  d'abonnement, « on y va voir et on revient » (Hugo, 16/09/2026 ;
+  `docs/archive/ui-development-journal.md` § 16.9). Elle n'a plus d'objet :
+  l'offre est devenue un `fullScreenCover` et non une feuille, donc
+  `BookPreviewSheet` s'y pose en **premier niveau** — rien à corriger là, une
+  feuille sur un plein écran n'empile rien. Le dernier empilement de l'app, la
+  saisie du code posée sur « Nouveau carnet », est devenu le second temps de
+  cette feuille (T133, Hugo, 25/11/2026). Une feuille qui en présenterait une
+  autre serait donc un défaut, et non un cas à arbitrer.
 - Le focus appartient à l'écran, pas au champ : un `@FocusState` sur une énum
   passé aux `BrandTextField`, pour que le clavier enchaîne les champs.
 - `BrandChatBubble` est **la** bulle de conversation (fond, queue, marges,
