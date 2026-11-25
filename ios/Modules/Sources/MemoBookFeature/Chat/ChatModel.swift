@@ -1994,6 +1994,49 @@ public final class ChatModel {
     /// (`services/photoPicking.ts`).
     public func sendPhotos(_ images: [PickedPhoto]) {
         guard !images.isEmpty else { return }
+
+        // **Une photo sans mémoire se fait demander où et quand** (T315) :
+        // passée par une messagerie, elle n'a ni date de prise de vue ni
+        // position, et ce que la photothèque en dit est le jour où elle est
+        // arrivée sur le téléphone. L'envoi entier attend la réponse — les
+        // photos du lot qui savent, elles, ne seront pas retouchées.
+        if images.contains(where: \.isForwarded) {
+            photosAwaitingOrigin = images
+            return
+        }
+
+        deliver(images)
+    }
+
+    /// Les photos choisies qui attendent de dire d'où elles viennent. `nil` :
+    /// la feuille est fermée, il n'y a rien en attente.
+    public private(set) var photosAwaitingOrigin: [PickedPhoto]?
+
+    /// Combien, dans ce lot, ont perdu leur mémoire — ce que la feuille
+    /// annonce. Les autres partent telles quelles.
+    public var forwardedPhotoCount: Int {
+        photosAwaitingOrigin?.count(where: \.isForwarded) ?? 0
+    }
+
+    /// La réponse du voyageur. Ce qu'il laisse vide ne remplace rien, et seules
+    /// les photos sans mémoire sont rangées : celles qui portaient leur date
+    /// en savent plus que lui.
+    public func placeAwaitingPhotos(day: Date?, place: String) {
+        guard let waiting = photosAwaitingOrigin else { return }
+        photosAwaitingOrigin = nil
+        deliver(waiting.map { $0.isForwarded ? $0.placed(day: day, place: place) : $0 })
+    }
+
+    /// La sortie, et le glissé qui referme la feuille : les photos partent
+    /// comme avant T315. Elles sont déjà choisies — une sélection perdue
+    /// parce qu'on n'a pas répondu serait pire que mal rangée.
+    public func sendAwaitingPhotosAsIs() {
+        guard let waiting = photosAwaitingOrigin else { return }
+        photosAwaitingOrigin = nil
+        deliver(waiting)
+    }
+
+    private func deliver(_ images: [PickedPhoto]) {
         hideExhaustedNotice()
 
         var envoye = false

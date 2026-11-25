@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import MemoBookCore
 import Photos
 import PhotosUI
 import SwiftUI
@@ -21,10 +22,43 @@ public struct PickedPhoto: Sendable, Hashable {
     /// n'a pas de position, ou que le nom n'a pas pu être trouvé.
     public let placeName: String?
 
-    public init(data: Data, capturedAt: Date? = nil, placeName: String? = nil) {
+    /// **Elle est passée par une messagerie, et n'a plus de mémoire** (T315).
+    ///
+    /// Ni date de prise de vue ni position : ce que la photothèque en dit est
+    /// le jour où le fichier est arrivé sur le téléphone. ``capturedAt`` ment
+    /// donc, et c'est pour ça qu'on demande — voir ``PhotoFilename``.
+    public let isForwarded: Bool
+
+    public init(
+        data: Data,
+        capturedAt: Date? = nil,
+        placeName: String? = nil,
+        isForwarded: Bool = false
+    ) {
         self.data = data
         self.capturedAt = capturedAt
         self.placeName = placeName
+        self.isForwarded = isForwarded
+    }
+
+    /// La même photo, rangée au jour et à l'endroit que le voyageur vient de
+    /// donner (T315). Ce qu'il laisse vide ne remplace rien.
+    ///
+    /// Le jour est posé à **midi** : une journée prise à minuit bascule à la
+    /// veille dès que le serveur la lit en UTC depuis l'est de Greenwich, et
+    /// la photo change de page.
+    public func placed(day: Date?, place: String?) -> PickedPhoto {
+        let trimmed = place?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return PickedPhoto(
+            data: data,
+            capturedAt: day.map(Self.noon(of:)) ?? capturedAt,
+            placeName: (trimmed?.isEmpty == false ? trimmed : nil) ?? placeName,
+            isForwarded: isForwarded
+        )
+    }
+
+    static func noon(of day: Date) -> Date {
+        Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: day) ?? day
     }
 }
 
@@ -120,6 +154,27 @@ extension PhotoOrigin {
         return PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject
     }
 
+    /// **Le nom d'origine du fichier**, celui que la photothèque a reçu —
+    /// voir ``MemoBookCore/PhotoFilename`` pour ce qu'il raconte (T315).
+    ///
+    /// `PHAssetResource` et non `PHAsset` : la fiche n'expose aucun nom, la
+    /// ressource oui. La première suffit — une photo en a une, deux avec sa
+    /// version retouchée, et les deux portent le même nom d'origine.
+    nonisolated static func filename(of asset: PHAsset) -> String? {
+        PHAssetResource.assetResources(for: asset).first?.originalFilename
+    }
+
+    /// Cette photo a-t-elle perdu sa mémoire en route.
+    ///
+    /// **Deux conditions, et il faut les deux** : le nom dit la messagerie, et
+    /// la photo n'a **aucune position**. Une photo qui a gardé sa position a
+    /// gardé ses métadonnées — quel que soit son nom —, et il n'y a alors rien
+    /// à demander.
+    nonisolated static func isForwarded(_ asset: PHAsset?) -> Bool {
+        guard let asset, asset.location == nil, let name = filename(of: asset) else { return false }
+        return PhotoFilename.isForwarded(name)
+    }
+
     /// Décrit une série de photos choisies, dans l'ordre du choix.
     ///
     /// Les octets sont déjà chargés par l'appelant : cette fonction ne
@@ -131,7 +186,12 @@ extension PhotoOrigin {
             let asset = index < items.count ? Self.asset(of: items[index]) : nil
             let place = await asset?.location.asyncFlatMap { await origin.name(of: $0) }
             described.append(
-                PickedPhoto(data: data, capturedAt: asset?.creationDate, placeName: place ?? nil)
+                PickedPhoto(
+                    data: data,
+                    capturedAt: asset?.creationDate,
+                    placeName: place ?? nil,
+                    isForwarded: Self.isForwarded(asset)
+                )
             )
         }
         return described
