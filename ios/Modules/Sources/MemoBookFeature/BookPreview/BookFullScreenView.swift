@@ -27,10 +27,16 @@ struct BookFullScreenView: View {
     var body: some View {
         VStack(spacing: MemoBookSpacing.xs) {
             header
+            // Le même mot que sous l'en-tête du mode réduit, et il n'arrive
+            // qu'en réponse à un geste ou à une attente : le reste du temps, la
+            // page garde toute la hauteur (T302).
+            BookPreviewNotice(model: model)
+                .padding(.horizontal, MemoBookSpacing.screenMargin)
             page
             filmstrip
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .animation(.snappy(duration: 0.25), value: model.notice)
     }
 
     // MARK: L'en-tête
@@ -41,16 +47,9 @@ struct BookFullScreenView: View {
     private var header: some View {
         BrandScreenHeader(
             title: BookCopy.Preview.title,
-            subtitle: BookCopy.Preview.subtitle(
-                title: model.preview?.title ?? "",
-                pages: model.sheetCount
-            )
+            subtitle: model.headerSubtitle
         ) {
-            BrandHeaderAction(
-                icon: "IconShareSystem",
-                label: BookCopy.Preview.Voice.share,
-                action: onShare
-            )
+            BookShareAction(model: model, action: onShare)
         }
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         .padding(.top, MemoBookSpacing.xs)

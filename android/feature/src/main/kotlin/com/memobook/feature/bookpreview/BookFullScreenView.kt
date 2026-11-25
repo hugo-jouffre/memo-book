@@ -100,7 +100,7 @@ internal fun BookFullScreenView(model: BookPreviewModel, onShare: () -> Unit, on
             .navigationBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs),
     ) {
-        FullScreenHeader(state, onShare, onBack)
+        FullScreenHeader(model, state, onShare, onBack)
         FullScreenPage(model, state, Modifier.weight(1f))
         Filmstrip(model, state)
     }
@@ -111,7 +111,12 @@ internal fun BookFullScreenView(model: BookPreviewModel, onShare: () -> Unit, on
  * une ligne de séparation en bas, parce que la page qui suit monte jusqu'à lui.
  */
 @Composable
-private fun FullScreenHeader(state: BookPreviewModel.State, onShare: () -> Unit, onBack: () -> Unit) {
+private fun FullScreenHeader(
+    model: BookPreviewModel,
+    state: BookPreviewModel.State,
+    onShare: () -> Unit,
+    onBack: () -> Unit,
+) {
     BrandScreenHeader(
         BookCopy.Preview.title,
         onBack = onBack,
@@ -121,8 +126,8 @@ private fun FullScreenHeader(state: BookPreviewModel.State, onShare: () -> Unit,
             }
             .padding(horizontal = MemoBookSpacing.screenMargin)
             .padding(top = MemoBookSpacing.xs),
-        subtitle = BookCopy.Preview.subtitle(title = state.preview?.title ?: "", pages = state.sheetCount),
-        trailing = { BrandHeaderAction(R.drawable.icon_share_system, BookCopy.Preview.Voice.share, action = onShare) },
+        subtitle = state.headerSubtitle,
+        trailing = { BookShareAction(model, state, onShare) },
     )
 }
 

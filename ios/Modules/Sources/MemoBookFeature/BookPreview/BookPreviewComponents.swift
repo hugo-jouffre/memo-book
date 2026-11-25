@@ -89,6 +89,48 @@ struct BookActionsBlock: View {
     }
 }
 
+/// **Le bouton « Partager » des trois écrans de l'aperçu** (T302).
+///
+/// Il est ici et non recopié dans chacun pour la raison qui vaut pour tout ce
+/// fichier — les trois doivent poser le même bouton au même endroit — et pour
+/// une seconde : sa règle est une. On ne partage pas un carnet qui n'existe pas
+/// encore.
+///
+/// Fermé, il **pâlit et reste tapable**, et l'appui pose l'explication sous
+/// l'en-tête (``BookPreviewModel/notice``). Il était `disabled(true)` sur
+/// l'écran de composition : le geste y était avalé sans un mot, ce que le
+/// design system interdit depuis.
+struct BookShareAction: View {
+    let model: BookPreviewModel
+    let action: () -> Void
+
+    var body: some View {
+        BrandHeaderAction(
+            icon: "IconShareSystem",
+            label: BookCopy.Preview.Voice.share,
+            isAvailable: model.canShare,
+            onUnavailable: model.explainShareIsClosed,
+            action: action
+        )
+    }
+}
+
+/// **Ce que l'aperçu dit de lui-même, sous son en-tête** — voir
+/// ``BookPreviewModel/notice`` pour ce qui parle et dans quel ordre.
+///
+/// Un seul bloc pour les trois écrans, et un seul mot à la fois : deux
+/// bandeaux empilés sous un en-tête ne se lisent plus, ils se sautent.
+struct BookPreviewNotice: View {
+    let model: BookPreviewModel
+
+    var body: some View {
+        if let notice = model.notice {
+            BrandNotice(notice.message, tone: notice.answersAGesture ? .information : .neutral)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+}
+
 /// Une feuille du carnet : la page du PDF, ou **le plat choisi** quand c'est
 /// la première ou la dernière et que les couvertures sont réglées.
 ///

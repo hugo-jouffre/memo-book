@@ -122,6 +122,13 @@ extension BookPreview {
     /// **Sans PDF** : un aperçu n'a pas de document dans un jeu d'essai, et
     /// c'est très bien — c'est l'état « le carnet existe, le fichier n'est pas
     /// encore là » que R11 réclame et que la maquette ne dessine pas.
+    ///
+    /// Il porte en revanche un `readyRenderId` depuis T302, et c'est ce qui
+    /// fait de lui un carnet **composé** : le partage se ferme désormais sur
+    /// ``BookPreview/hasComposedDocument``, et sans ce champ le bac à sable
+    /// n'aurait plus montré ni la feuille de partage ni le choix des étapes.
+    /// Un carnet du jeu d'essai est composé — c'est son fichier qui n'est pas
+    /// descendu, pas sa composition qui manque.
     public static var fixture: BookPreview {
         BookPreview(
             memoId: "memo-rome",
@@ -135,6 +142,7 @@ extension BookPreview {
                     "Les ruines dorées du Colisée nous rappellent la grandeur de l’histoire à chaque coin de rue."
             ),
             hasConfiguredCovers: false,
+            readyRenderId: "render-rome",
             // Les étapes du carnet, pour que la feuille « Qu'est-ce que tu
             // envoies ? » ait de quoi se montrer dans le bac à sable (T285).
             chapters: [

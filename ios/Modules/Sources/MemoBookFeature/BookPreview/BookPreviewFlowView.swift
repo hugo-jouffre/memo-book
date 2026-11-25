@@ -213,7 +213,16 @@ public struct BookPreviewFlowView: View {
     /// peu près la même chose — et que le carnet partait avec une adresse à
     /// suivre que personne n'avait demandé à donner.
     private func sharePdf(chapters: Set<Int>?) async {
-        guard let file = model.exportPdf(chapters: chapters) else { return }
+        guard let file = model.exportPdf(chapters: chapters) else {
+            // Le carnet est composé mais son PDF n'est pas là : la feuille se
+            // referme sur le bandeau qui propose de le recharger (T302).
+            // Depuis que l'app n'invente plus de fichier, ce chemin existe —
+            // et il ne doit surtout pas être silencieux.
+            showsShareChoice = false
+            shareStep = .choice
+            model.reportMissingDocument()
+            return
+        }
         showsShareChoice = false
         shareStep = .choice
         systemShare = payload(
@@ -304,22 +313,21 @@ private struct BookCompositionView: View {
                     title: BookCopy.Composition.title,
                     subtitle: BookCopy.Composition.message
                 ) {
-                    BrandHeaderAction(
-                        icon: "IconShareSystem",
-                        label: BookCopy.Preview.Voice.share,
-                        action: onShare
-                    )
-                    // Le partage n'a rien à partager tant que le carnet n'est
-                    // pas composé. Le bouton reste à sa place — il déciderait
-                    // sinon de la hauteur de l'en-tête en apparaissant.
+                    // Le partage n'a rien à partager tant que le carnet
+                    // n'est pas composé. Le bouton reste à sa place — il
+                    // déciderait sinon de la hauteur de l'en-tête en
+                    // apparaissant — et il **pâlit** au lieu d'être désactivé
+                    // (T302) : son appui pose l'explication juste dessous.
                     //
-                    // ⚠️ **Désactivé ici, et pas sur l'en-tête** (Hugo,
-                    // 19/09/2026) : posé sur l'en-tête entier, le `disabled`
-                    // emportait la flèche de retour avec lui, et on restait
-                    // bloqué sur l'écran de composition jusqu'à la fin du
-                    // chargement.
-                    .disabled(true)
+                    // ⚠️ La fermeture est sur le bouton, et pas sur l'en-tête
+                    // (Hugo, 19/09/2026) : posé sur l'en-tête entier, le
+                    // `disabled` d'alors emportait la flèche de retour avec
+                    // lui, et on restait bloqué sur l'écran de composition
+                    // jusqu'à la fin du chargement.
+                    BookShareAction(model: model, action: onShare)
                 }
+
+                BookPreviewNotice(model: model)
 
                 // **La page se monte, puis la suivante** (Hugo, 08/10/2026),
                 // et ce qui se passe s'écrit **par-dessus**, en corps de texte,
@@ -376,6 +384,7 @@ private struct BookCompositionView: View {
             .padding(.bottom, MemoBookSpacing.l)
         }
         .scrollIndicators(.hidden)
+        .animation(.snappy(duration: 0.25), value: model.notice)
         // VoiceOver n'a pas besoin de la cascade : une phrase suffit à dire ce
         // qui se passe, et elle est annoncée sans interrompre la lecture.
         .accessibilityElement(children: .contain)
@@ -423,26 +432,20 @@ private struct BookReaderView: View {
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
                 BrandScreenHeader(
                     title: BookCopy.Preview.title,
-                    subtitle: BookCopy.Preview.subtitle(
-                        title: model.preview?.title ?? "",
-                        pages: model.sheetCount
-                    ),
+                    subtitle: model.headerSubtitle,
                     isSubtitleLoading: model.preview == nil
                 ) {
-                    BrandHeaderAction(
-                        icon: "IconShareSystem",
-                        label: BookCopy.Preview.Voice.share,
-                        action: onShare
-                    )
+                    BookShareAction(model: model, action: onShare)
                 }
 
-                // Une régénération en fond (étape validée) ne doit jamais
-                // reprendre l'écran plein de composition : les pages déjà là
-                // restent feuilletables, ce bandeau discret suffit à le dire.
-                if model.isRecomposing {
-                    BrandNotice(BookCopy.Preview.recomposing)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
+                // Ce que l'écran dit de lui-même : une régénération en fond
+                // (étape validée) ne doit jamais reprendre l'écran plein de
+                // composition — les pages déjà là restent feuilletables, ce
+                // bandeau discret suffit à le dire —, et **un carnet qui n'est
+                // pas composé le dit aussi** (T302) : la page crème ne
+                // s'explique pas toute seule, elle se lit comme une page
+                // blanche composée.
+                BookPreviewNotice(model: model)
 
                 BookPageStage {
                     BookSheetView(
@@ -490,7 +493,7 @@ private struct BookReaderView: View {
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.top, MemoBookSpacing.xs)
             .padding(.bottom, MemoBookSpacing.l)
-            .animation(.snappy(duration: 0.25), value: model.isRecomposing)
+            .animation(.snappy(duration: 0.25), value: model.notice)
         }
         .scrollIndicators(.hidden)
     }

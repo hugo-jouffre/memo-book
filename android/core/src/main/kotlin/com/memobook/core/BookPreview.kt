@@ -258,6 +258,26 @@ data class BookPreview(
     val hasReadyRender: Boolean
         get() = readyRenderId != null || pdfUrl != null || status.isReady
 
+    /**
+     * **Un PDF composé existe** — ce qu'il faut pour partager quoi que ce soit
+     * (T302, Hugo, 08/11/2026 : « un carnet non composé se présente comme
+     * prêt… “Partager” doit rester fermé tant que la composition n'est pas
+     * allée au bout »).
+     *
+     * Trois questions voisines, et il fallait les distinguer : [hasDocument]
+     * dit que le fichier est ouvert à l'écran ; [hasReadyRender] que le carnet
+     * est commandable, en croyant un statut « prêt » sur parole — c'est ce qui
+     * permet au jeu d'essai de se feuilleter sans PDF ; celle-ci qu'il y a un
+     * carnet **derrière** la page, donc un fichier ou un lien à envoyer.
+     *
+     * Le statut seul ne suffit donc pas ici : le serveur tire le statut du
+     * **dernier** rendu et `pdfUrl` du dernier rendu **prêt**
+     * (`appSerializers.ts`). Un rendu marqué prêt dont le fichier n'a jamais
+     * été écrit annonce « ready » sans PDF.
+     */
+    val hasComposedDocument: Boolean
+        get() = pdfUrl != null || readyRenderId != null
+
     companion object {
         /**
          * Le lien des jeux d'essai — bac à sable, aperçus —, à la forme de

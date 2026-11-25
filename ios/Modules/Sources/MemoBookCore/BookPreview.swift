@@ -366,4 +366,32 @@ public struct BookPreview: Codable, Sendable, Hashable {
     public var hasReadyRender: Bool {
         readyRenderId != nil || pdfUrl != nil || status.isReady
     }
+
+    /**
+     **Un PDF composé existe** — ce qu'il faut pour partager quoi que ce soit
+     (T302, Hugo, 08/11/2026 : « un carnet non composé se présente comme
+     prêt… “Partager” doit rester fermé tant que la composition n'est pas allée
+     au bout »).
+
+     Trois questions voisines, et il fallait les distinguer :
+
+     - ``hasDocument`` : le fichier est **ouvert à l'écran**, on peut poser
+       quelque chose dessus ;
+     - ``hasReadyRender`` : le carnet est commandable — il croit un statut
+       « prêt » sur parole, et c'est ce qui permet au jeu d'essai de se
+       feuilleter sans PDF ;
+     - celle-ci : il y a un carnet **derrière** la page, donc un fichier ou un
+       lien à envoyer.
+
+     Le statut seul ne suffit donc pas ici, et c'est tout le ticket : le
+     serveur tire le statut du **dernier** rendu et `pdfUrl` du dernier rendu
+     **prêt** (`appSerializers.ts`). Un rendu marqué prêt dont le fichier n'a
+     jamais été écrit annonce donc `ready` sans PDF — l'aperçu s'ouvrait sur
+     une page crème, et « Partager » envoyait un PDF d'une page qui disait
+     lui-même qu'il n'était pas le carnet.
+
+     `pdfUrl` suffit sans le statut : il ne s'efface pas pendant une
+     recomposition, et le carnet qu'on feuillette alors se partage très bien.
+     */
+    public var hasComposedDocument: Bool { pdfUrl != nil || readyRenderId != nil }
 }
