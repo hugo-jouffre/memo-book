@@ -164,6 +164,65 @@ pas dans ce fichier n'existe pas.
 | T284 | **Aucune carte n'est générée dans le PDF d'aperçu.** Le gabarit sait pourtant le faire — `layout_chapter_map` ouvre un chapitre sur la carte de la région. **Fait le 21/11** ([PR 248](https://github.com/hugo-jouffre/memo-book/pull/248)) : ni l'un ni l'autre. Tout fonctionnait — layout, géométrie, contours de Natural Earth, rues d'OpenStreetMap — et il manquait **le champ `map` sur une journée**, que personne n'écrivait : ni le structureur déterministe, ni le prompt du metteur en page qui n'en dit pas un mot ; les cartes de l'atelier, elles, sont écrites à la main dans le payload. `ouvrirLesChapitresSurUneCarte` les pose maintenant **sans modèle**, depuis `memo_steps.destinationCountryCode`. **Une par pays** : sans coordonnées (T280), deux cartes d'un même pays seraient identiques. Vérifié en rendu local — le contour de la Colombie s'ouvre à côté du récit du jour 1 | Aperçu PDF, impression |
 | T285 | **Au partage d'un PDF, pouvoir choisir ce qu'on envoie** : tout depuis le début, ou seulement quelques étapes sélectionnées avant l'envoi. Rien de tel dans le code. **Instruit le 21/11** ([PR 249](https://github.com/hugo-jouffre/memo-book/pull/249)) : la pièce qu'on croyait manquante ne manque pas. Le carnet composé fait **une page par entrée de `days[]`**, et `groupSteps` les regroupe déjà par étape : l'index étape → pages se **dérive** du payload, sans rien stocker. Vérifié sur le carnet d'exemple — « Jour 1 – Arrivée à Bogotá » pages 3-4, « Jour 2 – Monserrate » 5-6, « Jour 3 – Guatapé » 7-8. Et le PDF est **déjà chargé dans l'app** (`renderer.documentData`) : extraire des pages est local, instantané, hors ligne, sans nouveau rendu serveur. **Fait le 21/11** ([PR 250](https://github.com/hugo-jouffre/memo-book/pull/250)) : des **étapes à cocher**, toutes cochées en arrivant — « tout depuis le début » est donc l'état de départ, pas une option à prendre. `renders.chapters` porte l'index (dérivé, pas calculé) ; l'app découpe le PDF qu'elle a déjà, avec PDFKit : instantané, hors ligne, sans nouveau rendu serveur. **Les couvertures partent toujours** — un carnet qui commence par « Jour 4 » n'a plus l'air d'un carnet. Le **lien public** reste le carnet entier : le ticket dit « au partage d'un PDF ». ⚠️ Deux lignes du design system assumées : `BrandOptionGroup` sert ici à un choix **multiple**, et le choix des étapes est un **second temps de la même feuille** — elle ne se referme pas pour en rouvrir une autre. Les deux sont écrites dans `ios/CLAUDE.md` | Partager |
 
+### Lot du 8 novembre
+
+Les points envoyés par Hugo le 08/11/2026, **dans son ordre** — la table les
+garde tels quels, comme celle du 5 novembre. Trente-trois.
+
+**L'ordre dans lequel je les traite**, qui n'est pas celui-là (Hugo, 25/11/2026,
+m'a demandé de prioriser) :
+
+1. **Ce qui perd du contenu ou ment au voyageur** — T295, T301, T302, T315,
+   T309, T318. Une photo qui n'arrive pas et un carnet qui se dit prêt sans
+   l'être coûtent la confiance ; le reste coûte du confort.
+2. **Ce qui fait attendre** — T299, T307, T308.
+3. **Les gestes du fil** — T286, T288, T304, T306, T316, T289, T313, T312,
+   T305, T314.
+4. **Ce qui enrichit le récit** — T291, T292, T296, T297, T303, T310, T311,
+   T317.
+5. **L'accueil d'un voyage** — T293, T294, T290, T300.
+6. **À explorer, parce que ça change la forme du produit** — T298.
+
+⚠️ **Trois attendent quelqu'un d'autre** : T287 et T303 attendent leurs icônes
+dans Figma, T311 attend un choix d'argent de Hugo. Ils ne bloquent pas le
+reste.
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T286 | **Un message se sélectionne, et les raccourcis suivent.** Un clic simple sur un message le cerne d'un **liseré bleu clair**, et les propositions de réponse s'adaptent à **ce message-là** — aujourd'hui elles dépendent du fil entier, alors qu'elles répondent en réalité à un message précis | Conversation |
+| T287 | **Le passage « rédigé / brut » doit se faire tout petit** : deux icônes, sans libellé, discrètes, en haut à droite du message. La réanalyse aussi — une flèche qui tourne sur elle-même avec « IA » au centre. ⚠️ Les deux icônes se **dessinent dans Figma d'abord** (R10) | Conversation |
+| T288 | **L'appui long sur un message de MEMO ouvre ses gestes à lui** : réanalyser, modifier à la main, changer les dates (déduites automatiquement), changer le nom du lieu, supprimer (en rouge). Le pendant de l'appui long sur un message du voyageur, livré au lot du 5 novembre | Conversation |
+| T289 | **La barre de saisie et ses propositions s'effacent quand on remonte** le fil pour lire, et reviennent dès qu'on redescend | Conversation |
+| T290 | **L'image de l'accueil d'un voyage reste fixe** et c'est le bas de la page qui vient la recouvrir au défilement — titres et flèches passent derrière elle | Accueil d'un voyage |
+| T291 | **La rédaction comble les oublis sans demander** : un nom de lieu, d'hôtel, un mot de vocabulaire que le voyageur cherche et n'a pas dit. Le récit en sort plus complet et plus naturel. ⚠️ À border — c'est la frontière avec l'invention, et `docs/redaction.md` interdit d'ajouter ce qui n'a pas été dit | Conversation — rédaction |
+| T292 | **Choisir sa manière d'être rédigé**, dans la personnalisation du carnet : plusieurs façons proposées, plus ses propres indications. Changer de méthode annonce que **tout va être repris**, et c'est réservé aux **abonnés illimités** — sauf carnet d'une seule étape. Un abonné peut aussi tout faire reprendre sans rien changer, par un bouton | Réglages du voyage, Conversation |
+| T293 | **Les étapes se lisent de la plus récente à la plus ancienne** sur l'accueil d'un voyage | Accueil d'un voyage |
+| T294 | **Un rail de jours à droite** de l'accueil d'un voyage, qui suit le défilement des étapes | Accueil d'un voyage |
+| T295 | **Les photos de Maÿlis attendent depuis plusieurs jours.** Deux choses : la file ne se vide pas, et elle craint de perdre une sélection qui lui a pris du temps. ✅ Sur ce second point, rien n'est perdu — la file vit dans `Application Support`, qu'iOS ne purge pas. Reste **pourquoi elle ne part pas**, et le **saut de défilement** à chaque fois qu'elle repasse devant ses photos en attente | Conversation — photos |
+| T296 | **MEMO répond par un emoji** plutôt que par un message : 👀 lecture en cours, ⬆️ partira au retour du réseau, 🚘 ✈️ 🚂 ⛵️ selon le déplacement raconté, ✅ pris en compte. Et le voyageur peut réagir aux messages de MEMO pour valider sans écrire | Conversation |
+| T297 | **Un petit livre dépasse du bord**, en haut à droite, et sautille quand l'aperçu se met à jour — la porte d'entrée du PDF, à la manière des stories dans les messages d'Instagram. Il **évolue** : d'abord sans couverture, avec un mot disant qu'elle arrivera après quatre ou cinq étapes avec photos ; puis la couverture s'affiche, et le livre s'épaissit | Conversation, Aperçu PDF |
+| T298 | **Une conversation par étape**, ou un système à la Polarsteps où photos et textes d'une étape se tiennent, avec un glissé horizontal d'une étape à l'autre. **À explorer** : ça change la forme du produit. Question ouverte — que faire quand un seul vocal raconte plusieurs étapes ? Un partage visuel animé ? | Conversation |
+| T299 | **L'aperçu ne doit pas se remettre en page à chaque ouverture.** La dernière version est gardée **sur le téléphone**, donc lisible sans réseau, et un bouton à flèche tournante la régénère. La mise en page devrait se faire **au fil de la conversation**, prête d'avance. Et une régénération ne devrait refaire que **les pages modifiées**, en comparant l'ancien JSON au nouveau. ⚠️ Lié à T258, que je n'ai pas pu vérifier dans le dépôt | Aperçu PDF |
+| T300 | **Le bouton « Partager » du dernier écran de création** doit se distinguer de « Commencer » : fond blanc, ou simple contour vert | Création d'un voyage |
+| T301 | **Un second voyage créé pendant le premier reprend sa photo de couverture.** Côté serveur pourtant, `cover_photos` est bien lié au voyage (`memoId`) : le défaut est donc **dans l'app**, et chaque carte de l'accueil doit montrer la photo de **son** voyage | Accueil |
+| T302 | **Un carnet non composé se présente comme prêt** : page blanche, aucun chargement visible, et « Partager » envoie un PDF qui dit lui-même qu'il n'est pas composé. « Partager » doit rester fermé tant que la composition n'est pas allée au bout | Aperçu PDF |
+| T303 | **Des légendes sur les photos**, et des flèches qui désignent un détail de l'image. ⚠️ La flèche se **dessine dans Figma d'abord** : vectorielle, noire, contour blanc, arrondie (R10) | Conversation, Impression |
+| T304 | **« Importer des photos » ne doit pas envoyer de message.** La suggestion ouvre le sélecteur iOS — ce qu'elle fait déjà — mais elle poste aussi une bulle, et ça ressemble à un bug | Conversation |
+| T305 | **Les photos en nombre impair se rangent comme sur WhatsApp** : toute la largeur de la bulle occupée, chacune au format qu'elle a — carré, portrait, paysage. Et des coins **moins arrondis**, parallèles à ceux de la bulle | Conversation — photos |
+| T306 | **Pendant la rédaction, les propositions s'en vont** au lieu de tourner : elles descendent en douceur derrière la barre de saisie, et remontent quand elles sont prêtes | Conversation |
+| T307 | **La rédaction doit être plus rapide**, en reprenant ce qui avait été réglé du temps de GPT. Et le JSON de mise en page doit se fabriquer **en arrière-plan**, sans l'annoncer : rien n'oblige à dire que le carnet est prêt dès l'étape enregistrée — autant laisser le temps d'ajouter un vocal ou des photos | Conversation, Aperçu PDF |
+| T308 | **La date et le lieu d'une étape ne s'affichent qu'une fois compris.** Une date précise pour une journée, une **tranche** pour une période. Et une transcription n'est pas une étape : un vocal peut en couvrir plusieurs, une étape se raconter en plusieurs fois. ⚠️ Prolonge T267, T279 et T280 | Conversation |
+| T309 | **Les photos de Maÿlis, de très bonne qualité, mettent un temps fou.** Les compresser, tenter une version légère d'abord puis la bonne en arrière-plan. Et surtout : elles **restent en bas du fil** et remontent au mauvais endroit à l'envoi, alors qu'elles devraient garder leur place dans la chronologie, envoyées ou non. ⚠️ T275 a déjà ramené les photos à 2400 px le 19/11 — mesurer avant de recommencer | Conversation — photos |
+| T310 | **Une photo trop mauvaise se signale** et n'entre pas dans le carnet. Le voyageur peut passer outre, MemoBook lui déconseille. ⚠️ La netteté est déjà mesurée à l'arrivée (`photoSharpness`, T265) : il manque de le **dire** | Conversation — photos |
+| T311 | **Trop de photos : MemoBook choisit** les plus belles et les plus pertinentes, selon le récit et le poids de l'étape. ⚠️ C'est le reste de T265 — la netteté est faite, l'esthétique chiffrée à 5,1 ¢ une fois, la pertinence à 1,59 $ par carnet. Un **choix d'argent** t'appartient | Conversation, mise en page |
+| T312 | **Un ascenseur natif iOS le long du bord droit** du fil, pour savoir où l'on en est | Conversation |
+| T313 | **Les sauts de défilement**, en général, dans le fil | Conversation |
+| T314 | **« Retourner en bas » devient une flèche** dans un cercle, discrète, et disparaît quand on est déjà dans les dix derniers messages | Conversation |
+| T315 | **Les métadonnées d'une photo ne doivent pas se perdre** : lieu, date, heure. Une photo venue de WhatsApp les a déjà perdues — ça se voit à son nom de fichier : MemoBook doit le **détecter** et demander où et quand, faute de quoi il la placera mal | Conversation — photos |
+| T316 | **Pendant qu'un vocal se transcrit, ne rien montrer** : pas de bulle en construction, juste un petit 👂 posé sur le message du voyageur | Conversation |
+| T317 | **Dire qui raconte**, en tête de chaque paragraphe, quand le voyage se raconte à plusieurs. Le compte aide, mais l'IA devrait aussi **reconnaître les voix** de ceux qui parlent dans le même téléphone | Conversation, Impression |
+| T318 | **« Hors ligne » s'affiche après un vocal alors que le réseau va bien** — le serveur est simplement en train de travailler. L'animation et le mot doivent dire ça. ⚠️ Cousin de T275, dont le diagnostic tient déjà : « en ligne » ne veut pas dire « l'API répond » | Conversation |
+
 ### En pause — v2
 
 | # | Sujet | Écran / parcours |
