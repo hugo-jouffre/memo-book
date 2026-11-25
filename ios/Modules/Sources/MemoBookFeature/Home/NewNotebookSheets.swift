@@ -13,24 +13,62 @@ import UIKit
 ///
 /// **La feuille ne navigue pas**, comme l'accueil qui la présente : elle émet
 /// une ``HomeIntent`` et se referme. La seule exception est « Rejoins une
-/// aventure », qui a besoin d'un code avant de mener quelque part : elle ouvre
-/// alors ``JoinTripSheet`` par-dessus elle, qui fait vérifier le code par
-/// l'accueil (``HomeModel/join(code:)``) — c'est le voyage retrouvé qui devient
-/// l'intention.
+/// aventure », qui a besoin d'un code avant de mener quelque part : la feuille
+/// passe alors à son **second temps**, ``JoinTripStep``, qui fait vérifier le
+/// code par l'accueil (``HomeModel/join(code:)``) — c'est le voyage retrouvé
+/// qui devient l'intention.
+///
+/// Deux temps dans **une seule** feuille, et non une feuille posée sur l'autre
+/// (T133, Hugo, 25/11/2026) : c'était le dernier empilement de l'app, et
+/// « un enchaînement de feuilles ne s'empile pas » (`ios/CLAUDE.md`). Rien ne
+/// change pour qui s'en sert — renoncer au code ramenait déjà au choix, en
+/// refermant la feuille du dessus ; c'est maintenant le choix qui revient,
+/// sans seconde feuille à refermer.
 struct NewNotebookSheet: View {
     /// Le carnet que la dernière ligne propose de retrouver : celui qui est
     /// ouvert, sinon le prochain voyage prévu. `nil` quand il n'y a ni l'un ni
     /// l'autre — la ligne et son filet disparaissent alors ensemble, plutôt que
     /// de laisser un séparateur qui ne sépare plus rien.
     let resumableTrip: Trip?
-    /// Fait vérifier un code d'accès — voir ``JoinTripSheet``.
+    /// Fait vérifier un code d'accès — voir ``JoinTripStep``.
     var join: (String) async -> JoinOutcome = { _ in .notFound }
     let onIntent: (HomeIntent) -> Void
 
-    @State private var isJoining = false
+    /// Les deux temps de la feuille, dans l'ordre où on les traverse.
+    enum Step: Hashable {
+        /// Les trois portes, et le rappel du carnet en cours.
+        case choice
+        /// Le code d'accès d'un voyage qui existe déjà.
+        case join
+    }
+
+    @State private var step: Step = .choice
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        Group {
+            switch step {
+            case .choice: choice
+            case .join:
+                JoinTripStep(
+                    join: join,
+                    // Renoncer au code rend les trois portes, comme le faisait
+                    // la feuille du dessus en se refermant.
+                    onCancel: { step = .choice },
+                    onJoined: { tripId in
+                        dismiss()
+                        onIntent(.openTrip(id: tripId))
+                    }
+                )
+            }
+        }
+        // Le même fondu enchaîné que les quatre temps de ``SubscriptionSheet``,
+        // le cran de la feuille suivant la hauteur du temps affiché.
+        .animation(.smooth(duration: 0.3), value: step)
+    }
+
+    /// Le premier temps : par où commence un carnet.
+    private var choice: some View {
         BrandSheet(
             "Nouveau carnet",
             subtitle: "L’aventure commence maintenant",
@@ -58,7 +96,7 @@ struct NewNotebookSheet: View {
                     // Figma.
                     detail: "Écrivez l’aventure à plusieurs"
                 ) {
-                    isJoining = true
+                    step = .join
                 }
 
                 // ⚠️ **Pas dans la V1** (Hugo, 16/09/2026). La porte reste
@@ -77,15 +115,6 @@ struct NewNotebookSheet: View {
                 if let resumableTrip {
                     resumeSection(resumableTrip)
                 }
-            }
-        }
-        .brandSheet(isPresented: $isJoining) {
-            JoinTripSheet(join: join) { tripId in
-                // La feuille du code se referme elle-même ; celle-ci s'efface
-                // derrière, et on arrive dans le voyage qu'on vient de
-                // rejoindre plutôt que sur le choix qu'on vient de faire.
-                dismiss()
-                onIntent(.openTrip(id: tripId))
             }
         }
     }
@@ -368,15 +397,18 @@ struct NewNotebookOptionCard: View {
 
 // MARK: - Rejoindre
 
-/// Entrer le code d'accès d'un voyage qui existe déjà.
+/// Entrer le code d'accès d'un voyage qui existe déjà — **le second temps de
+/// ``NewNotebookSheet``**, et non une feuille à part (T133).
 ///
 /// Un seul champ, et le geste qui le remplit : un code d'accès arrive presque
 /// toujours par message, donc il se **colle** — le taper à la main est le cas
 /// rare, pas l'inverse. C'est pour ça que « Coller » est posé à côté du champ
 /// et non caché dans le menu d'un appui long.
-struct JoinTripSheet: View {
+struct JoinTripStep: View {
     /// Fait vérifier le code saisi, une fois nettoyé.
     let join: (String) async -> JoinOutcome
+    /// On renonce : la feuille rend ses trois portes.
+    let onCancel: () -> Void
     /// Le voyage est rejoint : son identifiant.
     let onJoined: (String) -> Void
 
@@ -447,7 +479,7 @@ struct JoinTripSheet: View {
         // maquette dessine celle d'Apple (R6). « Réessayer » rend le champ
         // pour corriger la faute de frappe ; « Annuler » renonce.
         .alert(JoinCopy.notFoundTitle, isPresented: $showsNotFound) {
-            Button(JoinCopy.cancel, role: .cancel) { dismiss() }
+            Button(JoinCopy.cancel, role: .cancel) { onCancel() }
             Button(JoinCopy.retry) { focus = .code }
         } message: {
             Text(JoinCopy.notFoundMessage)
@@ -521,8 +553,12 @@ struct JoinTripSheet: View {
     /// La sortie, en rouge et sans cadre : elle annule ce qu'on était en train
     /// de faire, elle ne le fait pas. Même dessin que « Supprimer mon compte »
     /// au bas du profil.
+    ///
+    /// Elle rend les trois portes et ne referme pas la feuille : c'est déjà ce
+    /// qu'on voyait avant T133, quand elle refermait la feuille du code et
+    /// découvrait le choix resté derrière.
     private var cancelButton: some View {
-        Button { dismiss() } label: {
+        Button { onCancel() } label: {
             Text("Annuler")
                 .font(MemoBookFont.button)
                 .foregroundStyle(MemoBookColor.error)
@@ -606,6 +642,6 @@ enum JoinCopy {
     Color.clear
         .background(MemoBookColor.background)
         .sheet(isPresented: .constant(true)) {
-            JoinTripSheet(join: { _ in .notFound }, onJoined: { _ in })
+            JoinTripStep(join: { _ in .notFound }, onCancel: {}, onJoined: { _ in })
         }
 }

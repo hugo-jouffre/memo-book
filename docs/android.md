@@ -179,7 +179,7 @@ régénérer avec elle (deux tests le vérifient).
 | iOS | État |
 |---|---|
 | `HomeView` : cartes, tiroir d'actions, micro, boîte hors ligne, alerte de fin de voyage (seulement pour un abonnement Google Play) | ✅ |
-| `NewNotebookSheet`, `JoinTripSheet` (Polarsteps reste « à venir ») | ✅ |
+| `NewNotebookSheet` et son second temps `JoinTripStep` (Polarsteps reste « à venir ») | ✅ |
 | `TripCreationView` : six étapes, création hors ligne, code d'accès, invitation par la feuille de partage | ✅ |
 | `TripHomeView` : en-tête, étapes, validation, suppression d'étape | ✅ |
 | `ChatView` : texte, vocal, photos, suggestions, appels à l'action, lecture à voix haute, photo plein écran, contexte du voyage, fil hors ligne | ✅ |

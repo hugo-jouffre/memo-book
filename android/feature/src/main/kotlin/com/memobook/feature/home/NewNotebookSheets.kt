@@ -4,9 +4,13 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,7 +64,6 @@ import com.memobook.design.BrandAlert
 import com.memobook.design.BrandButton
 import com.memobook.design.BrandKeyboardDismissBar
 import com.memobook.design.BrandSheet
-import com.memobook.design.BrandSheetHost
 import com.memobook.design.BrandText
 import com.memobook.design.BrandTextField
 import com.memobook.design.LocalBrandSheetDismiss
@@ -87,16 +90,23 @@ import kotlinx.coroutines.launch
  *
  * **La feuille ne navigue pas**, comme l'accueil qui la présente : elle émet
  * une [HomeIntent] et se referme. La seule exception est « Rejoins une
- * aventure », qui a besoin d'un code avant de mener quelque part : elle ouvre
- * alors [JoinTripSheet] par-dessus elle, qui fait vérifier le code par
- * l'accueil ([HomeModel.join]) — c'est le voyage retrouvé qui devient
+ * aventure », qui a besoin d'un code avant de mener quelque part : la feuille
+ * passe alors à son **second temps**, [JoinTripStep], qui fait vérifier le code
+ * par l'accueil ([HomeModel.join]) — c'est le voyage retrouvé qui devient
  * l'intention.
+ *
+ * Deux temps dans **une seule** feuille, et non une feuille posée sur l'autre
+ * (T133, Hugo, 25/11/2026) : c'était le dernier empilement de l'app, et « un
+ * enchaînement de feuilles ne s'empile pas » (`ios/CLAUDE.md`). Rien ne change
+ * pour qui s'en sert — renoncer au code ramenait déjà au choix, en refermant la
+ * feuille du dessus ; c'est maintenant le choix qui revient, sans seconde
+ * feuille à refermer.
  *
  * @param resumableTrip le carnet que la dernière ligne propose de retrouver :
  *   celui qui est ouvert, sinon le prochain voyage prévu. `null` quand il n'y a
  *   ni l'un ni l'autre — la ligne et son filet disparaissent alors ensemble,
  *   plutôt que de laisser un séparateur qui ne sépare plus rien.
- * @param join fait vérifier un code d'accès — voir [JoinTripSheet].
+ * @param join fait vérifier un code d'accès — voir [JoinTripStep].
  */
 @Composable
 fun NewNotebookSheet(
@@ -104,7 +114,7 @@ fun NewNotebookSheet(
     join: suspend (String) -> JoinOutcome = { JoinOutcome.NotFound },
     onIntent: (HomeIntent) -> Unit,
 ) {
-    var isJoining by remember { mutableStateOf(false) }
+    var step by remember { mutableStateOf(NewNotebookSheet.Step.Choice) }
     val dismiss = LocalBrandSheetDismiss.current
 
     /**
@@ -116,61 +126,83 @@ fun NewNotebookSheet(
         onIntent(intent)
     }
 
-    BrandSheet(
-        "Nouveau carnet",
-        subtitle = "L’aventure commence maintenant",
-        titleAlignment = BrandSheet.TitleAlignment.Centered,
-    ) {
-        // 12 entre les cartes, et non 16 : ce sont trois formulations d'un même
-        // choix, pas trois blocs indépendants. Elles doivent se lire comme une
-        // liste.
-        Column(
-            Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs + 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            NewNotebookOptionCard(
-                icon = NewNotebookOptionCard.Icon.Brand(R.drawable.icon_plus),
-                title = "À partir de zéro",
-                detail = "Raconte ton histoire, simplement",
-            ) { choose(HomeIntent.CreateTrip) }
+    // Le même fondu enchaîné que les quatre temps de `SubscriptionSheet`, la
+    // feuille suivant la hauteur du temps affiché.
+    AnimatedContent(
+        targetState = step,
+        transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) using SizeTransform(clip = false) },
+        label = "temps",
+    ) { shown ->
+        when (shown) {
+            NewNotebookSheet.Step.Choice -> BrandSheet(
+                "Nouveau carnet",
+                subtitle = "L’aventure commence maintenant",
+                titleAlignment = BrandSheet.TitleAlignment.Centered,
+            ) {
+                // 12 entre les cartes, et non 16 : ce sont trois formulations
+                // d'un même choix, pas trois blocs indépendants. Elles doivent
+                // se lire comme une liste.
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs + 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    NewNotebookOptionCard(
+                        icon = NewNotebookOptionCard.Icon.Brand(R.drawable.icon_plus),
+                        title = "À partir de zéro",
+                        detail = "Raconte ton histoire, simplement",
+                    ) { choose(HomeIntent.CreateTrip) }
 
-            NewNotebookOptionCard(
-                icon = NewNotebookOptionCard.Icon.Brand(R.drawable.icon_link),
-                title = "Rejoins une aventure",
-                // ⚠️ La maquette vouvoie ici (« Écrivez »), alors que l'app
-                // tutoie partout ailleurs. Même cas que les cartes du Welcome
-                // (T8 de `docs/archive/ui-development-journal.md`) : on
-                // implémente la copie de Figma en l'état, la correction se fait
-                // dans Figma.
-                detail = "Écrivez l’aventure à plusieurs",
-            ) { isJoining = true }
+                    NewNotebookOptionCard(
+                        icon = NewNotebookOptionCard.Icon.Brand(R.drawable.icon_link),
+                        title = "Rejoins une aventure",
+                        // ⚠️ La maquette vouvoie ici (« Écrivez »), alors que
+                        // l'app tutoie partout ailleurs. Même cas que les cartes
+                        // du Welcome (T8 de
+                        // `docs/archive/ui-development-journal.md`) : on
+                        // implémente la copie de Figma en l'état, la correction
+                        // se fait dans Figma.
+                        detail = "Écrivez l’aventure à plusieurs",
+                    ) { step = NewNotebookSheet.Step.Join }
 
-            // ⚠️ **Pas dans la V1** (Hugo, 16/09/2026). La porte reste dessinée
-            // — elle dit ce que l'app saura faire — mais elle s'efface et
-            // annonce son délai, au lieu de mener à une intention que `RootView`
-            // ignore en silence.
-            NewNotebookOptionCard(
-                icon = NewNotebookOptionCard.Icon.ThirdParty(R.drawable.icon_polarsteps),
-                title = "Importe depuis Polarsteps",
-                detail = "On récupérera toutes tes étapes",
-                availability = NewNotebookOptionCard.Availability.ComingSoon,
-            ) { choose(HomeIntent.ImportFromPolarsteps) }
+                    // ⚠️ **Pas dans la V1** (Hugo, 16/09/2026). La porte reste
+                    // dessinée — elle dit ce que l'app saura faire — mais elle
+                    // s'efface et annonce son délai, au lieu de mener à une
+                    // intention que `RootView` ignore en silence.
+                    NewNotebookOptionCard(
+                        icon = NewNotebookOptionCard.Icon.ThirdParty(R.drawable.icon_polarsteps),
+                        title = "Importe depuis Polarsteps",
+                        detail = "On récupérera toutes tes étapes",
+                        availability = NewNotebookOptionCard.Availability.ComingSoon,
+                    ) { choose(HomeIntent.ImportFromPolarsteps) }
 
-            if (resumableTrip != null) {
-                ResumeSection(resumableTrip) { choose(HomeIntent.OpenTrip(resumableTrip.id)) }
+                    if (resumableTrip != null) {
+                        ResumeSection(resumableTrip) { choose(HomeIntent.OpenTrip(resumableTrip.id)) }
+                    }
+                }
+            }
+
+            NewNotebookSheet.Step.Join -> JoinTripStep(
+                join = join,
+                // Renoncer au code rend les trois portes, comme le faisait la
+                // feuille du dessus en se refermant.
+                onCancel = { step = NewNotebookSheet.Step.Choice },
+            ) { tripId ->
+                dismiss()
+                onIntent(HomeIntent.OpenTrip(tripId))
             }
         }
     }
+}
 
-    BrandSheetHost(isPresented = isJoining, onDismissRequest = { isJoining = false }) {
-        JoinTripSheet(join = join) { tripId ->
-            // La feuille du code se referme elle-même ; celle-ci s'efface
-            // derrière, et on arrive dans le voyage qu'on vient de rejoindre
-            // plutôt que sur le choix qu'on vient de faire.
-            dismiss()
-            onIntent(HomeIntent.OpenTrip(tripId))
-        }
+/** Les temps de la feuille, sous son nom comme sur iOS (`NewNotebookSheet.Step`). */
+internal object NewNotebookSheet {
+    enum class Step {
+        /** Les trois portes, et le rappel du carnet en cours. */
+        Choice,
+
+        /** Le code d'accès d'un voyage qui existe déjà. */
+        Join,
     }
 }
 
@@ -466,8 +498,9 @@ private fun OptionArrow(accentColor: androidx.compose.ui.graphics.Color, isComin
 private enum class JoinField { Code }
 
 /**
- * Entrer le code d'accès d'un voyage qui existe déjà. Jumeau de
- * `JoinTripSheet` (`Home/NewNotebookSheets.swift`).
+ * Entrer le code d'accès d'un voyage qui existe déjà — **le second temps de
+ * [NewNotebookSheet]**, et non une feuille à part (T133). Jumeau de
+ * `JoinTripStep` (`Home/NewNotebookSheets.swift`).
  *
  * Un seul champ, et le geste qui le remplit : un code d'accès arrive presque
  * toujours par message, donc il se **colle** — le taper à la main est le cas
@@ -475,10 +508,15 @@ private enum class JoinField { Code }
  * et non caché dans le menu d'un appui long.
  *
  * @param join fait vérifier le code saisi, une fois nettoyé.
+ * @param onCancel on renonce : la feuille rend ses trois portes.
  * @param onJoined le voyage est rejoint : son identifiant.
  */
 @Composable
-fun JoinTripSheet(join: suspend (String) -> JoinOutcome, onJoined: (String) -> Unit) {
+fun JoinTripStep(
+    join: suspend (String) -> JoinOutcome,
+    onCancel: () -> Unit,
+    onJoined: (String) -> Unit,
+) {
     val context = LocalContext.current
     val dismiss = LocalBrandSheetDismiss.current
     val scope = rememberCoroutineScope()
@@ -581,11 +619,15 @@ fun JoinTripSheet(join: suspend (String) -> JoinOutcome, onJoined: (String) -> U
                 // La sortie, en rouge et sans cadre : elle annule ce qu'on était
                 // en train de faire, elle ne le fait pas. Même dessin que
                 // « Supprimer mon compte » au bas du profil.
+                //
+                // Elle rend les trois portes et ne referme pas la feuille :
+                // c'est déjà ce qu'on voyait avant T133, quand elle refermait la
+                // feuille du code et découvrait le choix resté derrière.
                 Box(
                     Modifier
                         .fillMaxWidth()
                         .heightIn(min = MemoBookSpacing.minimumTapTarget)
-                        .clickable(interactionSource = null, indication = PlainButtonIndication, role = Role.Button, onClick = dismiss),
+                        .clickable(interactionSource = null, indication = PlainButtonIndication, role = Role.Button, onClick = onCancel),
                     contentAlignment = Alignment.Center,
                 ) {
                     BrandText("Annuler", MemoBookFont.button, color = MemoBookColor.error, textAlign = TextAlign.Center)
@@ -604,7 +646,7 @@ fun JoinTripSheet(join: suspend (String) -> JoinOutcome, onJoined: (String) -> U
         actions = listOf(
             BrandAlert.Action(JoinCopy.cancel, BrandAlert.Role.Cancel) {
                 showsNotFound = false
-                dismiss()
+                onCancel()
             },
             BrandAlert.Action(JoinCopy.retry) {
                 showsNotFound = false
@@ -729,8 +771,8 @@ private fun NewNotebookSheetAccessibilityPreview() {
 
 @Preview(locale = "fr-rFR", name = "Rejoindre", widthDp = 390, heightDp = 500)
 @Composable
-private fun JoinTripSheetPreview() {
-    SheetPreviewFrame { JoinTripSheet(join = { JoinOutcome.NotFound }, onJoined = {}) }
+private fun JoinTripStepPreview() {
+    SheetPreviewFrame { JoinTripStep(join = { JoinOutcome.NotFound }, onCancel = {}, onJoined = {}) }
 }
 
 @Composable
