@@ -108,9 +108,26 @@ interface RunReport {
   label: string;
   scene: string;
   model: string;
+  /**
+   * **L'effort de réflexion du passage** — et il manquait.
+   *
+   * Le 26/11/2026, il a fallu comparer T307 au passage du 23/11 sans pouvoir
+   * dire à quel effort celui-là avait tourné : le rapport notait le modèle et
+   * les règles, pas le réglage qui fait l'essentiel du temps de réponse. On
+   * s'en est tiré en supposant le défaut du script. Un rapport qui ne dit pas
+   * son effort ne se compare pas.
+   *
+   * Absent des rapports écrits avant cette date : relu comme inconnu.
+   */
+  effort?: string;
   rulesHash: string;
   date: string;
   steps: StepReport[];
+}
+
+/** Ce que le rapport dit de son effort — « ? » pour un rapport d'avant le 26/11/2026. */
+function effortOf(report: RunReport): string {
+  return report.effort ?? "?";
 }
 
 function dayOrNull(value: string | null | undefined): Date | null {
@@ -253,6 +270,7 @@ async function run(client: Anthropic): Promise<RunReport> {
     label: values.label ?? new Date().toISOString().replace(/[:.]/g, "-"),
     scene: scene.name,
     model: values.model,
+    effort: values.effort,
     rulesHash: createHash("sha256").update(loadWritingRules()).digest("hex").slice(0, 10),
     date: new Date().toISOString(),
     steps,
@@ -263,7 +281,8 @@ function runToMarkdown(report: RunReport): string {
   const lines = [
     `# ${report.scene} — ${report.label}`,
     "",
-    `Modèle : \`${report.model}\` · règles \`${report.rulesHash}\` · ${report.date}`,
+    `Modèle : \`${report.model}\` · effort \`${effortOf(report)}\` · ` +
+      `règles \`${report.rulesHash}\` · ${report.date}`,
   ];
   for (const step of report.steps) {
     lines.push("", `## ${step.id}${step.result ? ` — ${step.result.title}` : ""}`, "");
@@ -415,7 +434,18 @@ async function compare(client: Anthropic): Promise<string> {
   const scene = JSON.parse(await readFile(values.scene, "utf8")) as Scene;
   const watchOf = (step: StepReport) => scene.steps.find((candidate) => candidate.id === step.id)?.watch ?? step.watch;
 
-  const lines = [`# ${a.label} → ${b.label}`, "", `${a.scene}`, ""];
+  const lines = [
+    `# ${a.label} → ${b.label}`,
+    "",
+    `${a.scene}`,
+    "",
+    // Les deux réglages en tête : une comparaison entre deux efforts ne dit
+    // pas la même chose qu'une comparaison à effort égal, et c'est la première
+    // chose à savoir avant de lire les notes.
+    `\`${a.label}\` : ${a.model}, effort \`${effortOf(a)}\`, règles \`${a.rulesHash}\``,
+    `\`${b.label}\` : ${b.model}, effort \`${effortOf(b)}\`, règles \`${b.rulesHash}\``,
+    "",
+  ];
   const verdictsA: (Verdict | null)[] = [];
   const verdictsB: (Verdict | null)[] = [];
   const stepLines: string[] = [];

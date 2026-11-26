@@ -114,6 +114,14 @@ npm run redaction:eval -- --label essai --until 13       # seulement les trois p
 
 Les rapports vont dans `backend/.redaction-eval/` (hors dépôt).
 
+**Chaque rapport dit son effort** (26/11/2026). Il notait le modèle et le hash
+des règles, pas le réglage qui fait l'essentiel du temps de réponse : comparer
+T307 au passage du 23/11 a obligé à **supposer** que celui-là avait tourné au
+défaut du script. Un rapport qui ne dit pas son effort ne se compare pas. Les
+rapports d'avant cette date l'affichent `?`, et une comparaison met les deux
+réglages en tête — comparer deux efforts différents ne dit pas la même chose
+que comparer à effort égal.
+
 **Le rapport montre aussi le découpage** (23/11/2026) : en tête, quatre nombres
 — moments rendus, souvenirs coupés, moments datés ou situés dans la journée,
 noms à faire confirmer —, puis sous chaque étape ses moments avec **la
