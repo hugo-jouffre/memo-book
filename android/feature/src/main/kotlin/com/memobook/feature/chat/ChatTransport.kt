@@ -52,6 +52,14 @@ data class OutgoingTurn(
     val body: Body,
     val waitingForCreditUntil: Instant? = null,
     val waitingForUnlimited: Boolean = false,
+    /**
+     * **Le moment où le voyageur a posé ce tour** (T309) — l'instant du geste,
+     * et non celui où l'envoi aboutit. Il part avec le tour, le serveur le
+     * garde, et c'est lui qui range la bulle : une photo qui attend trois
+     * jours ne change pas de place en arrivant. Un tour relu de la file porte
+     * l'instant où il y est entré (`PendingTurn.queuedAt`).
+     */
+    val postedAt: Instant = Instant.now(),
 ) {
     sealed interface Body {
         /**
@@ -313,6 +321,7 @@ data class ChatTransport(
                         stepId = turn.stepId,
                         suggestionId = body.suggestionId,
                         entryId = body.entryId,
+                        postedAt = turn.postedAt,
                     ),
                 )
                 is OutgoingTurn.Body.Voice -> api.sendChatVoice(
@@ -327,11 +336,18 @@ data class ChatTransport(
                         levels = body.audio.levels,
                         placeLabel = body.audio.placeLabel,
                         stepId = turn.stepId,
+                        postedAt = turn.postedAt,
                     ),
                 )
                 is OutgoingTurn.Body.Photos -> api.sendChatPhotos(
                     tripId,
-                    ChatPhotosTurn(id = turn.id, photos = body.photos, capturedAt = body.capturedAt, stepId = turn.stepId),
+                    ChatPhotosTurn(
+                        id = turn.id,
+                        photos = body.photos,
+                        capturedAt = body.capturedAt,
+                        stepId = turn.stepId,
+                        postedAt = turn.postedAt,
+                    ),
                 )
             }
 

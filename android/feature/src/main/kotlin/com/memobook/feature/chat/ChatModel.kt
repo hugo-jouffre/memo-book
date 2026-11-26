@@ -1171,6 +1171,10 @@ class ChatModel(
             sentAt = Instant.now(),
             stepId = outgoing.stepId,
             delivery = delivery(outgoing),
+            // **L'instant du geste** : c'est lui qui range la bulle, et le
+            // serveur le rendra tel quel — la place ne bougera pas à l'envoi
+            // (T309).
+            postedAt = outgoing.postedAt,
         )
     }
 
@@ -2378,8 +2382,21 @@ class ChatModel(
 
     // MARK: -
 
+    /**
+     * **Une bulle se pose à sa place, pas à la fin** (T309).
+     *
+     * Le plus souvent c'est la même chose : on parle maintenant, et maintenant
+     * est après tout le reste. Mais un tour qui attend le réseau depuis hier
+     * se pose **hier**, entre les bulles de son époque — c'est tout l'objet du
+     * ticket, et sans ça il serait resté en bas du fil.
+     */
     private fun append(message: ChatMessage) {
-        changeThread { it.copy(messages = it.messages + message) }
+        changeThread { thread ->
+            val place = thread.messages.indexOfFirst { byRank.compare(message, it) < 0 }
+            val messages = thread.messages.toMutableList()
+            if (place < 0) messages += message else messages.add(place, message)
+            thread.copy(messages = messages)
+        }
     }
 
     private fun mark(id: String, delivery: ChatDelivery) {
@@ -2418,8 +2435,22 @@ class ChatModel(
         /** Sous une minute de crédit, le champ rappelle ce qu'il reste. */
         private const val CHARACTER_REMINDER_BELOW_MS = 60_000
 
-        /** L'ordre du serveur d'abord ; ce qui n'en a pas encore — une bulle optimiste — reste en bas, où il est. */
-        private val byRank: Comparator<ChatMessage> = compareBy { it.seq ?: Int.MAX_VALUE }
+        /**
+         * **Le moment où chaque bulle a été posée**, et le rang d'arrivée pour
+         * départager (T309).
+         *
+         * Avant, c'était le rang seul, et une bulle qui n'en avait pas encore —
+         * une photo en attente — était rangée **sous tout le reste** : elle
+         * restait en bas du fil des jours durant, puis se posait ailleurs en
+         * arrivant. Un serveur d'avant le 26/11/2026 n'envoie pas d'instant :
+         * on retombe alors sur le rang, c'est-à-dire l'ordre d'avant.
+         */
+        private val byRank: Comparator<ChatMessage> = Comparator { a, b ->
+            val left = a.postedAt
+            val right = b.postedAt
+            if (left != null && right != null && left != right) left.compareTo(right)
+            else (a.seq ?: Int.MAX_VALUE).compareTo(b.seq ?: Int.MAX_VALUE)
+        }
 
         /**
          * Le dernier crédit **servi** de chaque voyage, le temps que l'app vive :

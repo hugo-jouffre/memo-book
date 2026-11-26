@@ -137,7 +137,8 @@ const memoInclude = {
     include: { media: true, step: { select: { number: true } } },
   },
   chatMessages: {
-    orderBy: { seq: "asc" },
+    // Le fil tel qu'il se lit dans l'app (T309).
+    orderBy: [{ postedAt: "asc" }, { seq: "asc" }],
     include: { account: { select: { firstName: true } } },
   },
   // Les PDF prêts, du plus récent au plus ancien : le premier est « le »

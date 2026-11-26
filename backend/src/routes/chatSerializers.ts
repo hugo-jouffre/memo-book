@@ -342,6 +342,12 @@ function serializeBody(
  * `sentAt` d'une bulle du voyageur est la date **du souvenir**, pas celle de
  * l'écriture : un vocal reconstruit depuis l'accueil garde le jour où il a été
  * raconté. Les bulles de MEMO et les textes datent de leur écriture.
+ *
+ * ⚠️ **`postedAt` est une autre chose, et c'est lui qui range le fil** (T309) :
+ * le moment où le voyageur a **posé** la bulle. Ranger le fil sur `sentAt`
+ * ferait remonter une photo de l'été dernier au milieu du voyage ; le ranger
+ * sur l'arrivée au serveur pousse au bas du fil une photo partie trois jours
+ * plus tard. Les deux cohabitent donc, et chacune dit ce qu'elle dit.
  */
 export function serializeChatMessage(message: ChatMessageRow, options: SerializeMessageOptions) {
   if (!isVisibleTo(message, options.viewerIsUnlimited)) return null;
@@ -373,6 +379,9 @@ export function serializeChatMessage(message: ChatMessageRow, options: Serialize
   return {
     id: message.id,
     seq: message.seq,
+    // L'ordre du fil (T309). Absent d'un serveur d'avant le 26/11/2026 :
+    // l'app retombe alors sur `seq`, l'ordre d'arrivée.
+    postedAt: message.postedAt.toISOString(),
     author: message.author,
     authorName: isOtherTraveller ? firstNameOf(message.account) : null,
     // Le portrait de celui qui a parlé, **sur toutes les bulles du voyageur** —

@@ -231,6 +231,58 @@ class ChatModelTest {
      * La bulle se pose avant le réseau, et passe « envoyée » au reçu — sous le
      * **même** identifiant, avec le rang que le serveur lui donne.
      */
+    /**
+     * **Une bulle en attente garde sa place** (T309, Hugo — « elles restent en
+     * bas du fil et remontent au mauvais endroit à l'envoi »). Jumeau de
+     * `ChatModelTests.testAWaitingBubbleKeepsItsPlaceAmongTheServersOwn`.
+     */
+    @Test
+    fun aWaitingBubbleKeepsItsPlaceAmongTheServersOwn() = runTest(dispatcher) {
+        val avantHier = Instant.now().minusSeconds(2 * 86_400)
+        val hier = Instant.now().minusSeconds(86_400)
+        val maintenant = Instant.now()
+        val script = Script(
+            thread(
+                messages = listOf(
+                    ChatMessage(
+                        id = "avant",
+                        author = ChatAuthor.Memo,
+                        body = ChatMessageBody.Text("Bonjour 👋"),
+                        sentAt = avantHier,
+                        seq = 1,
+                        postedAt = avantHier,
+                    ),
+                    ChatMessage(
+                        id = "apres",
+                        author = ChatAuthor.Memo,
+                        body = ChatMessageBody.Text("Et sinon ?"),
+                        sentAt = maintenant,
+                        seq = 2,
+                        postedAt = maintenant,
+                    ),
+                ),
+            ),
+        )
+        // Ce que le disque garde depuis hier — un tour qui n'a jamais pu partir.
+        script.waiting = listOf(
+            OutgoingTurn(
+                id = "en-attente",
+                body = OutgoingTurn.Body.Text("Mes photos du marché."),
+                postedAt = hier,
+            ),
+        )
+
+        val model = model(script)
+        model.load()
+
+        assertEquals(
+            listOf("avant", "en-attente", "apres"),
+            model.messages.map { it.id },
+            "La bulle en attente garde sa place, au lieu d'être rangée sous tout le reste.",
+        )
+        assertNull(model.messages[1].seq, "Elle n'a toujours pas de rang : elle attend le réseau.")
+    }
+
     @Test
     fun theBubbleIsPostedBeforeTheNetworkAndConfirmedByTheReceipt() = runTest(dispatcher) {
         val script = Script(thread())

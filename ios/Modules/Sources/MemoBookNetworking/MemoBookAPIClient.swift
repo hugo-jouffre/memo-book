@@ -573,6 +573,8 @@ public actor MemoBookAPIClient: MemoBookAPI {
         var form = MultipartFormData()
         form.addField(name: "id", value: turn.id)
         form.addField(name: "capturedAt", value: ISO8601DateFormatter.memoBookString(from: turn.capturedAt))
+        // **Le moment du geste** : il range la bulle dans le fil (T309).
+        form.addField(name: "postedAt", value: ISO8601DateFormatter.memoBookString(from: turn.postedAt))
         // Arrondie à la seconde, et **pour mémoire** : depuis le crédit du jour
         // (03/10/2026), le serveur relit la durée dans le fichier et ne croit
         // plus celle-ci. Elle part quand même, inoffensive — un serveur d'avant
@@ -601,6 +603,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         var form = MultipartFormData()
         form.addField(name: "id", value: turn.id)
         form.addField(name: "capturedAt", value: ISO8601DateFormatter.memoBookString(from: turn.capturedAt))
+        // **Le moment du geste** : il range la bulle dans le fil (T309), et
+        // c'est tout l'objet du ticket — une photo qui attend trois jours ne
+        // doit pas changer de place en arrivant.
+        form.addField(name: "postedAt", value: ISO8601DateFormatter.memoBookString(from: turn.postedAt))
         if let stepId = turn.stepId {
             form.addField(name: "stepId", value: stepId)
         }

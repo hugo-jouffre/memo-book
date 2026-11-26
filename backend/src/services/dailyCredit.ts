@@ -736,6 +736,12 @@ export async function chargeDailyCredit(
     isUnlimited: boolean;
     charge: DailyCharge;
     now?: Date;
+    /**
+     * **Le moment où le voyageur a posé le tour** qui épuise son crédit
+     * (T309). La bulle « reviens demain » se range avec lui, et non à la fin
+     * du fil : un tour posé hors ligne arrive des jours plus tard.
+     */
+    postedAt?: Date;
   },
 ): Promise<DailyChargeResult> {
   const now = input.now ?? new Date();
@@ -774,7 +780,9 @@ export async function chargeDailyCredit(
   });
 
   const exhaustedNow = !input.isUnlimited && usedMs < DAILY_CREDIT_LIMIT_MS && nextUsedMs >= DAILY_CREDIT_LIMIT_MS;
-  const notice = exhaustedNow ? await postExhaustedNotice(tx, { memoId: input.memoId, day, now }) : null;
+  const notice = exhaustedNow
+    ? await postExhaustedNotice(tx, { memoId: input.memoId, day, now, postedAt: input.postedAt })
+    : null;
 
   return { credit: { ...before, usedMs: nextUsedMs }, notice, charged: { day, chargedMs: nextUsedMs - usedMs } };
 }
@@ -789,7 +797,8 @@ export async function chargeDailyCredit(
  */
 export async function postExhaustedNotice(
   tx: Prisma.TransactionClient,
-  input: { memoId: string; day: LocalDate; now?: Date },
+  /** `postedAt` : l'instant du tour refusé, pour que la bulle se range avec lui (T309). */
+  input: { memoId: string; day: LocalDate; now?: Date; postedAt?: Date },
 ): Promise<ChatMessage | null> {
   const now = input.now ?? new Date();
   const where = { memoId_day: { memoId: input.memoId, day: dateColumn(input.day) } };
@@ -813,6 +822,7 @@ export async function postExhaustedNotice(
       memoId: input.memoId,
       author: "memo",
       kind: "text",
+      ...(input.postedAt ? { postedAt: input.postedAt } : {}),
       text: DAILY_CREDIT_EXHAUSTED_MESSAGE,
       pauseMilliseconds: pauseBeforeSaying(DAILY_CREDIT_EXHAUSTED_MESSAGE),
       model: "scripted",

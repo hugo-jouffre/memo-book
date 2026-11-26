@@ -1524,11 +1524,36 @@ model ChatMessage {
   memoId String
   memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
 
-  /// L'ordre du fil, et **la seule vérité sur l'ordre**. Une séquence
-  /// Postgres, jamais `createdAt` : deux bulles de MEMO écrites dans la même
-  /// transaction partagent une milliseconde, et une réponse insérée par un
-  /// job ne doit jamais pouvoir passer avant la question.
+  /// **L'ordre d'arrivée au serveur**, et le départage de tout le reste. Une
+  /// séquence Postgres, jamais `createdAt` : deux bulles de MEMO écrites dans
+  /// la même transaction partagent une milliseconde, et une réponse insérée
+  /// par un job ne doit jamais pouvoir passer avant la question.
+  ///
+  /// ⚠️ **Ce n'est plus seul l'ordre du fil** (T309) : c'est `postedAt` qui
+  /// range les bulles, et `seq` qui départage celles du même instant. Il
+  /// reste la vérité pour tout ce qui demande « la dernière » — le tour en
+  /// vol, le plafond du jour, la pagination d'un sondage.
   seq Int @unique @default(autoincrement())
+
+  /// **Le moment où le voyageur l'a posée**, et c'est lui qui range le fil
+  /// (T309, Hugo — « elles devraient garder leur place dans la chronologie,
+  /// envoyées ou non »).
+  ///
+  /// Une photo choisie dans le métro part des jours plus tard : elle arrivait
+  /// alors **après** tout ce qui avait été dit entre-temps, loin de l'endroit
+  /// où le voyageur l'avait posée. L'app envoie donc l'instant de son geste,
+  /// et le fil s'ordonne dessus — en attente comme une fois arrivée, la bulle
+  /// ne bouge plus.
+  ///
+  /// Par défaut l'instant d'écriture : les bulles de MEMO, les tours d'une app
+  /// qui ne l'envoie pas encore, et tout ce qui précède le 26/11/2026 — la
+  /// migration l'a rempli avec `createdAt`, donc l'ordre d'avant, intact.
+  ///
+  /// ⚠️ **Ce n'est pas `sentAt`**, que le sérialiseur calcule pour l'app : lui
+  /// est la date du **souvenir** (la prise de vue d'une photo, le jour raconté
+  /// d'un vocal), et ranger le fil dessus y ferait remonter une photo de
+  /// l'été dernier.
+  postedAt DateTime @default(now())
 
   author ChatAuthor
   kind   ChatMessageKind
@@ -1601,7 +1626,9 @@ model ChatMessage {
 
   createdAt DateTime @default(now())
 
-  /// La lecture du fil : par carnet, dans l'ordre.
+  /// La lecture du fil : par carnet, dans l'ordre où il se lit (T309).
+  @@index([memoId, postedAt, seq])
+  /// Et par ordre d'arrivée : « la dernière bulle », la pagination d'un sondage.
   @@index([memoId, seq])
   /// Le tour en vol, et le plafond quotidien : par carnet, par auteur, par date.
   @@index([memoId, author, createdAt])

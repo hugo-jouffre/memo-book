@@ -516,10 +516,24 @@ data class ChatMessage(
     val authorInitials: String? = null,
     val authorAvatarUrl: URI? = null,
     /**
-     * Le rang dans le fil, tel que le serveur le tient : **la seule vérité sur
-     * l'ordre**. `null` pour une bulle posée par l'app avant sa réponse.
+     * Le rang d'**arrivée au serveur**. `null` pour une bulle posée par l'app
+     * avant sa réponse. Il départage deux bulles posées au même instant —
+     * voir [postedAt], qui range le fil.
      */
     val seq: Int? = null,
+    /**
+     * **Le moment où la bulle a été posée**, et c'est lui qui la range dans
+     * le fil (T309).
+     *
+     * Une photo choisie dans le métro part des jours plus tard : rangée à son
+     * arrivée, elle tombait sous tout ce qui avait été dit entre-temps. La
+     * bulle optimiste porte donc l'instant du geste, le serveur le garde et
+     * le rend ici : **la place ne change pas à l'envoi**.
+     *
+     * `null` d'un serveur d'avant le 26/11/2026 : le fil se range alors sur
+     * [seq], comme avant. Ce n'est pas [sentAt], qui est la date du souvenir.
+     */
+    val postedAt: Instant? = null,
     /**
      * Le silence avant cette bulle de MEMO, décidé par le serveur et joué par
      * l'app — la donnée de rythme de [MemoBeat]. `null` pour une bulle du
@@ -625,6 +639,7 @@ data class ChatMessage(
         val authorInitials: String? = null,
         val authorAvatarUrl: JsonElement? = null,
         val seq: Int? = null,
+        @Serializable(with = InstantSerializer::class) val postedAt: Instant? = null,
         val pauseMilliseconds: Int? = null,
         val disposition: ChatDisposition? = null,
         val callToAction: JsonElement? = null,
@@ -644,6 +659,7 @@ data class ChatMessage(
                 authorInitials = it.authorInitials,
                 authorAvatarUrl = it.authorAvatarUrl?.let { url -> JsonPrimitive(url.toString()) },
                 seq = it.seq,
+                postedAt = it.postedAt,
                 pauseMilliseconds = it.pauseMilliseconds,
                 disposition = it.disposition,
                 callToAction = it.callToAction?.let { cta -> MemoBookJson.encodeToJsonElement(ChatCallToAction.serializer(), cta) },
@@ -661,6 +677,7 @@ data class ChatMessage(
                 authorInitials = it.authorInitials,
                 authorAvatarUrl = it.authorAvatarUrl.decodeOrNull(UriSerializer),
                 seq = it.seq,
+                postedAt = it.postedAt,
                 pauseMilliseconds = it.pauseMilliseconds,
                 disposition = it.disposition,
                 callToAction = it.callToAction.decodeOrNull(ChatCallToAction.serializer()),
@@ -1312,6 +1329,12 @@ data class ChatTextTurn(
     val suggestionId: String? = null,
     /** Le souvenir visé par « Ça me convient ». */
     val entryId: String? = null,
+    /**
+     * **Le moment où le voyageur a posé ce tour** (T309) : c'est lui qui range
+     * la bulle dans le fil, et non l'instant où l'envoi aboutit.
+     */
+    @Serializable(with = InstantSerializer::class)
+    val postedAt: Instant = Instant.now(),
 ) {
     @EncodeDefault
     val kind: String = "text"
@@ -1339,17 +1362,24 @@ data class ChatVoiceTurn(
     val levels: List<Double> = emptyList(),
     val placeLabel: String? = null,
     val stepId: String? = null,
+    /**
+     * **Le moment où le voyageur a posé ce tour** (T309) : c'est lui qui range
+     * la bulle dans le fil, et non l'instant où l'envoi aboutit.
+     */
+    val postedAt: Instant = Instant.now(),
 ) {
     // Les octets se comparent par contenu, comme les `Data` d'iOS.
     override fun equals(other: Any?): Boolean =
         other is ChatVoiceTurn && id == other.id && data.contentEquals(other.data) &&
             filename == other.filename && mimeType == other.mimeType && capturedAt == other.capturedAt &&
             durationSeconds == other.durationSeconds && levels == other.levels &&
-            placeLabel == other.placeLabel && stepId == other.stepId
+            placeLabel == other.placeLabel && stepId == other.stepId && postedAt == other.postedAt
 
     override fun hashCode(): Int =
-        listOf(id, data.contentHashCode(), filename, mimeType, capturedAt, durationSeconds, levels, placeLabel, stepId)
-            .hashCode()
+        listOf(
+            id, data.contentHashCode(), filename, mimeType, capturedAt, durationSeconds, levels,
+            placeLabel, stepId, postedAt,
+        ).hashCode()
 }
 
 /** Une photo à envoyer, une à quatre par tour. */
@@ -1371,6 +1401,11 @@ data class ChatPhotosTurn(
     val photos: List<ChatPhotoUpload>,
     val capturedAt: Instant,
     val stepId: String? = null,
+    /**
+     * **Le moment où le voyageur a posé ce tour** (T309) : c'est lui qui range
+     * la bulle dans le fil, et non l'instant où l'envoi aboutit.
+     */
+    val postedAt: Instant = Instant.now(),
 )
 
 // MARK: - Outils de décodage, propres à la conversation

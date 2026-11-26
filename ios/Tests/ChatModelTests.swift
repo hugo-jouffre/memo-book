@@ -197,6 +197,39 @@ final class ChatModelTests: XCTestCase {
 
     // MARK: - Envoyer
 
+    /// **Une bulle en attente garde sa place** (T309, Hugo — « elles restent
+    /// en bas du fil et remontent au mauvais endroit à l'envoi »).
+    ///
+    /// Les photos de Maÿlis attendent le réseau pendant des jours. Rangées à
+    /// leur **arrivée** — ce que faisait le rang seul —, elles tombaient sous
+    /// tout ce qui avait été dit entre-temps. Elles portent maintenant
+    /// l'instant de leur geste, et rien ne les en déloge : ici, le fil se
+    /// rouvre sur un tour qui attend depuis hier, et il se pose **entre** les
+    /// deux bulles du serveur.
+    func testAWaitingBubbleKeepsItsPlaceAmongTheServersOwn() async throws {
+        let avantHier = Date(timeIntervalSinceNow: -2 * 86_400)
+        let hier = Date(timeIntervalSinceNow: -86_400)
+        let maintenant = Date()
+        let script = Script(thread: thread(messages: [
+            ChatMessage(id: "avant", author: .memo, body: .text("Bonjour 👋"), sentAt: avantHier, seq: 1, postedAt: avantHier),
+            ChatMessage(id: "apres", author: .memo, body: .text("Et sinon ?"), sentAt: maintenant, seq: 2, postedAt: maintenant),
+        ]))
+        // Ce que le disque garde depuis hier — un tour qui n'a jamais pu partir.
+        await script.setWaiting([
+            OutgoingTurn(id: "en-attente", body: .text("Mes photos du marché."), postedAt: hier)
+        ])
+
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertEqual(
+            model.messages.map(\.id),
+            ["avant", "en-attente", "apres"],
+            "La bulle en attente garde sa place, au lieu d'être rangée sous tout le reste."
+        )
+        XCTAssertNil(model.messages[1].seq, "Elle n'a toujours pas de rang : elle attend le réseau.")
+    }
+
     /// La bulle se pose avant le réseau, et passe « envoyée » au reçu — sous le
     /// **même** identifiant, avec le rang que le serveur lui donne.
     func testTheBubbleIsPostedBeforeTheNetworkAndConfirmedByTheReceipt() async throws {

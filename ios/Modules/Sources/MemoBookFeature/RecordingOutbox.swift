@@ -971,7 +971,8 @@ public final class RecordingOutbox {
             stepId: turn.stepId,
             body: .photos(reduced, capturedAt: capturedAt),
             waitingForCreditUntil: turn.waitingForCreditUntil,
-            waitingForUnlimited: turn.waitingForUnlimited
+            waitingForUnlimited: turn.waitingForUnlimited,
+            postedAt: turn.postedAt
         )
     }
 
@@ -985,7 +986,9 @@ public final class RecordingOutbox {
                 stepId: record.stepId,
                 body: .text(text, suggestionId: record.suggestionId, entryId: record.entryId),
                 waitingForCreditUntil: waitingForCreditUntil,
-                waitingForUnlimited: record.waitingForUnlimited
+                waitingForUnlimited: record.waitingForUnlimited,
+                // L'instant du geste, pas celui de la relecture (T309).
+                postedAt: record.queuedAt
             )
         case .voice:
             guard let data = files.first, let filename = record.filenames.first,
@@ -1006,7 +1009,9 @@ public final class RecordingOutbox {
                     )
                 ),
                 waitingForCreditUntil: waitingForCreditUntil,
-                waitingForUnlimited: record.waitingForUnlimited
+                waitingForUnlimited: record.waitingForUnlimited,
+                // L'instant du geste, pas celui de la relecture (T309).
+                postedAt: record.queuedAt
             )
         case .photos:
             guard files.count == record.filenames.count, files.count == record.mimeTypes.count, !files.isEmpty
@@ -1032,7 +1037,9 @@ public final class RecordingOutbox {
                 stepId: record.stepId,
                 body: .photos(photos, capturedAt: record.recordedAt),
                 waitingForCreditUntil: waitingForCreditUntil,
-                waitingForUnlimited: record.waitingForUnlimited
+                waitingForUnlimited: record.waitingForUnlimited,
+                // L'instant du geste, pas celui de la relecture (T309).
+                postedAt: record.queuedAt
             )
         }
     }

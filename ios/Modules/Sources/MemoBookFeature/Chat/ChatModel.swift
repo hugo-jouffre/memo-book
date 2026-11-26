@@ -965,7 +965,11 @@ public final class ChatModel {
             body: body,
             sentAt: .now,
             stepId: outgoing.stepId,
-            delivery: Self.delivery(of: outgoing)
+            delivery: Self.delivery(of: outgoing),
+            // **L'instant du geste** : c'est lui qui range la bulle, et le
+            // serveur le rendra tel quel — la place ne bougera pas à l'envoi
+            // (T309).
+            postedAt: outgoing.postedAt
         )
     }
 
@@ -1286,10 +1290,20 @@ public final class ChatModel {
 
     // MARK: - Le fil
 
-    /// L'ordre du serveur d'abord ; ce qui n'en a pas encore — une bulle
-    /// optimiste — reste en bas, où il est.
+    /// **Le moment où chaque bulle a été posée**, et le rang d'arrivée pour
+    /// départager (T309).
+    ///
+    /// Avant, c'était le rang d'arrivée seul, et une bulle qui n'en avait pas
+    /// encore — une photo en attente — était rangée **sous tout le reste** :
+    /// elle restait en bas du fil des jours durant, puis se posait ailleurs en
+    /// arrivant. Elle porte maintenant l'instant de son geste, le serveur le
+    /// garde, et la place ne change plus.
+    ///
+    /// Un serveur d'avant le 26/11/2026 n'envoie pas d'instant : on retombe
+    /// alors sur le rang, c'est-à-dire exactement l'ordre d'avant.
     private static func byRank(_ a: ChatMessage, _ b: ChatMessage) -> Bool {
-        (a.seq ?? Int.max) < (b.seq ?? Int.max)
+        if let left = a.postedAt, let right = b.postedAt, left != right { return left < right }
+        return (a.seq ?? Int.max) < (b.seq ?? Int.max)
     }
 
     private func merge(_ received: [ChatMessage]) {
@@ -2498,8 +2512,17 @@ public final class ChatModel {
 
     // MARK: -
 
+    /// **Une bulle se pose à sa place, pas à la fin** (T309).
+    ///
+    /// Le plus souvent c'est la même chose : on parle maintenant, et maintenant
+    /// est après tout le reste. Mais un tour qui attend le réseau depuis hier
+    /// se pose **hier**, entre les bulles de son époque — c'est tout l'objet
+    /// du ticket, et sans ça il serait resté en bas du fil.
     private func append(_ message: ChatMessage) {
-        thread?.messages.append(message)
+        guard var thread else { return }
+        let place = thread.messages.firstIndex { Self.byRank(message, $0) } ?? thread.messages.endIndex
+        thread.messages.insert(message, at: place)
+        self.thread = thread
     }
 
     private func mark(_ id: String, as delivery: ChatDelivery) {
