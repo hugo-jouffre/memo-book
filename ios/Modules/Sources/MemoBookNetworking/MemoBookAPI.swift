@@ -308,6 +308,11 @@ public protocol MemoBookAPI: Sendable {
     /// Une à six photos : un souvenir par image, une seule bulle.
     func sendChatPhotos(tripId: String, turn: ChatPhotosTurn) async throws -> ChatTurnReceipt
 
+    /// **La pleine définition d'une photo déjà posée** (T309) : la
+    /// conversation a reçu l'aperçu de 1 200 px, celle-ci le remplace — et
+    /// c'est sur elle que le serveur mesure enfin la netteté.
+    func replacePhoto(entryId: String, data: Data, filename: String, mimeType: String) async throws -> Entry
+
     /// « Ça me convient » : le souvenir est relu et validé.
     func validateEntry(id: String) async throws -> EntryValidation
 

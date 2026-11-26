@@ -625,10 +625,29 @@ public actor MemoBookAPIClient: MemoBookAPI {
                 form.addField(name: "photos", value: value)
             }
         }
+        // **Ce ne sont que des aperçus** (T309) : le serveur le note, et ne
+        // juge pas la netteté d'une photo de 1 200 px sur un barème calibré
+        // pour 2400. La pleine définition suit, photo par photo.
+        if turn.photos.contains(where: \.isPreview) {
+            form.addField(name: "lightweight", value: "1")
+        }
         for photo in turn.photos {
             form.addFile(name: "file", filename: photo.filename, mimeType: photo.mimeType, data: photo.data)
         }
         return try await postForm(form, path: "/v1/trips/\(tripId)/chat")
+    }
+
+    /// **La pleine définition d'une photo déjà posée** (T309) : la
+    /// conversation a reçu l'aperçu, celle-ci le remplace.
+    public func replacePhoto(entryId: String, data: Data, filename: String, mimeType: String) async throws -> Entry {
+        var form = MultipartFormData()
+        form.addFile(name: "file", filename: filename, mimeType: mimeType, data: data)
+
+        let contentType = form.contentType
+        var request = try makeRequest(method: "PUT", path: "/v1/entries/\(entryId)/photo")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = form.finalized()
+        return try await perform(request, credential: .session)
     }
 
     private func postForm<Response: Decodable>(_ form: MultipartFormData, path: String) async throws -> Response {

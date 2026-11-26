@@ -40,6 +40,37 @@ enum PhotoEncoding {
     /// et retombe dans la file en annonçant « hors ligne ».
     static let maxSide = 2_400
 
+    /// **Le grand côté d'un aperçu**, celui qui part le premier (T309,
+    /// 26/11/2026).
+    ///
+    /// Mesuré le 26/11 sur une vraie photo du carnet (2400 × 1602, 1,22 Mo) :
+    /// 1 000 px à qualité 60 pèsent 108 ko, **1 200 px à 70 en pèsent 228**,
+    /// 1 400 px à 70 en pèsent 280, 1 600 px à 75 en pèsent 425. Six photos
+    /// en pleine définition font 7,3 Mo, soit **58 s à 1 Mb/s** — le délai
+    /// d'abandon du client, après quoi le tour retombe dans la file et
+    /// recommence (T295, les photos de Maÿlis restées des jours en attente).
+    /// Les mêmes six en aperçu font 1,4 Mo et onze secondes.
+    ///
+    /// 1 200 px et non 1 000 : la vignette du fil se dessine sur 180 pt, soit
+    /// 540 px en 3×, et la visionneuse plein écran montre **cet aperçu-là**
+    /// tant que la vraie photo n'est pas montée. À 1 000 px elle est
+    /// visiblement molle ; à 1 200 elle tient le temps qu'il faut.
+    static let previewSide = 1_200
+
+    /// La qualité d'un aperçu : plus basse que celle d'une photo de carnet —
+    /// il ne s'imprime pas, il se regarde quelques minutes.
+    static let previewQuality: CGFloat = 0.7
+
+    /// **L'aperçu léger d'une photo**, à envoyer tout de suite ; la pleine
+    /// définition suit en arrière-plan (`PUT /v1/entries/:id/photo`).
+    ///
+    /// Rend `nil` quand les octets ne sont pas une image lisible — l'appelant
+    /// envoie alors la photo entière, comme avant : mieux vaut un envoi long
+    /// qu'un envoi sans photo.
+    static func preview(from data: Data) -> Data? {
+        jpeg(from: data, quality: previewQuality, maxSide: previewSide)
+    }
+
     /// Les octets d'une photo, en JPEG et **à la taille du carnet** — ou `nil`
     /// si ces octets ne sont pas une image lisible.
     ///

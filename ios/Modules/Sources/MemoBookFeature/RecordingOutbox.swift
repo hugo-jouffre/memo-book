@@ -140,6 +140,11 @@ public final class RecordingOutbox {
     private let connectivity: Connectivity
     private let send: @Sendable (OutgoingTurn, String) async throws -> ChatTurnReceipt
 
+    /// **La pleine définition d'une photo déjà posée** (T309) : l'identifiant
+    /// du souvenir, et ses octets. Rend sans rien quand ça a abouti ; jette
+    /// comme le reste quand le réseau manque.
+    private let replacePhoto: @Sendable (String, Data, String, String) async throws -> Void
+
     /// Les voyages créés sur le téléphone que le serveur n'a pas encore vus,
     /// **tous comptes confondus** — voir ``localTrips``.
     private var storedTrips: [PendingTrip] = []
@@ -201,13 +206,15 @@ public final class RecordingOutbox {
         },
         createTrip: @escaping @Sendable (TripDraft) async throws -> CreatedTrip = { draft in
             .fixture(draft, id: draft.id)
-        }
+        },
+        replacePhoto: @escaping @Sendable (String, Data, String, String) async throws -> Void = { _, _, _, _ in }
     ) {
         self.store = store
         self.trips = trips
         self.connectivity = connectivity
         self.send = send
         self.createTrip = createTrip
+        self.replacePhoto = replacePhoto
     }
 
     /// Ouvre la file et se met à l'écoute du réseau. Idempotent : l'appeler
@@ -312,12 +319,22 @@ public final class RecordingOutbox {
         guard isOnline, !isWaitingForServer(tripId) else { return await queue(turn, for: tripId) }
 
         sending += 1
-        let outcome = await deliver(turn, to: tripId)
+        // **L'aperçu part d'abord, ici comme au vidage** (T309) : c'est le
+        // chemin de l'envoi immédiat, celui que prend une photo choisie avec
+        // du réseau — soit presque toutes.
+        let outcome = await deliver(Self.previewingPhotos(turn), to: tripId)
         sending -= 1
 
         switch outcome {
         case .sent(let receipt):
             noteDelivery(of: 1)
+            // Et la pleine définition suit : les vrais octets sont encore là,
+            // dans le tour qu'on vient de nous confier.
+            // **Et on les monte tout de suite** : rangées sans rien pour les
+            // prendre, elles attendraient le prochain retour dans l'app.
+            if let receipt, await queueFullPhotos(of: turn, to: tripId, receipt: receipt) {
+                Task { await self.flush() }
+            }
             return .delivered(receipt)
         case .deferred:
             return await queue(turn, for: tripId)
@@ -431,6 +448,14 @@ public final class RecordingOutbox {
         for record in waiting {
             guard isOnline else { break }
 
+            // **La pleine définition d'une photo déjà posée** (T309) : ce
+            // n'est pas un tour, elle ne passe ni par le crédit du jour ni
+            // par la bulle. Elle monte, ou elle réessaiera.
+            if record.kind == .fullPhoto {
+                await uploadFullPhoto(record)
+                continue
+            }
+
             // Son voyage attend encore : il partira au prochain vidage, après lui.
             if isWaitingForServer(record.tripId) { continue }
 
@@ -477,24 +502,32 @@ public final class RecordingOutbox {
                 continue
             }
 
-            // Une fiche écrite avant le 19/11 porte ses photos **à leur
-            // taille d'origine** : `PhotoEncoding` les ramène à 2400 px au
-            // moment du choix (T275), pas à l'envoi, et ce qui était déjà
-            // sur le disque n'a jamais été repris. Trois à six Mo pièce, le
-            // client abandonne à 60 s, le tour retombe dans la file — et
-            // recommence, indéfiniment. C'est ce qui laisse des photos en
-            // attente pendant des jours (T295, Maÿlis).
+            // **Ce qui part d'abord n'est qu'un aperçu** (T309) : 1 200 px,
+            // ~230 ko au lieu de ~1,2 Mo. Mesuré le 26/11, six photos en
+            // pleine définition font 7,3 Mo, soit 58 s à 1 Mb/s — le délai
+            // d'abandon du client, après quoi le tour retombe dans la file et
+            // recommence (T295 : les photos de Maÿlis, en attente des jours
+            // durant). Les mêmes six en aperçu font 1,4 Mo et onze secondes :
+            // la bulle arrive, et on continue à raconter.
             //
-            // Ce qui **sort** de la file passe donc par la même borne que ce
-            // qui y entre. Une photo déjà assez petite revient octet pour
-            // octet : pour tout ce qui a été mis en file depuis, cette ligne
-            // ne change rien. La fiche sur le disque, elle, n'est pas
-            // réécrite — son format est relu par la version d'avant, et on
-            // n'y touche pas pour une taille qui se recalcule.
-            let ready = Self.reducingPhotos(turn)
+            // La pleine définition part ensuite, une photo à la fois, dès que
+            // le reçu a dit quel souvenir chacune complète — voir
+            // `queueFullPhotos`. La fiche sur le disque n'est pas réécrite :
+            // son format est relu par la version d'avant, et on n'y touche
+            // pas pour une taille qui se recalcule.
+            let ready = Self.previewingPhotos(turn)
 
             switch await deliver(ready, to: record.tripId) {
             case .sent(let receipt):
+                // **Les vraies photos partent ensuite** (T309) : ce qui vient
+                // d'arriver n'en est que l'aperçu. On range la pleine
+                // définition dans la file avant d'oublier la fiche — sinon
+                // ses fichiers s'en vont avec elle.
+                // Rangées pendant ce passage : le suivant les prendra, et
+                // `flush` en fait un tant que `drainsAgain` est levé.
+                if let receipt, await queueFullPhotos(of: turn, to: record.tripId, receipt: receipt) {
+                    drainsAgain = true
+                }
                 await store.remove(record)
                 delivered += 1
                 note(.delivered(receipt), of: record.id, to: record.tripId)
@@ -543,7 +576,12 @@ public final class RecordingOutbox {
     /// ce qui attend l'illimité.
     private func refreshCounts() async {
         let now = Date.now
-        let all = await store.all()
+        // **Les pleines définitions ne comptent pas** (T309) : la bulle est
+        // déjà dans le fil, son aperçu avec, et rien n'attend plus côté
+        // voyageur. Les annoncer « en attente du réseau » ferait dire à
+        // l'accueil que six souvenirs n'ont pas été envoyés alors qu'ils y
+        // sont tous.
+        let all = await store.all().filter { $0.kind != .fullPhoto }
         waitingForUnlimited = all.filter(\.waitingForUnlimited).count
         waitingForCredit = all.filter { !$0.waitingForUnlimited && $0.isWaitingForCredit(at: now) }.count
         pending = all.count - waitingForCredit - waitingForUnlimited
@@ -606,6 +644,70 @@ public final class RecordingOutbox {
 
     /// La marge du réveil, après l'heure de recharge annoncée par le serveur.
     private static let creditWakeMargin: TimeInterval = 5
+
+    /// **Range la pleine définition des photos qu'on vient de poser** (T309).
+    ///
+    /// Le reçu rend la bulle du serveur, et ses pièces jointes portent
+    /// l'identifiant du souvenir de chaque photo, **dans l'ordre des
+    /// fichiers** : c'est ce qui permet d'associer chaque fichier au souvenir
+    /// qu'il complète. Sans reçu lisible — une bulle qu'on ne retrouve pas,
+    /// un serveur d'avant —, on ne range rien : l'aperçu restera, et c'est
+    /// une photo un peu douce, pas une photo perdue.
+    @discardableResult
+    private func queueFullPhotos(of turn: OutgoingTurn, to tripId: String, receipt: ChatTurnReceipt) async -> Bool {
+        guard
+            case .photos(let photos, _) = turn.body,
+            let bubble = receipt.messages.first(where: { $0.id == turn.id }),
+            case .photos(let attachments) = bubble.body
+        else { return false }
+
+        var queued = false
+        for (index, attachment) in attachments.enumerated() {
+            guard index < photos.count else { break }
+            let full = photos[index].data
+            // L'aperçu et la pleine définition sont les mêmes octets quand la
+            // photo était déjà petite : rien à remonter.
+            guard (PhotoEncoding.preview(from: full)?.count ?? full.count) < full.count else { continue }
+
+            let pending = PendingTurn(
+                id: "full-\(attachment.id)",
+                tripId: tripId,
+                kind: .fullPhoto,
+                entryId: attachment.id,
+                filenames: [photos[index].filename],
+                mimeTypes: [photos[index].mimeType],
+                recordedAt: photos[index].capturedAt ?? .now
+            )
+            try? await store.enqueue(pending, files: [full])
+            queued = true
+        }
+        return queued
+    }
+
+    /// Monte la pleine définition d'une photo, et oublie la fiche une fois
+    /// qu'elle est passée. Un échec la laisse en place : elle repartira au
+    /// prochain vidage, comme tout le reste.
+    private func uploadFullPhoto(_ record: PendingTurn) async {
+        guard
+            let entryId = record.entryId,
+            let files = try? await store.files(for: record),
+            let data = files.first,
+            let filename = record.filenames.first
+        else {
+            await store.remove(record)
+            return
+        }
+
+        do {
+            try await replacePhoto(entryId, data, filename, record.mimeTypes.first ?? "image/jpeg")
+            await store.remove(record)
+        } catch {
+            // Un refus **définitif** du serveur ne se rejoue pas : le souvenir
+            // a disparu, ou n'a jamais été une photo. L'aperçu reste, et il
+            // vaut mieux que de réessayer toutes les dix secondes.
+            if case .rejected = Self.outcome(for: error) { await store.remove(record) }
+        }
+    }
 
     private func deliver(_ turn: OutgoingTurn, to tripId: String) async -> Outcome {
         do {
@@ -951,18 +1053,19 @@ public final class RecordingOutbox {
     /// tient déjà dans la borne — ``PhotoEncoding/jpeg(from:quality:maxSide:)``
     /// la rend alors telle quelle. Une photo que l'encodeur ne sait pas lire
     /// part comme elle est : mieux vaut un envoi lourd qu'un souvenir jeté.
-    nonisolated private static func reducingPhotos(_ turn: OutgoingTurn) -> OutgoingTurn {
+    nonisolated private static func previewingPhotos(_ turn: OutgoingTurn) -> OutgoingTurn {
         guard case .photos(let photos, let capturedAt) = turn.body else { return turn }
 
         let reduced = photos.map { photo in
-            guard let data = PhotoEncoding.jpeg(from: photo.data), data.count < photo.data.count
+            guard let data = PhotoEncoding.preview(from: photo.data), data.count < photo.data.count
             else { return photo }
             return ChatPhotoUpload(
                 data: data,
                 filename: photo.filename,
                 mimeType: photo.mimeType,
                 capturedAt: photo.capturedAt,
-                capturedPlaceName: photo.capturedPlaceName
+                capturedPlaceName: photo.capturedPlaceName,
+                isPreview: true
             )
         }
 
@@ -979,6 +1082,10 @@ public final class RecordingOutbox {
     nonisolated private static func turn(from record: PendingTurn, files: [Data], now: Date = .now) -> OutgoingTurn? {
         let waitingForCreditUntil = record.isWaitingForCredit(at: now) ? record.waitingForCreditUntil : nil
         switch record.kind {
+        // Ce n'en est pas un : elle monte par `uploadFullPhoto`, pas par le
+        // fil (T309).
+        case .fullPhoto:
+            return nil
         case .text:
             guard let text = record.text else { return nil }
             return OutgoingTurn(

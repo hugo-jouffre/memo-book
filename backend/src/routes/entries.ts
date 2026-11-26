@@ -386,6 +386,104 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
    * dessus détruirait le travail de l'utilisateur sans qu'il l'ait demandé.
    * Il doit d'abord revenir à la version proposée (`editedText: null`).
    */
+  /**
+   * **La pleine définition d'une photo déjà posée** (T309, 26/11/2026).
+   *
+   * La conversation reçoit d'abord un **aperçu léger** — 1 200 px, ~230 ko —
+   * pour que la bulle arrive en quelques secondes : mesuré le 26/11, six
+   * photos en pleine définition font 7,3 Mo, soit 58 s à 1 Mb/s, c'est-à-dire
+   * le délai d'abandon du client, qui renvoie alors le tour dans la file
+   * (T295). Les mêmes six en léger font 1,4 Mo. Le téléphone garde les vraies
+   * octets et les monte ensuite, une photo à la fois, par cette route.
+   *
+   * Ce qu'elle fait, dans cet ordre : convertir si besoin, ranger le nouveau
+   * fichier, **remesurer** (c'est seulement ici que la netteté et le verdict
+   * se décident — le laplacien dépend de la définition, et le barème est
+   * calibré sur 2400 px), refaire la vignette d'écran, puis effacer l'aperçu.
+   *
+   * Les copies dérivées tombent avec l'ancien fichier : la copie de rendu et
+   * la publication au CDN montraient l'aperçu, et la prochaine composition
+   * les refera (même règle que `services/renderPhotos.ts`).
+   *
+   * Rejouable : une photo déjà en pleine définition accepte un nouvel envoi —
+   * le téléphone peut avoir perdu le reçu. Elle n'appartient qu'à qui voit le
+   * voyage, comme tout le reste d'un souvenir.
+   */
+  app.put("/v1/entries/:id/photo", async (request) => {
+    const { id } = entryIdParams.parse(request.params);
+    const accountId = accountIdOf(request);
+
+    const entry = await context.prisma.entry.findFirst({
+      where: { id, memo: visibleToAccount(accountId) },
+      include: { media: true },
+    });
+    if (!entry) throw HttpError.notFound("Entrée introuvable.");
+    if (entry.kind !== "photo" || !entry.media) {
+      throw HttpError.badRequest("Ce souvenir n'est pas une photo.");
+    }
+
+    if (!request.isMultipart()) {
+      throw HttpError.badRequest("La pleine définition s'envoie en multipart/form-data.");
+    }
+    const file = await request.file({ limits: { fileSize: MAX_MEDIA_BYTES } });
+    if (!file) throw HttpError.badRequest("Aucun fichier reçu.");
+    const buffer = await file.toBuffer();
+    const mimeType = file.mimetype || "application/octet-stream";
+    if (!mimeType.startsWith(IMAGE_MIME_PREFIX)) {
+      throw HttpError.badRequest(`Type de média non supporté : ${mimeType}. Attendu : image/*.`);
+    }
+
+    const photo = await toRenderablePhoto(buffer, file.filename, mimeType);
+    const stored = await context.storage.put("photo", photo.filename, photo.buffer, photo.mimeType);
+    const measure = await measurePhoto(photo.buffer);
+    const thumbStorageKey = await storeScreenThumbnail(context, photo.buffer);
+    const replaced = entry.media.storageKey;
+
+    const updated = await context.prisma.$transaction(async (tx) => {
+      await tx.mediaAsset.update({
+        where: { id: entry.media!.id },
+        data: {
+          storageKey: stored.storageKey,
+          mimeType: stored.mimeType,
+          bytes: stored.bytes,
+          isLightweight: false,
+          cdnUrl: null,
+          cdnAssetId: null,
+          renderStorageKey: null,
+          thumbStorageKey,
+        },
+      });
+      return tx.entry.update({
+        where: { id: entry.id },
+        data: measure
+          ? {
+              photoWidthPx: measure.widthPx,
+              photoHeightPx: measure.heightPx,
+              photoIsLandscape: measure.isLandscape,
+              photoSharpness: measure.sharpness,
+              photoVerdict: measure.verdict,
+            }
+          : {},
+      });
+    });
+
+    // **Après** la transaction : un fichier effacé ne revient pas, et on ne
+    // l'efface qu'une fois la base d'accord. Jamais bloquant — un aperçu qui
+    // survit ne coûte que sa place.
+    if (replaced !== stored.storageKey) {
+      await context.storage.remove([replaced]).catch((cause: unknown) => {
+        request.log.warn({ err: cause, storageKey: replaced }, "Aperçu léger non effacé");
+      });
+    }
+
+    request.log.info(
+      { entryId: entry.id, bytes: stored.bytes, verdict: measure?.verdict ?? null },
+      "Photo remplacée par sa pleine définition",
+    );
+
+    return serializeEntry(updated);
+  });
+
   app.post("/v1/entries/:id/redaction", async (request, reply) => {
     const { id } = entryIdParams.parse(request.params);
 
