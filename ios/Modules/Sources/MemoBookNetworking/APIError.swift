@@ -116,6 +116,24 @@ public enum APIError: Error, LocalizedError, Sendable {
         if case .transport = self { true } else { false }
     }
 
+    /**
+     **Le serveur n'a pas répondu à temps**, et ce n'est pas une panne de
+     réseau (T318, Hugo, 08/11/2026 — « “Hors ligne” s'affiche après un vocal
+     alors que le réseau va bien ; le serveur est simplement en train de
+     travailler »).
+
+     ``isTransport`` confond les deux : l'appel n'a pas abouti, et c'est tout
+     ce qu'il dit. Or un vocal de quatre minutes passe par la transcription
+     puis la rédaction, et le client abandonne à ``APIConfiguration/timeout``
+     — l'app annonçait alors « hors ligne » à quelqu'un dont le wifi va très
+     bien. Le tour repart tout seul : il est gardé sur le téléphone, et le
+     serveur reprend le même identifiant.
+     */
+    public var isTimeout: Bool {
+        guard case .transport(let underlying, _) = self else { return false }
+        return (underlying as? URLError)?.code == .timedOut
+    }
+
     /// La panne est **du côté du serveur** — un 5xx —, pas de l'appareil ni de
     /// la requête. C'est ce qui décide de proposer le support à côté de
     /// « Réessayer » : contre un bogue de notre côté, réessayer ne suffit pas.

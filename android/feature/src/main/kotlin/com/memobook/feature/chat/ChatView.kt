@@ -973,7 +973,7 @@ private fun ChatNotices(model: ChatModel, state: ChatModel.State, photosDeniedMe
     Column(verticalArrangement = Arrangement.spacedBy(ChatMetrics.messageSpacing)) {
         // Un fil local, sans le serveur : on peut raconter quand même, et c'est
         // ce que la boîte dit d'abord.
-        if (state.isOffline) BrandNotice(ChatCopy.offline)
+        if (state.isOffline) BrandNotice(model.threadNotice)
         if (state.microphoneIsDenied) {
             ErrorBanner(RecordingError.PermissionDenied.message, retry = onOpenSettings)
         }

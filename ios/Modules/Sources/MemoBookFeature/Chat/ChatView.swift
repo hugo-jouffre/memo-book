@@ -311,6 +311,9 @@ public struct ChatView: View {
         // relue au retour au premier plan — des Réglages, souvent.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            // Le réseau a pu revenir — ou partir — pendant qu'on était
+            // ailleurs : la phrase d'un tour en attente le suit (T318).
+            await model.refreshNetworkState()
             await refreshNotificationAuthorization()
         }
         // L'écran de la question, à la première conversation d'un voyage
@@ -820,7 +823,7 @@ public struct ChatView: View {
         // Un fil local, sans le serveur : on peut raconter quand même, et
         // c'est ce que la boîte dit d'abord.
         if model.isOffline {
-            BrandNotice(ChatCopy.offline)
+            BrandNotice(model.threadNotice)
         }
 
         if model.microphoneIsDenied {

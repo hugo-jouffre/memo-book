@@ -41,9 +41,21 @@ extension AppDependencies {
 enum SandboxNetwork {
     static let isOffline = OSAllocatedUnfairLock(initialState: false)
 
-    static func failIfOffline() throws {
+    /// **Le serveur qui met du temps** (T318) : le réseau reste debout, et
+    /// l'appel expire — ce qui arrive à un vocal de quatre minutes, que le
+    /// client abandonne à 60 s pendant que la transcription tourne encore.
+    ///
+    /// Les deux états ne se confondent pas : celui-ci laisse le moniteur
+    /// réseau en ligne, et c'est précisément ce qui distingue les deux
+    /// phrases de la barre d'envoi.
+    static let isSlow = OSAllocatedUnfairLock(initialState: false)
+
+    static func failIfUnreachable() throws {
         if isOffline.withLock({ $0 }) {
             throw APIError.transport(URLError(.notConnectedToInternet), url: nil)
+        }
+        if isSlow.withLock({ $0 }) {
+            throw APIError.transport(URLError(.timedOut), url: nil)
         }
     }
 }
@@ -220,7 +232,7 @@ public actor PreviewAPI: MemoBookAPI {
     /// crédit du jour : le voyageur abonné ou non, et le crédit de chaque voyage
     /// en cours — voir ``SandboxCredit``.
     public func homeFeed() async throws -> HomeFeed {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         let fixture = HomeFeed.fixture
         let isUnlimited = SandboxCredit.isUnlimited(profileIsUnlimited: sandboxProfileIsUnlimited)
         let feed = HomeFeed(
@@ -233,7 +245,7 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     public func tripDetail(id: String) async throws -> TripDetail {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         // Un voyage créé ici est lui-même, pas le voyage de Rome du jeu d'essai.
         if let created = createdTrips.first(where: { $0.id == id }) { return TripDetail(trip: created) }
         let detail = TripDetail.fixture(id: id)
@@ -260,13 +272,13 @@ public actor PreviewAPI: MemoBookAPI {
     /// sur le fil — c'est là qu'on le voit —, et le voyage se relit tel quel.
     /// Le jeu d'essai n'a pas de vignette d'étape à changer.
     public func setStepCoverPhoto(tripId: String, stepId: String, entryId: String?) async throws -> TripDetail {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         await chat.elect(stepCover: entryId, inStep: stepId, tripId: tripId)
         return try await tripDetail(id: tripId)
     }
 
     public func setTripCoverPhoto(tripId: String, entryId: String?) async throws -> TripDetail {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         await chat.elect(tripCover: entryId, tripId: tripId)
         return try await tripDetail(id: tripId)
     }
@@ -284,7 +296,7 @@ public actor PreviewAPI: MemoBookAPI {
     /// — sauf celle de Kyoto, le carnet du seed qui n'a rien à lire : c'est le
     /// seul moyen de voir les deux états sans serveur.
     public func publicBook(id: String) async throws -> PublicBook {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         return id == "gallery-kyoto" ? .nothingToReadFixture : .fixture
     }
 
@@ -294,7 +306,7 @@ public actor PreviewAPI: MemoBookAPI {
     /// d'accès de la maquette : de quoi traverser les six étapes sans serveur.
     /// Sous **l'identifiant que l'app a tiré**, comme le serveur.
     public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         let created = CreatedTrip.fixture(draft, id: draft.id)
         // Rejouée, la création corrige le voyage au lieu d'en ajouter un.
         createdTrips.removeAll { $0.id == created.trip.id }
@@ -528,19 +540,19 @@ public actor PreviewAPI: MemoBookAPI {
     /// écrite ici, pour que la modale se regarde sans serveur. Fermée ou
     /// envoyée, elle ne revient pas — comme en vrai.
     public func feedbackCampaign() async throws -> FeedbackCampaign? {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         guard !answeredFeedbackCampaigns.contains(FeedbackCampaign.fixture.id) else { return nil }
         return FeedbackCampaign.fixture
     }
 
     public func sendFeedbackResponse(campaignId: String, response: FeedbackResponse) async throws {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         _ = response
         answeredFeedbackCampaigns.insert(campaignId)
     }
 
     public func deleteEntry(id: String) async throws {
-        try SandboxNetwork.failIfOffline()
+        try SandboxNetwork.failIfUnreachable()
         deletedEntryIds.insert(id)
         // **Et les bulles qui le montraient** (T270), comme le serveur
         // (`services/deletion.ts`, `forgetBubblesOf`) : sans ça, « Supprimer »

@@ -232,6 +232,16 @@ data class ChatTransport(
     val waiting: suspend () -> List<OutgoingTurn> = { emptyList() },
     val deliveries: suspend () -> Flow<ChatTurnDelivery> = { emptyFlow() },
     val offlineThread: suspend (Throwable) -> ChatThread? = { null },
+    /**
+     * **Le réseau est là, maintenant** (T318).
+     *
+     * Ce que le moniteur en dit à l'instant où on le demande, et non la
+     * raison pour laquelle un tour est parti dans la file : un tour qui attend
+     * pendant que le réseau va bien attend le **serveur**, et l'écran ne doit
+     * pas dire « hors ligne ». Vrai par défaut — un double qui ne s'en occupe
+     * pas n'a pas de panne de réseau à annoncer.
+     */
+    val isOnline: suspend () -> Boolean = { true },
     val discard: suspend (turnId: String) -> Boolean = { false },
     val remember: suspend (ChatThread) -> Unit = {},
 ) {

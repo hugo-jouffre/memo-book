@@ -621,6 +621,15 @@ public enum HomeIntent: Sendable, Hashable {
             outbox.debugSetOffline(!isOffline)
         }
 
+        /// **Le serveur met du temps** (T318), le réseau restant debout : un
+        /// envoi expire et retombe dans la file, et la barre doit alors dire
+        /// que le serveur travaille — et non « tu es hors ligne ».
+        public var isServerSlow: Bool { outbox.isServerSlow }
+
+        public func debugToggleSlowServer() {
+            outbox.debugSetServerSlow(!outbox.isServerSlow)
+        }
+
         /// Met un vocal en file sans passer par le micro : de quoi voir la
         /// boîte « tes vocaux sont conservés » sans avoir à parler.
         ///
