@@ -72,13 +72,21 @@ async function createTrip(): Promise<string> {
   return response.json<{ id: string }>().id;
 }
 
-/** Un récit écrit dans le fil : il crée le souvenir, et sa fiche. */
-async function tell(memoId: string, text: string, capturedAt?: string): Promise<void> {
+/**
+ * Un récit écrit dans le fil : il crée le souvenir, et sa fiche.
+ *
+ * ⚠️ **Il est horodaté par le serveur**, à l'instant de l'envoi — un message
+ * texte ne porte pas de `capturedAt` (seuls un vocal et des photos en
+ * envoient un, `routes/chat.ts`). C'est très bien pour ce qu'on vérifie ici :
+ * l'enregistrement est d'aujourd'hui, le récit raconte le mois d'août, et les
+ * deux dates ne peuvent pas se confondre par accident.
+ */
+async function tell(memoId: string, text: string): Promise<void> {
   const response = await harness.app.inject({
     method: "POST",
     url: `/v1/trips/${memoId}/chat`,
     headers: { authorization: owner.authorization },
-    payload: { id: randomUUID(), kind: "text", text, ...(capturedAt ? { capturedAt } : {}) },
+    payload: { id: randomUUID(), kind: "text", text },
   });
   expect(response.statusCode).toBe(201);
 }
@@ -122,7 +130,8 @@ describe("la date d'une étape", () => {
   it("est celle que le récit raconte, et non celle de l'enregistrement", async () => {
     redactor.livedFrom = "2026-08-28";
     const memoId = await createTrip();
-    await tell(memoId, "Hier on a marché jusqu'au phare, et on s'est baignés en rentrant.", "2026-08-31T19:00:00.000Z");
+    const avantEnvoi = Date.now();
+    await tell(memoId, "Hier on a marché jusqu'au phare, et on s'est baignés en rentrant.");
 
     const trip = await readTrip(memoId);
     expect(trip.steps).toHaveLength(1);
@@ -132,9 +141,10 @@ describe("la date d'une étape", () => {
     expect(trip.steps[0]?.endDate).toBe("2026-08-28T00:00:00.000Z");
 
     // Les dates d'enregistrement restent en base : elles ordonnent le carnet
-    // et datent le relevé météo.
+    // et datent le relevé météo. Elles sont d'aujourd'hui — le récit, lui,
+    // raconte le mois d'août, et c'est tout l'objet du ticket.
     const step = await harness.prisma.memoStep.findFirstOrThrow({ where: { memoId } });
-    expect(step.startDate?.toISOString()).toBe("2026-08-31T19:00:00.000Z");
+    expect(step.startDate!.getTime()).toBeGreaterThanOrEqual(avantEnvoi);
     expect(step.livedFromDay?.toISOString()).toBe("2026-08-28T00:00:00.000Z");
   });
 
@@ -199,15 +209,17 @@ describe("la fiche du fil", () => {
     redactor.livedFrom = "2026-08-28";
     redactor.place = "Naxos";
     const memoId = await createTrip();
-    await tell(memoId, "Hier on a marché jusqu'au phare de Naxos.", "2026-08-31T19:00:00.000Z");
+    const avantEnvoi = Date.now();
+    await tell(memoId, "Hier on a marché jusqu'au phare de Naxos.");
 
     const card = await readCard(memoId);
     expect(card.transcript.livedFrom).toBe("2026-08-28T00:00:00.000Z");
     expect(card.transcript.livedTo).toBeNull();
     expect(card.transcript.placeName).toBe("Naxos");
     // La date d'envoi reste servie — elle dit quand on a parlé, et la fiche ne
-    // l'affiche plus comme la date de l'étape.
-    expect(card.transcript.capturedAt).toBe("2026-08-31T19:00:00.000Z");
+    // l'affiche plus comme la date de l'étape. C'est aujourd'hui, pas le jour
+    // raconté : les deux ne se confondent pas.
+    expect(Date.parse(card.transcript.capturedAt)).toBeGreaterThanOrEqual(avantEnvoi);
   });
 
   /**

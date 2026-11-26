@@ -198,6 +198,15 @@ ville. Il reste un contexte pour la rédaction, et plus un nom — c'est la
 plainte de T280, imprimée sur soixante pages. Le champ a quitté
 `StructuringEntry`.
 
+⚠️ **Les carnets déjà en base n'ont aucun jour vécu**, et ils n'en auront pas :
+la colonne naît nulle partout, et personne ne peut relire à leur place ce que
+les récits disaient. Leurs étapes n'affichent donc plus de date tant que leurs
+récits ne sont pas repassés par la rédaction (« Ré-analyser », ou la reprise
+complète de `rewriteTrip.ts`, qui se paie). C'est assumé, et c'est le même
+arbitrage que T280 sur le lieu : les dates qu'ils affichaient étaient celles de
+leurs enregistrements, c'est-à-dire fausses dès qu'on avait pris du retard. Le
+carnet **imprimé**, lui, garde une date dans tous les cas.
+
 **Pas mesuré au banc** : les neuf vocaux du banc ne sont pas rejoués pour deux
 champs que le relevé rend en plus, et le coût d'un passage (1 à 2 $) ne se
 justifie pas ici. Ce qui est tenu par des tests, c'est la lecture défensive, le
