@@ -19,9 +19,14 @@ import SwiftUI
 ///    de faire tuer l'app.
 /// 2. **La page voisine est préparée d'avance.** Tourner la page ne déclenche
 ///    donc aucun rendu : il a eu lieu pendant qu'on lisait la précédente.
-/// 3. **Le document n'est pas mis en cache sur le disque.** Le lien est signé
-///    et de courte durée ; le garder ne servirait qu'à afficher un carnet
-///    périmé.
+/// 3. **Le document reçu est rendu à l'appelant**, qui le garde sur l'appareil
+///    (``BookDocumentStore``, T299) : l'ouverture suivante ne retélécharge
+///    rien, et un carnet composé se feuillette sans réseau. Ce qui se garde
+///    sont les octets, jamais le lien — celui-là est signé et de courte durée.
+///    On a longtemps refusé ce cache de peur de montrer un carnet périmé ; la
+///    réponse n'était pas de jeter le fichier mais de **savoir lequel on
+///    a** : la fiche du magasin dit de quel rendu il vient, et l'aperçu ne
+///    retélécharge que si le serveur en annonce un autre.
 @MainActor
 @Observable
 final class BookPageRenderer {
@@ -66,8 +71,14 @@ final class BookPageRenderer {
     }
 
     /// Ouvre le PDF. Rejouable : réessayer après un échec passe par ici.
-    func load(from url: URL) async {
-        guard !isLoading else { return }
+    ///
+    /// - Returns: les octets reçus, **tels que le serveur les a envoyés**, pour
+    ///   que l'appelant les garde (``BookDocumentStore``). Et non
+    ///   ``documentData``, qui réécrit le document : ce qui se garde doit être
+    ///   ce qui a été composé.
+    @discardableResult
+    func load(from url: URL) async -> Data? {
+        guard !isLoading else { return nil }
         isLoading = true
         didFail = false
         defer { isLoading = false }
@@ -80,25 +91,40 @@ final class BookPageRenderer {
 
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 didFail = true
-                return
+                return nil
             }
 
-            guard let opened = PDFDocument(data: data) else {
-                didFail = true
-                return
-            }
-
-            document = opened
-            sheetCount = opened.pageCount
-            cache.removeAllObjects()
-
-            if let first = opened.page(at: 0) {
-                let box = first.bounds(for: .cropBox)
-                if box.height > 0 { aspectRatio = box.width / box.height }
-            }
+            return open(data) ? data : nil
         } catch {
             didFail = true
+            return nil
         }
+    }
+
+    /// Ouvre un PDF qu'on a déjà sous la main — celui que l'appareil gardait
+    /// (T299). Aucun réseau, donc aucune attente : c'est ce qui fait que
+    /// l'aperçu s'ouvre sur le carnet au lieu d'une page crème.
+    ///
+    /// - Returns: `false` quand les octets ne sont pas un PDF lisible. Le
+    ///   magasin peut avoir été tronqué par une purge d'iOS au milieu d'une
+    ///   écriture : l'appelant retéléchargera.
+    @discardableResult
+    func open(_ data: Data) -> Bool {
+        guard let opened = PDFDocument(data: data) else {
+            didFail = true
+            return false
+        }
+
+        didFail = false
+        document = opened
+        sheetCount = opened.pageCount
+        cache.removeAllObjects()
+
+        if let first = opened.page(at: 0) {
+            let box = first.bounds(for: .cropBox)
+            if box.height > 0 { aspectRatio = box.width / box.height }
+        }
+        return true
     }
 
     /// L'image d'une feuille, rendue si besoin.

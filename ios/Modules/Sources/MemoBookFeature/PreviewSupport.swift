@@ -699,8 +699,6 @@ public actor PreviewAPI: MemoBookAPI {
                 return Render(id: "render-sandbox", memoId: memoId, status: .processing, createdAt: .now, updatedAt: .now)
             }
         #endif
-        let memo = try existingMemo(memoId)
-
         let render = Render(
             id: UUID().uuidString,
             memoId: memoId,
@@ -710,9 +708,19 @@ public actor PreviewAPI: MemoBookAPI {
             createdAt: .now,
             updatedAt: .now
         )
-
         rendersById[render.id] = render
-        memosById[memoId] = memo.prepending(render: render)
+
+        // **Un carnet que le double ne connaît pas n'est pas un refus** (T299).
+        // L'aperçu du bac à sable vit sur le jeu d'essai de `BookFixtures`, dont
+        // l'identifiant n'est pas dans `memosById` : un 404 « Carnet
+        // introuvable » remontait donc de chaque demande de composition. Il ne
+        // se voyait pas tant que seule l'ouverture en lançait une — elle avale
+        // l'échec, un carnet déjà composé restant feuilletable —, et il est
+        // apparu avec la flèche de mise à jour, qui a bien raison, elle, de
+        // dire qu'un geste a raté. Dans le bac à sable, il n'y a rien à rater.
+        if let memo = memosById[memoId] {
+            memosById[memoId] = memo.prepending(render: render)
+        }
         return render
     }
 

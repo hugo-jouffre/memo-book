@@ -127,7 +127,7 @@ private fun FullScreenHeader(
             .padding(horizontal = MemoBookSpacing.screenMargin)
             .padding(top = MemoBookSpacing.xs),
         subtitle = state.headerSubtitle,
-        trailing = { BookShareAction(model, state, onShare) },
+        trailing = { BookPreviewActions(model, state, onShare) },
     )
 }
 

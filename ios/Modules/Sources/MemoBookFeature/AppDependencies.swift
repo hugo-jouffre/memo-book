@@ -51,6 +51,10 @@ public final class AppDependencies {
     /// réseau continue derrière.
     private let content = ContentCache()
 
+    /// Le dernier carnet composé de chaque voyage, gardé sur l'appareil pour
+    /// que l'aperçu s'ouvre dessus — sans transfert, et sans réseau (T299).
+    private let books = BookDocumentStore()
+
     /// Enregistrement en cours ou terminé. Le garder permet à plusieurs écrans
     /// qui démarrent en même temps d'attendre le même appel plutôt que d'en
     /// lancer un chacun.
@@ -211,6 +215,9 @@ public final class AppDependencies {
     /// serait le seul geste irréversible du lot.
     public func forgetAccountContent() async {
         await content.clearAll()
+        // Les carnets composés gardés sur l'appareil : ce sont les voyages de
+        // quelqu'un, et le PDF est ce qui en dit le plus (T299).
+        await books.clearAll()
         // Les photos gardées décodées en mémoire (couvertures, en-tête du
         // fil) : elles appartiennent aux voyages de ce compte — voir
         // ``RemoteImageCache``.
@@ -689,7 +696,7 @@ public final class AppDependencies {
     /// pour les deux plats de la première et de la dernière page (T223),
     /// `POST /v1/memos/:id/share-link` pour le lien de partage.
     public func bookPreviewModel(memoId: String) -> BookPreviewModel {
-        BookPreviewModel(
+        let model = BookPreviewModel(
             memoId: memoId,
             source: { [api] id in try await api.bookPreview(memoId: id) },
             // Le rendu que le serveur rend — en cours, à jour ou neuf — ne sert
@@ -698,6 +705,10 @@ public final class AppDependencies {
             covers: { [api] id in try await api.bookCovers(tripId: id) },
             requestLink: { [api] id in try await api.bookShareLink(memoId: id) }
         )
+        // Le dernier carnet composé, gardé sur l'appareil : l'aperçu s'ouvre
+        // dessus, sans transfert et sans réseau (T299).
+        model.documents = books
+        return model
     }
 
     /// Le tunnel de commande, **entièrement servi par le serveur** — c'est ce

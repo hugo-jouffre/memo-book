@@ -437,7 +437,7 @@ private fun BookCompositionView(
             // 19/09/2026) : posé sur l'en-tête entier, le `disabled` d'alors
             // emportait la flèche de retour avec lui, et on restait bloqué sur
             // l'écran de composition jusqu'à la fin du chargement.
-            trailing = { BookShareAction(model, state, onShare) },
+            trailing = { BookPreviewActions(model, state, onShare) },
         )
 
         BookPreviewNotice(state)
@@ -541,7 +541,7 @@ private fun BookReaderView(
             onBack = onBack,
             subtitle = state.headerSubtitle,
             isSubtitleLoading = state.preview == null,
-            trailing = { BookShareAction(model, state, onShare) },
+            trailing = { BookPreviewActions(model, state, onShare) },
         )
 
         // Ce que l'écran dit de lui-même : une régénération en fond (étape

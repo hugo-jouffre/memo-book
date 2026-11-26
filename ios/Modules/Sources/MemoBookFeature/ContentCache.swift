@@ -34,8 +34,10 @@ import MemoBookCore
 /// fil le remplace dès que le réseau revient.
 ///
 /// Ce qu'on **ne garde pas**, et c'est délibéré : les commandes — c'est de
-/// l'argent, et un état périmé est pire qu'un état absent ; les rendus PDF —
-/// ce sont des fichiers, ils ont leur propre cache d'URL. Les photos (profil,
+/// l'argent, et un état périmé est pire qu'un état absent. Le PDF du carnet,
+/// lui, se garde depuis T299, mais pas ici : ce sont des mégaoctets et non du
+/// JSON, et ``BookDocumentStore`` les range à côté, dans le même `Caches` et
+/// avec les mêmes règles. Les photos (profil,
 /// couvertures) passent par le cache d'URL de l'app, agrandi pour elles — voir
 /// `MemoBookApp.init()`.
 ///
@@ -71,20 +73,10 @@ actor ContentCache {
             case .profile: "profile.json"
             case .statistics: "statistics.json"
             case .gallery: "gallery.json"
-            case .trip(let id): "trip-\(Self.digest(id)).json"
-            case .tripSettings(let id): "trip-settings-\(Self.digest(id)).json"
-            case .chat(let id): "chat-\(Self.digest(id)).json"
+            case .trip(let id): "trip-\(cacheFilenameDigest(id)).json"
+            case .tripSettings(let id): "trip-settings-\(cacheFilenameDigest(id)).json"
+            case .chat(let id): "chat-\(cacheFilenameDigest(id)).json"
             }
-        }
-
-        private static func digest(_ value: String) -> String {
-            // `hashValue` change d'un lancement à l'autre (il est salé) : on
-            // veut une empreinte **stable**, sinon le cache d'hier ne se relit
-            // jamais. Une somme simple suffit — il ne s'agit pas de sécurité,
-            // seulement de ne pas écrire un identifiant en clair.
-            var hash: UInt64 = 5381
-            for byte in value.utf8 { hash = hash &* 33 &+ UInt64(byte) }
-            return String(hash, radix: 36)
         }
     }
 
@@ -134,4 +126,21 @@ actor ContentCache {
     private func url(for slot: Slot) -> URL {
         directory.appending(path: slot.filename)
     }
+}
+
+/// L'empreinte sous laquelle un identifiant entre dans un nom de fichier.
+///
+/// Un UUID est un nom de fichier valide, mais **on ne pose pas d'identifiants
+/// de ressources dans l'arborescence d'un appareil**. ``ContentCache`` et
+/// ``BookDocumentStore`` s'en servent tous les deux, et la même entrée doit y
+/// donner le même nom.
+///
+/// `hashValue` ne convient pas : il change d'un lancement à l'autre (il est
+/// salé), et le cache d'hier ne se relirait jamais. Une somme simple — djb2 —
+/// suffit : il ne s'agit pas de sécurité, seulement de ne pas écrire un
+/// identifiant en clair.
+func cacheFilenameDigest(_ value: String) -> String {
+    var hash: UInt64 = 5381
+    for byte in value.utf8 { hash = hash &* 33 &+ UInt64(byte) }
+    return String(hash, radix: 36)
 }

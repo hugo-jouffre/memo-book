@@ -2,7 +2,11 @@ package com.memobook.design
 
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,11 +23,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -175,6 +181,7 @@ fun BrandHeaderAction(
     label: String,
     modifier: Modifier = Modifier,
     isAvailable: Boolean = true,
+    isBusy: Boolean = false,
     onUnavailable: (() -> Unit)? = null,
     action: () -> Unit,
 ) {
@@ -205,15 +212,41 @@ fun BrandHeaderAction(
             )
             .semantics {
                 contentDescription = label
-                if (!isAvailable) stateDescription = "Non disponible"
+                if (isBusy) {
+                    stateDescription = "En cours"
+                } else if (!isAvailable) {
+                    stateDescription = "Non disponible"
+                }
             },
         contentAlignment = Alignment.Center,
     ) {
+        // Un tour par seconde, tant que ça travaille (T299, la flèche de mise
+        // à jour du carnet).
+        //
+        // **Mouvement réduit** : la flèche ne tourne pas. Ce n'est pas une
+        // perte d'information — un bandeau sous l'en-tête dit ce qui se passe,
+        // et c'est lui que TalkBack lit.
+        val spins = isBusy && !isReduceMotionEnabled()
+        val rotation = remember { Animatable(0f) }
+        LaunchedEffect(spins) {
+            if (!spins) {
+                rotation.snapTo(0f)
+                return@LaunchedEffect
+            }
+            rotation.animateTo(
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1_000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            )
+        }
+
         Image(
             painter = painterResource(icon),
             contentDescription = null,
             colorFilter = ColorFilter.tint(MemoBookColor.ink),
-            modifier = Modifier.size(iconSide),
+            modifier = Modifier.size(iconSide).rotate(rotation.value),
         )
     }
 }

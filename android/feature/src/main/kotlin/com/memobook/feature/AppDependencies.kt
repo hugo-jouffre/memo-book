@@ -1,5 +1,6 @@
 package com.memobook.feature
 
+import com.memobook.feature.bookpreview.BookDocumentStore
 import com.memobook.core.InviteBase
 import com.memobook.core.Account
 import com.memobook.feature.chat.ChatTransport
@@ -130,6 +131,12 @@ class AppDependencies(
     internal val content = ContentCache(File(cacheDirectory, "memobook-content"))
 
     /**
+     * Le dernier carnet composé de chaque voyage, gardé sur l'appareil pour que
+     * l'aperçu s'ouvre dessus — sans transfert, et sans réseau (T299).
+     */
+    internal val keptBooks = BookDocumentStore(File(cacheDirectory, "memobook-books"))
+
+    /**
      * La file de départ des vocaux. Elle vit **ici** et non dans un écran : un
      * souvenir raconté dans un tunnel doit repartir tout seul au retour du
      * réseau, quel que soit l'écran affiché à ce moment-là — et même si on
@@ -182,6 +189,9 @@ class AppDependencies(
      */
     suspend fun forgetAccountContent() {
         content.clearAll()
+        // Les carnets composés gardés sur l'appareil : ce sont les voyages de
+        // quelqu'un, et le PDF est ce qui en dit le plus (T299).
+        keptBooks.clearAll()
         accountForgetters.forEach { it() }
         // Les voyages créés hors ligne restent sur le disque, comme les
         // vocaux : ils ne se montrent plus, et ne partent plus, tant que leur

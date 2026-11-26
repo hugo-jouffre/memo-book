@@ -49,7 +49,7 @@ struct BookFullScreenView: View {
             title: BookCopy.Preview.title,
             subtitle: model.headerSubtitle
         ) {
-            BookShareAction(model: model, action: onShare)
+            BookPreviewActions(model: model, onShare: onShare)
         }
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         .padding(.top, MemoBookSpacing.xs)

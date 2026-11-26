@@ -324,7 +324,7 @@ private struct BookCompositionView: View {
                     // `disabled` d'alors emportait la flèche de retour avec
                     // lui, et on restait bloqué sur l'écran de composition
                     // jusqu'à la fin du chargement.
-                    BookShareAction(model: model, action: onShare)
+                    BookPreviewActions(model: model, onShare: onShare)
                 }
 
                 BookPreviewNotice(model: model)
@@ -435,7 +435,7 @@ private struct BookReaderView: View {
                     subtitle: model.headerSubtitle,
                     isSubtitleLoading: model.preview == nil
                 ) {
-                    BookShareAction(model: model, action: onShare)
+                    BookPreviewActions(model: model, onShare: onShare)
                 }
 
                 // Ce que l'écran dit de lui-même : une régénération en fond

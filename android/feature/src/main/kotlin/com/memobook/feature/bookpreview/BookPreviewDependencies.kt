@@ -19,9 +19,8 @@ import java.io.File
  * Deux paramètres de plus qu'iOS, qui tiennent à Android :
  *
  * @param cacheDirectory le cache de l'app (`Context.cacheDir`), où le PDF
- *   s'écrit pour `PdfRenderer` et pour la feuille de partage. Ce n'est jamais
- *   `ContentCache` : ce sont des fichiers de travail, pas du contenu à relire
- *   hors ligne. `AppDependencies` ne garde pas le dossier qu'il reçoit, d'où ce
+ *   s'écrit pour `PdfRenderer` et pour la feuille de partage, et où
+ *   `memobook-books/` garde le dernier carnet composé de chaque voyage (T299). `AppDependencies` ne garde pas le dossier qu'il reçoit, d'où ce
  *   paramètre ; il disparaît le jour où elle le garde.
  * @param opensBlankPages le `#if DEBUG` d'iOS : un build débogable ouvre
  *   l'aperçu sur des pages blanches quand rien n'a été composé.
@@ -35,6 +34,12 @@ fun AppDependencies.bookPreviewModel(memoId: String, cacheDirectory: File, opens
         startComposition = { id -> api.startRender(memoId = id) },
         covers = { id -> api.bookCovers(tripId = id) },
         requestLink = { id -> api.bookShareLink(memoId = id).toString() },
-        documents = cacheDirectory,
+        workDirectory = cacheDirectory,
         opensBlankPages = opensBlankPages,
-    )
+    ).also {
+        // Le dernier carnet composé, gardé sur l'appareil : l'aperçu s'ouvre
+        // dessus, sans transfert et sans réseau (T299). Le magasin appartient à
+        // `AppDependencies`, comme `ContentCache` — un seul pour toute l'app,
+        // et effacé à la déconnexion.
+        it.documents = keptBooks
+    }
