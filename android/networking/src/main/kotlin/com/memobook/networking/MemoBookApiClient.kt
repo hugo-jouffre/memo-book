@@ -500,6 +500,8 @@ class MemoBookApiClient(
         val form = MultipartFormData()
         form.addField("id", turn.id)
         form.addField("capturedAt", MemoBookDate.format(turn.capturedAt))
+        // **Le moment du geste** : il range la bulle dans le fil (T309).
+        form.addField("postedAt", MemoBookDate.format(turn.postedAt))
         // Arrondie à la seconde, et **pour mémoire** : depuis le crédit du jour
         // (03/10/2026), le serveur relit la durée dans le fichier et ne croit
         // plus celle-ci. Elle part quand même, inoffensive — un serveur d'avant
@@ -526,6 +528,10 @@ class MemoBookApiClient(
         val form = MultipartFormData()
         form.addField("id", turn.id)
         form.addField("capturedAt", MemoBookDate.format(turn.capturedAt))
+        // **Le moment du geste** : il range la bulle dans le fil (T309), et
+        // c'est tout l'objet du ticket — une photo qui attend trois jours ne
+        // doit pas changer de place en arrivant.
+        form.addField("postedAt", MemoBookDate.format(turn.postedAt))
         turn.stepId?.let { form.addField("stepId", it) }
         for (photo in turn.photos) {
             form.addFile(name = "file", filename = photo.filename, mimeType = photo.mimeType, data = photo.data)

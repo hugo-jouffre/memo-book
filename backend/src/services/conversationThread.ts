@@ -113,6 +113,14 @@ export async function ensureOpening(
   db: Db,
   memoId: string,
   responder: MemoResponder,
+  /**
+   * **L'instant du tour qu'elle précède** (T309) : l'ouverture se range avec
+   * lui, et `seq` la met devant — elle est écrite la première. Sans ça, elle
+   * prenait l'instant de son insertion, postérieur de quelques millisecondes
+   * à celui que l'app annonce, et MEMO disait bonjour **après** la première
+   * phrase du voyageur. Absent : l'instant de l'écriture, comme avant.
+   */
+  postedAt?: Date,
 ): Promise<ChatMessage | null> {
   const existing = await db.chatMessage.findFirst({ where: { memoId }, select: { id: true } });
   if (existing) return null;
@@ -123,6 +131,7 @@ export async function ensureOpening(
       memoId,
       author: "memo",
       kind: "text",
+      ...(postedAt ? { postedAt } : {}),
       text: opening.text,
       pauseMilliseconds: OPENING_PAUSE_MS,
       model: "scripted",

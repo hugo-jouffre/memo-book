@@ -1244,6 +1244,8 @@ class RecordingOutbox(
                 body = body,
                 waitingForCreditUntil = waitingForCreditUntil,
                 waitingForUnlimited = record.waitingForUnlimited,
+                // L'instant du geste, pas celui de la relecture (T309).
+                postedAt = record.queuedAt,
             )
         }
 

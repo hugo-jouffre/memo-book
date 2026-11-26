@@ -629,6 +629,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
           kind: "transcript",
           entryId,
           replyToId: message.id,
+          // Une réponse se range avec sa question (T309) : le tour peut avoir
+          // été posé des jours avant d'arriver.
+          postedAt: message.postedAt,
           stepId: message.stepId,
           pauseMilliseconds: pauseBeforeTranscript(null),
           model: reply.model,
@@ -680,6 +683,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
           kind: "text",
           text: beat.text,
           replyToId: message.id,
+          // Une réponse se range avec sa question (T309) : le tour peut avoir
+          // été posé des jours avant d'arriver.
+          postedAt: message.postedAt,
           stepId: message.stepId,
           pauseMilliseconds: beat.pauseMilliseconds,
           model: reply.model,
@@ -708,6 +714,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
           kind: "text",
           text: offer.notice,
           replyToId: message.id,
+          // Une réponse se range avec sa question (T309) : le tour peut avoir
+          // été posé des jours avant d'arriver.
+          postedAt: message.postedAt,
           stepId: message.stepId,
           pauseMilliseconds: pauseBeforeSaying(offer.notice),
           model: offer.model,
@@ -726,6 +735,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
           kind: "transcript",
           entryId: closing.entryId,
           replyToId: message.id,
+          // Une réponse se range avec sa question (T309) : le tour peut avoir
+          // été posé des jours avant d'arriver.
+          postedAt: message.postedAt,
           stepId: closing.stepId,
           pauseMilliseconds: pauseBeforeTranscript(null),
           model: "scripted",
@@ -739,6 +751,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
           kind: "text",
           text: question,
           replyToId: message.id,
+          // Une réponse se range avec sa question (T309) : le tour peut avoir
+          // été posé des jours avant d'arriver.
+          postedAt: message.postedAt,
           stepId: closing.stepId,
           pauseMilliseconds: pauseBeforeSaying(question),
           model: "scripted",
@@ -871,6 +886,9 @@ async function converseOralRevision(
           kind: "text",
           text: beat.text,
           replyToId: message.id,
+          // Une réponse se range avec sa question (T309) : le tour peut avoir
+          // été posé des jours avant d'arriver.
+          postedAt: message.postedAt,
           stepId: message.stepId,
           pauseMilliseconds: beat.pauseMilliseconds,
           model: "scripted",
@@ -1183,6 +1201,9 @@ async function converseMissingDay(
         kind: "text",
         text,
         replyToId: message.id,
+        // Une réponse se range avec sa question (T309) : le tour peut avoir
+        // été posé des jours avant d'arriver.
+        postedAt: message.postedAt,
         stepId: message.stepId,
         pauseMilliseconds: pauseBeforeSaying(text),
         model: "scripted",
@@ -1438,6 +1459,8 @@ async function attachSamplePhotos(
         author: "traveller",
         kind: "photos",
         accountId: message.accountId,
+        // Les photos se rangent avec la puce qui les a demandées (T309).
+        postedAt: message.postedAt,
         entryId: entries[0]!.id,
         disposition: "memory",
         stepId: message.stepId,
@@ -1568,6 +1591,9 @@ async function converseTripContextTurn(
           kind: "text",
           text: beat.text,
           replyToId: message.id,
+          // Une réponse se range avec sa question (T309) : le tour peut avoir
+          // été posé des jours avant d'arriver.
+          postedAt: message.postedAt,
           stepId: message.stepId,
           pauseMilliseconds: beat.pauseMilliseconds,
           model,

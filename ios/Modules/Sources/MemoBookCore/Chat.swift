@@ -559,9 +559,26 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
     public let authorInitials: String?
     public let authorAvatarUrl: URL?
 
-    /// Le rang dans le fil, tel que le serveur le tient : **la seule vérité sur
-    /// l'ordre**. `nil` pour une bulle posée par l'app avant sa réponse.
+    /// Le rang d'**arrivée au serveur**. `nil` pour une bulle posée par l'app
+    /// avant sa réponse. Il départage deux bulles posées au même instant —
+    /// voir ``postedAt``, qui range le fil.
     public let seq: Int?
+
+    /// **Le moment où la bulle a été posée**, et c'est lui qui la range dans
+    /// le fil (T309).
+    ///
+    /// Une photo choisie dans le métro part des jours plus tard : rangée à son
+    /// arrivée, elle tombait sous tout ce qui avait été dit entre-temps, loin
+    /// de l'endroit où on l'avait posée. La bulle optimiste porte donc
+    /// l'instant du geste, le serveur le garde (`chat_messages.postedAt`) et
+    /// le rend ici : **la place ne change pas à l'envoi**.
+    ///
+    /// `nil` d'un serveur d'avant le 26/11/2026 : le fil se range alors sur
+    /// ``seq``, comme avant.
+    ///
+    /// ⚠️ Ce n'est pas ``sentAt``, qui est la date du **souvenir** — la prise
+    /// de vue d'une photo, le jour raconté d'un vocal.
+    public let postedAt: Date?
 
     /// Le silence avant cette bulle de MEMO, décidé par le serveur et joué par
     /// l'app — la donnée de rythme de ``MemoBeat``. `nil` pour une bulle du
@@ -602,6 +619,7 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         authorInitials: String? = nil,
         authorAvatarUrl: URL? = nil,
         seq: Int? = nil,
+        postedAt: Date? = nil,
         pauseMilliseconds: Int? = nil,
         disposition: ChatDisposition? = nil,
         callToAction: ChatCallToAction? = nil,
@@ -617,6 +635,7 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         self.authorInitials = authorInitials
         self.authorAvatarUrl = authorAvatarUrl
         self.seq = seq
+        self.postedAt = postedAt
         self.pauseMilliseconds = pauseMilliseconds
         self.disposition = disposition
         self.callToAction = callToAction
@@ -710,7 +729,7 @@ extension ChatDisposition: Codable {
 extension ChatMessage: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, author, body, sentAt, stepId
-        case authorName, authorInitials, authorAvatarUrl, seq, pauseMilliseconds, disposition
+        case authorName, authorInitials, authorAvatarUrl, seq, postedAt, pauseMilliseconds, disposition
         case callToAction, entryId
     }
 
@@ -731,6 +750,7 @@ extension ChatMessage: Codable {
             // initiales prennent la place.
             authorAvatarUrl: try? container.decodeIfPresent(URL.self, forKey: .authorAvatarUrl),
             seq: try container.decodeIfPresent(Int.self, forKey: .seq),
+            postedAt: try container.decodeIfPresent(Date.self, forKey: .postedAt),
             pauseMilliseconds: try container.decodeIfPresent(Int.self, forKey: .pauseMilliseconds),
             disposition: try container.decodeIfPresent(ChatDisposition.self, forKey: .disposition),
             // Un bouton illisible ne fait jamais tomber la bulle : son texte
@@ -751,6 +771,7 @@ extension ChatMessage: Codable {
         try container.encodeIfPresent(authorInitials, forKey: .authorInitials)
         try container.encodeIfPresent(authorAvatarUrl, forKey: .authorAvatarUrl)
         try container.encodeIfPresent(seq, forKey: .seq)
+        try container.encodeIfPresent(postedAt, forKey: .postedAt)
         try container.encodeIfPresent(pauseMilliseconds, forKey: .pauseMilliseconds)
         try container.encodeIfPresent(disposition, forKey: .disposition)
         try container.encodeIfPresent(callToAction, forKey: .callToAction)
@@ -1403,22 +1424,28 @@ public struct ChatTextTurn: Encodable, Sendable, Hashable {
     /// Le souvenir visé par « Ça me convient ».
     public let entryId: String?
 
+    /// **Le moment où le voyageur a posé ce tour** (T309) : c'est lui qui
+    /// range la bulle dans le fil, et non l'instant où l'envoi aboutit.
+    public let postedAt: Date
+
     public init(
         id: String,
         text: String,
         stepId: String? = nil,
         suggestionId: String? = nil,
-        entryId: String? = nil
+        entryId: String? = nil,
+        postedAt: Date = .now
     ) {
         self.id = id
         self.text = text
         self.stepId = stepId
         self.suggestionId = suggestionId
         self.entryId = entryId
+        self.postedAt = postedAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, text, stepId, suggestionId, entryId
+        case id, kind, text, stepId, suggestionId, entryId, postedAt
     }
 }
 
@@ -1442,6 +1469,10 @@ public struct ChatVoiceTurn: Sendable, Hashable {
     public let placeLabel: String?
     public let stepId: String?
 
+    /// **Le moment où le voyageur a posé ce tour** (T309) : c'est lui qui
+    /// range la bulle dans le fil, et non l'instant où l'envoi aboutit.
+    public let postedAt: Date
+
     public init(
         id: String,
         data: Data,
@@ -1451,7 +1482,8 @@ public struct ChatVoiceTurn: Sendable, Hashable {
         durationSeconds: TimeInterval,
         levels: [Double] = [],
         placeLabel: String? = nil,
-        stepId: String? = nil
+        stepId: String? = nil,
+        postedAt: Date = .now
     ) {
         self.id = id
         self.data = data
@@ -1462,6 +1494,7 @@ public struct ChatVoiceTurn: Sendable, Hashable {
         self.levels = levels
         self.placeLabel = placeLabel
         self.stepId = stepId
+        self.postedAt = postedAt
     }
 }
 
@@ -1506,10 +1539,21 @@ public struct ChatPhotosTurn: Sendable, Hashable {
     public let capturedAt: Date
     public let stepId: String?
 
-    public init(id: String, photos: [ChatPhotoUpload], capturedAt: Date, stepId: String? = nil) {
+    /// **Le moment où le voyageur a posé ce tour** (T309) : c'est lui qui
+    /// range la bulle dans le fil, et non l'instant où l'envoi aboutit.
+    public let postedAt: Date
+
+    public init(
+        id: String,
+        photos: [ChatPhotoUpload],
+        capturedAt: Date,
+        stepId: String? = nil,
+        postedAt: Date = .now
+    ) {
         self.id = id
         self.photos = photos
         self.capturedAt = capturedAt
         self.stepId = stepId
+        self.postedAt = postedAt
     }
 }

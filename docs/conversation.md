@@ -50,6 +50,22 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Une bulle garde la place où elle a été posée** (T309, 26/11/2026). Le fil
+  s'ordonne sur `chat_messages.postedAt` — l'instant du **geste**, envoyé par
+  l'app avec le tour —, et `seq`, le rang d'arrivée, ne fait plus que
+  départager deux bulles du même instant. Les photos de Maÿlis attendaient le
+  réseau pendant des jours : rangées à leur arrivée, elles tombaient sous tout
+  ce qui avait été dit entre-temps, puis se posaient ailleurs en arrivant.
+  Elles ne bougent plus. **La réponse de MEMO prend l'instant de sa question** :
+  un échange ne se coupe pas en deux. Une app qui n'envoie rien — ou tout ce
+  qui précède le 26/11 — se range à l'arrivée, comme avant, et le serveur tient
+  l'instant annoncé à distance de l'absurde : jamais dans l'avenir, jamais plus
+  vieux qu'un an (`postedAtFrom`). **L'ouverture de MEMO prend l'instant du
+  tour qu'elle précède**, et `seq` la met devant — elle est écrite la
+  première : sans ça, elle se posait quelques millisecondes après lui, et MEMO
+  disait bonjour **après** la première phrase du voyageur (vu en CI). ⚠️ À ne pas confondre avec `sentAt`, que
+  l'app affiche : lui est la date du **souvenir** — la prise de vue d'une
+  photo, le jour raconté d'un vocal.
 - **Le fil vit sur le serveur.** On le retrouve d'un autre téléphone, et un
   co-voyageur le voit. L'app le relit toujours au serveur ; elle ne garde que
   ses trente derniers messages, pour le rouvrir **sans réseau** sous le

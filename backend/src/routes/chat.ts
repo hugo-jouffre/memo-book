@@ -101,7 +101,34 @@ const textTurnBody = z.object({
   suggestionId: z.string().max(64).nullable().optional(),
   /** Le souvenir visé par « Ça me convient ». */
   entryId: z.string().uuid().nullable().optional(),
+  /**
+   * **Le moment où le voyageur a posé ce tour** (T309), et non celui où il
+   * arrive : c'est lui qui range la bulle dans le fil. Absent d'une app
+   * d'avant le 26/11/2026 — la bulle se range alors à son arrivée, comme
+   * avant.
+   */
+  postedAt: z.string().datetime({ offset: true }).optional(),
 });
+
+/**
+ * **L'instant que l'app annonce, tenu à distance de l'absurde** (T309).
+ *
+ * Il range la bulle dans le fil : une date fautive la poserait au début du
+ * carnet, ou après tout le reste. On n'accepte donc qu'un instant **passé**
+ * et pas plus vieux qu'un an — au-delà, c'est une horloge déréglée ou un
+ * client malveillant, et l'arrivée fait foi, comme pour une app qui n'envoie
+ * rien.
+ */
+export const POSTED_AT_FLOOR_MS = 365 * 24 * 60 * 60 * 1000;
+
+export function postedAtFrom(raw: string | null | undefined, now: Date): Date {
+  if (!raw) return now;
+  const posted = new Date(raw);
+  if (Number.isNaN(posted.getTime())) return now;
+  if (posted.getTime() > now.getTime()) return now;
+  if (posted.getTime() < now.getTime() - POSTED_AT_FLOOR_MS) return now;
+  return posted;
+}
 
 /** ~25 Mo : un vocal long, une photo pleine résolution. */
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
@@ -142,11 +169,18 @@ async function loadViewer(context: AppContext, accountId: string): Promise<Accou
   return context.prisma.account.findUniqueOrThrow({ where: { id: accountId } });
 }
 
+/**
+ * **Le fil dans l'ordre où il se lit** : le moment où chaque bulle a été
+ * posée, et `seq` pour départager celles d'un même instant (T309).
+ *
+ * Pas `seq` seul : une photo choisie dans le métro arrive des jours plus
+ * tard, et se rangeait alors après tout ce qui avait été dit entre-temps.
+ */
 async function loadMessages(context: AppContext, memoId: string): Promise<ChatMessageRow[]> {
   return context.prisma.chatMessage.findMany({
     where: { memoId },
     include: chatMessageInclude,
-    orderBy: { seq: "asc" },
+    orderBy: [{ postedAt: "asc" }, { seq: "asc" }],
   });
 }
 
@@ -199,7 +233,8 @@ async function loadOutline(context: AppContext, memoId: string): Promise<ThreadO
     context.prisma.chatMessage.findMany({
       where: { memoId },
       select: { id: true, seq: true, author: true, kind: true, entryId: true, createdAt: true },
-      orderBy: { seq: "asc" },
+      // Le même ordre que le fil lui-même (T309).
+      orderBy: [{ postedAt: "asc" }, { seq: "asc" }],
     }),
     context.prisma.chatMessage.findMany({
       where: { memoId, author: "memo", kind: "text" },
@@ -278,7 +313,7 @@ async function loadRows(context: AppContext, ids: string[]): Promise<ChatMessage
   const rows = await context.prisma.chatMessage.findMany({
     where: { id: { in: ids } },
     include: chatMessageInclude,
-    orderBy: { seq: "asc" },
+    orderBy: [{ postedAt: "asc" }, { seq: "asc" }],
   });
   return rows;
 }
@@ -703,6 +738,9 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
 
     if (!request.isMultipart()) {
       const body = textTurnBody.parse(request.body ?? {});
+      // **Le moment du geste**, pas celui de l'arrivée (T309) : c'est lui qui
+      // range la bulle, et la réponse de MEMO se rangera avec elle.
+      const postedAt = postedAtFrom(body.postedAt, now);
       const text = body.text.trim();
 
       // Une puce arrive avec son identifiant ; un client qui n'envoie que le
@@ -765,7 +803,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         context.prisma.$transaction(async (tx) => {
           await lockThread(tx, memoId);
           const ids: string[] = [];
-          const opening = await ensureOpening(tx, memoId, context.responder);
+          const opening = await ensureOpening(tx, memoId, context.responder, postedAt);
           if (opening) ids.push(opening.id);
 
           if (validatedEntryId) {
@@ -783,6 +821,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
               author: "traveller",
               kind: "text",
               accountId,
+              postedAt,
               text: command ? (text.length > 0 ? text : null) : text,
               suggestionId,
               entryId: validatedEntryId ?? revisedEntryId ?? body.entryId ?? null,
@@ -795,7 +834,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
 
           const charged =
             charge && speaker
-              ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now })
+              ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now, postedAt })
               : null;
           if (charged?.notice) ids.push(charged.notice.id);
           return { ids, credit: charged?.credit ?? null };
@@ -862,6 +901,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       throw HttpError.badRequest(`${MAX_PHOTOS} photos au plus par message.`);
     }
 
+    const postedAt = postedAtFrom(fieldOf(fields, "postedAt"), now);
     const rawCapturedAt = fieldOf(fields, "capturedAt");
     const capturedAt = rawCapturedAt ? new Date(rawCapturedAt) : now;
     if (Number.isNaN(capturedAt.getTime())) {
@@ -963,7 +1003,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         context.prisma.$transaction(async (tx) => {
           await lockThread(tx, memoId);
           const ids: string[] = [];
-          const opening = await ensureOpening(tx, memoId, context.responder);
+          const opening = await ensureOpening(tx, memoId, context.responder, postedAt);
           if (opening) ids.push(opening.id);
           const message = await tx.chatMessage.create({
             data: {
@@ -972,6 +1012,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
               author: "traveller",
               kind: "voice",
               accountId,
+              postedAt,
               // Une correction est une précision de la fiche qu'elle vise :
               // c'est ainsi que la rédaction la relit.
               disposition: revisedEntryId ? "context" : "trip_context",
@@ -993,7 +1034,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
           });
           ids.push(message.id);
           const charged =
-            charge && speaker ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now }) : null;
+            charge && speaker ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now, postedAt }) : null;
           if (charged?.notice) ids.push(charged.notice.id);
           // Ce que ce vocal a pris : rendu s'il se révèle muet (QA D9).
           if (charged) await recordVoiceCharge(tx, message, charged.charged);
@@ -1016,7 +1057,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       context.prisma.$transaction(async (tx) => {
         await lockThread(tx, memoId);
         const ids: string[] = [];
-        const opening = await ensureOpening(tx, memoId, context.responder);
+        const opening = await ensureOpening(tx, memoId, context.responder, postedAt);
         if (opening) ids.push(opening.id);
 
         const entries = await Promise.all(
@@ -1076,6 +1117,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
             author: "traveller",
             kind: isAudio ? "voice" : "photos",
             accountId,
+            postedAt,
             entryId: first.id,
             disposition: "memory",
             stepId,
@@ -1094,6 +1136,8 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
               kind: "transcript",
               entryId: first.id,
               replyToId: message.id,
+              // La fiche se range avec le vocal qu'elle transcrit (T309).
+              postedAt,
               stepId,
               pauseMilliseconds: pauseBeforeTranscript(duration),
               model: "scripted",
@@ -1106,7 +1150,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         // Le décompte **après** les bulles du tour : la bulle « reviens
         // demain », s'il la faut, vient derrière elles dans le fil.
         const charged =
-          charge && speaker ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now }) : null;
+          charge && speaker ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now, postedAt }) : null;
         if (charged?.notice) ids.push(charged.notice.id);
         // Ce que ce vocal a pris : rendu s'il se révèle muet (QA D9).
         if (charged && isAudio) await recordVoiceCharge(tx, message, charged.charged);

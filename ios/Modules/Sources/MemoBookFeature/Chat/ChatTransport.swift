@@ -33,18 +33,29 @@ public struct OutgoingTurn: Sendable, Hashable, Identifiable {
     /// bulle « Trop long pour une journée ».
     public let waitingForUnlimited: Bool
 
+    /// **Le moment où le voyageur a posé ce tour** (T309) — l'instant du
+    /// geste, et non celui où l'envoi aboutit. Il part avec le tour, le
+    /// serveur le garde, et c'est lui qui range la bulle dans le fil : une
+    /// photo qui attend trois jours ne change pas de place en arrivant.
+    ///
+    /// Un tour relu de la file porte l'instant où il y est entré
+    /// (``PendingTurn/queuedAt``), jamais celui de la relecture.
+    public let postedAt: Date
+
     public init(
         id: String = UUID().uuidString.lowercased(),
         stepId: String? = nil,
         body: Body,
         waitingForCreditUntil: Date? = nil,
-        waitingForUnlimited: Bool = false
+        waitingForUnlimited: Bool = false,
+        postedAt: Date = .now
     ) {
         self.id = id
         self.stepId = stepId
         self.body = body
         self.waitingForCreditUntil = waitingForCreditUntil
         self.waitingForUnlimited = waitingForUnlimited
+        self.postedAt = postedAt
     }
 
     /// Le tour est retenu sur le disque — par le crédit de demain, ou par
@@ -396,7 +407,8 @@ public struct ChatTransport: Sendable {
                     text: text,
                     stepId: turn.stepId,
                     suggestionId: suggestionId,
-                    entryId: entryId
+                    entryId: entryId,
+                    postedAt: turn.postedAt
                 )
             )
         case .voice(let audio):
@@ -411,13 +423,20 @@ public struct ChatTransport: Sendable {
                     durationSeconds: audio.durationSeconds,
                     levels: audio.levels,
                     placeLabel: audio.placeLabel,
-                    stepId: turn.stepId
+                    stepId: turn.stepId,
+                    postedAt: turn.postedAt
                 )
             )
         case .photos(let photos, let capturedAt):
             return try await api.sendChatPhotos(
                 tripId: tripId,
-                turn: ChatPhotosTurn(id: turn.id, photos: photos, capturedAt: capturedAt, stepId: turn.stepId)
+                turn: ChatPhotosTurn(
+                    id: turn.id,
+                    photos: photos,
+                    capturedAt: capturedAt,
+                    stepId: turn.stepId,
+                    postedAt: turn.postedAt
+                )
             )
         }
     }
