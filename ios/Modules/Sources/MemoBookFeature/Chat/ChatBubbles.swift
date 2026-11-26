@@ -549,6 +549,11 @@ struct ChatPhotosBubble: View {
         max(0, attachments.count - ChatMetrics.visiblePhotoCount)
     }
 
+    /// Les vignettes deux par deux, telles que la grille les pose.
+    private var rows: [[PhotoAttachment]] {
+        stride(from: 0, to: shown.count, by: 2).map { Array(shown[$0..<min($0 + 2, shown.count)]) }
+    }
+
     var body: some View {
         BrandChatBubble(author: author) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs / 2) {
@@ -557,12 +562,31 @@ struct ChatPhotosBubble: View {
                 } else {
                     // Deux colonnes, jamais plus : à trois, une vignette tombe
                     // sous la largeur d'un pouce sur un iPhone SE.
-                    LazyVGrid(
-                        columns: [GridItem(.flexible()), GridItem(.flexible())],
-                        spacing: MemoBookSpacing.xs / 2
-                    ) {
-                        ForEach(Array(shown.enumerated()), id: \.element.id) { index, attachment in
-                            photo(attachment, at: index, side: thumbnail * 1.4)
+                    //
+                    // ⚠️ **Et une grille qui n'est pas paresseuse** (T295,
+                    // 26/11/2026). Une `LazyVGrid` ne connaît la hauteur que
+                    // des rangées qu'elle a déjà fabriquées : tant que la
+                    // bulle n'est qu'à moitié à l'écran, elle s'annonce plus
+                    // courte qu'elle ne sera, et tout ce qui la suit remonte —
+                    // puis redescend quand la rangée suivante naît. C'est le
+                    // saut que Maÿlis voit **à chaque passage devant ses
+                    // photos en attente**, et elles en ont six : la bulle la
+                    // plus haute du fil, celle qui ne tient jamais d'un coup.
+                    //
+                    // Six vignettes au plus (``visiblePhotoCount``) : la
+                    // paresse ne faisait rien gagner, elle ne coûtait que
+                    // cette hauteur-là.
+                    Grid(horizontalSpacing: MemoBookSpacing.xs / 2, verticalSpacing: MemoBookSpacing.xs / 2) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { rank, row in
+                            GridRow {
+                                ForEach(Array(row.enumerated()), id: \.element.id) { column, attachment in
+                                    photo(attachment, at: rank * 2 + column, side: thumbnail * 1.4)
+                                }
+                                // Un nombre impair laisse la dernière place
+                                // vide plutôt que d'étirer la vignette sur
+                                // toute la largeur.
+                                if row.count == 1 { Color.clear.frame(maxWidth: .infinity) }
+                            }
                         }
                     }
                 }
