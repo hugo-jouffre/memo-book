@@ -1063,6 +1063,7 @@ object ChatView {
             showsCallToAction = !message.author.isTraveller && model.showsCallToAction(message.callToAction),
             portrait = portrait(message, state),
             levels = (message.body as? ChatMessageBody.Voice)?.note?.let(model::levels) ?: emptyList(),
+            isSelected = state.selectedMessageId == message.id,
         )
 
     /**

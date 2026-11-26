@@ -564,6 +564,18 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
     /// voir ``postedAt``, qui range le fil.
     public let seq: Int?
 
+    /// **Les puces que cette bulle propose quand on la choisit** (T286, Hugo
+    /// — « les propositions s'adaptent à ce message-là »).
+    ///
+    /// Les puces répondaient au fil **entier** : sa dernière bulle décidait
+    /// pour tout le monde. Le serveur rend maintenant, pour chaque bulle,
+    /// celles qu'il aurait proposées si le fil s'arrêtait là.
+    ///
+    /// `nil` d'un sondage — qui ne rend que ce qui a changé, et où l'app
+    /// garde ce qu'elle a — et d'un serveur d'avant le 26/11/2026 : choisir
+    /// une bulle ne change alors pas les puces du bas.
+    public let suggestions: [ChatSuggestion]?
+
     /// **Le moment où la bulle a été posée**, et c'est lui qui la range dans
     /// le fil (T309).
     ///
@@ -620,6 +632,7 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         authorAvatarUrl: URL? = nil,
         seq: Int? = nil,
         postedAt: Date? = nil,
+        suggestions: [ChatSuggestion]? = nil,
         pauseMilliseconds: Int? = nil,
         disposition: ChatDisposition? = nil,
         callToAction: ChatCallToAction? = nil,
@@ -636,6 +649,7 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         self.authorAvatarUrl = authorAvatarUrl
         self.seq = seq
         self.postedAt = postedAt
+        self.suggestions = suggestions
         self.pauseMilliseconds = pauseMilliseconds
         self.disposition = disposition
         self.callToAction = callToAction
@@ -729,7 +743,8 @@ extension ChatDisposition: Codable {
 extension ChatMessage: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, author, body, sentAt, stepId
-        case authorName, authorInitials, authorAvatarUrl, seq, postedAt, pauseMilliseconds, disposition
+        case authorName, authorInitials, authorAvatarUrl, seq, postedAt, suggestions
+        case pauseMilliseconds, disposition
         case callToAction, entryId
     }
 
@@ -751,6 +766,9 @@ extension ChatMessage: Codable {
             authorAvatarUrl: try? container.decodeIfPresent(URL.self, forKey: .authorAvatarUrl),
             seq: try container.decodeIfPresent(Int.self, forKey: .seq),
             postedAt: try container.decodeIfPresent(Date.self, forKey: .postedAt),
+            // Une puce illisible ne fait pas tomber la bulle : la bande garde
+            // celles du fil.
+            suggestions: (try? container.decodeIfPresent([ChatSuggestion].self, forKey: .suggestions)) ?? nil,
             pauseMilliseconds: try container.decodeIfPresent(Int.self, forKey: .pauseMilliseconds),
             disposition: try container.decodeIfPresent(ChatDisposition.self, forKey: .disposition),
             // Un bouton illisible ne fait jamais tomber la bulle : son texte
@@ -772,6 +790,7 @@ extension ChatMessage: Codable {
         try container.encodeIfPresent(authorAvatarUrl, forKey: .authorAvatarUrl)
         try container.encodeIfPresent(seq, forKey: .seq)
         try container.encodeIfPresent(postedAt, forKey: .postedAt)
+        try container.encodeIfPresent(suggestions, forKey: .suggestions)
         try container.encodeIfPresent(pauseMilliseconds, forKey: .pauseMilliseconds)
         try container.encodeIfPresent(disposition, forKey: .disposition)
         try container.encodeIfPresent(callToAction, forKey: .callToAction)

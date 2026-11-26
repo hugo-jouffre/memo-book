@@ -50,6 +50,18 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Un appui simple choisit une bulle** (T286, 26/11/2026) : elle se cerne
+  d'un liseré bleu, et **les puces du bas répondent à elle**. Jusque-là elles
+  répondaient au fil entier — sa dernière bulle décidait pour tout le monde,
+  alors qu'elles répondent en réalité à un message précis. Le serveur rend
+  donc, pour chaque bulle, celles qu'il aurait proposées **si le fil
+  s'arrêtait là** (`suggestionIdsByMessage`, la même règle lue autant de fois
+  qu'il y a de bulles). Un second appui relâche ; parler relâche aussi — ce
+  qu'on vient de dire est la nouvelle fin du fil. Le liseré épouse la forme de
+  la bulle, queue comprise, et il est **bleu soutenu** : le fond d'une bulle du
+  voyageur est déjà le bleu clair. Une bulle sans puces à elle — un sondage, un
+  serveur d'avant — laisse celles du fil : mieux vaut celles d'avant qu'une
+  bande vide.
 - **Une bulle garde la place où elle a été posée** (T309, 26/11/2026). Le fil
   s'ordonne sur `chat_messages.postedAt` — l'instant du **geste**, envoyé par
   l'app avec le tour —, et `seq`, le rang d'arrivée, ne fait plus que

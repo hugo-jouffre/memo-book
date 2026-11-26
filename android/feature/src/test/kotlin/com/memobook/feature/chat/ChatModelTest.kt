@@ -232,6 +232,45 @@ class ChatModelTest {
      * **même** identifiant, avec le rang que le serveur lui donne.
      */
     /**
+     * **Choisir une bulle change les puces** (T286, Hugo — « un clic simple
+     * sur un message le cerne d'un liseré bleu clair, et les propositions
+     * s'adaptent à ce message-là »). Jumeau de
+     * `ChatModelTests.testChoosingAMessageShowsItsOwnSuggestions`.
+     */
+    @Test
+    fun choosingAMessageShowsItsOwnSuggestions() = runTest(dispatcher) {
+        val ancienne = ChatSuggestion(id = "context", label = "Te raconter le voyage", symbol = "🧭")
+        val courante = ChatSuggestion(id = "photos", label = "Importer des photos", symbol = "📷")
+        val script = Script(
+            thread(
+                messages = listOf(
+                    ChatMessage(
+                        id = "ouverture",
+                        author = ChatAuthor.Memo,
+                        body = ChatMessageBody.Text("Bonjour 👋"),
+                        sentAt = Instant.now(),
+                        seq = 1,
+                        suggestions = listOf(ancienne),
+                    ),
+                    traveller("recit", "Une journée à Rome.", seq = 2),
+                ),
+                suggestions = listOf(courante),
+            ),
+        )
+        val model = model(script)
+        model.load()
+
+        assertEquals(listOf("photos"), model.visibleSuggestions.map { it.id }, "Sans choix, celles du fil.")
+
+        model.select("ouverture")
+        assertEquals(listOf("context"), model.visibleSuggestions.map { it.id }, "Choisie, la bulle impose les siennes.")
+
+        // Un second appui relâche.
+        model.select("ouverture")
+        assertEquals(listOf("photos"), model.visibleSuggestions.map { it.id })
+    }
+
+    /**
      * **Une bulle en attente garde sa place** (T309, Hugo — « elles restent en
      * bas du fil et remontent au mauvais endroit à l'envoi »). Jumeau de
      * `ChatModelTests.testAWaitingBubbleKeepsItsPlaceAmongTheServersOwn`.

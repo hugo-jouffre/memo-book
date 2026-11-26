@@ -15,6 +15,10 @@ struct ChatMessageRow: View {
     let isExpanded: Bool
     let onToggleExpansion: () -> Void
 
+    /// **Cette bulle est celle qu'on a choisie** (T286) : elle se cerne d'un
+    /// liseré, et les puces du bas répondent à elle.
+    var isSelected: Bool = false
+
     /// Ce que fait le bouton posé sous une bulle de MEMO — ``ChatCallToAction``.
     /// C'est l'écran qui ouvre ce qu'il ouvre (le paywall, les réglages du
     /// voyage, l'aperçu…) ; la rangée ne fait que transmettre.
@@ -39,6 +43,40 @@ struct ChatMessageRow: View {
             deliveryTicks
         }
         .frame(maxWidth: .infinity, alignment: horizontalAlignment)
+    }
+
+    /// **Un appui simple choisit la bulle** (T286, Hugo — « un clic simple sur
+    /// un message le cerne d'un liseré bleu clair, et les propositions
+    /// s'adaptent à ce message-là »).
+    ///
+    /// Le liseré se dessine **autour** de la bulle et non dedans : le fond
+    /// d'une bulle du voyageur est déjà ce bleu-là (`bubbleTraveller`), et un
+    /// contour de la même couleur n'y serait pas visible. D'où le bleu
+    /// **soutenu** (`blueText`), à deux points, posé en dehors — c'est le
+    /// même bleu que l'app emploie partout pour dire « ceci est désigné ».
+    ///
+    /// L'appui ne mange rien : les photos ouvrent toujours la visionneuse,
+    /// les boutons d'une fiche restent des boutons — ils sont posés **dans**
+    /// la bulle, et leur geste l'emporte sur celui-ci (`.highPriorityGesture`
+    /// n'est pas nécessaire : SwiftUI sert d'abord le plus intérieur).
+    @ViewBuilder
+    private func selectable(_ content: some View) -> some View {
+        content
+            .overlay {
+                if isSelected {
+                    // **La forme de la bulle elle-même**, queue comprise : un
+                    // rectangle arrondi lui couperait sa pointe.
+                    BrandBubbleShape(side: isTraveller ? .trailing : .leading)
+                        .stroke(MemoBookColor.blueText, lineWidth: 2)
+                        .padding(-3)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
+            .contentShape(.rect)
+            .onTapGesture { model.select(message.id) }
+            .animation(.smooth(duration: 0.2), value: isSelected)
+            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     /// **Les coches, à la manière de WhatsApp** (Hugo, 08/10/2026), sous les
@@ -96,7 +134,7 @@ struct ChatMessageRow: View {
     private var row: some View {
         if typeSize.isAccessibilitySize {
             VStack(alignment: alignment, spacing: MemoBookSpacing.xs / 2) {
-                bubble
+                selectable(bubble)
                 if !actions.isEmpty {
                     HStack(spacing: 0) { actionButtons }
                 }
@@ -107,7 +145,7 @@ struct ChatMessageRow: View {
                     Spacer(minLength: 0)
                     actionButtons
                 }
-                bubble
+                selectable(bubble)
                 if !isTraveller {
                     actionButtons
                     Spacer(minLength: 0)

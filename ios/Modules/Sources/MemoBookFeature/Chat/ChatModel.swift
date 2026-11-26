@@ -565,10 +565,34 @@ public final class ChatModel {
     ///
     /// Crédit épuisé, « Raconter à l'oral » se tait (03/10/2026) : elle
     /// n'armerait qu'un micro qui ne s'ouvre pas.
+    /// **La bulle qu'on a choisie** (T286) — cernée d'un liseré, et c'est à
+    /// elle que les puces répondent. `nil` : le fil entier décide, comme
+    /// avant.
+    public private(set) var selectedMessageId: String?
+
+    /// Choisit une bulle, ou la relâche si c'est elle qu'on retouche : un
+    /// second appui au même endroit défait le premier, sans quoi il n'y
+    /// aurait aucun moyen de revenir aux puces du fil.
+    public func select(_ messageId: String) {
+        selectedMessageId = selectedMessageId == messageId ? nil : messageId
+    }
+
+    /// Relâche la bulle choisie. Appelé quand on parle : ce qu'on vient de
+    /// dire est la nouvelle fin du fil, et le liseré d'hier n'a plus de sens.
+    public func clearSelection() {
+        if selectedMessageId != nil { selectedMessageId = nil }
+    }
+
     public var visibleSuggestions: [ChatSuggestion] {
         guard turn == .idle else { return [] }
-        guard isCreditExhausted else { return suggestions }
-        return suggestions.filter { $0.intent != .sendThenSpeak }
+        // **Celles de la bulle choisie**, quand le serveur les a servies
+        // (T286). Une bulle sans puces à elle — un serveur d'avant, un
+        // sondage — laisse les puces du fil : mieux vaut celles d'avant
+        // qu'une bande vide.
+        let chosen = selectedMessageId.flatMap { id in messages.first { $0.id == id }?.suggestions }
+        let shown = chosen?.isEmpty == false ? chosen! : suggestions
+        guard isCreditExhausted else { return shown }
+        return shown.filter { $0.intent != .sendThenSpeak }
     }
 
     /// La bande de suggestions **garde sa place** pendant le tour : ses puces
@@ -929,6 +953,9 @@ public final class ChatModel {
     private func send(_ body: OutgoingTurn.Body, id: String = UUID().uuidString.lowercased()) {
         guard thread != nil else { return }
 
+        // Ce qu'on vient de dire est la nouvelle fin du fil : le liseré d'une
+        // bulle d'hier n'a plus de sens, et ses puces non plus (T286).
+        clearSelection()
         let outgoing = OutgoingTurn(id: id, stepId: activeStepId, body: body)
         append(optimisticMessage(for: outgoing))
         start(outgoing)
