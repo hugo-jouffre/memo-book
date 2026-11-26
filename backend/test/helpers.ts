@@ -21,16 +21,89 @@ export interface TestHarness {
   close(): Promise<void>;
 }
 
+/**
+ * **La base que la suite vide — et jamais celle de développement.**
+ *
+ * Le commentaire d'avant disait déjà « elle ne doit jamais tomber sur la base
+ * de développement », et le code retombait dessus : `TEST_DATABASE_URL` absent
+ * de `backend/.env`, `npm run test` visait `DATABASE_URL`, c'est-à-dire la base
+ * locale de Hugo — et `resetDatabase` la vide table par table, à chaque
+ * fichier. Vu le 19/11/2026, et **recommencé le 26/11/2026** : trois passages
+ * de la suite ont effacé un compte et son carnet, irrécupérables.
+ *
+ * Un commentaire ne protège rien. Alors :
+ *
+ * - `TEST_DATABASE_URL` est pris tel quel, mais **refusé** s'il désigne la même
+ *   base que `DATABASE_URL` ;
+ * - sans lui, on **dérive** `<base>_test` de `DATABASE_URL` plutôt que de
+ *   retomber dessus (`memobook` → `memobook_test`, qui existe) ;
+ * - et dans tous les cas, la base visée ne peut pas être celle de
+ *   développement. La suite s'arrête plutôt que d'effacer.
+ *
+ * ⚠️ Une base dérivée doit exister et porter le schéma :
+ * `DATABASE_URL=<…>_test npx prisma migrate deploy`.
+ */
+export function testDatabaseUrl(
+  explicit = process.env["TEST_DATABASE_URL"],
+  development = process.env["DATABASE_URL"],
+): string {
+  if (explicit) {
+    if (development && sameDatabase(explicit, development)) {
+      throw new Error(
+        "TEST_DATABASE_URL désigne la même base que DATABASE_URL : la suite la viderait. " +
+          "Donne-lui une base à elle (par exemple la même URL suffixée `_test`).",
+      );
+    }
+    return explicit;
+  }
+  if (!development) return "postgresql://memobook:memobook@localhost:5432/memobook_test";
+
+  const derived = withDatabaseSuffix(development, "_test");
+  if (sameDatabase(derived, development)) {
+    // Rien à dériver. Soit `DATABASE_URL` désigne déjà une base de test — et
+    // la vider est alors sans conséquence —, soit on n'a pas su lire son nom,
+    // et on s'arrête : une URL qu'on ne comprend pas n'est pas une base qu'on
+    // a le droit d'effacer.
+    if (databaseNameOf(development).endsWith("_test")) return development;
+    throw new Error(
+      "Impossible de dériver une base de test depuis DATABASE_URL : pose TEST_DATABASE_URL.",
+    );
+  }
+  return derived;
+}
+
+/** Le nom de la base dans une URL Postgres — le chemin, sans ses paramètres. */
+function databaseNameOf(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/^\//, "");
+  } catch {
+    return "";
+  }
+}
+
+function sameDatabase(left: string, right: string): boolean {
+  const name = databaseNameOf(left);
+  return name !== "" && name === databaseNameOf(right);
+}
+
+/** `postgresql://…/memobook?connection_limit=5` → `…/memobook_test?connection_limit=5`. */
+function withDatabaseSuffix(url: string, suffix: string): string {
+  try {
+    const parsed = new URL(url);
+    const name = parsed.pathname.replace(/^\//, "");
+    if (name === "" || name.endsWith(suffix)) return url;
+    parsed.pathname = `/${name}${suffix}`;
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 export function testEnv() {
   return loadEnv({
     NODE_ENV: "test",
     LOG_LEVEL: "silent",
-    // `TEST_DATABASE_URL` d'abord : la suite vide les tables à chaque fichier,
-    // elle ne doit jamais tomber sur la base de développement. Voir `.env`.
-    DATABASE_URL:
-      process.env["TEST_DATABASE_URL"] ??
-      process.env["DATABASE_URL"] ??
-      "postgresql://memobook:memobook@localhost:5432/memobook",
+    DATABASE_URL: testDatabaseUrl(),
     S3_ENDPOINT: "http://localhost:9000",
     S3_BUCKET: "memobook-media",
     S3_ACCESS_KEY_ID: "test",

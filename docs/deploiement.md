@@ -108,6 +108,19 @@ Une limite à connaître :
 Le schéma de **test** (`memobook_test`) ne se migre toujours qu'à la main — voir
 plus bas.
 
+**Et la suite de tests ne peut plus viser autre chose qu'une base de test**
+(26/11/2026). `testDatabaseUrl` (`backend/test/helpers.ts`) prend
+`TEST_DATABASE_URL`, le refuse s'il désigne la même base que `DATABASE_URL`,
+et sinon **dérive** `<base>_test` au lieu de retomber sur la base de
+développement — ce qu'elle faisait, et ce qui a effacé un carnet local deux fois
+(19 et 26/11/2026). Une base dérivée doit exister et porter le schéma :
+`DATABASE_URL=<…>_test npx prisma migrate deploy`.
+
+⚠️ La base de la CI s'appelle donc `memobook_test` elle aussi
+(`.github/workflows/ci-backend.yml`), et ce n'est pas cosmétique : elle est
+jetée avec le runner, mais c'est son **nom** qui dit à la garde qu'on a le droit
+de la vider. La renommer `memobook` ferait échouer toute la suite.
+
 À la main, depuis le Mac, `.env` rempli :
 
     cd backend
