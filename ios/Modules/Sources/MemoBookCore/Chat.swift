@@ -1518,18 +1518,26 @@ public struct ChatPhotoUpload: Sendable, Hashable {
     /// une photo prise à l'instant.
     public let capturedPlaceName: String?
 
+    /// **Ce ne sont que les octets d'un aperçu** (T309) : 1 200 px, montés
+    /// tout de suite pour que la bulle arrive. La pleine définition suit en
+    /// arrière-plan. Le serveur le note (`media_assets.isLightweight`) et ne
+    /// juge pas la netteté d'un aperçu — son barème est calibré sur 2400 px.
+    public let isPreview: Bool
+
     public init(
         data: Data,
         filename: String,
         mimeType: String,
         capturedAt: Date? = nil,
-        capturedPlaceName: String? = nil
+        capturedPlaceName: String? = nil,
+        isPreview: Bool = false
     ) {
         self.data = data
         self.filename = filename
         self.mimeType = mimeType
         self.capturedAt = capturedAt
         self.capturedPlaceName = capturedPlaceName
+        self.isPreview = isPreview
     }
 }
 

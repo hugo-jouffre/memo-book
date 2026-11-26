@@ -902,6 +902,10 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     }
 
     const postedAt = postedAtFrom(fieldOf(fields, "postedAt"), now);
+    // **Ce ne sont que des aperçus** (T309) : 1 200 px, montés tout de suite
+    // pour que la bulle arrive ; le téléphone enverra la pleine définition
+    // ensuite, photo par photo (`PUT /v1/entries/:id/photo`).
+    const lightweight = fieldOf(fields, "lightweight") === "1";
     const rawCapturedAt = fieldOf(fields, "capturedAt");
     const capturedAt = rawCapturedAt ? new Date(rawCapturedAt) : now;
     if (Number.isNaN(capturedAt.getTime())) {
@@ -1081,8 +1085,20 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
                       // La netteté, tirée du même décodage (T265) : c'est
                       // elle qui décidera quelles photos le carnet montre
                       // quand l'étape en porte plus qu'il n'en dessine.
-                      photoSharpness: measures[index].sharpness,
-                      photoVerdict: measures[index].verdict,
+                      //
+                      // ⚠️ **Jamais sur un aperçu** (T309) : le laplacien
+                      // dépend de la définition, et le barème est calibré sur
+                      // 2400 px — un aperçu de 1 200 px se ferait juger sur
+                      // une échelle qui n'est pas la sienne. Les deux champs
+                      // arrivent avec la pleine définition. Le sens, lui, se
+                      // lit sur n'importe quelle taille : un rapport de côtés
+                      // ne change pas en réduisant.
+                      ...(lightweight
+                        ? {}
+                        : {
+                            photoSharpness: measures[index].sharpness,
+                            photoVerdict: measures[index].verdict,
+                          }),
                     }
                   : {}),
                 ...(stepId ? { step: { connect: { id: stepId } } } : {}),
@@ -1093,6 +1109,8 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
                     bytes: object.bytes,
                     durationSeconds: isAudio ? duration : null,
                     thumbStorageKey: thumbnails[index] ?? null,
+                    // Un vocal ne connaît pas d'aperçu : seules les photos.
+                    isLightweight: lightweight && !isAudio,
                   },
                 },
               },

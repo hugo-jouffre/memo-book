@@ -94,9 +94,81 @@ final class RecordingOutboxTests: XCTestCase {
         XCTAssertEqual(sides.count, 1)
         XCTAssertEqual(
             sides.first,
-            PhotoEncoding.maxSide,
-            "Ce qui sort de la file doit tenir dans la borne d'envoi, même mis en file avant elle."
+            PhotoEncoding.previewSide,
+            "Ce qui part d'abord est l'aperçu, même pour une photo mise en file avant lui."
         )
+    }
+
+    /// **La pleine définition part ensuite** (T309) : l'aperçu fait arriver
+    /// la bulle, la vraie photo suit en arrière-plan, une à la fois.
+    func testTheFullSizedPhotoFollowsThePreview() async throws {
+        let sender = Sender()
+        let uploads = FullPhotoUploads()
+        let store = PendingRecordingStore.temporary()
+        let outbox = RecordingOutbox(
+            store: store,
+            send: { turn, tripId in try await sender.send(turn, to: tripId) },
+            replacePhoto: { entryId, data, _, _ in await uploads.record(entryId: entryId, data: data) }
+        )
+
+        let pleine = try image(width: 2_400, height: 1_600)
+        await outbox.submit(
+            OutgoingTurn(
+                id: "turn-photo",
+                body: .photos(
+                    [ChatPhotoUpload(data: pleine, filename: "p.jpg", mimeType: "image/jpeg")],
+                    capturedAt: .now
+                )
+            ),
+            to: "trip-1"
+        )
+
+        // L'aperçu est parti tout de suite, et il est plus petit.
+        let cotes = await sender.sentPhotoSides
+        XCTAssertEqual(cotes, [PhotoEncoding.previewSide])
+
+        // `until` attend une condition **synchrone** : la montée, elle, se
+        // compte dans un acteur. On la relit à la main.
+        let deadline = ContinuousClock.now + .seconds(2)
+        while await uploads.count == 0, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let premiere = await uploads.first
+        let montee = try XCTUnwrap(premiere)
+        XCTAssertEqual(montee.entryId, "turn-photo-0", "Chaque photo complète le souvenir que le reçu lui donne.")
+        XCTAssertEqual(montee.data, pleine, "Ce sont les octets d'origine, pas l'aperçu.")
+        // Et la file est vide : rien ne reste à monter.
+        let reste = await store.all()
+        XCTAssertTrue(reste.isEmpty, "La fiche de la pleine définition s'efface une fois montée.")
+    }
+
+    /// Une photo déjà petite n'a pas de pleine définition à monter : l'aperçu
+    /// **est** la photo.
+    func testASmallPhotoOwesNoFullSizedUpload() async throws {
+        let sender = Sender()
+        let uploads = FullPhotoUploads()
+        let store = PendingRecordingStore.temporary()
+        let outbox = RecordingOutbox(
+            store: store,
+            send: { turn, tripId in try await sender.send(turn, to: tripId) },
+            replacePhoto: { entryId, data, _, _ in await uploads.record(entryId: entryId, data: data) }
+        )
+
+        await outbox.submit(
+            OutgoingTurn(
+                id: "turn-petite",
+                body: .photos(
+                    [ChatPhotoUpload(data: try image(width: 800, height: 600), filename: "p.jpg", mimeType: "image/jpeg")],
+                    capturedAt: .now
+                )
+            ),
+            to: "trip-1"
+        )
+
+        let montees = await uploads.count
+        let reste = await store.all()
+        XCTAssertEqual(montees, 0)
+        XCTAssertTrue(reste.isEmpty)
     }
 
     /// **Une photo déjà assez petite n'est pas retouchée** : la ramener
@@ -978,6 +1050,15 @@ final class RecordingOutboxTests: XCTestCase {
 
 /// Le serveur, vu de la file : il accepte — et rend le reçu, la bulle du
 /// voyageur avec son rang —, il est injoignable, ou il refuse.
+/// Ce que la file a monté en pleine définition (T309).
+private actor FullPhotoUploads {
+    private(set) var uploads: [(entryId: String, data: Data)] = []
+
+    func record(entryId: String, data: Data) { uploads.append((entryId, data)) }
+    var count: Int { uploads.count }
+    var first: (entryId: String, data: Data)? { uploads.first }
+}
+
 private actor Sender {
     /// Les carnets servis, dans l'ordre des envois.
     private(set) var sent: [String] = []

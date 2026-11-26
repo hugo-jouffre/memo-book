@@ -1739,6 +1739,24 @@ model MediaAsset {
   /// change**, comme `renderStorageKey`.
   thumbStorageKey String?
 
+  /// **Ce fichier n'est que l'aperçu léger** (T309, 26/11/2026) : 1 200 px de
+  /// grand côté, ~230 ko au lieu de ~1,2 Mo. La pleine définition suit en
+  /// arrière-plan, et `PUT /v1/entries/:id/photo` la remet à `false` en
+  /// remplaçant le fichier.
+  ///
+  /// Pourquoi : mesuré le 26/11, six photos font 7,3 Mo, soit **58 s** à
+  /// 1 Mb/s — le délai d'abandon du client, qui renvoie alors le tour dans la
+  /// file (T295). Les mêmes six en léger font 1,4 Mo et onze secondes : la
+  /// bulle arrive, et le voyageur continue à raconter.
+  ///
+  /// Ce que ça change pour la suite : `entries.photoSharpness` et
+  /// `photoVerdict` ne sont **pas** mesurés sur un aperçu — le laplacien
+  /// dépend de la définition, et le barème a été calibré sur 2400 px. Ils
+  /// arrivent avec la pleine définition. Le carnet, lui, compose avec ce
+  /// qu'il a : une photo légère s'imprime un peu douce, une photo absente ne
+  /// s'imprime pas du tout.
+  isLightweight Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   entries Entry[]

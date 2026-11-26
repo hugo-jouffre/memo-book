@@ -110,7 +110,14 @@ public final class AppDependencies {
             trips: pendingTrips,
             connectivity: connectivity,
             send: { turn, tripId in try await ChatTransport.sendNow(turn, to: tripId, api: api) },
-            createTrip: { draft in try await api.createTrip(draft) }
+            createTrip: { draft in try await api.createTrip(draft) },
+            // La pleine définition d'une photo déjà posée (T309) : la
+            // conversation a reçu l'aperçu, celle-ci le remplace.
+            replacePhoto: { entryId, data, filename, mimeType in
+                _ = try await api.replacePhoto(
+                    entryId: entryId, data: data, filename: filename, mimeType: mimeType
+                )
+            }
         )
 
         // Au démarrage, et pas à l'ouverture d'un écran : c'est ce qui permet

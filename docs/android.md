@@ -302,6 +302,24 @@ plateforme :
 - Le paywall : « compte Google », « Play Store › Paiements et abonnements ›
   Abonnements » ; une erreur de vérification : « Le Play Store… ».
 
+### Ce qui n'est pas porté, et qui mord — les photos et leur taille
+
+⚠️ **Toute la chaîne de la taille des photos manque** (constaté le
+26/11/2026). `PhotoFlow` réécrit en JPEG qualité 85 et **ne réduit rien** —
+seul un garde-fou mémoire à 8 000 px. Trois choses d'iOS n'y sont donc pas :
+
+| iOS | Android |
+|---|---|
+| T275 (19/11) : 2400 px au choix de la photo, parce que c'est ce que le serveur garde | absent — une photo d'iPhone Android part à sa taille d'origine |
+| T295 (25/11) : ce qui **sort** de la file repasse par la même borne | absent, faute de borne |
+| T309 (26/11) : un aperçu de 1 200 px part d'abord, la pleine définition suit | absent |
+
+Les conséquences sont celles qu'iOS a connues : un envoi de plusieurs
+mégaoctets qui dépasse les 60 s du client, retombe dans la file et recommence.
+Le serveur, lui, ne voit rien d'anormal — une photo sans `lightweight` est
+traitée comme une pleine définition, ce qu'elle est. **C'est un ticket à
+lui**, et il se mesure avant de se corriger, comme le 26/11 côté iOS.
+
 ### Ce qui ne se porte pas
 
 - `MemoList/` et `MemoDetail/` : plus aucune route n'y mène sur iOS — et avec

@@ -613,6 +613,17 @@ public actor PreviewAPI: MemoBookAPI {
         )
     }
 
+    /// **La pleine définition d'une photo** (T309) : dans le bac à sable, il
+    /// n'y a rien à remplacer — aucune photo n'y monte vraiment. On rend le
+    /// souvenir tel quel, et la file oublie sa fiche comme après une vraie
+    /// montée.
+    public func replacePhoto(entryId: String, data: Data, filename: String, mimeType: String) async throws -> Entry {
+        guard let entry = memosById.values.flatMap(\.entries).first(where: { $0.id == entryId }) else {
+            throw APIError.server(statusCode: 404, code: "not_found", message: "Entrée introuvable.")
+        }
+        return entry
+    }
+
     /// ⚠️ **Un souvenir déposé sur un carnet inconnu ouvre ce carnet**, au lieu
     /// de rendre un 404.
     ///

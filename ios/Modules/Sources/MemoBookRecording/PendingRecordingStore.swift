@@ -32,6 +32,15 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
         case voice
         case text
         case photos
+
+        /// **La pleine définition d'une photo déjà posée** (T309).
+        ///
+        /// Ce n'en est pas un tour : la bulle est déjà dans le fil, et son
+        /// aperçu avec. Cette fiche-là ne porte qu'un fichier et le souvenir
+        /// qu'il complète (`entryId`), et elle monte par
+        /// `PUT /v1/entries/:id/photo`. Elle ne compte donc nulle part comme
+        /// « en attente du réseau » : rien n'attend plus, côté voyageur.
+        case fullPhoto
     }
 
     /// L'identifiant **du message**, celui que le serveur reprendra : c'est ce
