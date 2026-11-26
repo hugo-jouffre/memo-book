@@ -328,7 +328,7 @@ describe("buildRedactionPrompt", () => {
       capturedAt: new Date("2026-10-01T07:44:53Z"),
       placeLabel: null,
       precisions: [],
-      step: { number: 3, placeName: "Naxos", startDate: null, endDate: null },
+      step: { number: 3, placeName: "Naxos", livedFrom: null, livedTo: null },
     },
     coherenceSheet: EMPTY_COHERENCE_SHEET,
     previous: [],

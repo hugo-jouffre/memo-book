@@ -285,8 +285,23 @@ function serializeBody(
           title: transcriptTitle(stepNumbers?.get(message.id) ?? null),
           // Le titre que la rédaction a donné au récit — celui de l'étape dans le carnet.
           heading: phase === "ready" || phase === "unwritten" ? entry.suggestedTitle : null,
+          // **Quand on en a parlé**, et c'est tout ce que ça dit : la fiche
+          // ne l'affiche plus comme la date de l'étape (T308).
           capturedAt: entry.capturedAt.toISOString(),
-          placeLabel: entry.placeLabel,
+          // **Le lieu et les jours que l'étape a compris**, ou rien.
+          //
+          // La fiche affichait `placeLabel` — l'écho que l'app renvoie du lieu
+          // que le carnet lui avait donné, donc le lieu de l'étape **d'avant**
+          // quand on change de ville — et le jour de l'enregistrement, qui
+          // n'est pas celui qu'on raconte. Elle affiche maintenant ce que le
+          // carnet a compris, ou elle se tait : un lieu faux est pire qu'un
+          // lieu absent, et c'est la plainte même de T280.
+          //
+          // Pris sur l'étape et non sur le souvenir : une étape racontée en
+          // deux fois porte une seule date, et ses deux fiches la montrent.
+          placeName: entry.step?.placeName ?? null,
+          livedFrom: (entry.step?.livedFromDay ?? entry.livedFromDay)?.toISOString() ?? null,
+          livedTo: (entry.step?.livedToDay ?? entry.livedToDay)?.toISOString() ?? null,
           duration: entry.media?.durationSeconds ?? null,
           text: finalTextOf(entry),
           // **Les deux versions, pour pouvoir les comparer** (Hugo,

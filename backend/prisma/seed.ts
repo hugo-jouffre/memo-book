@@ -242,6 +242,18 @@ function longSeedDay(day: string): string {
 }
 
 /** « 26 août », pour la phrase des dates du contexte du voyage. */
+/**
+ * **Le jour d'un instant**, comme une colonne `@db.Date` l'attend (T308).
+ *
+ * Le jeu d'essai renseigne les jours racontés : sans eux, les étapes des
+ * comptes de démonstration s'afficheraient sans date — ce qui est le bon
+ * comportement pour un récit qui ne s'est pas situé, mais un mauvais écran de
+ * démonstration.
+ */
+function dayColumn(date: Date): Date {
+  return new Date(`${date.toISOString().slice(0, 10)}T00:00:00Z`);
+}
+
 function frenchDay(date: Date): string {
   return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" }).format(date);
 }
@@ -295,6 +307,13 @@ const ROME_STEPS = [
     ],
   },
 ];
+
+/** La fin d'une période, ou `null` quand l'étape tient dans une journée. */
+function livedPeriodEnd(step: { startDate: Date; endDate: Date }): Date | null {
+  const from = dayColumn(step.startDate);
+  const to = dayColumn(step.endDate);
+  return to.getTime() > from.getTime() ? to : null;
+}
 
 /**
  * Pose un compte et tout ce qui pend après lui : ses voyages, ses étapes, ses
@@ -428,6 +447,11 @@ async function seedTraveller(
         destinationCountryCode: "IT",
         startDate: step.startDate,
         endDate: step.endDate,
+        // Les jours racontés : ce que les écrans affichent (T308). Une étape
+        // d'une seule journée n'a pas de fin — « une date précise pour une
+        // journée, une tranche pour une période ».
+        livedFromDay: dayColumn(step.startDate),
+        livedToDay: livedPeriodEnd(step),
         transport: step.transport,
         // La première étape est déjà validée, pour voir les deux états (coche
         // vs. geste de validation) sans manipulation.
@@ -448,6 +472,10 @@ async function seedTraveller(
           transcript: souvenir.transcript,
           placeLabel: souvenir.placeLabel,
           capturedAt: new Date(step.startDate.getTime() + index * 3_600_000),
+          // Le récit se situe lui-même : c'est de là que `refreshTripFacts`
+          // redéduit les jours de l'étape, à l'identique.
+          livedFromDay: dayColumn(step.startDate),
+          livedToDay: livedPeriodEnd(step),
         },
       });
       memoryCount += 1;
@@ -966,6 +994,10 @@ async function seedGallery(): Promise<number> {
             destinationCountryCode: first?.[1],
             startDate: new Date(`${step.startDate}T00:00:00Z`),
             endDate: new Date(`${step.endDate}T00:00:00Z`),
+            // Les jours racontés, ceux que la page publique affiche (T308).
+            livedFromDay: new Date(`${step.startDate}T00:00:00Z`),
+            livedToDay:
+              step.endDate > step.startDate ? new Date(`${step.endDate}T00:00:00Z`) : null,
             transport: step.transport,
             photoUrl: galleryPhoto(`${slug}-${rank + 1}`),
           },
@@ -982,6 +1014,9 @@ async function seedGallery(): Promise<number> {
               // que le carnet imprime, et donc celui que la route publique rend.
               redactedText: text,
               capturedAt: new Date(`${step.startDate}T0${paragraph + 8}:00:00Z`),
+              livedFromDay: new Date(`${step.startDate}T00:00:00Z`),
+              livedToDay:
+                step.endDate > step.startDate ? new Date(`${step.endDate}T00:00:00Z`) : null,
             },
           });
         }

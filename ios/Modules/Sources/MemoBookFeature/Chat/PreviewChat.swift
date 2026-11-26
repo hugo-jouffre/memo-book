@@ -435,7 +435,9 @@ extension TranscriptCard {
         TranscriptCard(
             title: title,
             capturedAt: capturedAt,
-            placeLabel: placeLabel,
+            livedFrom: livedFrom,
+            livedTo: livedTo,
+            placeName: placeName,
             duration: duration,
             text: text,
             isSimulated: isSimulated,
@@ -450,7 +452,9 @@ extension TranscriptCard {
         TranscriptCard(
             title: title,
             capturedAt: capturedAt,
-            placeLabel: placeLabel,
+            livedFrom: livedFrom,
+            livedTo: livedTo,
+            placeName: placeName,
             duration: duration,
             text: text,
             isSimulated: isSimulated,

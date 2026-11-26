@@ -105,7 +105,7 @@ public struct LocalMemoResponder: MemoResponder {
         let card = TranscriptCard(
             title: ChatCopy.transcriptTitle,
             capturedAt: turn.message.sentAt,
-            placeLabel: turn.context.placeName,
+            placeName: turn.context.placeName,
             duration: note.duration,
             text: text,
             isSimulated: text != nil,

@@ -297,9 +297,9 @@ souvenir, même court : son fichier existe déjà.
 
 ## 5. La fiche de retranscription
 
-Après un vocal, MEMO pose une fiche « Retranscription étape N » — date,
-lieu, durée — **tout de suite**, avant même d'avoir écouté. Elle passe par
-trois temps :
+Après un vocal, MEMO pose une fiche « Retranscription étape N » — sa durée, et
+la date et le lieu **quand ils sont compris** — **tout de suite**, avant même
+d'avoir écouté. Elle passe par trois temps :
 
 | Temps | Ce qu'on voit | Ce qui se passe derrière |
 |---|---|---|
@@ -326,6 +326,36 @@ fiche.
 
 La fiche **connaît son souvenir** (`entryId`) : c'est elle qu'on valide, qu'on
 corrige, qu'on relit.
+
+### La date et le lieu de la fiche (T308, 26/11/2026)
+
+La fiche portait **le jour de l'enregistrement** et **l'écho du lieu** que l'app
+renvoie avec le vocal. Les deux sont faux dès qu'on prend du retard ou qu'on
+change de ville :
+
+- on raconte le soir, le lendemain, au retour — « hier on a marché jusqu'au
+  phare » s'affichait au jour où on l'a dit ;
+- `entries.placeLabel` n'est pas une mesure, c'est **le lieu que le carnet
+  avait donné à l'app** (`thread.context.placeName`) : le premier vocal d'une
+  nouvelle ville porte donc le nom de la précédente. Le schéma le dit depuis
+  T280 — « un écho, pas une mesure… jamais à nommer une étape ».
+
+La fiche montre maintenant **ce que le carnet a compris, ou rien** :
+
+| Ce que la fiche affiche | D'où ça vient |
+|---|---|
+| La date — précise pour une journée, une tranche pour une période | `livedFrom` / `livedTo`, les jours que le récit **raconte** (`memo_steps.livedFromDay`, voir [`redaction.md`](redaction.md)) |
+| Le lieu | `placeName`, celui de **l'étape** — les mots du récit d'abord, les photos ensuite (T280) |
+| Rien du tout | Un récit qui ne s'est pas situé, et c'est le cas le plus fréquent |
+
+Sans date **et** sans lieu, la ligne disparaît — l'icône de calendrier avec
+elle, qui n'annoncerait plus aucune date. La date d'envoi reste servie
+(`capturedAt`) : elle est vraie, elle ordonne le fil, elle n'est simplement
+plus présentée comme la date de l'étape.
+
+**Les dates sont celles de l'étape, pas du souvenir** : une étape racontée en
+deux séances a une seule tranche, et ses deux fiches la montrent. « Une
+transcription n'est pas une étape » (T308).
 
 ## 6. Valider, corriger
 

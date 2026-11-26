@@ -27,6 +27,43 @@ extension Date {
     }
 }
 
+extension TranscriptCard {
+    /// **La date que la fiche affiche** : celle que le récit raconte, et `nil`
+    /// quand il ne s'est pas situé (T308).
+    ///
+    /// Une journée donne « 28 août », une période « 28 – 30 août » : l'année
+    /// n'y est pas, comme pour ``Date/chatDayLabel`` — dans un fil, elle est
+    /// presque toujours celle du jour. Même règle de `FormatStyle` que
+    /// ``Trip/dateRangeLabel``, qui écrit le mois une seule fois.
+    ///
+    /// `nil` n'est pas un trou à combler : la fiche n'affichait le jour de
+    /// l'**enregistrement** que faute de mieux, et un dimanche imprimé sur une
+    /// journée de vendredi est pire qu'une fiche sans date.
+    var livedDatesLabel: String? {
+        switch (livedFrom, livedTo) {
+        case let (from?, to?) where from < to:
+            (from..<to).formatted(.interval.day().month(.wide))
+        case let (from?, _):
+            from.chatDayLabel
+        case (nil, _):
+            nil
+        }
+    }
+
+    /// La même chose pour VoiceOver : en toutes lettres, avec l'année — une
+    /// annonce vocale ne se relit pas.
+    var livedDatesSpokenLabel: String? {
+        switch (livedFrom, livedTo) {
+        case let (from?, to?) where from < to:
+            (from..<to).formatted(.interval.weekday(.wide).day().month(.wide).year())
+        case let (from?, _):
+            from.chatFullDayLabel
+        case (nil, _):
+            nil
+        }
+    }
+}
+
 extension TimeInterval {
     /// « 0:37 » — la durée sous une forme d'onde.
     ///

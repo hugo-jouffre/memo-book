@@ -71,6 +71,15 @@ export function tripDate(stored: Date): LocalDate {
   return new Date(stored.getTime() + DAY_MS / 2).toISOString().slice(0, 10);
 }
 
+/**
+ * L'inverse de ``calendarDate`` : le jour tel qu'une colonne `@db.Date`
+ * l'attend — minuit UTC, sans fuseau. Postgres n'en garde que la date, mais
+ * le client Prisma rend un `Date` complet, et c'est lui qu'on relit.
+ */
+export function calendarColumn(date: LocalDate): Date {
+  return new Date(`${date}T00:00:00Z`);
+}
+
 /** Le jour, `days` plus tard (ou plus tôt, en négatif). */
 export function addDays(date: LocalDate, days: number): LocalDate {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);

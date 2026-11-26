@@ -111,7 +111,7 @@ class LocalMemoResponder(private val voice: VoiceMode = VoiceMode.forCurrentBuil
         val card = TranscriptCard(
             title = ChatCopy.transcriptTitle,
             capturedAt = turn.message.sentAt,
-            placeLabel = turn.context.placeName,
+            placeName = turn.context.placeName,
             duration = note.duration,
             text = text,
             isSimulated = text != null,

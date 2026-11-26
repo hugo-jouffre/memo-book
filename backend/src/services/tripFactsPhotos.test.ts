@@ -36,6 +36,10 @@ function entry(
     continuesPrevious: false,
     pinnedStepId,
     capturedPlaceName: null,
+    // Aucun récit situé ici : ces tests ne parlent que du rangement des
+    // photos, et une étape sans jour raconté se range comme avant (T308).
+    livedFromDay: null,
+    livedToDay: null,
   };
 }
 
@@ -91,6 +95,29 @@ describe("à quelle étape une photo se range", () => {
    * EXIF d'une photo à la date d'enregistrement des récits, et la photo
    * partait systématiquement dans une étape d'avant.
    */
+  /**
+   * **Et quand le récit dit ce qu'il raconte, c'est ça qui compte** (T308).
+   *
+   * Une journée racontée deux jours plus tard n'attirait aucune de ses
+   * photos : la photo porte le jour de la prise de vue, le récit le jour de
+   * l'envoi, et la plus proche des étapes était celle qu'on enregistrait ce
+   * jour-là. Les jours **racontés** mettent les deux sur la même échelle.
+   */
+  it("une photo rejoint le récit qui raconte son jour, même raconté plus tard", () => {
+    const jour = (iso: string) => new Date(`${iso}T00:00:00Z`);
+    const groups = groupIntoSteps([
+      // Raconté le 29 octobre, mais il raconte le 26.
+      { ...entry("recit-du-26", "audio", 0), livedFromDay: jour("2026-10-26") },
+      // Raconté juste après, et il raconte le jour même.
+      { ...entry("recit-du-29", "audio", 10), livedFromDay: jour("2026-10-29") },
+      // Prise le 26 à seize heures : dans la journée du premier récit.
+      { ...entry("photo-du-26", "photo", 30), capturedAt: new Date("2026-10-26T16:00:00Z") },
+    ]);
+
+    const raconte = groups.find((group) => group.entries[0]!.id === "recit-du-26")!;
+    expect(raconte.entries.map((one) => one.id)).toContain("photo-du-26");
+  });
+
   it("une photo tombe dans l'étape dont les dates couvrent son jour", () => {
     const groups = groupIntoSteps([
       // Une étape de deux jours : le second récit prolonge le premier.
