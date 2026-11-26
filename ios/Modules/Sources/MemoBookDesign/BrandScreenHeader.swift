@@ -168,6 +168,7 @@ public struct BrandHeaderAction: View {
     private let icon: String
     private let label: String
     private let isAvailable: Bool
+    private let isBusy: Bool
     private let onUnavailable: (() -> Void)?
     private let action: () -> Void
 
@@ -177,21 +178,29 @@ public struct BrandHeaderAction: View {
     ///     d'`action` — même contrat que ``BrandToggleCard`` et
     ///     ``BrandSegmentedPicker``, et pour la même raison : un `disabled`
     ///     avale le geste et n'explique rien.
+    ///   - isBusy: la commande **travaille** : son icône tourne sur elle-même
+    ///     (T299, la flèche de régénération du carnet). Elle reste tapable —
+    ///     ce n'est pas une indisponibilité, c'est un travail en cours, et
+    ///     c'est à l'appelant d'ignorer un second appui.
     ///   - onUnavailable: ce qu'on fait de cet appui. Poser un message,
     ///     toujours.
     public init(
         icon: String,
         label: String,
         isAvailable: Bool = true,
+        isBusy: Bool = false,
         onUnavailable: (() -> Void)? = nil,
         action: @escaping () -> Void
     ) {
         self.icon = icon
         self.label = label
         self.isAvailable = isAvailable
+        self.isBusy = isBusy
         self.onUnavailable = onUnavailable
         self.action = action
     }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// L'icône suit le texte, la cible non : une commande qui grandit à
     /// l'infini pousserait le titre hors de sa ligne.
@@ -211,6 +220,18 @@ public struct BrandHeaderAction: View {
                 .scaledToFit()
                 .frame(width: min(iconSide, MemoBookSpacing.l), height: min(iconSide, MemoBookSpacing.l))
                 .foregroundStyle(MemoBookColor.ink)
+                // Un tour par seconde, tant que ça travaille. Même motif que
+                // ``BrandSkeleton`` : l'état est posé d'un coup, l'animation
+                // répète la transition.
+                //
+                // **Mouvement réduit** : la flèche ne tourne pas. Ce n'est pas
+                // une perte d'information — un bandeau sous l'en-tête dit ce
+                // qui se passe, et c'est lui que VoiceOver lit.
+                .rotationEffect(.degrees(isSpinning ? 360 : 0))
+                .animation(
+                    isSpinning ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
+                    value: isSpinning
+                )
                 .frame(
                     width: MemoBookSpacing.minimumTapTarget,
                     height: MemoBookSpacing.minimumTapTarget
@@ -227,7 +248,16 @@ public struct BrandHeaderAction: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
-        .accessibilityValue(isAvailable ? "" : "Non disponible")
+        .accessibilityValue(accessibilityValue)
+    }
+
+    /// `isBusy`, mais seulement si l'animation est permise : une rotation que
+    /// personne ne voit ne doit pas démarrer une boucle infinie.
+    private var isSpinning: Bool { isBusy && !reduceMotion }
+
+    private var accessibilityValue: String {
+        if isBusy { return "En cours" }
+        return isAvailable ? "" : "Non disponible"
     }
 }
 

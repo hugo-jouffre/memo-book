@@ -434,6 +434,75 @@ object BookCopy {
             "Ce carnet n’est pas encore composé : **ses pages arrivent** dès que MemoBook a fini de les mettre en page."
 
         /**
+         * **Sous l'en-tête, quand le carnet affiché est celui que l'appareil
+         * gardait** et que le serveur n'a rien dit — sans réseau, le plus
+         * souvent (T299).
+         *
+         * Elle nomme une **date**, et pas « hors ligne » : ce qui compte pour
+         * quelqu'un qui feuillette son carnet n'est pas l'état du réseau, c'est
+         * de savoir si ce qu'il a raconté hier soir y est. La phrase dit donc
+         * jusqu'où va ce qu'il regarde.
+         */
+        fun keptVersion(epochMillis: Long): String =
+            "Voici ton carnet tel qu’il était ${moment(epochMillis)}. " +
+                "**Ce que tu as raconté depuis** y entrera à la prochaine mise en page."
+
+        /**
+         * **Sous l'en-tête, après un appui sur la flèche** quand il n'y avait
+         * rien à régénérer (T299).
+         *
+         * Le geste doit recevoir une réponse : sans elle, une flèche qui tourne
+         * une seconde et s'arrête se lit comme une panne. Et la réponse est une
+         * bonne nouvelle — le carnet est à jour —, pas une erreur.
+         */
+        const val alreadyUpToDate =
+            "**Ton carnet est déjà à jour** : tout ce que tu as raconté y est mis en page."
+
+        /**
+         * **Sous l'en-tête, après un appui sur la flèche pâlie** : il n'y a pas
+         * encore de carnet à mettre à jour (T299).
+         */
+        const val nothingToRegenerate =
+            "Il n’y a rien à mettre à jour tant que ton carnet n’est pas composé. " +
+                "**Sa première mise en page est en cours** — la flèche s’ouvrira dès qu’elle aboutit."
+
+        /**
+         * « hier soir », « ce matin », « le 12 novembre ».
+         *
+         * Le jour et le moment plutôt qu'une heure : une date au quart d'heure
+         * près est illisible, et personne ne se souvient avoir composé son
+         * carnet à 21 h 47. Un « il y a 14 heures » demanderait un calcul
+         * mental pour la même information.
+         */
+        fun moment(
+            epochMillis: Long,
+            now: java.time.Instant = java.time.Instant.now(),
+            zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+        ): String {
+            val date = java.time.Instant.ofEpochMilli(epochMillis).atZone(zone)
+            val aujourdhui = now.atZone(zone).toLocalDate()
+            val moment = when (date.hour) {
+                in 0..4 -> "cette nuit"
+                in 5..11 -> "matin"
+                in 12..17 -> "après-midi"
+                else -> "soir"
+            }
+
+            if (date.toLocalDate() == aujourdhui) {
+                return if (moment == "cette nuit") moment else "ce $moment"
+            }
+            if (date.toLocalDate() == aujourdhui.minusDays(1)) {
+                return if (moment == "cette nuit") "la nuit dernière" else "hier $moment"
+            }
+            return "le ${date.dayOfMonth} ${MOIS[date.monthValue - 1]}"
+        }
+
+        private val MOIS = listOf(
+            "janvier", "février", "mars", "avril", "mai", "juin",
+            "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+        )
+
+        /**
          * Ce qu'on lit dans le PDF d'attente, celui que l'app compose quand le
          * carnet du serveur n'est pas chargé — voir `BookPreviewModel`. Les
          * treize espaces du milieu sont ceux de la chaîne Swift, au caractère près.
@@ -465,6 +534,13 @@ object BookCopy {
             const val enterFullScreen = "Afficher en plein écran"
             const val exitFullScreen = "Quitter le plein écran"
             const val share = "Partager mon carnet"
+
+            /**
+             * La flèche de T299. « Mettre à jour » et non « Régénérer » : c'est
+             * ce qu'elle fait pour la personne qui appuie, et le mot du
+             * ticket — régénérer — est celui du serveur.
+             */
+            const val regenerate = "Mettre mon carnet à jour"
         }
 
         /**
@@ -542,11 +618,16 @@ object BookCopy {
          *
          * Le bouton pâlit et reste tapable — « ce qu'on ne peut pas faire
          * pâlit, ça ne se désactive pas » (`ios/CLAUDE.md`) —, et voilà ce
-         * qu'il répond. La sortie qu'il nomme est vraie : l'aperçu relance la
-         * composition à chaque ouverture (`POST /v1/memos/:id/renders`).
+         * qu'il répond. La sortie qu'il nomme est vraie : il n'y a rien
+         * d'autre à faire qu'attendre.
+         *
+         * ⚠️ **Elle ne dit plus « la composition repart à chaque ouverture »**
+         * (T299) : ce n'est plus vrai d'un carnet composé — l'ouverture montre
+         * celui qu'on garde, et c'est la flèche de l'en-tête qui demande une
+         * mise en page.
          */
         const val notComposedYet =
-            "Il n’y a rien à partager tant que ton carnet n’est pas composé. **La composition repart à chaque ouverture de cet écran** — « Partager » s’ouvrira dès qu’elle aboutit."
+            "Il n’y a rien à partager tant que ton carnet n’est pas composé. **Sa mise en page est en cours** — « Partager » s’ouvrira dès qu’elle aboutit."
         const val shareLink = "Partager le lien de prévisualisation"
 
         /**

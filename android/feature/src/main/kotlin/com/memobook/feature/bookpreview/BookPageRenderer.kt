@@ -54,12 +54,17 @@ import java.util.concurrent.atomic.AtomicBoolean
  *    mémoire de l'app, la recette d'Android pour un cache d'images.
  * 2. **La page voisine est préparée d'avance.** Tourner la page ne déclenche
  *    donc aucun rendu : il a eu lieu pendant qu'on lisait la précédente.
- * 3. **Le document n'est pas un cache.** Le lien est signé et de courte durée ;
- *    le garder ne servirait qu'à afficher un carnet périmé. `PdfRenderer` ne
- *    lit pourtant qu'un **fichier** — PDFKit, lui, ouvre des données en
- *    mémoire : il est écrit dans le cache de l'app (`book-pages/`), réécrit à
- *    chaque chargement, et effacé à la fermeture de l'écran ([close]). Jamais
- *    dans `ContentCache` : ce n'est pas du contenu à relire hors ligne.
+ * 3. **Le document descendu est gardé sur l'appareil** par l'appelant
+ *    ([BookDocumentStore], T299) : l'ouverture suivante ne redescend rien, et
+ *    un carnet composé se feuillette sans réseau. Ce qui se garde est le
+ *    fichier, jamais le lien — celui-là est signé et de courte durée. On a
+ *    longtemps refusé ce cache de peur de montrer un carnet périmé ; la réponse
+ *    n'était pas de jeter le fichier mais de **savoir lequel on a** : la fiche
+ *    du magasin dit de quel rendu il vient.
+ *
+ *    Le fichier de travail de l'écran, lui, reste à part (`book-pages/`,
+ *    réécrit à chaque chargement, effacé à la fermeture — [close]) : c'est
+ *    celui que `PdfRenderer` tient ouvert, et le magasin en garde une copie.
  *
  * **Un seul fil** lit le document : `PdfRenderer` ne tient qu'une page ouverte à
  * la fois et ne se partage pas entre deux fils. Tout passe donc par
@@ -158,6 +163,37 @@ class BookPageRenderer(
             if (!downloaded) {
                 partial.delete()
                 document = document.copy(didFail = true)
+                return document
+            }
+            document = withContext(documentThread) { open(partial) }
+            return document
+        } finally {
+            isLoading.set(false)
+        }
+    }
+
+    /**
+     * Ouvre un PDF qu'on a déjà sous la main — celui que l'appareil gardait
+     * (T299). Aucun réseau, donc aucune attente : c'est ce qui fait que
+     * l'aperçu s'ouvre sur le carnet au lieu d'une page crème.
+     *
+     * Le fichier du magasin est **recopié** dans le fichier de travail : c'est
+     * ce dernier que `PdfRenderer` tient ouvert tant que l'écran vit, et
+     * [close] l'efface — le carnet gardé, lui, doit survivre à l'écran.
+     */
+    suspend fun openKept(source: File): Document {
+        if (!isLoading.compareAndSet(false, true)) return document
+        try {
+            val partial = File(workFile.parentFile, "${workFile.name}.part")
+            val copied = runCatching {
+                withContext(Dispatchers.IO) {
+                    workFile.parentFile?.mkdirs()
+                    source.copyTo(partial, overwrite = true)
+                    true
+                }
+            }.getOrDefault(false)
+            if (!copied) {
+                partial.delete()
                 return document
             }
             document = withContext(documentThread) { open(partial) }

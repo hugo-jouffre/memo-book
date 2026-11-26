@@ -115,6 +115,62 @@ struct BookShareAction: View {
     }
 }
 
+/// **Les deux commandes de l'en-tête de l'aperçu** : mettre le carnet à jour,
+/// et le partager.
+///
+/// ⚠️ **Deux et non une** (T299), là où ``BrandScreenHeader`` en demande « au
+/// plus une, sinon on ne sait plus laquelle est la sortie ». La raison de la
+/// règle est l'ambiguïté avec la sortie — et la sortie de cet écran est la
+/// flèche de retour, à gauche, qui ne ressemble à aucune des deux. Ces
+/// deux-là portent le **même objet**, le carnet qu'on regarde : le mettre à
+/// jour et l'envoyer. Les séparer mettrait les deux gestes d'une même chose à
+/// deux endroits de l'écran.
+///
+/// La flèche est **avant** le partage : « Partager » ne bouge pas de la place
+/// qu'il occupe depuis septembre, et c'est le nouveau venu qui se range.
+///
+/// C'est écrit dans `ios/CLAUDE.md`, et une ligne suffit à la défaire — la
+/// flèche irait alors sous les pages, à côté de « Personnaliser ».
+struct BookPreviewActions: View {
+    let model: BookPreviewModel
+    let onShare: () -> Void
+
+    var body: some View {
+        HStack(spacing: MemoBookSpacing.xs) {
+            BookRegenerateAction(model: model)
+            BookShareAction(model: model, action: onShare)
+        }
+    }
+}
+
+/// **La flèche qui régénère le carnet** (T299 — « un bouton à flèche tournante
+/// la régénère »).
+///
+/// Elle existe parce que l'ouverture ne recompose plus : le carnet gardé sur
+/// l'appareil s'affiche tout de suite, et c'est ce bouton qui demande une
+/// version fraîche. Elle **tourne** tant qu'une composition travaille — celle
+/// qu'on vient de demander, ou celle qu'une étape validée a lancée ailleurs.
+///
+/// Elle n'est pas offerte tant qu'il n'y a pas de carnet : sur un carnet jamais
+/// composé, l'écran de composition compose déjà, et une flèche de plus ne ferait
+/// que proposer d'attendre deux fois. Fermée, elle pâlit et explique.
+struct BookRegenerateAction: View {
+    let model: BookPreviewModel
+
+    var body: some View {
+        BrandHeaderAction(
+            icon: "IconLucideRotateCw",
+            label: BookCopy.Preview.Voice.regenerate,
+            isAvailable: model.canShare,
+            isBusy: model.isRefreshing,
+            onUnavailable: model.explainRegenerateIsClosed,
+            // Le geste appelle son modèle : aucun écran n'a à savoir ce qu'une
+            // mise à jour demande au serveur.
+            action: { Task { await model.regenerate() } }
+        )
+    }
+}
+
 /// **Ce que l'aperçu dit de lui-même, sous son en-tête** — voir
 /// ``BookPreviewModel/notice`` pour ce qui parle et dans quel ordre.
 ///

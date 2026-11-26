@@ -83,7 +83,15 @@ public final class BookPreviewModel {
     /// voir ``BookPreview/hasComposedDocument``. Un carnet que le serveur
     /// annonce prêt sans PDF n'a ni fichier ni lien à envoyer, et c'est
     /// exactement l'état dans lequel « Partager » envoyait un faux carnet.
-    public var canShare: Bool { preview?.hasComposedDocument ?? false }
+    ///
+    /// **Ou bien le PDF est là**, gardé sur l'appareil (T299) : un carnet
+    /// ouvert sans réseau se partage, puisque les octets sont en main — c'est
+    /// même le seul cas où le partage ne dépend pas du tout du serveur. Les
+    /// pages blanches du debug n'en sont pas : on regarde le document, pas
+    /// ``sheetCount``.
+    public var canShare: Bool {
+        (preview?.hasComposedDocument ?? false) || renderer.sheetCount > 0
+    }
 
     /// **Le sous-titre de l'en-tête** : « Rome et la Dolce Vita - 10 pages
     /// composées », ou le **titre seul** tant que rien n'est composé (T302).
@@ -125,18 +133,60 @@ public final class BookPreviewModel {
         // doubler ferait dire deux fois la même chose au même écran — et
         // « On remet à jour ton carnet… » y serait faux : rien n'est à
         // remettre à jour, c'est la première composition.
+        if hasAskedToRegenerate {
+            return Notice(message: BookCopy.Preview.nothingToRegenerate, answersAGesture: true)
+        }
+        if isAlreadyUpToDate {
+            return Notice(message: BookCopy.Preview.alreadyUpToDate, answersAGesture: true)
+        }
         guard stage == .preview else { return nil }
         if isRecomposing {
             return Notice(message: BookCopy.Preview.recomposing, answersAGesture: false)
+        }
+        // **Avant** l'état des choses : un carnet gardé est bien un carnet, et
+        // le serveur n'a simplement rien dit. Sans cette branche, l'ouverture
+        // sans réseau annonçait « pas encore composé » au-dessus du carnet
+        // qu'on feuillette.
+        if let keptAt {
+            return Notice(message: BookCopy.Preview.keptVersion(keptAt), answersAGesture: false)
         }
         guard !canShare else { return nil }
         return Notice(message: BookCopy.Preview.notComposed, answersAGesture: false)
     }
 
+    /// Une régénération demandée à la main tourne en ce moment — le temps de
+    /// l'appel et du premier sondage. ``isRecomposing`` prend la suite quand le
+    /// serveur en a lancé une.
+    public private(set) var isRegenerating = false
+
+    /// La dernière régénération demandée n'avait rien à régénérer. Retombe au
+    /// geste suivant, et dès qu'une composition part.
+    public private(set) var isAlreadyUpToDate = false
+
+    /// La flèche tourne-t-elle. Vrai de l'appui jusqu'à la fin de la
+    /// composition, qu'elle vienne de ce geste ou d'une étape validée
+    /// ailleurs : ce qui tourne dit « ça travaille », pas « j'ai appuyé ».
+    public var isRefreshing: Bool { isRegenerating || isRecomposing }
+
     /// Dit pourquoi « Partager » ne mène nulle part. Appelé par le bouton
     /// pâli, qui reste tapable : « ce qu'on ne peut pas faire pâlit, ça ne se
     /// désactive pas » (`ios/CLAUDE.md`).
-    public func explainShareIsClosed() { hasAskedToShare = true }
+    public func explainShareIsClosed() {
+        hasAskedToShare = true
+        hasAskedToRegenerate = false
+    }
+
+    /// Quelqu'un a touché la flèche de mise à jour alors qu'elle était pâlie
+    /// (T299). Retombe dès que le carnet est composé — voir ``apply(_:)``.
+    public private(set) var hasAskedToRegenerate = false
+
+    /// Dit pourquoi la flèche ne mène nulle part. Même contrat que
+    /// ``explainShareIsClosed()`` : le bouton pâli reste tapable, et l'appui va
+    /// chercher son explication.
+    public func explainRegenerateIsClosed() {
+        hasAskedToRegenerate = true
+        hasAskedToShare = false
+    }
 
     /// Le fichier n'a pas pu être fabriqué : le carnet est composé — sinon
     /// « Partager » serait resté fermé —, mais son PDF n'est pas descendu.
@@ -171,6 +221,27 @@ public final class BookPreviewModel {
     private let startComposition: ((String) async throws -> Void)?
     private let coversSource: ((String) async throws -> BookCovers)?
     private let requestLink: ((String) async throws -> URL)?
+
+    /// Où le dernier carnet composé est gardé (T299). `nil` — les aperçus
+    /// Xcode, la plupart des tests — ne garde rien : l'aperçu retéléchargera,
+    /// comme avant le ticket.
+    ///
+    /// Posé après la construction, comme ``pacing`` et pour la même raison :
+    /// c'est un rouage interne du module, et l'`init` du modèle est publique.
+    var documents: BookDocumentStore?
+
+    /// Le rendu derrière le PDF **ouvert à l'écran** — celui qu'on a gardé,
+    /// ou celui qu'on vient de télécharger.
+    ///
+    /// C'est ce qui évite le transfert : le serveur annonce le même rendu, il
+    /// n'y a rien à aller chercher. Distinct de `preview?.readyRenderId`, qui
+    /// est ce que le serveur a de plus récent.
+    private var openRenderId: String?
+
+    /// Quand le carnet affiché est arrivé sur l'appareil, quand c'est **lui
+    /// seul** qu'on peut montrer — le serveur n'a pas répondu. `nil` dès qu'une
+    /// réponse confirme le carnet.
+    public private(set) var keptAt: Date?
 
     /// Une composition est suivie en ce moment. Garde ``run()`` d'un second
     /// départ — la tâche de l'écran et celle d'un retour sur l'écran.
@@ -346,6 +417,14 @@ public final class BookPreviewModel {
         defer { isRunning = false }
         errorMessage = nil
 
+        // 0. **Le carnet qu'on avait**, avant tout appel (T299) : s'il est sur
+        //    l'appareil, il s'ouvre tout de suite, et la suite se passe
+        //    derrière des pages qu'on feuillette déjà. C'est tout le ticket —
+        //    l'attente d'avant était celle du transfert, pas celle de la
+        //    composition, que l'empreinte avait déjà supprimée (T224).
+        await openKeptDocument()
+        guard !Task.isCancelled else { return }
+
         // 1. Lancer la composition — ou retrouver celle qui tourne. Un échec ne
         //    s'affiche pas encore : un carnet déjà composé reste feuilletable,
         //    et c'est le sondage qui suit qui le dira.
@@ -357,6 +436,11 @@ public final class BookPreviewModel {
         do {
             first = try await source(memoId)
         } catch {
+            // Le carnet gardé est à l'écran : il n'y a **pas** d'erreur à
+            // montrer, il y a une version à nommer. Sans réseau, c'est
+            // exactement ce que le ticket demande — « donc lisible sans
+            // réseau » —, et le mot sous l'en-tête dit de quand elle date.
+            guard keptAt == nil else { return }
             errorMessage = launchFailure ?? error.localizedDescription
             #if DEBUG
                 openBlankPages()
@@ -455,6 +539,9 @@ public final class BookPreviewModel {
         /// s'il y a une raison.
         private func openBlankPages() {
             guard opensBlankPages, !Task.isCancelled else { return }
+            // Un carnet est ouvert — celui que l'appareil gardait (T299) : on
+            // ne le remplace pas par des pages blanches.
+            guard renderer.sheetCount == 0 else { return }
             if preview == nil {
                 preview = BookPreview(memoId: memoId, title: BookCopy.Preview.blankTitle)
             }
@@ -576,23 +663,64 @@ public final class BookPreviewModel {
 
         // Le carnet est arrivé : l'explication n'a plus d'objet, et le bouton
         // qu'elle désignait vient de s'ouvrir.
-        if canShare { hasAskedToShare = false }
+        if canShare {
+            hasAskedToShare = false
+            hasAskedToRegenerate = false
+        }
 
         switch loaded.status {
         case .ready, .failed:
             isRecomposing = false
         case .composing:
             isRecomposing = true
+            // Une composition est partie, d'ici ou d'ailleurs : « ton carnet
+            // est déjà à jour » vient d'être démenti.
+            isAlreadyUpToDate = false
         }
 
-        // Le PDF se recharge quand **un autre** rendu a abouti, ou qu'aucun
-        // document n'est ouvert. Un sondage qui confirme le même rendu ne
-        // retélécharge rien.
-        if let url = loaded.pdfUrl,
-            renderer.sheetCount == 0 || ShownBook(loaded).document != previous.map(ShownBook.init)?.document
-        {
-            await renderer.load(from: url)
+        // Le serveur a répondu : ce qui est à l'écran n'est plus « tout ce
+        // qu'on a », c'est le carnet confirmé. Le mot qui nommait sa date n'a
+        // plus d'objet.
+        keptAt = nil
+
+        // Le PDF se recharge quand le serveur annonce **un autre** rendu que
+        // celui qui est ouvert, ou qu'aucun document ne l'est. Un sondage qui
+        // confirme le même rendu ne retélécharge rien — et **le carnet gardé
+        // sur l'appareil compte comme ouvert** (T299) : c'est là que rouvrir un
+        // carnet inchangé cesse de coûter un transfert de plusieurs mégaoctets.
+        //
+        // La comparaison se fait sur ``openRenderId`` et non sur la réponse
+        // d'avant : ce qui compte est ce qu'on affiche, pas ce qu'on a lu.
+        guard let url = loaded.pdfUrl else { return }
+        let announced = ShownBook(loaded).document
+        guard renderer.sheetCount == 0 || announced != openRenderId else { return }
+
+        guard let data = await renderer.load(from: url) else { return }
+        openRenderId = announced
+        // Gardé **après** l'ouverture : un PDF que PDFKit refuse n'a rien à
+        // faire sur le disque, il ferait échouer les ouvertures suivantes sans
+        // réseau pour les réparer.
+        if let announced {
+            await documents?.keep(data, renderId: announced, for: memoId)
         }
+    }
+
+    /// Ouvre le carnet que l'appareil gardait, s'il y en a un (T299).
+    ///
+    /// **Avant tout appel réseau**, et sans en faire aucun : c'est ce qui
+    /// remplace la page crème du premier chargement par le carnet qu'on
+    /// feuilletait hier. La suite — composition, sondage — se déroule derrière.
+    ///
+    /// ``keptAt`` est posé ici et retiré par ``apply(_:)`` : entre les deux, le
+    /// carnet affiché est le seul qu'on puisse montrer, et l'écran le dit.
+    private func openKeptDocument() async {
+        guard let documents, renderer.sheetCount == 0 else { return }
+        guard let kept = await documents.kept(for: memoId) else { return }
+        guard renderer.open(kept.data) else { return }
+
+        openRenderId = kept.renderId
+        keptAt = kept.keptAt
+        stage = .preview
     }
 
     /// Ce que l'aperçu montre d'une réponse du serveur — de quoi décider si
@@ -661,6 +789,47 @@ public final class BookPreviewModel {
             }
         }
         isRecomposing = false
+    }
+
+    /// **Régénérer le carnet**, parce qu'on le demande (T299 — « un bouton à
+    /// flèche tournante la régénère »).
+    ///
+    /// Ouvrir l'aperçu ne remet plus rien en page : le carnet gardé s'affiche,
+    /// et le serveur ne recompose que si le récit a changé depuis (T224). Ce
+    /// bouton est donc le geste par lequel on **demande** une version fraîche,
+    /// au lieu de l'attendre.
+    ///
+    /// **Il ne force rien, et c'est voulu.** Une composition coûte de l'IA et un
+    /// rendu : c'est au serveur de décider s'il y a lieu — il relance quand
+    /// quelque chose a changé, il rend le dernier rendu sinon. On lit sa réponse
+    /// pour savoir lequel des deux vient d'arriver, et on le dit : une flèche
+    /// qui tourne une seconde et rien d'autre se lirait comme une panne.
+    public func regenerate() async {
+        guard !isRefreshing else { return }
+        isRegenerating = true
+        defer { isRegenerating = false }
+        errorMessage = nil
+        isAlreadyUpToDate = false
+        hasAskedToShare = false
+        hasAskedToRegenerate = false
+
+        if let failure = await launchComposition() {
+            errorMessage = failure
+            return
+        }
+        guard let loaded = try? await source(memoId) else { return }
+        await apply(loaded)
+
+        if isRecomposing {
+            await watchRecomposition()
+        } else {
+            // **C'est le serveur qui le dit**, et non une déduction : il
+            // compare l'empreinte du carnet à celle du dernier rendu
+            // (`isUpToDate`, T224) — la même question que celle qui décide de
+            // relancer. Un serveur d'avant ce champ ne la répond pas ; rien ne
+            // s'est lancé, c'est donc qu'il n'y avait rien à lancer.
+            isAlreadyUpToDate = loaded.isUpToDate ?? true
+        }
     }
 
     /// Relance après un échec.

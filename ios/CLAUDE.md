@@ -281,6 +281,17 @@ police ou marge codée en dur ailleurs.
   du nombre de coches aurait fait deux dessins pour une même idée, ce que la
   règle cherche justement à éviter. La règle vise donc l'usage, pas le
   composant — à relire le jour où un vrai groupe à cocher naîtra ailleurs.
+- `BrandScreenHeader` ne porte **qu'une** action de bout de ligne : deux
+  commandes en tête d'un écran poussé et on ne sait plus laquelle est la sortie.
+  ⚠️ **Une exception depuis T299** (26/11/2026) : l'aperçu PDF en porte **deux**
+  — la flèche qui met le carnet à jour, puis « Partager » (`BookPreviewActions`).
+  La raison de la règle est l'ambiguïté avec la sortie, et la sortie de cet
+  écran est la flèche de retour, à gauche, qui ne ressemble à aucune des deux.
+  Ces deux-là portent le **même objet**, le carnet qu'on regarde : le mettre à
+  jour et l'envoyer. Les séparer mettrait les deux gestes d'une même chose à
+  deux endroits de l'écran. La flèche est **avant** le partage, qui ne bouge pas
+  de la place qu'il occupe depuis septembre. Une ligne suffit à la défaire : la
+  flèche irait sous les pages, à côté de « Personnaliser ».
 - **Un enchaînement de feuilles ne s'empile pas, et n'a plus d'exception.** Une
   confirmation en plusieurs temps se fait dans **une seule** `BrandSheet` dont
   le contenu change — `SubscriptionSheet` et ses quatre temps, `NewNotebookSheet`

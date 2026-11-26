@@ -63,7 +63,11 @@ import kotlin.time.TimeSource
  * @param covers `GET /v1/trips/:id/covers`. `null` — la feuille du paywall, les
  *   aperçus — ne lit pas les plats.
  * @param requestLink `POST /v1/memos/:id/share-link`.
- * @param documents où le PDF et son export s'écrivent : le cache de l'app.
+ * @param workDirectory où le PDF de travail et son export s'écrivent : le cache
+ *   de l'app. **Ce n'est pas le magasin** des carnets gardés
+ *   ([BookDocumentStore], posé après la construction) : ces fichiers-ci meurent
+ *   avec l'écran, ceux-là lui survivent. Le paramètre s'appelait `documents`,
+ *   nom que porte désormais le magasin, comme sur iOS.
  *   Par défaut le dossier temporaire de Java, qu'Android pose sur ce même cache
  *   au lancement de l'app — le `URL.temporaryDirectory` d'iOS.
  * @param opensBlankPages le repli en pages blanches est permis — le `#if DEBUG`
@@ -80,7 +84,7 @@ class BookPreviewModel(
     private val startComposition: (suspend (String) -> Unit)? = null,
     covers: (suspend (String) -> BookCovers)? = null,
     private val requestLink: (suspend (String) -> String)? = null,
-    private val documents: File = File(System.getProperty("java.io.tmpdir") ?: "."),
+    private val workDirectory: File = File(System.getProperty("java.io.tmpdir") ?: "."),
     opensBlankPages: Boolean = false,
 ) : ViewModel() {
     /** Où en est le parcours. */
@@ -147,6 +151,28 @@ class BookPreviewModel(
          * Retombe dès que le carnet est composé — voir `apply`.
          */
         val hasAskedToShare: Boolean = false,
+        /**
+         * Quelqu'un a touché la flèche de mise à jour alors qu'elle était
+         * pâlie (T299). Retombe dès que le carnet est composé.
+         */
+        val hasAskedToRegenerate: Boolean = false,
+        /**
+         * Une mise à jour demandée à la main tourne en ce moment — le temps de
+         * l'appel et du premier sondage. [isRecomposing] prend la suite quand
+         * le serveur en a lancé une.
+         */
+        val isRegenerating: Boolean = false,
+        /**
+         * La dernière mise à jour demandée n'avait rien à régénérer. Retombe au
+         * geste suivant, et dès qu'une composition part.
+         */
+        val isAlreadyUpToDate: Boolean = false,
+        /**
+         * Quand le carnet affiché est arrivé sur l'appareil, quand c'est **lui
+         * seul** qu'on peut montrer — le serveur n'a pas répondu. `null` dès
+         * qu'une réponse confirme le carnet (T299).
+         */
+        val keptAt: Long? = null,
     ) {
         /**
          * Le carnet est composé côté serveur, donc imprimable.
@@ -170,7 +196,22 @@ class BookPreviewModel(
          * annonce prêt sans PDF n'a ni fichier ni lien à envoyer, et c'est
          * exactement l'état dans lequel « Partager » envoyait un faux carnet.
          */
-        val canShare: Boolean get() = preview?.hasComposedDocument ?: false
+        /**
+         * **Ou bien le PDF est là**, gardé sur l'appareil (T299) : un carnet
+         * ouvert sans réseau se partage, puisque le fichier est en main — c'est
+         * même le seul cas où le partage ne dépend pas du tout du serveur. Les
+         * pages blanches du debug n'en sont pas : on regarde le document, pas
+         * [sheetCount].
+         */
+        val canShare: Boolean
+            get() = (preview?.hasComposedDocument ?: false) || document.sheetCount > 0
+
+        /**
+         * La flèche tourne-t-elle. Vrai de l'appui jusqu'à la fin de la
+         * composition, qu'elle vienne de ce geste ou d'une étape validée
+         * ailleurs : ce qui tourne dit « ça travaille », pas « j'ai appuyé ».
+         */
+        val isRefreshing: Boolean get() = isRegenerating || isRecomposing
 
         /**
          * Le mot posé sous l'en-tête des trois écrans de l'aperçu, ou `null`
@@ -183,6 +224,12 @@ class BookPreviewModel(
         val notice: Notice?
             get() {
                 if (hasAskedToShare) return Notice(BookCopy.Share.notComposedYet, answersAGesture = true)
+                if (hasAskedToRegenerate) {
+                    return Notice(BookCopy.Preview.nothingToRegenerate, answersAGesture = true)
+                }
+                if (isAlreadyUpToDate) {
+                    return Notice(BookCopy.Preview.alreadyUpToDate, answersAGesture = true)
+                }
                 // L'écran de composition dit déjà tout sous sa page, et mieux
                 // que ce bandeau : la phase en cours, et les souvenirs qu'elle
                 // attend. Le doubler ferait dire deux fois la même chose au
@@ -191,6 +238,13 @@ class BookPreviewModel(
                 // composition.
                 if (stage != Stage.Preview) return null
                 if (isRecomposing) return Notice(BookCopy.Preview.recomposing, answersAGesture = false)
+                // **Avant** l'état des choses : un carnet gardé est bien un
+                // carnet, et le serveur n'a simplement rien dit. Sans cette
+                // branche, l'ouverture sans réseau annonçait « pas encore
+                // composé » au-dessus du carnet qu'on feuillette.
+                if (keptAt != null) {
+                    return Notice(BookCopy.Preview.keptVersion(keptAt), answersAGesture = false)
+                }
                 if (canShare) return null
                 return Notice(BookCopy.Preview.notComposed, answersAGesture = false)
             }
@@ -304,13 +358,30 @@ class BookPreviewModel(
      * module. Ce qui sort d'ici, ce sont des états et des images, pas un
      * document PDF.
      */
-    internal val renderer = BookPageRenderer(documents)
+    internal val renderer = BookPageRenderer(workDirectory)
 
     /**
      * Une composition est suivie en ce moment. Garde [run] d'un second départ
      * — l'effet de l'écran et celui d'un retour sur l'écran.
      */
     private var isRunning = false
+
+    /**
+     * Où le dernier carnet composé est gardé (T299). `null` — les aperçus, la
+     * plupart des tests — ne garde rien : l'aperçu redescendra, comme avant le
+     * ticket. Posé après la construction, comme `pacing`.
+     */
+    var documents: BookDocumentStore? = null
+
+    /**
+     * Le rendu derrière le PDF **ouvert à l'écran** — celui qu'on a gardé, ou
+     * celui qu'on vient de descendre.
+     *
+     * C'est ce qui évite le transfert : le serveur annonce le même rendu, il
+     * n'y a rien à aller chercher. Distinct du `readyRenderId` de la réponse,
+     * qui est ce que le serveur a de plus récent.
+     */
+    private var openRenderId: String? = null
 
     /**
      * Le rythme du parcours : la cascade, les sondages, et quand cesser
@@ -448,6 +519,15 @@ class BookPreviewModel(
         try {
             _state.update { it.copy(errorMessage = null) }
 
+            // 0. **Le carnet qu'on avait**, avant tout appel (T299) : s'il est
+            //    sur l'appareil, il s'ouvre tout de suite, et la suite se passe
+            //    derrière des pages qu'on feuillette déjà. C'est tout le
+            //    ticket — l'attente d'avant était celle du transfert, pas celle
+            //    de la composition, que l'empreinte avait déjà supprimée
+            //    (T224).
+            openKeptDocument()
+            currentCoroutineContext().ensureActive()
+
             // 1. Lancer la composition — ou retrouver celle qui tourne. Un échec
             //    ne s'affiche pas encore : un carnet déjà composé reste
             //    feuilletable, et c'est le sondage qui suit qui le dira.
@@ -460,6 +540,11 @@ class BookPreviewModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                // Le carnet gardé est à l'écran : il n'y a **pas** d'erreur à
+                // montrer, il y a une version à nommer. Sans réseau, c'est
+                // exactement ce que le ticket demande — « donc lisible sans
+                // réseau » —, et le mot sous l'en-tête dit de quand elle date.
+                if (state.value.keptAt != null) return
                 setError(launchFailure ?: describe(error))
                 openBlankPages()
                 return
@@ -544,6 +629,9 @@ class BookPreviewModel(
      */
     private suspend fun openBlankPages() {
         if (!opensBlankPages || !currentCoroutineContext().isActive) return
+        // Un carnet est ouvert — celui que l'appareil gardait (T299) : on ne le
+        // remplace pas par des pages blanches.
+        if (state.value.document.sheetCount > 0) return
         _state.update {
             it.copy(
                 preview = it.preview ?: BookPreview(memoId = memoId, title = BookCopy.Preview.blankTitle),
@@ -669,15 +757,63 @@ class BookPreviewModel(
                 // Le carnet est arrivé : l'explication n'a plus d'objet, et le
                 // bouton qu'elle désignait vient de s'ouvrir (T302).
                 hasAskedToShare = it.hasAskedToShare && !loaded.hasComposedDocument,
+                hasAskedToRegenerate = it.hasAskedToRegenerate && !loaded.hasComposedDocument,
+                // Une composition est partie, d'ici ou d'ailleurs : « ton
+                // carnet est déjà à jour » vient d'être démenti.
+                isAlreadyUpToDate =
+                    it.isAlreadyUpToDate && loaded.status != BookPreviewStatus.Composing,
+                // Le serveur a répondu : ce qui est à l'écran n'est plus « tout
+                // ce qu'on a », c'est le carnet confirmé. Le mot qui nommait sa
+                // date n'a plus d'objet.
+                keptAt = null,
             )
         }
 
-        // Le PDF se recharge quand **un autre** rendu a abouti, ou qu'aucun
-        // document n'est ouvert. Un sondage qui confirme le même rendu ne
-        // retélécharge rien.
+        // Le PDF se recharge quand le serveur annonce **un autre** rendu que
+        // celui qui est ouvert, ou qu'aucun document ne l'est. Un sondage qui
+        // confirme le même rendu ne redescend rien — et **le carnet gardé sur
+        // l'appareil compte comme ouvert** (T299) : c'est là que rouvrir un
+        // carnet inchangé cesse de coûter un transfert de plusieurs
+        // mégaoctets.
+        //
+        // La comparaison se fait sur [openRenderId] et non sur la réponse
+        // d'avant : ce qui compte est ce qu'on affiche, pas ce qu'on a lu.
         val url = loaded.pdfUrl ?: return
-        if (state.value.document.sheetCount == 0 || ShownBook(loaded).document != previous?.let(::ShownBook)?.document) {
-            loadDocument(url)
+        val announced = ShownBook(loaded).document
+        if (state.value.document.sheetCount > 0 && announced == openRenderId) return
+
+        loadDocument(url)
+        if (state.value.document.didFail) return
+        openRenderId = announced
+        // Gardé **après** l'ouverture : un PDF que `PdfRenderer` refuse n'a
+        // rien à faire sur le disque, il ferait échouer les ouvertures
+        // suivantes sans réseau pour les réparer.
+        val file = renderer.documentFile
+        if (announced != null && file != null) {
+            documents?.keep(file, renderId = announced, memoId = memoId)
+        }
+    }
+
+    /**
+     * Ouvre le carnet que l'appareil gardait, s'il y en a un (T299).
+     *
+     * **Avant tout appel réseau**, et sans en faire aucun : c'est ce qui
+     * remplace la page crème du premier chargement par le carnet qu'on
+     * feuilletait hier. La suite — composition, sondage — se déroule derrière.
+     *
+     * `keptAt` est posé ici et retiré par [apply] : entre les deux, le carnet
+     * affiché est le seul qu'on puisse montrer, et l'écran le dit.
+     */
+    private suspend fun openKeptDocument() {
+        val store = documents ?: return
+        if (state.value.document.sheetCount > 0) return
+        val kept = store.kept(memoId) ?: return
+        val document = renderer.openKept(kept.file)
+        if (document.sheetCount == 0) return
+
+        openRenderId = kept.renderId
+        _state.update {
+            it.copy(document = document, keptAt = kept.keptAt, stage = Stage.Preview)
         }
     }
 
@@ -769,6 +905,63 @@ class BookPreviewModel(
      * carnet jamais composé, le parcours entier — la composition **et** la
      * cascade.
      */
+    /**
+     * **Mettre le carnet à jour**, parce qu'on le demande (T299 — « un bouton à
+     * flèche tournante la régénère »).
+     *
+     * Ouvrir l'aperçu ne remet plus rien en page : le carnet gardé s'affiche,
+     * et le serveur ne recompose que si le récit a changé depuis (T224). Ce
+     * bouton est donc le geste par lequel on **demande** une version fraîche,
+     * au lieu de l'attendre.
+     *
+     * **Il ne force rien, et c'est voulu.** Une composition coûte de l'IA et un
+     * rendu : c'est au serveur de décider s'il y a lieu — il relance quand
+     * quelque chose a changé, il rend le dernier rendu sinon. On lit sa réponse
+     * pour savoir lequel des deux vient d'arriver, et on le dit : une flèche
+     * qui tourne une seconde et rien d'autre se lirait comme une panne.
+     */
+    suspend fun regenerate() {
+        if (state.value.isRefreshing) return
+        _state.update {
+            it.copy(
+                isRegenerating = true,
+                errorMessage = null,
+                isAlreadyUpToDate = false,
+                hasAskedToShare = false,
+                hasAskedToRegenerate = false,
+            )
+        }
+        try {
+            launchComposition()?.let { failure ->
+                setError(failure)
+                return
+            }
+            val loaded = try {
+                source(memoId)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                return
+            }
+            apply(loaded)
+
+            if (state.value.isRecomposing) {
+                watchRecomposition()
+            } else {
+                // **C'est le serveur qui le dit**, et non une déduction : il
+                // compare l'empreinte du carnet à celle du dernier rendu
+                // (`isUpToDate`, T224) — la même question que celle qui décide
+                // de relancer. Un serveur d'avant ce champ ne la répond pas ;
+                // rien ne s'est lancé, c'est donc qu'il n'y avait rien à
+                // lancer.
+                val aJour = loaded.isUpToDate ?: true
+                _state.update { it.copy(isAlreadyUpToDate = aJour) }
+            }
+        } finally {
+            _state.update { it.copy(isRegenerating = false) }
+        }
+    }
+
     suspend fun retry() {
         _state.update { it.copy(errorMessage = null) }
 
@@ -904,7 +1097,7 @@ class BookPreviewModel(
             .split('/', '\\', ':', '?', '%', '*', '|', '"', '<', '>')
             .joinToString(" ")
             .trim()
-        val folder = File(documents, SHARED_FOLDER)
+        val folder = File(workDirectory, SHARED_FOLDER)
         val file = File(folder, "${safe.ifEmpty { "Carnet" }}.pdf")
         val partial = File(folder, "${file.name}.part")
 
@@ -960,7 +1153,16 @@ class BookPreviewModel(
      * désactive pas » (`ios/CLAUDE.md`).
      */
     fun explainShareIsClosed() {
-        _state.update { it.copy(hasAskedToShare = true) }
+        _state.update { it.copy(hasAskedToShare = true, hasAskedToRegenerate = false) }
+    }
+
+    /**
+     * Dit pourquoi la flèche de mise à jour ne mène nulle part. Même contrat
+     * que [explainShareIsClosed] : le bouton pâli reste tapable, et l'appui va
+     * chercher son explication (T299).
+     */
+    fun explainRegenerateIsClosed() {
+        _state.update { it.copy(hasAskedToRegenerate = true, hasAskedToShare = false) }
     }
 
     /**
