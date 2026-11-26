@@ -24,6 +24,12 @@ export function registerStepRoutes(app: FastifyInstance, context: AppContext): v
    * en fond une nouvelle génération du carnet (`ensureRenderInProgress`) —
    * sauf mémo encore vide, où valider l'étape doit réussir quand même.
    *
+   * **En fond veut dire après une accalmie** (T307, `settle: true`) : valider
+   * une étape ne prouve pas que le voyageur a fini. Il enchaîne souvent un
+   * second vocal ou des photos, et la composition partie dans la seconde
+   * attendait alors trois minutes la rédaction du suivant pour échouer. Elle
+   * laisse maintenant le carnet se taire, et compose une fois pour tout.
+   *
    * Répond le voyage entier, comme `GET /v1/trips/:id` : on modifie une chose,
    * on relit tout.
    */
@@ -40,7 +46,7 @@ export function registerStepRoutes(app: FastifyInstance, context: AppContext): v
     if (result.justValidated) {
       const entryCount = await context.prisma.entry.count({ where: { memoId: memo.id } });
       if (entryCount > 0) {
-        await ensureRenderInProgress(context, memo.id);
+        await ensureRenderInProgress(context, memo.id, { settle: true });
       }
     }
 

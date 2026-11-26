@@ -50,6 +50,91 @@ export const EMPTY_COHERENCE_SHEET: CoherenceSheet = {
   voice: [],
 };
 
+/**
+ * Ce qu'une étape **ajoute** à la fiche — et non la fiche réécrite (T307).
+ *
+ * Le schéma faisait rendre la fiche entière à chaque étape. Sur le banc des
+ * neuf vocaux de Maxime, ça donnait, à la dernière étape, **7 233 caractères
+ * de fiche pour 1 193 caractères de texte** — six fois le livrable —, et ça
+ * grandissait en ligne droite depuis 1 586 à la première. Or une réponse plus
+ * longue est une attente plus longue, et rien de ce que le voyageur attendait
+ * n'était dans ces 7 233 caractères : ils étaient déjà dans la fiche, recopiés.
+ * « La retranscription des étapes est un peu trop longue » (Hugo, 18/10/2026)
+ * — c'était le dernier levier nommé par `docs/redaction.md`.
+ *
+ * Le modèle **lit** donc toujours la fiche entière, c'est elle qui tient la
+ * cohérence du carnet ; il ne rend que le neuf. Le reste se recoud ici, par
+ * ``mergeCoherenceSheet``, où ça ne coûte rien et ne peut plus se perdre.
+ *
+ * Deux champs n'ont pas d'ajouts, et c'est voulu :
+ * - `narration` est fixée pour tout le carnet, deux mots posés une fois ;
+ * - `voice` est un portrait de trois à six lignes qu'on **affine**, pas une
+ *   liste qui s'allonge. Le banc le montre : six lignes à la première étape,
+ *   six à la neuvième. N'en demander que les ajouts l'aurait fait enfler sans
+ *   fin, et c'est justement le défaut qu'on corrige.
+ *
+ * La **grammaire compilée** ne bouge pas : même nombre de champs, mêmes formes
+ * d'entrées, seuls les noms changent. C'est la contrainte qui a mis la
+ * rédaction à terre pendant trois semaines — voir ``RECIT_KEYS``.
+ */
+export interface CoherenceAdditions {
+  newPeople: { canonicalName: string; notes: string }[];
+  newPlaces: { canonicalName: string; notes: string }[];
+  newLexicon: { term: string; notes: string }[];
+  newFigures: { label: string; value: string }[];
+  narration: { person: string; tense: string };
+  voice: string[];
+}
+
+/** La même entrée à la casse et aux accents près : « Naxos » n'entre pas deux fois. */
+function sameCoherenceKey(left: string, right: string): boolean {
+  return left.trim().localeCompare(right.trim(), "fr", { sensitivity: "base" }) === 0;
+}
+
+/** Les entrées d'avant, plus celles qu'on ne connaissait pas encore. */
+function appendedEntries<T>(existing: T[], additions: T[], keyOf: (entry: T) => string): T[] {
+  const kept = [...existing];
+  for (const addition of additions) {
+    const key = (keyOf(addition) ?? "").trim();
+    if (key === "") continue;
+    if (kept.some((entry) => sameCoherenceKey(keyOf(entry) ?? "", key))) continue;
+    kept.push(addition);
+  }
+  return kept;
+}
+
+/**
+ * La fiche d'avant, plus ce que l'étape ajoute : la couture que le modèle
+ * faisait lui-même avant T307, et qu'on lui payait à chaque étape.
+ *
+ * Elle est **sourde aux retraits**. « Ne jamais retirer une entrée existante
+ * ni changer une graphie déjà fixée » était une consigne dans un schéma — la
+ * seule chose qu'on pouvait faire quand c'est le modèle qui rend la fiche.
+ * Ici, c'est la forme du code : une entrée posée ne peut plus disparaître.
+ *
+ * `narration` ne se prend donc qu'**une** fois, à la première étape qui la
+ * pose : « le même pour tout le carnet » devient vrai au lieu d'être demandé.
+ * `voice` se remplace quand l'étape en rend une, parce que c'est un portrait
+ * affiné et non une liste.
+ */
+export function mergeCoherenceSheet(
+  previous: CoherenceSheet,
+  additions: CoherenceAdditions,
+): CoherenceSheet {
+  const voice = additions.voice ?? [];
+  return {
+    people: appendedEntries(previous.people, additions.newPeople ?? [], (entry) => entry.canonicalName),
+    places: appendedEntries(previous.places, additions.newPlaces ?? [], (entry) => entry.canonicalName),
+    lexicon: appendedEntries(previous.lexicon, additions.newLexicon ?? [], (entry) => entry.term),
+    figures: appendedEntries(previous.figures, additions.newFigures ?? [], (entry) => entry.label),
+    narration:
+      previous.narration.person.trim() !== ""
+        ? previous.narration
+        : (additions.narration ?? EMPTY_COHERENCE_SHEET.narration),
+    voice: voice.length > 0 ? voice : previous.voice,
+  };
+}
+
 /** Une étape déjà rédigée et validée, donnée en contexte à la suivante. */
 export interface RedactedNeighbour {
   capturedAt: Date;
@@ -781,16 +866,27 @@ const REDACTION_SCHEMA = {
         "Un petit quiz imprimé dans la page, sur ce que le voyageur a raconté ou sur un fait vérifiable " +
         "du lieu — jamais inventé. Environ une étape sur trois, jamais deux étapes de suite : null le plus souvent.",
     },
-    coherenceSheet: {
+    coherenceAdditions: {
       type: "object",
       description:
-        "La fiche de cohérence mise à jour : l'ancienne, plus ce que cette étape ajoute. " +
-        "Ne jamais retirer une entrée existante ni changer une graphie déjà fixée.",
+        "Ce que CETTE étape ajoute à la fiche de cohérence — pas la fiche entière. " +
+        "La fiche d'avant t'est donnée plus haut et elle est conservée telle quelle : ne la " +
+        "recopie pas, n'en retire rien, ne change aucune graphie déjà fixée. Une personne, un " +
+        "lieu, un mot ou un chiffre qui y figure déjà ne se redonne pas.",
       properties: {
-        people: { type: "array", items: COHERENCE_ENTRY_SCHEMA },
-        places: { type: "array", items: COHERENCE_ENTRY_SCHEMA },
-        lexicon: {
+        newPeople: {
           type: "array",
+          description: "Les personnes qui apparaissent pour la première fois dans le carnet. Vide si aucune.",
+          items: COHERENCE_ENTRY_SCHEMA,
+        },
+        newPlaces: {
+          type: "array",
+          description: "Les lieux qui apparaissent pour la première fois dans le carnet. Vide si aucun.",
+          items: COHERENCE_ENTRY_SCHEMA,
+        },
+        newLexicon: {
+          type: "array",
+          description: "Les mots du voyageur à fixer, découverts dans cette étape seulement. Vide si aucun.",
           items: {
             type: "object",
             properties: {
@@ -801,18 +897,11 @@ const REDACTION_SCHEMA = {
             additionalProperties: false,
           },
         },
-        narration: {
-          type: "object",
-          properties: {
-            person: { type: "string", description: "« je », « on » ou « nous » — le même pour tout le carnet." },
-            tense: { type: "string", description: "Le système de temps retenu." },
-          },
-          required: ["person", "tense"],
-          additionalProperties: false,
-        },
-        figures: {
+        newFigures: {
           type: "array",
-          description: "Chiffres déjà annoncés dans le carnet, pour ne pas se contredire.",
+          description:
+            "Les chiffres annoncés dans CETTE étape, pour ne pas s'y contredire plus tard. " +
+            "Pas ceux des étapes précédentes : ils sont déjà dans la fiche.",
           items: {
             type: "object",
             properties: {
@@ -823,15 +912,29 @@ const REDACTION_SCHEMA = {
             additionalProperties: false,
           },
         },
+        narration: {
+          type: "object",
+          description:
+            "Le choix de narration. Il est fixé pour tout le carnet : si la fiche en porte " +
+            "déjà un, redonne-le à l'identique — il ne sera de toute façon pas changé.",
+          properties: {
+            person: { type: "string", description: "« je », « on » ou « nous » — le même pour tout le carnet." },
+            tense: { type: "string", description: "Le système de temps retenu." },
+          },
+          required: ["person", "tense"],
+          additionalProperties: false,
+        },
         voice: {
           type: "array",
           description:
-            "Le portrait du narrateur en trois à six lignes courtes : ses mots signature, son registre, " +
-            "son humour, la longueur de ses phrases. Affine-le d'étape en étape. Jamais un mot que tu n'as pas compris.",
+            "Le portrait du narrateur EN ENTIER, trois à six lignes courtes : ses mots " +
+            "signature, son registre, son humour, la longueur de ses phrases. C'est le seul " +
+            "champ qu'on te demande en entier, parce qu'il s'affine au lieu de s'allonger : " +
+            "reprends celui de la fiche et retouche-le. Jamais un mot que tu n'as pas compris.",
           items: { type: "string" },
         },
       },
-      required: ["people", "places", "lexicon", "narration", "figures", "voice"],
+      required: ["newPeople", "newPlaces", "newLexicon", "newFigures", "narration", "voice"],
       additionalProperties: false,
     },
     insights: {
@@ -993,7 +1096,7 @@ const REDACTION_SCHEMA = {
     "funFact",
     "funFactTitle",
     "quiz",
-    "coherenceSheet",
+    "coherenceAdditions",
     "insights",
     "doubts",
     "continuesPrevious",
@@ -1054,7 +1157,7 @@ const RECIT_KEYS = [
  * ajouter le texte écrit. Une température dite dans le vocal lui est donc
  * accessible, même si le récit ne l'a pas reprise.
  */
-const RELEVE_KEYS = ["coherenceSheet", "insights", "temperatureC"] as const;
+const RELEVE_KEYS = ["coherenceAdditions", "insights", "temperatureC"] as const;
 
 function sousSchema(keys: readonly string[]) {
   const properties = Object.fromEntries(
@@ -1066,8 +1169,16 @@ function sousSchema(keys: readonly string[]) {
 export const RECIT_SCHEMA = sousSchema(RECIT_KEYS);
 export const RELEVE_SCHEMA = sousSchema(RELEVE_KEYS);
 
-type RelevePart = Pick<RedactionResult, (typeof RELEVE_KEYS)[number]>;
-type RecitPart = Omit<RedactionResult, "model" | (typeof RELEVE_KEYS)[number]>;
+/**
+ * Ce que le relevé rend. `insights` et `temperatureC` sont ceux du résultat ;
+ * la fiche, elle, n'arrive qu'en **ajouts** — le résultat porte la fiche
+ * entière, recousue par ``mergeCoherenceSheet``. C'est la seule différence
+ * entre ce que le modèle rend et ce que la rédaction rend.
+ */
+type RelevePart = Pick<RedactionResult, "insights" | "temperatureC"> & {
+  coherenceAdditions: CoherenceAdditions;
+};
+type RecitPart = Omit<RedactionResult, "model" | "coherenceSheet" | "insights" | "temperatureC">;
 
 /**
  * Le relevé ne rédige pas : il lit le texte écrit et en tire des listes. Un
@@ -1259,7 +1370,8 @@ export function buildRedactionPrompt(input: RedactionInput): string {
     previous.length === 0
       ? "Première étape du carnet : la fiche est vide, c'est toi qui l'ouvres. " +
           "Les choix que tu fais ici (personne, temps, appellations) engagent tout le carnet."
-      : "Relis-la avant d'écrire, complète-la après. Ne change aucune graphie déjà fixée.",
+      : "Elle est acquise : relis-la avant d'écrire, et tu n'en rendras ensuite que les " +
+          "**ajouts**. Rien ne s'en retire, aucune graphie fixée ne se change.",
     "```json",
     JSON.stringify(coherenceSheet, null, 2),
     "```",
@@ -1389,9 +1501,11 @@ function buildRelevePrompt(input: RedactionInput, texte: string): string {
     texte,
     "",
     "## Ce qui t'est demandé maintenant",
-    "Tu n'écris plus : tu relèves. Rends seulement `coherenceSheet`, `insights` et `temperatureC`.",
-    "- `coherenceSheet` : l'ancienne fiche, **plus** ce que cette étape ajoute. Ne retire aucune",
-    "  entrée et ne change aucune graphie déjà fixée.",
+    "Tu n'écris plus : tu relèves. Rends seulement `coherenceAdditions`, `insights` et `temperatureC`.",
+    "- `coherenceAdditions` : **seulement ce que cette étape ajoute** à la fiche de cohérence.",
+    "  La fiche d'avant, donnée plus haut, est gardée telle quelle : ne la recopie pas. Une",
+    "  personne, un lieu, un mot ou un chiffre qui y figure déjà ne se redonne pas, et rien ne",
+    "  s'en retire. `voice` est la seule exception : rends le portrait en entier, retouché.",
     "- `insights` : ce que **cette étape** apporte aux statistiques du profil. Un relevé, pas un",
     "  total : ne reprends rien des étapes précédentes, et n'invente aucun chiffre. Ce que le",
     "  récit ne dit pas reste vide ou `null`.",
@@ -1537,7 +1651,13 @@ export class AnthropicRedactor implements Redactor {
       RELEVE_MAX_TOKENS,
     );
 
-    const parsed: Omit<RedactionResult, "model"> = { ...recit, ...releve };
+    const parsed: Omit<RedactionResult, "model"> = {
+      ...recit,
+      insights: releve.insights,
+      temperatureC: releve.temperatureC,
+      // La fiche entière se recoud **ici** : le modèle n'a rendu que le neuf.
+      coherenceSheet: mergeCoherenceSheet(input.coherenceSheet, releve.coherenceAdditions),
+    };
     return {
       ...parsed,
       ...withinFunFactLimit(parsed),

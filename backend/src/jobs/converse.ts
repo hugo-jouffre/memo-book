@@ -1214,8 +1214,10 @@ async function converseMissingDay(
 /**
  * « Je valide mes photos » : les photos en attente sont validées, et le carnet
  * se recompose en fond pour que la page de l'étape apparaisse dans l'aperçu —
- * le même déclencheur que « Valider cette étape » (`renderTrigger.ts`). Une
- * panne du rendu ne coupe pas la parole à MEMO : elle se journalise.
+ * le même déclencheur que « Valider cette étape » (`renderTrigger.ts`), et la
+ * même accalmie (T307) : celui qui vient d'envoyer vingt photos en envoie
+ * souvent vingt autres. Une panne du rendu ne coupe pas la parole à MEMO :
+ * elle se journalise.
  */
 async function validatePhotos(context: AppContext, memoId: string, now: Date): Promise<void> {
   await context.prisma.entry.updateMany({
@@ -1223,7 +1225,7 @@ async function validatePhotos(context: AppContext, memoId: string, now: Date): P
     data: { validatedAt: now },
   });
   try {
-    await ensureRenderInProgress(context, memoId);
+    await ensureRenderInProgress(context, memoId, { settle: true });
   } catch (cause) {
     context.logger.warn({ memoId, err: cause }, "Photos validées, mais le carnet n'a pas pu se recomposer");
   }

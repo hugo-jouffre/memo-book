@@ -604,7 +604,9 @@ describe("parler à MEMO", () => {
     expect(validation.statusCode).toBe(201);
     const after = await readThread(memo.id);
     expect(memoBubbles(after).at(-1)?.body).toEqual({ kind: "text", text: PHOTOS_VALIDATED });
-    expect(after.suggestions.map((suggestion) => suggestion.id)).toEqual(["preview", "dictate", "write"]);
+    // **Raconter d'abord** (T307) : « prévisualiser » n'ouvre plus le trio.
+    // La page de l'étape se compose encore quand cette bulle s'affiche.
+    expect(after.suggestions.map((suggestion) => suggestion.id)).toEqual(["dictate", "write", "preview"]);
   });
 
   it("ne double pas un message renvoyé avec le même identifiant", async () => {
