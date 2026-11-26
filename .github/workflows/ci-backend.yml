@@ -22,13 +22,20 @@ jobs:
 
     # Le test de bout en bout du pipeline a besoin d'une vraie base : c'est elle
     # qui porte les contraintes qu'on veut vérifier.
+    #
+    # ⚠️ **Le `_test` du nom compte.** La suite vide les tables à chaque fichier,
+    # et `testDatabaseUrl` (`backend/test/helpers.ts`) refuse de le faire sur une
+    # base qui ne se présente pas comme une base de test — après deux épisodes
+    # où elle a vidé la base locale de développement. Ici il n'y a qu'une base,
+    # jetée avec le runner : la nommer `_test` dit la vérité, et la garde la
+    # laisse alors passer telle quelle au lieu d'en dériver une qui n'existe pas.
     services:
       postgres:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: memobook
           POSTGRES_PASSWORD: memobook
-          POSTGRES_DB: memobook
+          POSTGRES_DB: memobook_test
         ports:
           - 5432:5432
         options: >-
@@ -41,7 +48,7 @@ jobs:
       # Aucun secret n'est nécessaire : `PIPELINE_MODE=fake` court-circuite
       # OpenAI et APITemplate avec des implémentations déterministes, et le
       # stockage des médias bascule en mémoire faute de configuration S3.
-      DATABASE_URL: postgresql://memobook:memobook@localhost:5432/memobook
+      DATABASE_URL: postgresql://memobook:memobook@localhost:5432/memobook_test
       PIPELINE_MODE: fake
       NODE_ENV: test
 
