@@ -56,19 +56,21 @@ Du vocal envoyé à « Il te convient ? », le chemin a été raccourci à chaqu
 | L'appel au modèle | effort `high` | effort **`medium`** par défaut |
 | « Il te convient ? » | après le recalcul des étapes du voyage | **avant** : le recalcul suit |
 
-L'effort est l'essentiel du temps (la réflexion compte dans la réponse). Il
-n'a **pas été mesuré** au banc le 18/10 : la clé Anthropic locale est vide.
-Pour trancher, poser la clé dans `backend/.env` puis :
+L'effort est l'essentiel du temps (la réflexion compte dans la réponse), et
+il est **mesuré** depuis le 26/11/2026 — voir le journal. En deux mots :
+`medium` reste le bon réglage, `low` va 40 % plus vite et le paie en fidélité
+et en voix. ⚠️ **`ANTHROPIC_REDACTION_EFFORT` ne règle que le récit** :
+le relevé est câblé à `low` (`RELEVE_EFFORT`), parce qu'il ne fait que relire.
 
 ```bash
-npm run redaction:eval -- --label effort-high --effort high --until 13
 npm run redaction:eval -- --label effort-medium --effort medium --until 13
-npm run redaction:eval -- --compare effort-high effort-medium --judge
+npm run redaction:eval -- --label effort-low --effort low --until 13
+npm run redaction:eval -- --compare effort-medium effort-low --judge
 ```
 
-Chaque étape du rapport porte sa durée. Si `medium` écrit moins bien,
-`ANTHROPIC_REDACTION_EFFORT=high` sur Railway rétablit l'ancien réglage sans
-déploiement de code. Les journaux de l'API donnent désormais `modelMs` et
+Chaque étape du rapport porte sa durée, et chaque rapport son effort. Changer
+de réglage ne demande **aucun déploiement de code** :
+`ANTHROPIC_REDACTION_EFFORT` sur Railway suffit. Les journaux de l'API donnent désormais `modelMs` et
 `totalMs` à chaque « Souvenir rédigé », et `totalMs` à chaque « Entrée
 transcrite ».
 
@@ -114,6 +116,14 @@ npm run redaction:eval -- --label essai --until 13       # seulement les trois p
 
 Les rapports vont dans `backend/.redaction-eval/` (hors dépôt).
 
+**Chaque rapport dit son effort** (26/11/2026). Il notait le modèle et le hash
+des règles, pas le réglage qui fait l'essentiel du temps de réponse : comparer
+T307 au passage du 23/11 a obligé à **supposer** que celui-là avait tourné au
+défaut du script. Un rapport qui ne dit pas son effort ne se compare pas. Les
+rapports d'avant cette date l'affichent `?`, et une comparaison met les deux
+réglages en tête — comparer deux efforts différents ne dit pas la même chose
+que comparer à effort égal.
+
 **Le rapport montre aussi le découpage** (23/11/2026) : en tête, quatre nombres
 — moments rendus, souvenirs coupés, moments datés ou situés dans la journée,
 noms à faire confirmer —, puis sous chaque étape ses moments avec **la
@@ -131,6 +141,62 @@ mesurerait plus rien. On illustre avec des voyages inventés (Lisbonne, l'Algarv
 Clara, Tom).
 
 ## 4. Journal
+
+### 26/11/2026 (soir) — L'effort de réflexion, enfin mesuré
+
+La question traînait depuis le 18/10/2026 : « l'effort n'a pas été mesuré au
+banc, la clé Anthropic locale est vide ». Elle est tranchée. Trois étapes
+(11-13, dont la plus coûteuse du banc), Opus 5, règles `2a7f8ef02c` :
+
+| | `medium` | `low` |
+|---|---|---|
+| Temps | 40 + 28 + 52 = **120 s** | 23 + 21 + 29 = **72 s** (−40 %) |
+| Jetons écrits par le récit | 6 895 | **3 599** (−48 %) |
+| Jetons écrits par le relevé | 1 880 | 1 871 (inchangé) |
+| Longueur des textes | 839 / 686 / 1 177 | 667 / 635 / 1 038 (−13 %) |
+| Barème | L · L · XL | L · L · XL |
+
+Le relevé ne bouge pas, et c'est normal : **il est déjà à `low`**
+(`RELEVE_EFFORT`). `ANTHROPIC_REDACTION_EFFORT` ne règle que le récit.
+
+**`low` écrit moins bien**, relecteur à l'appui :
+
+| | intention | fluidité | fidélité | voix | français | pièges ratés |
+|---|---|---|---|---|---|---|
+| `medium` | 4,0 | 4,0 | 3,7 | 4,0 | 4,3 | 2 |
+| `low` | **4,3** | 4,0 | **3,3** | **3,7** | **4,0** | **3** |
+
+Il gagne en intention et perd sur les trois critères qui font un carnet qu'on
+garde : la fidélité à ce qui a été dit, la voix du voyageur, le français. Les
+deux ratent les deux mêmes pièges ; `low` en rate **un de plus**, et c'est un
+piège de voix — « on s'est éclaté la gueule » devient « On a filé au Prime »,
+et toute l'énergie de la soirée disparaît.
+
+Et un défaut qui n'appartient qu'à `low` : il **découpe l'étape 13 en trois
+moments** là où `medium` et les deux passages à `high` n'en proposent aucun, et
+où le piège de la scène ne demande aucun découpage. Un découpeur qui coupe sans
+raison invente — c'est le risque nommé en § 3.
+
+**Décision : on garde `medium`.** Quarante secondes gagnées sur une étape sont
+réelles, mais un carnet s'imprime : une phrase qui s'écarte de ce que le
+voyageur a dit y reste pour toujours. `ANTHROPIC_REDACTION_EFFORT=low` sur
+Railway suffirait à changer d'avis sans déployer, si le temps devenait le
+problème le plus grave.
+
+**Ce que ça dit du temps de la rédaction.** L'essentiel est la réflexion du
+récit, et cette réflexion est précisément ce qui rend le texte fidèle et dans
+la voix du voyageur. À `medium`, une étape prend 28 à 52 s au banc, contre 48 à
+112 s à `high`. **La rédaction est près de son plancher** à qualité constante ;
+ce qui reste à gagner est dans l'**attente perçue** — ce que l'app montre
+pendant ces quarante secondes —, pas dans le modèle.
+
+⚠️ **Un écart à surveiller, qui n'est pas celui de l'effort** : le piège de
+l'étape 12 dit que « Toto Scooter » et « le Prime » sont entendus clairement et
+ne doivent **jamais** être mis en doute. `medium` n'en doute que d'un, mais le
+passage T307 à `high` doutait des deux — comme `low`. Ce n'est donc pas un
+effet de l'effort. Noms mis en doute sur les neuf étapes : 1 avant T307, 3
+après. À reprendre quand on retouchera `namesToConfirm`.
+
 
 ### 26/11/2026 — La fiche de cohérence ne se réécrit plus (T307)
 
