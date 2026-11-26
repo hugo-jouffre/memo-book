@@ -198,6 +198,13 @@ export interface SerializeMessageOptions {
    * dessinent alors ensemble.
    */
   cover?: { tripEntryId: string | null; stepEntryIds: ReadonlySet<string> };
+
+  /**
+   * **Les puces que cette bulle propose quand on la choisit** (T286).
+   * Absentes d'un sondage, qui ne rend que ce qui a changé : l'app garde
+   * alors celles qu'elle a déjà.
+   */
+  suggestions?: ReturnType<typeof serializeChatSuggestions>;
 }
 
 /**
@@ -382,6 +389,9 @@ export function serializeChatMessage(message: ChatMessageRow, options: Serialize
     // L'ordre du fil (T309). Absent d'un serveur d'avant le 26/11/2026 :
     // l'app retombe alors sur `seq`, l'ordre d'arrivée.
     postedAt: message.postedAt.toISOString(),
+    // Ce que cette bulle propose quand on la choisit (T286) — absent du
+    // sondage, où l'app garde ce qu'elle a.
+    ...(options.suggestions ? { suggestions: options.suggestions } : {}),
     author: message.author,
     authorName: isOtherTraveller ? firstNameOf(message.account) : null,
     // Le portrait de celui qui a parlé, **sur toutes les bulles du voyageur** —
@@ -526,6 +536,36 @@ export function suggestionsRowOf(message: ChatMessageRow): SuggestionsRow {
 }
 
 /**
+ * **Les puces de chaque bulle, pour quand on la choisit** (T286, Hugo — « un
+ * clic simple sur un message le cerne d'un liseré, et les propositions
+ * s'adaptent à ce message-là »).
+ *
+ * Les puces répondaient au fil **entier** : sa dernière bulle décidait pour
+ * tout le monde. Elles répondent en réalité à un message précis, et c'est
+ * celui-là qu'on choisit.
+ *
+ * La règle ne change pas d'un iota : ce sont celles que ``currentSuggestionIds``
+ * aurait rendues **si le fil s'arrêtait là**. Un fil de deux cents bulles tient
+ * en deux cents lectures d'un prefixe, et la liste se calcule une fois par
+ * réponse, jamais par bulle.
+ *
+ * ⚠️ Avec le `turn` **au repos** : « MEMO réfléchit » vide les puces du bas de
+ * l'écran, mais choisir une bulle d'hier pendant qu'il répond doit quand même
+ * montrer les siennes.
+ */
+export function suggestionIdsByMessage(
+  rows: readonly (ThreadOutlineRow | (SuggestionsRow & { id: string }))[],
+  tripContext: TripContext | null,
+): Map<string, string[]> {
+  const byMessage = new Map<string, string[]>();
+  for (let index = 0; index < rows.length; index += 1) {
+    const prefix = rows.slice(0, index + 1);
+    byMessage.set(rows[index]!.id, currentSuggestionIds(prefix, { status: "idle" }, tripContext));
+  }
+  return byMessage;
+}
+
+/**
  * Les puces à proposer : celles de la dernière bulle de MEMO ; sous une fiche
  * qui clôt le fil (un souvenir reconstruit), le trio de validation tant
  * qu'elle n'est pas relue, puis de quoi continuer ; rien pendant un tour en vol.
@@ -580,11 +620,24 @@ export function serializeChatThread(options: SerializeThreadOptions) {
     cover: coverOf(options.memo),
   };
 
-  const messages = options.messages
-    .map((message) => serializeChatMessage(message, messageOptions))
-    .filter((message) => message !== null);
-
   const tripContext = parseTripContext(memo.tripContext);
+
+  // Une fois pour tout le fil, et non une fois par bulle : la carte se lit
+  // ensuite par identifiant (T286).
+  const suggestionsByMessage = suggestionIdsByMessage(
+    options.messages.map((row) => ({ id: row.id, ...suggestionsRowOf(row) })),
+    tripContext,
+  );
+
+  const messages = options.messages
+    .map((message) =>
+      serializeChatMessage(message, {
+        ...messageOptions,
+        // Ce que cette bulle-là propose quand on la choisit (T286).
+        suggestions: serializeChatSuggestions(suggestionsByMessage.get(message.id) ?? []),
+      }),
+    )
+    .filter((message) => message !== null);
   const flag = flagOf(memo.destinationCountryCode);
   const placeName = activeStep?.placeName ?? memo.destinationCity ?? null;
   const pageCount = memo.pageCount > 0 ? memo.pageCount : options.memoryCount * 2;

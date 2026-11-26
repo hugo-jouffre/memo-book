@@ -197,6 +197,67 @@ final class ChatModelTests: XCTestCase {
 
     // MARK: - Envoyer
 
+    /// **Choisir une bulle change les puces** (T286, Hugo — « un clic simple
+    /// sur un message le cerne d'un liseré bleu clair, et les propositions
+    /// s'adaptent à ce message-là »).
+    ///
+    /// Elles répondaient au fil entier : sa dernière bulle décidait pour tout
+    /// le monde. Le serveur rend maintenant, pour chaque bulle, celles qu'il
+    /// aurait proposées si le fil s'arrêtait là.
+    func testChoosingAMessageShowsItsOwnSuggestions() async throws {
+        let ancienne = ChatSuggestion(id: "context", label: "Te raconter le voyage", symbol: "🧭", intent: .send)
+        let courante = ChatSuggestion(id: "photos", label: "Importer des photos", symbol: "📷", intent: .send)
+        let script = Script(thread: thread(
+            messages: [
+                ChatMessage(
+                    id: "ouverture",
+                    author: .memo,
+                    body: .text("Bonjour 👋"),
+                    sentAt: .now,
+                    seq: 1,
+                    suggestions: [ancienne]
+                ),
+                ChatMessage(id: "recit", author: .traveller, body: .text("Une journée à Rome."), sentAt: .now, seq: 2),
+            ],
+            suggestions: [courante]
+        ))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertEqual(model.visibleSuggestions.map(\.id), ["photos"], "Sans choix, ce sont celles du fil.")
+
+        model.select("ouverture")
+        XCTAssertEqual(model.selectedMessageId, "ouverture")
+        XCTAssertEqual(model.visibleSuggestions.map(\.id), ["context"], "Choisie, la bulle impose les siennes.")
+
+        // Un second appui relâche : sans ça, rien ne ramènerait les puces du fil.
+        model.select("ouverture")
+        XCTAssertNil(model.selectedMessageId)
+        XCTAssertEqual(model.visibleSuggestions.map(\.id), ["photos"])
+
+        // Et parler relâche aussi : ce qu'on vient de dire est la nouvelle fin.
+        model.select("ouverture")
+        model.draft = "Et le soir, une pizza."
+        model.sendDraft()
+        XCTAssertNil(model.selectedMessageId, "Parler défait le choix.")
+    }
+
+    /// Une bulle que le serveur n'a pas garnie — un sondage, un serveur
+    /// d'avant — laisse les puces du fil : mieux vaut celles d'avant qu'une
+    /// bande vide.
+    func testAMessageWithoutItsOwnSuggestionsKeepsTheThreads() async throws {
+        let courante = ChatSuggestion(id: "photos", label: "Importer des photos", symbol: "📷", intent: .send)
+        let script = Script(thread: thread(
+            messages: [ChatMessage(id: "ouverture", author: .memo, body: .text("Bonjour 👋"), sentAt: .now, seq: 1)],
+            suggestions: [courante]
+        ))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        model.select("ouverture")
+        XCTAssertEqual(model.visibleSuggestions.map(\.id), ["photos"])
+    }
+
     /// **Une bulle en attente garde sa place** (T309, Hugo — « elles restent
     /// en bas du fil et remontent au mauvais endroit à l'envoi »).
     ///

@@ -304,6 +304,11 @@ class ChatModel(
         val networkIsUp: Boolean = true,
         val microphoneIsDenied: Boolean = false,
         val copiedMessageId: String? = null,
+        /**
+         * **La bulle qu'on a choisie** (T286) — cernée d'un liseré, et c'est
+         * à elle que les puces répondent. `null` : le fil entier décide.
+         */
+        val selectedMessageId: String? = null,
         val showsExhaustedNotice: Boolean = false,
         val callToActionStates: Map<String, ChatCallToActionState> = emptyMap(),
         val composer: ChatComposerMode = ChatComposerMode.Tools,
@@ -747,11 +752,34 @@ class ChatModel(
      * Crédit épuisé, « Raconter à l'oral » se tait (03/10/2026) : elle
      * n'armerait qu'un micro qui ne s'ouvre pas.
      */
+    /**
+     * Choisit une bulle, ou la relâche si c'est elle qu'on retouche : un
+     * second appui au même endroit défait le premier (T286).
+     */
+    fun select(messageId: String) {
+        change { copy(selectedMessageId = if (selectedMessageId == messageId) null else messageId) }
+    }
+
+    /**
+     * Relâche la bulle choisie. Appelé quand on parle : ce qu'on vient de
+     * dire est la nouvelle fin du fil.
+     */
+    fun clearSelection() {
+        if (current.selectedMessageId != null) change { copy(selectedMessageId = null) }
+    }
+
     val visibleSuggestions: List<ChatSuggestion>
         get() {
             if (current.turn != ChatTurnState.Idle) return emptyList()
-            if (!isCreditExhausted) return suggestions
-            return suggestions.filter { it.intent != ChatSuggestion.Intent.SendThenSpeak }
+            // **Celles de la bulle choisie**, quand le serveur les a servies
+            // (T286). Une bulle sans puces à elle laisse celles du fil :
+            // mieux vaut celles d'avant qu'une bande vide.
+            val chosen = current.selectedMessageId
+                ?.let { id -> messages.firstOrNull { it.id == id }?.suggestions }
+                ?.takeIf { it.isNotEmpty() }
+            val shown = chosen ?: suggestions
+            if (!isCreditExhausted) return shown
+            return shown.filter { it.intent != ChatSuggestion.Intent.SendThenSpeak }
         }
 
     /**
@@ -1136,6 +1164,9 @@ class ChatModel(
      */
     private fun send(body: OutgoingTurn.Body, id: String = newId()) {
         if (current.thread == null) return
+        // Ce qu'on vient de dire est la nouvelle fin du fil : le liseré d'une
+        // bulle d'hier n'a plus de sens, et ses puces non plus (T286).
+        clearSelection()
         val outgoing = OutgoingTurn(id = id, stepId = activeStepId, body = body)
         append(optimisticMessage(outgoing))
         start(outgoing)

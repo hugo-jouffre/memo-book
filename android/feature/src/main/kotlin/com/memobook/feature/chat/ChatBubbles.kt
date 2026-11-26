@@ -84,6 +84,7 @@ import com.memobook.core.TranscriptCard
 import com.memobook.core.VoiceNote
 import com.memobook.design.ActivitySpinner
 import com.memobook.design.BrandAlert
+import com.memobook.design.BrandBubbleShape
 import com.memobook.design.BrandChatBubble
 import com.memobook.design.BrandMark
 import com.memobook.design.BrandMarkDrawing
@@ -121,6 +122,11 @@ data class ChatRowState(
     val showsCallToAction: Boolean = false,
     val portrait: ChatPortrait? = null,
     val levels: List<Double> = emptyList(),
+    /**
+     * **Cette bulle est celle qu'on a choisie** (T286) : elle se cerne d'un
+     * liseré, et les puces du bas répondent à elle.
+     */
+    val isSelected: Boolean = false,
 )
 
 /**
@@ -197,7 +203,32 @@ private fun BubbleAndActions(
 ) {
     val isTraveller = message.author.isTraveller
     val actions = actions(message)
-    val bubble: @Composable () -> Unit = { Bubble(message, model, row, isExpanded, onToggleExpansion, onCallToAction) }
+    // **Un appui simple choisit la bulle** (T286) : le liseré se dessine sur
+    // la forme de la bulle, queue comprise — un rectangle arrondi lui
+    // couperait sa pointe — et en bleu soutenu, parce que le fond d'une bulle
+    // du voyageur est déjà le bleu clair.
+    val bubble: @Composable () -> Unit = {
+        Box(
+            Modifier
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { model.select(message.id) }
+                .then(
+                    if (row.isSelected) {
+                        Modifier.border(
+                            2.dp,
+                            MemoBookColor.blueText,
+                            BrandBubbleShape(if (isTraveller) BrandBubbleShape.Side.Trailing else BrandBubbleShape.Side.Leading),
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            Bubble(message, model, row, isExpanded, onToggleExpansion, onCallToAction)
+        }
+    }
     val buttons: @Composable () -> Unit = {
         actions.forEach { action ->
             ChatActionButton(

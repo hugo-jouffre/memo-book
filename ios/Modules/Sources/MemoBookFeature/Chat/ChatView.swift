@@ -376,6 +376,7 @@ public struct ChatView: View {
                             model: model,
                             isExpanded: expanded.contains(message.id),
                             onToggleExpansion: { toggleExpansion(of: message.id) },
+                            isSelected: model.selectedMessageId == message.id,
                             onCallToAction: perform
                         )
                         .id(message.id)

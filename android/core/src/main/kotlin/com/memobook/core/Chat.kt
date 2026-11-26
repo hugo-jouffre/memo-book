@@ -522,6 +522,16 @@ data class ChatMessage(
      */
     val seq: Int? = null,
     /**
+     * **Les puces que cette bulle propose quand on la choisit** (T286).
+     *
+     * Les puces répondaient au fil **entier** : sa dernière bulle décidait
+     * pour tout le monde. Le serveur rend maintenant, pour chaque bulle,
+     * celles qu'il aurait proposées si le fil s'arrêtait là. `null` d'un
+     * sondage ou d'un serveur d'avant le 26/11/2026 : choisir une bulle ne
+     * change alors pas les puces du bas.
+     */
+    val suggestions: List<ChatSuggestion>? = null,
+    /**
      * **Le moment où la bulle a été posée**, et c'est lui qui la range dans
      * le fil (T309).
      *
@@ -640,6 +650,7 @@ data class ChatMessage(
         val authorAvatarUrl: JsonElement? = null,
         val seq: Int? = null,
         @Serializable(with = InstantSerializer::class) val postedAt: Instant? = null,
+        val suggestions: List<ChatSuggestion>? = null,
         val pauseMilliseconds: Int? = null,
         val disposition: ChatDisposition? = null,
         val callToAction: JsonElement? = null,
@@ -660,6 +671,7 @@ data class ChatMessage(
                 authorAvatarUrl = it.authorAvatarUrl?.let { url -> JsonPrimitive(url.toString()) },
                 seq = it.seq,
                 postedAt = it.postedAt,
+                suggestions = it.suggestions,
                 pauseMilliseconds = it.pauseMilliseconds,
                 disposition = it.disposition,
                 callToAction = it.callToAction?.let { cta -> MemoBookJson.encodeToJsonElement(ChatCallToAction.serializer(), cta) },
@@ -678,6 +690,7 @@ data class ChatMessage(
                 authorAvatarUrl = it.authorAvatarUrl.decodeOrNull(UriSerializer),
                 seq = it.seq,
                 postedAt = it.postedAt,
+                suggestions = it.suggestions,
                 pauseMilliseconds = it.pauseMilliseconds,
                 disposition = it.disposition,
                 callToAction = it.callToAction.decodeOrNull(ChatCallToAction.serializer()),
