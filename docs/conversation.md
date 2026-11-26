@@ -60,7 +60,10 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   un échange ne se coupe pas en deux. Une app qui n'envoie rien — ou tout ce
   qui précède le 26/11 — se range à l'arrivée, comme avant, et le serveur tient
   l'instant annoncé à distance de l'absurde : jamais dans l'avenir, jamais plus
-  vieux qu'un an (`postedAtFrom`). ⚠️ À ne pas confondre avec `sentAt`, que
+  vieux qu'un an (`postedAtFrom`). **L'ouverture de MEMO prend l'instant du
+  tour qu'elle précède**, et `seq` la met devant — elle est écrite la
+  première : sans ça, elle se posait quelques millisecondes après lui, et MEMO
+  disait bonjour **après** la première phrase du voyageur (vu en CI). ⚠️ À ne pas confondre avec `sentAt`, que
   l'app affiche : lui est la date du **souvenir** — la prise de vue d'une
   photo, le jour raconté d'un vocal.
 - **Le fil vit sur le serveur.** On le retrouve d'un autre téléphone, et un

@@ -803,7 +803,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         context.prisma.$transaction(async (tx) => {
           await lockThread(tx, memoId);
           const ids: string[] = [];
-          const opening = await ensureOpening(tx, memoId, context.responder);
+          const opening = await ensureOpening(tx, memoId, context.responder, postedAt);
           if (opening) ids.push(opening.id);
 
           if (validatedEntryId) {
@@ -1003,7 +1003,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         context.prisma.$transaction(async (tx) => {
           await lockThread(tx, memoId);
           const ids: string[] = [];
-          const opening = await ensureOpening(tx, memoId, context.responder);
+          const opening = await ensureOpening(tx, memoId, context.responder, postedAt);
           if (opening) ids.push(opening.id);
           const message = await tx.chatMessage.create({
             data: {
@@ -1057,7 +1057,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       context.prisma.$transaction(async (tx) => {
         await lockThread(tx, memoId);
         const ids: string[] = [];
-        const opening = await ensureOpening(tx, memoId, context.responder);
+        const opening = await ensureOpening(tx, memoId, context.responder, postedAt);
         if (opening) ids.push(opening.id);
 
         const entries = await Promise.all(
