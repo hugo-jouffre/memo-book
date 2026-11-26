@@ -935,6 +935,13 @@ async function seedGallery(): Promise<number> {
   // Refaits à neuf, comme les carnets des comptes de test : un seed rejoué ne
   // doit pas empiler deux fois la même galerie.
   await prisma.memo.deleteMany({ where: { ownerAccountId: community.id } });
+  // **Et leurs fichiers avec eux** (26/11/2026). Supprimer les carnets efface
+  // leurs souvenirs en cascade, mais **pas** les `media_assets` : ils ne
+  // pendent à personne. Leurs `storageKey` sont uniques, et le seed rejoué
+  // mourait donc sur `P2002` en les recréant — après avoir déjà effacé la
+  // galerie, laissant la base à moitié peuplée. Ils portent tous le préfixe
+  // `gallery/`, posé juste en dessous.
+  await prisma.mediaAsset.deleteMany({ where: { storageKey: { startsWith: "gallery/" } } });
 
   for (const [index, trip] of GALLERY_TRIPS.entries()) {
     const [first, ...rest] = trip.countries;
