@@ -508,13 +508,29 @@ export function photosAtZeroRatio(received: number): string {
   );
 }
 
-/** Les photos validées : la page se compose, l'étape suivante peut venir. */
+/**
+ * Les photos validées : la page **se prépare**, et l'étape n'est pas close.
+ *
+ * Elle disait « Tu peux la prévisualiser, puis me raconter l'étape suivante ».
+ * Deux promesses de trop (T307) :
+ *
+ * - **« tu peux la prévisualiser »** arrivait avant que la composition ait
+ *   commencé, et elle prend une à deux minutes. Celui qui y allait tombait sur
+ *   la version d'avant — depuis T299 son carnet gardé, ce qui est mieux qu'un
+ *   écran vide, mais ce n'était pas « sa page » qu'on lui avait promise.
+ * - **« puis l'étape suivante »** refermait le moment. « Rien ne force à dire
+ *   que le carnet est prêt dès que l'étape est enregistrée, mieux vaut laisser
+ *   le temps d'ajouter un vocal ou des photos » (Hugo, 08/11/2026) — et le
+ *   serveur attend maintenant cette accalmie pour de bon
+ *   (`jobs/structure.ts`). La phrase dit donc ce que le serveur fait.
+ */
 export const PHOTOS_VALIDATED =
-  "C’est fait : je crée la page de cette étape dans ton carnet. Tu peux la " +
-  "prévisualiser, puis me raconter l’étape suivante.";
+  "C’est fait : la page de cette étape se prépare dans ton carnet. Si tu veux " +
+  "lui ajouter un vocal ou d’autres photos, c’est encore le moment.";
 
 /** Les photos validées, quand MEMO revient ensuite à une étape laissée en plan. */
-export const PHOTOS_VALIDATED_BEFORE_RETURN = "C’est fait : je crée la page de cette étape dans ton carnet.";
+export const PHOTOS_VALIDATED_BEFORE_RETURN =
+  "C’est fait : la page de cette étape se prépare dans ton carnet.";
 
 /** « Ton étape 2 « Le zoo avec Mathis » » — ou « ton étape 2 » sans titre. */
 function stepLabel(number: number, title: string | null): string {
@@ -924,7 +940,14 @@ export const SUGGESTION_SETS = {
   afterPhotos: ["photos-more", "preview", "dictate"],
   /** Il en manque : en ajouter est la première chose à proposer. */
   photosMissing: ["photos-more", "preview", "dictate"],
-  afterPhotosValidated: ["preview", "dictate", "write"],
+  /**
+   * **Raconter d'abord, aller voir ensuite** (T307). La première puce était
+   * « prévisualiser », qui envoyait regarder un carnet dont la page n'était pas
+   * encore composée. Celle-ci laisse la parole au voyageur, et l'aperçu reste
+   * à un appui. Pas de puce « photos » : en reproposer à qui vient de valider
+   * les siennes, c'est le détail qui dit qu'il n'y a personne en face.
+   */
+  afterPhotosValidated: ["dictate", "write", "preview"],
   /** Après une correction au clavier : il reste à valider pour passer aux photos. */
   afterEdit: ["accept", "edit-hand"],
   /**

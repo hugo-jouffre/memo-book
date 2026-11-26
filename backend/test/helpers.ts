@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import pino from "pino";
+import { STRUCTURE_TIMING } from "../src/jobs/structure.js";
 import { buildApp } from "../src/app.js";
 import { createContext, type AppContext } from "../src/context.js";
 import { loadEnv } from "../src/env.js";
@@ -47,6 +48,16 @@ export async function createHarness(
   });
   const app = await buildApp(context);
   await app.ready();
+
+  // **L'accalmie de la composition, raccourcie** (T307). La file des tests est
+  // en ligne : valider une étape exécute la composition *dans* la requête, et
+  // quarante-cinq secondes d'accalmie feraient expirer chaque test qui valide
+  // quoi que ce soit. On garde le chemin de code, pas son horloge — c'est ce
+  // que `STRUCTURE_TIMING` annonce en étant une variable. Le comportement
+  // lui-même se tient dans `test/accalmieDeLaComposition.test.ts`, qui pose
+  // ses propres durées.
+  STRUCTURE_TIMING.settleQuietMs = 10;
+  STRUCTURE_TIMING.pollMs = 5;
 
   return {
     app,

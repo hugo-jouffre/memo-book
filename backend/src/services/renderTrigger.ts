@@ -26,7 +26,9 @@ export const STALE_RENDER_MS = 20 * 60 * 1000;
  * Lance une composition du carnet, **seulement si elle sert à quelque chose**.
  *
  * Appelée à chaque ouverture de l'aperçu PDF (T224, Hugo 06/10/2026) — et par
- * la validation d'une étape, en fond. Trois réponses, dans cet ordre :
+ * la validation d'une étape ou des photos, en fond, qui demandent alors une
+ * **accalmie** (`settle`) : voir `RenderTriggerOptions`. Trois réponses, dans
+ * cet ordre :
  *
  * 1. **Une composition tourne déjà** : on la rend. Deux appuis rapprochés ne
  *    produisent jamais deux PDF facturés.
@@ -46,10 +48,25 @@ export const STALE_RENDER_MS = 20 * 60 * 1000;
  * nouvelle : `PrintOrder.renderId` verrouille une commande sur une génération
  * précise (`onDelete: Restrict`), qui ne doit donc jamais changer après coup.
  */
+export interface RenderTriggerOptions {
+  /**
+   * **Personne ne regarde l'écran** : la composition peut attendre que le
+   * voyageur ait fini de remplir son carnet (T307). Posé par « Valider cette
+   * étape » et « Je valide mes photos » ; jamais par l'ouverture de l'aperçu,
+   * où le voyageur attend. L'attente elle-même est dans `jobs/structure.ts`
+   * (`STRUCTURE_TIMING.settleQuietMs`) et non ici : c'est le job qui voit le
+   * carnet bouger, et le rendu existe pendant ce temps — l'aperçu dit « ça
+   * compose » au lieu de laisser croire que rien ne se passe.
+   */
+  settle?: boolean;
+  /** Pour les tests : l'instant de référence de la composition périmée. */
+  now?: Date;
+}
+
 export async function ensureRenderInProgress(
   context: AppContext,
   memoId: string,
-  now: Date = new Date(),
+  { settle = false, now = new Date() }: RenderTriggerOptions = {},
 ): Promise<RenderTrigger> {
   const decision = await context.prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT id FROM memos WHERE id = ${memoId} FOR UPDATE`;
@@ -100,6 +117,7 @@ export async function ensureRenderInProgress(
   try {
     await context.queue.publish<StructureJob>(JOB_NAMES.structure, {
       renderId: decision.render.id,
+      settle,
     });
   } catch (cause) {
     await context.prisma.render.updateMany({

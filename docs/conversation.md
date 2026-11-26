@@ -180,9 +180,30 @@ un déroulé fixe, écrit par le code, sans modèle :
      n'entrent pas dans le carnet tant que le ratio reste à 0 %.
 6. **« Je valide mes photos »** → les photos sont validées et le carnet se
    recompose en fond (`ensureRenderInProgress`, le même déclencheur que
-   « Valider cette étape »). MEMO le dit ; puces : « Voir ma page » (ouvre
-   l'aperçu, n'envoie rien — intention `open_preview`), raconter à l'oral, à
-   l'écrit. **L'étape suivante ne vient qu'ici.**
+   « Valider cette étape »). Puces : raconter à l'oral, à l'écrit, puis « Voir
+   ma page » (ouvre l'aperçu, n'envoie rien — intention `open_preview`).
+   **L'étape suivante ne vient qu'ici.**
+
+   **Ce que MEMO dit a changé le 26/11/2026** (T307). Il disait « C'est fait :
+   je crée la page de cette étape dans ton carnet. Tu peux la prévisualiser,
+   puis me raconter l'étape suivante. » Deux promesses de trop :
+   « prévisualiser » arrivait avant que la composition ait commencé — elle
+   prend une à deux minutes, et elle attend désormais une accalmie —, et
+   « puis l'étape suivante » refermait le moment. Il dit maintenant :
+
+   > C'est fait : la page de cette étape se prépare dans ton carnet. Si tu veux
+   > lui ajouter un vocal ou d'autres photos, c'est encore le moment.
+
+   Et « Voir ma page » n'ouvre plus le trio : **raconter d'abord, aller voir
+   ensuite**. « Rien ne force à dire que le carnet est prêt dès que l'étape est
+   enregistrée, mieux vaut laisser le temps d'ajouter un vocal ou des photos »
+   (Hugo, 08/11/2026). Pas de puce « photos » pour autant : en reproposer à qui
+   vient de valider les siennes, c'est le détail qui dit qu'il n'y a personne
+   en face.
+
+   La bulle de l'**arrivée** des photos (point 5, `photosKept`) n'a pas bougé :
+   « tu pourras la prévisualiser » est au futur, et ne promet rien
+   d'immédiat.
 7. **L'étape sautée** (Hugo, 12/10/2026). Si l'on a raconté une étape puis la
    suivante dans la foulée, la première n'est ni validée ni illustrée. Au
    « Je valide mes photos » de la seconde, MEMO revient au récit raconté

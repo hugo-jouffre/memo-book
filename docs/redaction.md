@@ -72,9 +72,24 @@ déploiement de code. Les journaux de l'API donnent désormais `modelMs` et
 `totalMs` à chaque « Souvenir rédigé », et `totalMs` à chaque « Entrée
 transcrite ».
 
-Un levier reste à prendre : le schéma fait réécrire **toute** la fiche de
-cohérence à chaque étape, ce qui allonge la réponse à mesure que le carnet
-grandit. N'en demander que les ajouts serait le prochain gain.
+**Ce levier est pris** (26/11/2026, T307). Le schéma faisait réécrire **toute**
+la fiche de cohérence à chaque étape : à la neuvième étape du banc, 7 233
+caractères de fiche pour 1 193 caractères de texte — six fois le livrable —, et
+ça grandissait en ligne droite depuis 1 586 à la première. Le modèle ne rend
+plus que les **ajouts** (`coherenceAdditions`), et la fiche se recoud côté
+serveur (`mergeCoherenceSheet`). Voir le journal du 26/11/2026.
+
+| Où | Avant | Depuis le 26/11/2026 |
+|---|---|---|
+| La fiche de cohérence rendue | la fiche entière, à chaque étape | ses **ajouts** seulement |
+| Ce que ça pèse sur le banc | 36 257 caractères en neuf étapes | **12 574** — et ça ne croît plus |
+| Qui garantit qu'on ne perd rien | une consigne dans le schéma | la fusion côté serveur |
+
+Deux champs restent rendus en entier, et c'est voulu : `narration`, fixée pour
+tout le carnet (deux mots posés une fois), et `voice`, un portrait de trois à
+six lignes qu'on **affine** — le banc le montre, six lignes à la première étape
+comme à la neuvième. N'en demander que les ajouts l'aurait fait enfler sans
+fin, soit exactement le défaut qu'on corrige.
 
 Les règles des textes du **carnet entier** — quiz, mot fléché, intro, chiffres
 du voyage — sont dans `agents/agent-transcription-carnet.md`. **Aucun agent ne
@@ -116,6 +131,66 @@ mesurerait plus rien. On illustre avec des voyages inventés (Lisbonne, l'Algarv
 Clara, Tom).
 
 ## 4. Journal
+
+### 26/11/2026 — La fiche de cohérence ne se réécrit plus (T307)
+
+Le schéma faisait rendre **toute** la fiche à chaque étape. Le modèle ne rend
+plus que ses **ajouts** (`coherenceAdditions`) ; la fiche se recoud côté
+serveur (`mergeCoherenceSheet`, `services/redaction.ts`).
+
+**Ce que le modèle écrit de fiche**, par étape du banc des neuf vocaux de
+Maxime — c'est ça qui change :
+
+| Étape | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | Total |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Avant | 1 586 | 2 145 | 2 598 | 3 185 | 3 852 | 4 410 | 5 231 | 6 017 | 7 233 | 36 257 |
+| Après | 1 433 | 983 | 931 | 929 | 918 | 905 | 1 469 | 984 | 1 563 | **10 115** |
+
+**Ce n'est pas le total qui compte, c'est la pente.** Avant, la fiche grandissait
+en ligne droite : à la neuvième étape, 7 233 caractères de fiche pour 1 193
+caractères de texte — six fois le livrable, et un carnet de vingt étapes aurait
+doublé. Après, c'est **plat** : autour de mille caractères, quelle que soit la
+longueur du carnet.
+
+**Le temps gagné est modeste, et on sait pourquoi** : 699 s → 637 s sur les neuf
+étapes, soit 9 % (`--label apres-t307` contre `apres-prenom`, Opus 5, règles
+`2a7f8ef02c`, effort `high` des deux côtés). Les jetons écrits le disent — le
+relevé en écrit 500 à 830 par étape, le récit 2 800 à 8 200. **Le relevé ne pèse
+que 11 % de ce que le modèle écrit**, et la fiche est l'essentiel du relevé :
+en couper 72 % coupe 8 % du total. La mesure et l'explication se recoupent.
+
+Le temps d'une rédaction est donc, pour l'essentiel, **la réflexion du récit**.
+`ANTHROPIC_REDACTION_EFFORT` vaut `medium` en production, le banc tourne à
+`high` : la part de la fiche y est plus grande en production que ces 9 % ne le
+disent. Mesurer `medium` contre `low` serait le prochain pas, et c'est un
+arbitrage de qualité, pas d'ingénierie.
+
+**La qualité ne bouge pas**, relecteur à l'appui (`--judge`) :
+
+| | intention | fluidité | fidélité | voix | français |
+|---|---|---|---|---|---|
+| Avant | 4,3 | 3,9 | 3,8 | 4,1 | 4,2 |
+| Après | 4,3 | 3,9 | **3,6** | 4,0 | **4,4** |
+
+Et rien de structurel n'a bougé : 4 moments proposés dont 4 datés des deux
+côtés, 2 souvenirs coupés, 9 quiz, longueur moyenne 874 → 875 caractères, zéro
+tournure proscrite et zéro texte hors barème. Les noms à faire confirmer passent
+de 1 à 3. ⚠️ **Un écart à regarder** : l'étape 12 perd un point de fidélité
+(3 → 2), le relecteur lui reprochant un glissement de ton. Les moyennes bougent
+de ±0,2 sur cinq points, et le même modèle varie de ±40 % d'un passage à
+l'autre sur le simple temps de réponse : on ne peut pas distinguer ça du bruit
+à neuf étapes.
+
+**Deux champs restent rendus en entier** — `narration`, fixée pour tout le
+carnet, et `voice`, un portrait de trois à six lignes qu'on affine. Voir
+`CoherenceAdditions` pour le raisonnement.
+
+**Et la fiche ne peut plus s'amputer.** « Ne retire aucune entrée, ne change
+aucune graphie fixée » était une consigne dans un schéma — la seule chose qu'on
+pouvait faire quand c'est le modèle qui rend la fiche. C'est désormais la forme
+du code : une entrée posée ne disparaît plus, et la narration ne se fixe qu'une
+fois.
+
 
 ### 23/11/2026 (nuit) — La règle corrigée, et mesurée
 

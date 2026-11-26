@@ -24,20 +24,41 @@ import { isSimulatedCdnUrl } from "../services/webflow.js";
 
 export interface StructureJob {
   renderId: string;
+  /**
+   * **Attendre que le voyageur ait fini** avant de composer (T307).
+   *
+   * Posé par les déclencheurs de fond — « Valider cette étape », « Je valide
+   * mes photos » —, où personne ne regarde l'écran. Absent quand c'est
+   * l'ouverture de l'aperçu qui compose : là, le voyageur attend.
+   */
+  settle?: boolean;
 }
 
 /**
- * Combien de temps la mise en page attend les souvenirs encore en rédaction,
- * et à quel pas elle regarde. Une variable et non une constante : les tests la
- * raccourcissent.
+ * Combien de temps la mise en page attend avant de composer, et à quel pas elle
+ * regarde. Une variable et non une constante : les tests la raccourcissent.
  *
- * **Attendre plutôt qu'échouer** (07/10/2026) : l'aperçu lance désormais une
- * composition à chaque ouverture (T224), y compris trente secondes après le
- * dernier vocal, quand MEMO n'a pas fini de l'écrire. Échouer aussitôt
- * laissait l'aperçu sur « La composition n'a pas abouti » pour un souvenir
- * qui serait prêt dans l'instant ; trois minutes couvrent une rédaction lente.
+ * **Attendre plutôt qu'échouer** (07/10/2026) : l'aperçu lance une composition
+ * à chaque ouverture (T224), y compris trente secondes après le dernier vocal,
+ * quand MEMO n'a pas fini de l'écrire. Échouer aussitôt laissait l'aperçu sur
+ * « La composition n'a pas abouti » pour un souvenir qui serait prêt dans
+ * l'instant ; trois minutes couvrent une rédaction lente.
+ *
+ * `settleQuietMs` est l'**accalmie** qu'une composition de fond attend en plus
+ * (T307) : non pas que le carnet soit prêt, mais que le voyageur ait fini de
+ * le remplir. « Rien ne force à dire que le carnet est prêt dès que l'étape est
+ * enregistrée, mieux vaut laisser le temps d'ajouter un vocal ou des photos »
+ * (Hugo, 08/11/2026). Quarante-cinq secondes : le temps de lâcher un second
+ * vocal ou de choisir trois photos, pas celui d'aller déjeuner.
+ *
+ * Elle ne s'applique **qu'aux compositions de fond**. Quand le voyageur ouvre
+ * l'aperçu, il regarde l'écran : on ne le fait pas attendre une accalmie.
  */
-export const STRUCTURE_TIMING = { redactionWaitMs: 3 * 60 * 1000, pollMs: 5_000 };
+export const STRUCTURE_TIMING = {
+  redactionWaitMs: 3 * 60 * 1000,
+  settleQuietMs: 45_000,
+  pollMs: 5_000,
+};
 
 /** Les souvenirs de ce carnet que la rédaction n'a pas encore rendus. */
 export function pendingRedactionCount(
@@ -49,14 +70,98 @@ export function pendingRedactionCount(
   });
 }
 
-async function waitForRedactions(prisma: AppContext["prisma"], memoId: string): Promise<number> {
+/**
+ * Attend que le carnet soit **composable**, et rend ce qui reste en rédaction
+ * quand on renonce.
+ *
+ * Deux conditions, et la seconde est nouvelle :
+ *
+ * 1. **Plus aucun souvenir en rédaction.** Un texte pas encore écrit entrerait
+ *    dans le PDF en transcription brute, hésitations comprises.
+ * 2. **Le carnet ne bouge plus depuis `settleQuietMs`** — seulement pour une
+ *    composition de fond (`settle`). La mesure est l'**empreinte** du carnet
+ *    (`services/bookFingerprint.ts`), celle-là même qui décide si composer
+ *    sert à quelque chose : un vocal de plus, trois photos, une étape qui se
+ *    redécoupe la font bouger, et l'accalmie repart. On ne devine donc pas
+ *    quelles colonnes comptent comme « un changement » : c'est la même liste
+ *    que celle qui jugera le résultat.
+ *
+ * Avant T307, une composition lancée par la validation d'une étape partait
+ * dans la seconde. Le voyageur enchaînait un second vocal, sa rédaction
+ * commençait, et cette composition-là attendait trois minutes pour **échouer**
+ * — « 2 souvenir(s) sont encore en cours de rédaction » —, après quoi il
+ * fallait tout relancer. Elle attend maintenant que ça se calme, et compose
+ * une fois pour les deux.
+ *
+ * Au plafond, on rend la main : la branche d'échec du job est inchangée, et
+ * un carnet que le voyageur remplit sans discontinuer finit par être composé
+ * tel qu'il est plutôt que de n'être jamais composé.
+ */
+export async function waitUntilSettled(
+  prisma: AppContext["prisma"],
+  memoId: string,
+  settle: boolean,
+): Promise<number> {
   const deadline = Date.now() + STRUCTURE_TIMING.redactionWaitMs;
+
+  let fingerprint = settle ? await currentBookFingerprint(prisma, memoId) : null;
+  // L'accalmie se compte depuis le **dernier changement du carnet**, pas depuis
+  // l'instant où ce job a démarré : un carnet qu'on n'a pas touché depuis dix
+  // minutes n'a aucune raison d'attendre quarante-cinq secondes de plus.
+  // **Jamais dans le futur** : la date vient de Postgres, l'accalmie se compte
+  // sur l'horloge de l'app. Un décalage entre les deux ferait attendre jusqu'au
+  // plafond chaque composition de fond, sans que rien ne le dise.
+  let unchangedSince = settle
+    ? Math.min((await lastBookChange(prisma, memoId))?.getTime() ?? 0, Date.now())
+    : 0;
   let pending = await pendingRedactionCount(prisma, memoId);
-  while (pending > 0 && Date.now() < deadline) {
+
+  const quiet = () => !settle || Date.now() - unchangedSince >= STRUCTURE_TIMING.settleQuietMs;
+
+  while ((pending > 0 || !quiet()) && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, STRUCTURE_TIMING.pollMs));
     pending = await pendingRedactionCount(prisma, memoId);
+    if (!settle) continue;
+
+    const now = await currentBookFingerprint(prisma, memoId);
+    if (now !== fingerprint) {
+      fingerprint = now;
+      // L'horloge de l'app et non celle de Postgres : ce qu'on vient de voir
+      // changer a changé **maintenant**, et comparer deux horloges pour
+      // quarante-cinq secondes d'accalmie n'apporterait qu'un décalage.
+      unchangedSince = Date.now();
+    }
   }
+
   return pending;
+}
+
+/**
+ * Quand ce carnet a bougé pour la dernière fois — la date derrière l'empreinte.
+ *
+ * Mêmes colonnes que ``currentBookFingerprint``, puisque c'est la même
+ * question posée autrement : celle-là dit *si* le carnet a changé, celle-ci
+ * *quand*. Les deux listes doivent rester ensemble.
+ */
+async function lastBookChange(
+  prisma: AppContext["prisma"],
+  memoId: string,
+): Promise<Date | null> {
+  const [memo, entries, steps, coverPhotos] = await Promise.all([
+    prisma.memo.findUnique({ where: { id: memoId }, select: { updatedAt: true } }),
+    prisma.entry.aggregate({ where: { memoId }, _max: { updatedAt: true } }),
+    prisma.memoStep.aggregate({ where: { memoId }, _max: { updatedAt: true } }),
+    prisma.coverPhoto.aggregate({ where: { memoId }, _max: { createdAt: true } }),
+  ]);
+
+  const dates = [
+    memo?.updatedAt,
+    entries._max.updatedAt,
+    steps._max.updatedAt,
+    coverPhotos._max.createdAt,
+  ].filter((date): date is Date => date instanceof Date);
+
+  return dates.length === 0 ? null : new Date(Math.max(...dates.map((date) => date.getTime())));
 }
 
 /**
@@ -70,7 +175,7 @@ async function waitForRedactions(prisma: AppContext["prisma"], memoId: string): 
  */
 export async function structureRender(
   context: AppContext,
-  { renderId }: StructureJob,
+  { renderId, settle = false }: StructureJob,
 ): Promise<void> {
   const { prisma, structurer, queue, logger } = context;
 
@@ -87,10 +192,11 @@ export async function structureRender(
   });
 
   try {
-    // Les souvenirs encore en rédaction d'abord — voir `STRUCTURE_TIMING`.
-    // Le carnet se relit **après** l'attente : ce sont leurs textes finis qu'on
-    // veut.
-    await waitForRedactions(prisma, found.memoId);
+    // Que le carnet soit composable d'abord — voir `STRUCTURE_TIMING`. Le
+    // carnet se relit **après** l'attente : ce sont les textes finis qu'on
+    // veut, et, pour une composition de fond, le carnet tel que le voyageur
+    // l'a laissé.
+    await waitUntilSettled(prisma, found.memoId, settle);
     // Les chiffres du dos de couverture à jour avant de composer — les jours
     // d'un voyage en cours avancent sans qu'aucun souvenir n'arrive (T227).
     await refreshTripFactsQuietly(context, found.memoId);
