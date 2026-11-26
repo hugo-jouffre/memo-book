@@ -85,8 +85,10 @@ const publicBookSelect = {
       placeName: true,
       destinationName: true,
       destinationCountryCode: true,
-      startDate: true,
-      endDate: true,
+      // Les jours **racontés** par l'étape, et non ceux de ses
+      // enregistrements (T308) : la page publique n'affiche que du compris.
+      livedFromDay: true,
+      livedToDay: true,
       photoUrl: true,
       transport: true,
       entries: {

@@ -36,7 +36,17 @@ import { contextVoiceOf } from "./tripContext.js";
 /** Le client d'une transaction, ou le client tout court : les deux lisent et écrivent pareil. */
 export type Db = PrismaClient | Prisma.TransactionClient;
 
-export type EntryWithMedia = Entry & { media: MediaAsset | null };
+export type EntryWithMedia = Entry & {
+  media: MediaAsset | null;
+  /**
+   * **L'étape qui porte ce souvenir**, pour ce que sa fiche affiche : le lieu
+   * compris et les jours racontés (T308). Absente d'un souvenir qu'aucun
+   * recalcul n'a encore rangé — la fiche se contente alors de ce que le
+   * souvenir sait de lui-même, c'est-à-dire souvent rien, et n'affiche pas de
+   * ligne de date.
+   */
+  step?: { placeName: string | null; livedFromDay: Date | null; livedToDay: Date | null } | null;
+};
 
 /** Un message avec ce qu'il faut pour le dessiner : son souvenir, et qui l'a dit. */
 export type ChatMessageRow = ChatMessage & {
@@ -50,7 +60,15 @@ export type ChatMessageRow = ChatMessage & {
 };
 
 export const chatMessageInclude = {
-  entry: { include: { media: true } },
+  entry: {
+    include: {
+      media: true,
+      // La fiche montre le lieu et les dates de **l'étape**, pas l'écho que
+      // l'app avait envoyé avec le vocal (T308) : trois colonnes, et une
+      // jointure que toutes les lectures du fil partagent.
+      step: { select: { placeName: true, livedFromDay: true, livedToDay: true } },
+    },
+  },
   // La photo et le nom de celui qui a parlé : la bulle d'un vocal porte son
   // portrait, ou ses initiales (Clara, 26/09/2026).
   account: { select: { firstName: true, lastName: true, avatarStorageKey: true, avatarUrl: true } },

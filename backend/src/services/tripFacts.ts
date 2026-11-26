@@ -87,6 +87,14 @@ interface FactEntry {
    * en mots, et c'est la rédaction qui le relève.
    */
   capturedPlaceName: string | null;
+
+  /**
+   * **Le ou les jours que ce récit raconte**, quand il les dit (T308). Nuls
+   * le plus souvent, et nuls pour une photo — une photo ne raconte rien.
+   * `livedToDay` ne vaut que pour une période.
+   */
+  livedFromDay: Date | null;
+  livedToDay: Date | null;
 }
 
 /** Un groupe de souvenirs qui deviendra une étape. */
@@ -313,6 +321,23 @@ function stepCovering(stories: StepGroup[], photo: FactEntry): StepGroup | undef
   // Un groupe sans récit (des photos seules) garde ses propres dates.
   const span = (group: StepGroup) => {
     const stories = group.entries.filter((entry) => entry.kind !== "photo");
+
+    // **Et quand les récits disent ce qu'ils racontent, c'est ça** (T308).
+    //
+    // Une photo porte le jour où l'obturateur a cliqué ; un récit, le jour où
+    // on l'a envoyé. Une journée racontée deux jours plus tard n'attirait donc
+    // aucune de ses photos : la plus proche des étapes était celle qu'on
+    // enregistrait ce jour-là. Les jours **racontés** mettent les deux sur la
+    // même échelle. La tranche va jusqu'à la fin du dernier jour, sinon une
+    // photo de l'après-midi tomberait hors d'une journée qui commence et
+    // finit à minuit.
+    const lived = stories.flatMap((entry) =>
+      entry.livedFromDay
+        ? [entry.livedFromDay.getTime(), (entry.livedToDay ?? entry.livedFromDay).getTime() + DAY_MS - 1]
+        : [],
+    );
+    if (lived.length > 0) return { from: Math.min(...lived), to: Math.max(...lived) };
+
     const times = (stories.length > 0 ? stories : group.entries).map((entry) => entry.capturedAt.getTime());
     return { from: Math.min(...times), to: Math.max(...times) };
   };
@@ -405,6 +430,8 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
           separatedByTraveller: true,
           pinnedStepId: true,
           capturedPlaceName: true,
+          livedFromDay: true,
+          livedToDay: true,
           media: { select: { cdnUrl: true } },
         },
       });
@@ -420,6 +447,8 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
         continuesPrevious: row.continuesPreviousStep && !row.separatedByTraveller,
         pinnedStepId: row.pinnedStepId,
         capturedPlaceName: row.capturedPlaceName,
+        livedFromDay: row.livedFromDay,
+        livedToDay: row.livedToDay,
       }));
 
       const before = [...memo.steps].sort((a, b) => b.number - a.number)[0] ?? null;
@@ -571,6 +600,14 @@ async function writeSteps(
       }
       if (step.startDate?.getTime() !== fields.startDate.getTime()) changed.startDate = fields.startDate;
       if (step.endDate?.getTime() !== fields.endDate.getTime()) changed.endDate = fields.endDate;
+      // Les jours racontés, qui peuvent redevenir nuls : une rédaction
+      // relancée sur un récit corrigé peut ne plus rien situer.
+      if ((step.livedFromDay?.getTime() ?? null) !== (fields.livedFromDay?.getTime() ?? null)) {
+        changed.livedFromDay = fields.livedFromDay;
+      }
+      if ((step.livedToDay?.getTime() ?? null) !== (fields.livedToDay?.getTime() ?? null)) {
+        changed.livedToDay = fields.livedToDay;
+      }
       if (step.transport !== fields.transport) changed.transport = fields.transport;
       if (step.photoUrl !== fields.photoUrl) changed.photoUrl = fields.photoUrl;
       if (Object.keys(changed).length > 0) await tx.memoStep.update({ where: { id: step.id }, data: changed });
@@ -632,7 +669,28 @@ export function stepFields(group: StepGroup, step: ExistingStep | undefined) {
     placeKey,
   );
 
+  // **Les jours que l'étape raconte** (T308) : ceux que ses récits ont dits,
+  // et rien d'autre. Un seul récit situé suffit à dater l'étape ; aucun, et
+  // elle n'affiche pas de date — plutôt que le jour de l'enregistrement, que
+  // personne n'a donné.
+  //
+  // Un récit situé qui prolonge une journée déjà racontée élargit la tranche,
+  // et c'est voulu : « une étape se raconte en plusieurs fois » (T308). Mais
+  // deux récits du **même** jour ne font pas une période, d'où la fin laissée
+  // nulle quand les deux bouts tombent le même jour — même règle que sur le
+  // souvenir, et c'est elle qui donne « une date précise pour une journée,
+  // une tranche pour une période ».
+  const livedDays = group.entries
+    .flatMap((entry) => (entry.livedFromDay ? [entry] : []))
+    .flatMap((entry) => [entry.livedFromDay!, entry.livedToDay ?? entry.livedFromDay!])
+    .map((day) => day.getTime());
+  const livedFromDay = livedDays.length > 0 ? new Date(Math.min(...livedDays)) : null;
+  const livedToDay = livedDays.length > 0 ? new Date(Math.max(...livedDays)) : null;
+
   return {
+    livedFromDay,
+    livedToDay:
+      livedFromDay && livedToDay && livedToDay.getTime() > livedFromDay.getTime() ? livedToDay : null,
     // Une étape choisie par le voyageur garde son nom ; les autres prennent
     // celui de leur lieu. Ce que la rédaction ne sait pas, on ne l'efface pas.
     placeName:

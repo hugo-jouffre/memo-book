@@ -216,7 +216,11 @@ private fun history(detail: TripDetail): List<ChatMessage> {
                 TranscriptCard(
                     title = ChatCopy.transcriptTitle,
                     capturedAt = day,
-                    placeLabel = step.placeName,
+                    // Le jeu d'essai situe ses étapes : la fiche y montre
+                    // donc une date et un lieu compris (T308).
+                    livedFrom = step.startDate,
+                    livedTo = step.endDate,
+                    placeName = step.placeName,
                     duration = note.duration,
                     text = transcripts[index % transcripts.size],
                     isSimulated = true,

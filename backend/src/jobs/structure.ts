@@ -3,6 +3,7 @@ import type { AppContext } from "../context.js";
 import { bookCoversOf, coverPhotoEntryIds } from "../services/bookCovers.js";
 import { currentBookFingerprint } from "../services/bookFingerprint.js";
 import { applyBookSettings, keepsPhotos } from "../services/bookSettings.js";
+import { calendarDate } from "../services/localCalendar.js";
 import { validatePayload } from "../services/payloadValidator.js";
 import {
   ouvrirLesChapitresSurUneCarte,
@@ -218,7 +219,7 @@ export async function structureRender(
             // **L'étape à laquelle le souvenir appartient** (T267) : son lieu
             // est le repli de l'en-tête quand le vocal n'en dit pas. Ce n'est
             // pas une déduction, c'est le lieu de cette étape-là.
-            step: { select: { placeName: true, destinationName: true } },
+            step: { select: { placeName: true, destinationName: true, livedFromDay: true } },
           },
         },
         // Les deux plats du carnet lisent le voyage : les étapes et les pays
@@ -277,9 +278,13 @@ export async function structureRender(
         quiz: memo.quizEnabled ? quizForBook(entry) : null,
         weatherKey: entry.weatherKey,
         capturedAt: entry.capturedAt,
-        placeLabel: entry.placeLabel,
+        // **Le jour que l'étape raconte** (T308), quand un de ses récits l'a
+        // dit : c'est lui qui regroupe et qui date la journée du carnet. Pris
+        // sur l'étape pour que les photos ne quittent pas le récit qu'elles
+        // illustrent — une photo ne raconte aucun jour.
+        livedDay: entry.step?.livedFromDay ? calendarDate(entry.step.livedFromDay) : null,
         // Le lieu de l'étape qui porte ce souvenir, quand il y en a une
-        // (T267). `structuring.ts` s'en sert faute de mieux.
+        // (T267) — et le seul qui nomme une journée depuis T308.
         stepPlace: entry.step?.placeName?.trim() || entry.step?.destinationName?.trim() || null,
         photoUrl,
         // Ce qu'on a mesuré de la photo à son arrivée (T265) : c'est ce qui

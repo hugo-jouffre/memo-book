@@ -367,8 +367,8 @@ interface StepForPublicBook {
   placeName: string | null;
   destinationName: string | null;
   destinationCountryCode: string | null;
-  startDate: Date | null;
-  endDate: Date | null;
+  livedFromDay: Date | null;
+  livedToDay: Date | null;
   photoUrl: string | null;
   transport: TripTransport | null;
   entries: EntryForPublicBook[];
@@ -443,7 +443,9 @@ export function serializePublicBook(
       // une étape qu'aucun récit n'a su nommer.
       place: step.placeName?.trim() || step.destinationName?.trim() || null,
       countryCode: step.destinationCountryCode,
-      dates: tripDates(step.startDate, step.endDate),
+      // Les jours **racontés**, ou aucune date : la page publique ne date pas
+      // une étape d'après le moment où le voyageur en a parlé (T308).
+      dates: tripDates(step.livedFromDay, step.livedToDay ?? step.livedFromDay),
       photoUrl: publiclyServableImageUrl(step.photoUrl),
       transport: step.transport,
       // Le récit de l'étape, un paragraphe par souvenir, dans l'ordre vécu. Les
@@ -657,6 +659,23 @@ type StepWithMembers = MemoStep & {
   }[];
 };
 
+/**
+ * **Les deux dates qu'une étape montre** — le jour raconté, jamais celui de
+ * l'enregistrement (T308).
+ *
+ * Une seule journée rend deux fois le même jour : les clients en font une date
+ * précise, une période en fait une tranche, et c'est exactement la règle
+ * demandée. Aucun jour raconté rend `null` deux fois, et l'écran n'affiche
+ * alors pas de ligne de dates — ce qu'il sait déjà faire pour un voyage sans
+ * dates.
+ */
+export function displayedStepDates(step: { livedFromDay: Date | null; livedToDay: Date | null }): {
+  startDate: Date | null;
+  endDate: Date | null;
+} {
+  return { startDate: step.livedFromDay, endDate: step.livedToDay ?? step.livedFromDay };
+}
+
 export function serializeTripStep(
   step: StepWithMembers,
   companions: ReturnType<typeof serializeCompanion>[],
@@ -666,6 +685,7 @@ export function serializeTripStep(
   // racontée — servie sans session (`routes/tripPhotos.ts`). Avant la
   // composition du carnet, une étape illustrée n'avait pas d'image.
   const firstPhoto = (step.entries ?? []).find((entry) => entry.kind === "photo" && entry.media);
+  const shown = displayedStepDates(step);
   return {
     id: step.id,
     number: step.number,
@@ -673,8 +693,12 @@ export function serializeTripStep(
     destination: step.destinationName
       ? { name: step.destinationName, countryCode: step.destinationCountryCode }
       : null,
-    startDate: iso(step.startDate),
-    endDate: iso(step.endDate),
+    // **Les dates que l'étape affiche** : celles que ses récits ont dites
+    // (T308), et nulles tant qu'aucun ne s'est situé. Ce ne sont plus celles
+    // des enregistrements (`memo_steps.startDate`), qui disaient le jour où
+    // l'on en a parlé — un dimanche pour une journée de vendredi.
+    startDate: iso(shown.startDate),
+    endDate: iso(shown.endDate),
     // Les compagnons d'une étape sont ceux du voyage tant que la présence n'est
     // pas suivie étape par étape. Mieux vaut la liste du voyage qu'une liste
     // vide, qui ferait croire que personne n'y était.

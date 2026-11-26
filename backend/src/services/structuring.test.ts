@@ -23,7 +23,7 @@ function entry(overrides: Partial<StructuringEntry> = {}): StructuringEntry {
     funFactTitle: null,
     weatherKey: null,
     capturedAt: new Date("2026-04-12T09:00:00Z"),
-    placeLabel: "Kyoto",
+    stepPlace: "Kyoto",
     photoUrl: null,
     ...overrides,
   };
@@ -101,7 +101,7 @@ describe("HeuristicStructurer", () => {
         entry({
           capturedAt: new Date("2026-04-13T09:00:00Z"),
           transcript: "Deuxième journée, on a marché longtemps.",
-          placeLabel: "Nara",
+          stepPlace: "Nara",
         }),
       ],
       tripContext: null,
@@ -380,12 +380,13 @@ describe("le lieu de l'en-tête, quand le vocal n'en dit pas", () => {
     return payload.days[0]?.day_intro?.location;
   };
 
-  it("prend le lieu dit par le voyageur", async () => {
-    expect(await enTete([jour({ placeLabel: "Naxos", stepPlace: "Paros" })])).toBe("Naxos");
-  });
-
-  it("retombe sur le lieu de l'étape quand le vocal n'en dit pas", async () => {
-    expect(await enTete([jour({ placeLabel: null, stepPlace: "Paros" })])).toBe("Paros");
+  /**
+   * **L'étape, et non l'écho renvoyé par l'app** (T308). C'était l'inverse
+   * jusqu'au 26/11/2026 : `placeLabel` passait devant, et il nomme l'étape
+   * d'avant le jour où l'on change de ville. Le champ n'existe plus.
+   */
+  it("prend le lieu que l'étape a compris", async () => {
+    expect(await enTete([jour({ stepPlace: "Paros" })])).toBe("Paros");
   });
 
   /**
@@ -393,7 +394,7 @@ describe("le lieu de l'en-tête, quand le vocal n'en dit pas", () => {
    * sur une journée passée à Kyoto, ce qui est la plainte de T280. Sans lieu,
    * l'en-tête n'en affiche pas — et MEMO le demandera.
    */
-  it("n'invente rien quand ni l'un ni l'autre n'existe", async () => {
-    expect(await enTete([jour({ placeLabel: null, stepPlace: null })])).toBe("");
+  it("n'invente rien quand l'étape n'a pas de lieu", async () => {
+    expect(await enTete([jour({ stepPlace: null })])).toBe("");
   });
 });

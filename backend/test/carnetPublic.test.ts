@@ -85,6 +85,11 @@ async function publicBook(overrides: Record<string, unknown> = {}) {
       destinationCountryCode: "GR",
       startDate: new Date("2026-06-01T00:00:00Z"),
       endDate: new Date("2026-06-08T00:00:00Z"),
+      // **Ce que l'étape raconte**, et c'est ça que la page publique affiche
+      // depuis T308 — les deux dates au-dessus sont celles des
+      // enregistrements, que personne n'a données.
+      livedFromDay: new Date("2026-06-01T00:00:00Z"),
+      livedToDay: new Date("2026-06-08T00:00:00Z"),
       photoUrl: "https://cdn.test/paros.jpg",
       transport: "boat",
     },
@@ -169,6 +174,9 @@ describe("lire un carnet de la galerie", () => {
 
     expect(steps.map((step) => step.place)).toEqual(["Paros", "Naxos"]);
     expect(steps[0]?.dates).toBe("du 1er au 8 juin 2026");
+    // Naxos n'a pas dit ce qu'elle racontait : elle n'affiche aucune date,
+    // plutôt que celle de ses enregistrements (T308).
+    expect(steps[1]?.dates).toBeNull();
     expect(steps[0]?.photoUrl).toBe("https://cdn.test/paros.jpg");
     expect(steps[0]?.transport).toBe("boat");
     // Les deux souvenirs de Paros, dans l'ordre, et le texte **du carnet** : la

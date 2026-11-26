@@ -989,7 +989,11 @@ struct ChatTranscriptBubble: View {
     }
 
     private var accessibilityText: String {
-        let day = ChatCopy.Voice.transcript(title: card.title, day: card.capturedAt.chatFullDayLabel)
+        // Le titre seul quand aucune date n'est comprise : VoiceOver
+        // annonçait la date d'enregistrement comme celle de l'étape (T308).
+        let day = card.livedDatesSpokenLabel.map {
+            ChatCopy.Voice.transcript(title: card.title, day: $0)
+        } ?? card.title
         let state: String
         switch stage {
         case .listening: state = ChatCopy.transcriptPending
@@ -1033,23 +1037,35 @@ struct ChatTranscriptBubble: View {
                 }
             }
 
-            HStack(spacing: MemoBookSpacing.snug) {
-                Image(brand: "IconLucideCalendar")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: glyph, height: glyph)
-                    .foregroundStyle(MemoBookColor.ink)
+            // **La date et le lieu, une fois compris** (T308) — sinon rien.
+            //
+            // La ligne portait le jour de l'enregistrement et l'écho du lieu
+            // renvoyé par l'app : un dimanche sur une journée de vendredi, et
+            // le nom de la ville précédente le jour où l'on en change. Ce
+            // qu'on ne sait pas ne s'écrit plus, et la ligne disparaît quand
+            // on ne sait rien — le calendrier avec elle, qui n'annoncerait
+            // plus aucune date.
+            if card.livedDatesLabel != nil || card.placeName != nil {
+                HStack(spacing: MemoBookSpacing.snug) {
+                    if let dates = card.livedDatesLabel {
+                        Image(brand: "IconLucideCalendar")
+                            .resizable()
+                            .renderingMode(.template)
+                            .scaledToFit()
+                            .frame(width: glyph, height: glyph)
+                            .foregroundStyle(MemoBookColor.ink)
 
-                Text(card.capturedAt.chatDayLabel)
-                    .font(MemoBookFont.caption)
-                    .foregroundStyle(MemoBookColor.ink)
+                        Text(dates)
+                            .font(MemoBookFont.caption)
+                            .foregroundStyle(MemoBookColor.ink)
+                    }
 
-                if let place = card.placeLabel {
-                    Text(place)
-                        .font(MemoBookFont.caption)
-                        .foregroundStyle(MemoBookColor.inkMuted)
-                        .lineLimit(1)
+                    if let place = card.placeName {
+                        Text(place)
+                            .font(MemoBookFont.caption)
+                            .foregroundStyle(MemoBookColor.inkMuted)
+                            .lineLimit(1)
+                    }
                 }
             }
         }

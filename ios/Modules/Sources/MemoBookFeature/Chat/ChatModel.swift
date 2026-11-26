@@ -1440,7 +1440,12 @@ public final class ChatModel {
                 TranscriptCard(
                     title: card.title,
                     capturedAt: entry.capturedAt,
-                    placeLabel: entry.placeLabel ?? card.placeLabel,
+                    // Le lieu et les jours **compris** restent ceux que le
+                    // serveur a servis avec la fiche (T308) : le souvenir ne
+                    // porte que l'écho du lieu, et aucune date vécue.
+                    livedFrom: card.livedFrom,
+                    livedTo: card.livedTo,
+                    placeName: card.placeName,
                     duration: card.duration,
                     text: entry.displayText ?? card.text,
                     isSimulated: false,

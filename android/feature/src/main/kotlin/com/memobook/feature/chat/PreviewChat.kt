@@ -430,7 +430,9 @@ private fun TranscriptCard.identified(entryId: String): TranscriptCard =
     TranscriptCard(
         title = title,
         capturedAt = capturedAt,
-        placeLabel = placeLabel,
+        livedFrom = livedFrom,
+        livedTo = livedTo,
+        placeName = placeName,
         duration = duration,
         text = text,
         isSimulated = isSimulated,
@@ -444,7 +446,9 @@ private fun TranscriptCard.validated(): TranscriptCard =
     TranscriptCard(
         title = title,
         capturedAt = capturedAt,
-        placeLabel = placeLabel,
+        livedFrom = livedFrom,
+        livedTo = livedTo,
+        placeName = placeName,
         duration = duration,
         text = text,
         isSimulated = isSimulated,

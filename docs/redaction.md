@@ -38,6 +38,7 @@ il a été vécu quand le récit le dit (§ 4, 20/11/2026).
 | Ce qu'il sait du voyage | `buildRedactionPrompt` dans `backend/src/services/redaction.ts`, et `backend/src/jobs/redact.ts` qui va le chercher |
 | Ce qu'il sait du voyage **dans l'atelier** | `consigneRedactionEtape` dans `MemoBook Generator/public/partage.js`, et `redigerEtapes` dans `public/app.js` |
 | Ce qu'il rend | `REDACTION_SCHEMA` dans `redaction.ts` |
+| Ce qu'il **relève** (fiche de cohérence, statistiques, température, jour vécu) | `RELEVE_KEYS` et `buildRelevePrompt` dans `redaction.ts` — ⚠️ ne rien ajouter à `RECIT_KEYS` sans relire pourquoi le schéma est coupé en deux |
 | La bulle qui cite ses doutes | `validationQuestionFor` dans `backend/src/services/conversationCopy.ts` |
 | Les noms soufflés au transcripteur | `transcriptionHintFor` dans `backend/src/services/transcription.ts` |
 | Le modèle | `ANTHROPIC_REDACTION_MODEL` dans `backend/.env` — voir [`modeles-ia.md`](modeles-ia.md) |
@@ -141,6 +142,77 @@ mesurerait plus rien. On illustre avec des voyages inventés (Lisbonne, l'Algarv
 Clara, Tom).
 
 ## 4. Journal
+
+### 26/11/2026 (nuit) — Le jour que le récit raconte (T308)
+
+Le carnet datait une étape du moment où on en avait **parlé**. Un vocal du
+dimanche qui raconte vendredi affichait dimanche ; une étape racontée en deux
+séances affichait une « tranche » de deux jours qui n'était que l'écart entre
+les deux enregistrements. Personne n'avait donné ces dates.
+
+**Ce qu'on demande au modèle** : deux champs, `livedFrom` et `livedTo` — le
+premier jour que le récit raconte, et le dernier **seulement** si le récit
+couvre une période et la borne lui-même. `null` au moindre doute, et c'est le
+cas le plus fréquent : un voyageur qui raconte sa journée ne la date pas. Le
+prompt lui donne déjà la date d'envoi du vocal et les dates du voyage, de quoi
+poser « hier » ou « le premier jour » sans deviner — et la consigne dit
+explicitement de ne **pas** déduire le jour vécu de la date d'envoi.
+
+⚠️ **Ils sont dans le relevé, pas dans le récit.** C'est le même arbitrage que
+`temperatureC` le 04/11/2026 : le récit est le bloc qui a fait dépasser la
+grammaire compilée d'Anthropic, et une rédaction refusée est une panne totale
+et muette. On n'ajoute rien à ce bloc pour la commodité. Le relevé, lui, reçoit
+**tout** le prompt du récit, transcription comprise : il a de quoi situer
+« hier ». Son effort est `low`, ce qui suffit à une arithmétique de calendrier
+— et la fenêtre du voyage rattrape le reste.
+
+**Ce qu'on en accepte** (`parseLivedDays`, relu comme le jour d'un moment) :
+
+- un jour hors de la fenêtre du voyage → `null` ; le modèle rend parfois
+  l'année en cours là où le voyage est l'an dernier ;
+- un début illisible efface la fin : « jusqu'au 30 » tout seul ne situe rien ;
+- une fin **le même jour ou avant** le début n'est pas une période → `null`.
+  C'est ce qui rend la règle simple partout ailleurs : une fin renseignée veut
+  dire une tranche, toujours.
+
+**Ce que ça change dans le carnet.** `entries.livedFromDay` / `livedToDay`
+portent ce que le récit a dit ; `refreshTripFacts` remonte le plus ancien et le
+plus récent sur `memo_steps.livedFromDay` / `livedToDay`. Un seul récit situé
+suffit à dater l'étape ; deux séances qui situent deux journées font une
+tranche — « une étape se raconte en plusieurs fois ». Les dates
+d'enregistrement restent en base (`memo_steps.startDate`) : elles ordonnent le
+carnet et datent le relevé météo, qui a besoin d'un jour même approximatif.
+
+Et **la journée du carnet imprimé suit le jour vécu** (`groupEntriesByDay`) :
+deux séances sur la même journée faisaient deux pages, datées des jours où l'on
+avait parlé. Le jour vient de l'**étape** et non du souvenir — une photo ne
+raconte aucun jour, et prise sur elle-même elle partirait dans une autre
+journée que le récit qu'elle illustre. Sans jour vécu, la page garde la date
+d'enregistrement : un carnet imprimé sans date sur une page n'a nulle part où
+mettre son blanc, là où un écran peut simplement se taire.
+
+⚠️ **`placeLabel` ne nomme plus rien.** L'en-tête d'une journée le prenait
+**avant** le lieu de l'étape (T267) : c'est un écho du lieu que le carnet avait
+donné à l'app, donc le lieu de l'étape **d'avant** le jour où l'on change de
+ville. Il reste un contexte pour la rédaction, et plus un nom — c'est la
+plainte de T280, imprimée sur soixante pages. Le champ a quitté
+`StructuringEntry`.
+
+⚠️ **Les carnets déjà en base n'ont aucun jour vécu**, et ils n'en auront pas :
+la colonne naît nulle partout, et personne ne peut relire à leur place ce que
+les récits disaient. Leurs étapes n'affichent donc plus de date tant que leurs
+récits ne sont pas repassés par la rédaction (« Ré-analyser », ou la reprise
+complète de `rewriteTrip.ts`, qui se paie). C'est assumé, et c'est le même
+arbitrage que T280 sur le lieu : les dates qu'ils affichaient étaient celles de
+leurs enregistrements, c'est-à-dire fausses dès qu'on avait pris du retard. Le
+carnet **imprimé**, lui, garde une date dans tous les cas.
+
+**Pas mesuré au banc** : les neuf vocaux du banc ne sont pas rejoués pour deux
+champs que le relevé rend en plus, et le coût d'un passage (1 à 2 $) ne se
+justifie pas ici. Ce qui est tenu par des tests, c'est la lecture défensive, le
+calcul des dates d'étape, le regroupement des journées et ce que les écrans
+reçoivent — pas la justesse du modèle sur « hier », qui se verra sur un vrai
+carnet.
 
 ### 26/11/2026 (soir) — L'effort de réflexion, enfin mesuré
 

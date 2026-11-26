@@ -142,13 +142,34 @@ data class TranscriptCard(
      */
     val heading: String? = null,
     /**
-     * Le jour dont on parle, pas celui de l'envoi : quelqu'un raconte souvent
-     * sa journée le soir, ou trois jours plus tard. C'est
-     * `RecordedAudio.recordedAt` qui le porte, comme
-     * `MemoDetailModel.finishRecording()` le fait déjà pour `capturedAt`.
+     * **Quand le vocal a été enregistré** — et c'est tout ce que ça dit.
+     *
+     * La fiche l'affichait comme la date de l'étape, et c'était faux : on
+     * raconte le soir, le lendemain, ou trois jours plus tard. C'est
+     * [livedFrom] qui porte le jour **vécu**, quand le récit l'a dit (T308).
+     * Gardée parce qu'elle reste vraie, et qu'elle sert à ordonner le fil.
      */
     val capturedAt: Instant,
-    val placeLabel: String? = null,
+    /**
+     * **Le ou les jours que l'étape raconte** (T308), tels que la rédaction
+     * les a compris. `null` tous les deux le plus souvent — un voyageur qui
+     * raconte sa journée ne la date pas —, et la fiche n'affiche alors aucune
+     * date plutôt qu'une date que personne n'a donnée.
+     *
+     * [livedTo] n'est renseigné que pour une **période** : une journée ne
+     * porte que [livedFrom], et la fiche en fait une date précise.
+     */
+    val livedFrom: Instant? = null,
+    val livedTo: Instant? = null,
+    /**
+     * **Le lieu que l'étape a compris**, ou `null`.
+     *
+     * Ce n'était pas ce lieu-là jusqu'au 26/11/2026 mais `placeLabel`, l'écho
+     * que l'app renvoie avec le vocal du lieu que le carnet lui avait donné :
+     * le jour où l'on change de ville, la fiche portait le nom de la
+     * précédente (T308, dans le sillage de T280).
+     */
+    val placeName: String? = null,
     /**
      * La durée du vocal d'origine, en secondes, pour que la fiche dise de quoi
      * elle est tirée. `null` pour une fiche qui ne vient pas d'un vocal.
@@ -260,7 +281,12 @@ data class TranscriptCard(
         val title: String,
         val heading: String? = null,
         @Serializable(with = InstantSerializer::class) val capturedAt: Instant,
-        val placeLabel: String? = null,
+        // Absents d'un serveur d'avant le 26/11/2026, et d'un fil du jeu
+        // d'essai : la fiche n'affiche alors pas de date, ce qui est
+        // exactement ce qu'on veut dire quand on ne sait pas.
+        @Serializable(with = InstantSerializer::class) val livedFrom: Instant? = null,
+        @Serializable(with = InstantSerializer::class) val livedTo: Instant? = null,
+        val placeName: String? = null,
         val duration: Double? = null,
         val text: String? = null,
         val isSimulated: Boolean? = null,
@@ -275,7 +301,8 @@ data class TranscriptCard(
         Surrogate.serializer(),
         {
             Surrogate(
-                it.title, it.heading, it.capturedAt, it.placeLabel, it.duration, it.text, it.isSimulated,
+                it.title, it.heading, it.capturedAt, it.livedFrom, it.livedTo, it.placeName, it.duration,
+                it.text, it.isSimulated,
                 it.entryId, it.footnote, it.phase, it.isValidated, it.freeCorrectionCharactersLeft,
             )
         },
@@ -284,7 +311,9 @@ data class TranscriptCard(
                 title = it.title,
                 heading = it.heading,
                 capturedAt = it.capturedAt,
-                placeLabel = it.placeLabel,
+                livedFrom = it.livedFrom,
+                livedTo = it.livedTo,
+                placeName = it.placeName,
                 duration = it.duration,
                 text = it.text,
                 isSimulated = it.isSimulated ?: false,

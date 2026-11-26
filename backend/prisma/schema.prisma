@@ -1097,8 +1097,25 @@ model MemoStep {
   destinationName        String?
   destinationCountryCode String?
 
+  /// **Quand on en a parlé** : les premier et dernier enregistrements de ses
+  /// souvenirs. Ce sont elles qui ordonnent le carnet et qui datent le relevé
+  /// météo (`services/weatherLookup.ts`), lequel a besoin d'un jour même
+  /// approximatif. Ce ne sont **pas** les dates que les écrans affichent —
+  /// voir `livedFromDay` juste en dessous.
   startDate DateTime?
   endDate   DateTime?
+
+  /// **Les jours que l'étape raconte**, quand ses récits les disent (T308).
+  ///
+  /// Calculées par `refreshTripFacts` depuis `entries.livedFromDay` : le plus
+  /// ancien et le plus récent de ses récits. Nulles tant qu'aucun récit de
+  /// l'étape n'a situé ce qu'il raconte — et c'est **ce que les écrans
+  /// affichent** : une date comprise, ou rien.
+  ///
+  /// Comme sur le souvenir, `livedToDay` ne se renseigne que pour une
+  /// période : une date précise pour une journée, une tranche pour plusieurs.
+  livedFromDay DateTime? @db.Date
+  livedToDay   DateTime? @db.Date
 
   /// La vignette de l'étape (URL CDN publique).
   ///
@@ -1397,6 +1414,26 @@ model Entry {
   /// Horodatage du souvenir lui-même, pas de l'upload — c'est lui qui sert à
   /// regrouper les entries par journée lors de la structuration.
   capturedAt DateTime @default(now())
+
+  /// **Le premier jour que ce récit raconte**, et le dernier quand il en
+  /// couvre plusieurs (T308). Nuls le plus souvent, et c'est voulu.
+  ///
+  /// `capturedAt` juste au-dessus dit quand on a **parlé** ; ces deux-là
+  /// disent quand on a **vécu**. Les deux se confondent pour une journée
+  /// racontée le soir même, et se séparent dès qu'on rattrape : un vocal du
+  /// dimanche qui raconte vendredi, trois jours de route résumés d'un coup,
+  /// une même étape reprise en deux fois.
+  ///
+  /// Remplis par la rédaction, **uniquement si le récit le dit** — « hier »,
+  /// « le premier jour », « on y a passé trois jours » — et jamais déduits
+  /// (`RedactionResult.livedFrom`). Ce qu'on ne sait pas reste nul, et
+  /// l'étape n'affiche alors aucune date : jusqu'ici elle affichait le jour
+  /// de l'enregistrement, c'est-à-dire une date que personne n'avait dite.
+  ///
+  /// `livedToDay` ne se renseigne que pour une **période** : nul avec
+  /// `livedFromDay` renseigné veut dire une seule journée, le cas courant.
+  livedFromDay DateTime? @db.Date
+  livedToDay   DateTime? @db.Date
   /// Lieu déclaré par l'app (nom lisible, ex. « Bogotá, Colombie »).
   ///
   /// ⚠️ C'est un **écho**, pas une mesure : l'app envoie le lieu de l'étape en

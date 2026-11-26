@@ -18,6 +18,7 @@ import {
   confirmRedaction,
   firstNameOf,
 } from "../services/conversationThread.js";
+import { calendarColumn } from "../services/localCalendar.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { fillMissingStepTemperaturesQuietly } from "../services/weatherLookup.js";
 
@@ -251,8 +252,10 @@ export async function redactEntry(
           ? {
               number: entry.step.number,
               placeName: entry.step.placeName,
-              startDate: entry.step.startDate,
-              endDate: entry.step.endDate,
+              // Les jours **racontés** par l'étape, pas ceux de ses envois
+              // (T308) : c'est à partir d'eux que « le lendemain » se pose.
+              livedFrom: entry.step.livedFromDay,
+              livedTo: entry.step.livedToDay,
             }
           : null,
       },
@@ -295,6 +298,12 @@ export async function redactEntry(
           // ira alors la chercher (`services/weatherLookup.ts`), et celle-ci
           // l'emportera toujours sur celle-là.
           temperatureC: result.temperatureC,
+          // **Le jour que le récit raconte** (T308), quand il le dit — et le
+          // dernier d'une période. Nuls le plus souvent : l'étape n'affiche
+          // alors aucune date, au lieu du jour de l'enregistrement.
+          // `refreshTripFacts` les remonte ensuite sur l'étape.
+          livedFromDay: result.livedFrom ? calendarColumn(result.livedFrom) : null,
+          livedToDay: result.livedTo ? calendarColumn(result.livedTo) : null,
           funFact: result.funFact,
           funFactTitle: result.funFactTitle,
           // Écrit même quand le réglage Quiz est coupé, comme le fun fact :

@@ -95,13 +95,31 @@ public struct TranscriptCard: Sendable, Hashable {
     /// rédigé (Hugo, 01/10/2026).
     public let heading: String?
 
-    /// Le jour dont on parle, pas celui de l'envoi : quelqu'un raconte souvent
-    /// sa journée le soir, ou trois jours plus tard. C'est
-    /// ``RecordedAudio/recordedAt`` qui le porte, comme
-    /// `MemoDetailModel.finishRecording()` le fait déjà pour `capturedAt`.
+    /// **Quand le vocal a été enregistré** — et c'est tout ce que ça dit.
+    ///
+    /// La fiche l'affichait comme la date de l'étape, et c'était faux : on
+    /// raconte le soir, le lendemain, ou trois jours plus tard. C'est
+    /// ``livedFrom`` qui porte le jour **vécu**, quand le récit l'a dit (T308).
+    /// Gardée parce qu'elle reste vraie, et qu'elle sert à ordonner le fil.
     public let capturedAt: Date
 
-    public let placeLabel: String?
+    /// **Le ou les jours que l'étape raconte** (T308), tels que la rédaction
+    /// les a compris. `nil` tous les deux le plus souvent — un voyageur qui
+    /// raconte sa journée ne la date pas —, et la fiche n'affiche alors aucune
+    /// date plutôt qu'une date que personne n'a donnée.
+    ///
+    /// ``livedTo`` n'est renseigné que pour une **période** : une journée ne
+    /// porte que ``livedFrom``, et la fiche en fait une date précise.
+    public let livedFrom: Date?
+    public let livedTo: Date?
+
+    /// **Le lieu que l'étape a compris**, ou `nil`.
+    ///
+    /// Ce n'était pas ce lieu-là jusqu'au 26/11/2026 mais `placeLabel`, l'écho
+    /// que l'app renvoie avec le vocal du lieu que le carnet lui avait donné :
+    /// le jour où l'on change de ville, la fiche portait le nom de la
+    /// précédente (T308, dans le sillage de T280).
+    public let placeName: String?
 
     /// La durée du vocal d'origine, pour que la fiche dise de quoi elle est
     /// tirée. `nil` pour une fiche qui ne vient pas d'un vocal.
@@ -189,7 +207,9 @@ public struct TranscriptCard: Sendable, Hashable {
         title: String,
         heading: String? = nil,
         capturedAt: Date,
-        placeLabel: String? = nil,
+        livedFrom: Date? = nil,
+        livedTo: Date? = nil,
+        placeName: String? = nil,
         duration: TimeInterval? = nil,
         text: String? = nil,
         isSimulated: Bool = false,
@@ -205,7 +225,9 @@ public struct TranscriptCard: Sendable, Hashable {
         self.title = title
         self.heading = heading
         self.capturedAt = capturedAt
-        self.placeLabel = placeLabel
+        self.livedFrom = livedFrom
+        self.livedTo = livedTo
+        self.placeName = placeName
         self.duration = duration
         self.text = text
         self.isSimulated = isSimulated
@@ -225,7 +247,9 @@ public struct TranscriptCard: Sendable, Hashable {
             title: title,
             heading: heading,
             capturedAt: capturedAt,
-            placeLabel: placeLabel,
+            livedFrom: livedFrom,
+            livedTo: livedTo,
+            placeName: placeName,
             duration: duration,
             text: text,
             isSimulated: isSimulated,
@@ -252,7 +276,8 @@ public struct TranscriptCard: Sendable, Hashable {
 
 extension TranscriptCard: Codable {
     private enum CodingKeys: String, CodingKey {
-        case title, heading, capturedAt, placeLabel, duration, text, isSimulated, entryId, footnote
+        case title, heading, capturedAt, livedFrom, livedTo, placeName, duration, text, isSimulated
+        case entryId, footnote
         case phase, isValidated, freeCorrectionCharactersLeft
         case rawText, writtenText, prefersTranscript
     }
@@ -263,7 +288,12 @@ extension TranscriptCard: Codable {
             title: try container.decode(String.self, forKey: .title),
             heading: try container.decodeIfPresent(String.self, forKey: .heading),
             capturedAt: try container.decode(Date.self, forKey: .capturedAt),
-            placeLabel: try container.decodeIfPresent(String.self, forKey: .placeLabel),
+            // Absents d'un serveur d'avant le 26/11/2026, et d'un fil du jeu
+            // d'essai : la fiche n'affiche alors pas de date, ce qui est
+            // exactement ce qu'on veut dire quand on ne sait pas.
+            livedFrom: try container.decodeIfPresent(Date.self, forKey: .livedFrom),
+            livedTo: try container.decodeIfPresent(Date.self, forKey: .livedTo),
+            placeName: try container.decodeIfPresent(String.self, forKey: .placeName),
             duration: try container.decodeIfPresent(TimeInterval.self, forKey: .duration),
             text: try container.decodeIfPresent(String.self, forKey: .text),
             isSimulated: try container.decodeIfPresent(Bool.self, forKey: .isSimulated) ?? false,
@@ -284,7 +314,9 @@ extension TranscriptCard: Codable {
         try container.encode(title, forKey: .title)
         try container.encodeIfPresent(heading, forKey: .heading)
         try container.encode(capturedAt, forKey: .capturedAt)
-        try container.encodeIfPresent(placeLabel, forKey: .placeLabel)
+        try container.encodeIfPresent(livedFrom, forKey: .livedFrom)
+        try container.encodeIfPresent(livedTo, forKey: .livedTo)
+        try container.encodeIfPresent(placeName, forKey: .placeName)
         try container.encodeIfPresent(duration, forKey: .duration)
         try container.encodeIfPresent(text, forKey: .text)
         try container.encode(isSimulated, forKey: .isSimulated)

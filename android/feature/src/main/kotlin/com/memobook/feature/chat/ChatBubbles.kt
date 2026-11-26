@@ -1084,7 +1084,11 @@ object ChatTranscriptBubble {
     }
 
     fun accessibilityText(card: TranscriptCard, stage: Stage): String {
-        val day = ChatCopy.Voice.transcript(title = card.title, day = card.capturedAt.chatFullDayLabel)
+        // Le titre seul quand aucune date n'est comprise : TalkBack annonçait
+        // la date d'enregistrement comme celle de l'étape (T308).
+        val day = card.livedDatesSpokenLabel
+            ?.let { ChatCopy.Voice.transcript(title = card.title, day = it) }
+            ?: card.title
         val state = when (stage) {
             Stage.Listening -> ChatCopy.transcriptPending
             Stage.Writing -> "${ChatCopy.transcriptWriting} ${card.text.orEmpty()}"
@@ -1113,10 +1117,21 @@ private fun TranscriptHeading(card: TranscriptCard) {
                 Box(Modifier.padding(start = MemoBookSpacing.xs)) { Glyph(R.drawable.icon_lucide_check, glyph, MemoBookColor.action) }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.snug), verticalAlignment = Alignment.CenterVertically) {
-            Glyph(R.drawable.icon_lucide_calendar, glyph, MemoBookColor.ink)
-            BrandText(card.capturedAt.chatDayLabel, MemoBookFont.caption)
-            card.placeLabel?.let { BrandText(it, MemoBookFont.caption, color = MemoBookColor.inkMuted, maxLines = 1) }
+        // **La date et le lieu, une fois compris** (T308) — sinon rien. La
+        // ligne portait le jour de l'enregistrement et l'écho du lieu renvoyé
+        // par l'app : un dimanche sur une journée de vendredi, et le nom de la
+        // ville précédente le jour où l'on en change. La ligne disparaît quand
+        // on ne sait rien — le calendrier avec elle, qui n'annoncerait plus
+        // aucune date.
+        val dates = card.livedDatesLabel
+        if (dates != null || card.placeName != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.snug), verticalAlignment = Alignment.CenterVertically) {
+                if (dates != null) {
+                    Glyph(R.drawable.icon_lucide_calendar, glyph, MemoBookColor.ink)
+                    BrandText(dates, MemoBookFont.caption)
+                }
+                card.placeName?.let { BrandText(it, MemoBookFont.caption, color = MemoBookColor.inkMuted, maxLines = 1) }
+            }
         }
     }
 }

@@ -230,7 +230,16 @@ describe("ce qu'on demande au modèle, et ce qu'on en ressort", () => {
       required: string[];
     };
 
-    expect(Object.keys(releve.properties)).toEqual(["coherenceAdditions", "insights", "temperatureC"]);
+    // `livedFrom` et `livedTo` ont rejoint le relevé le 26/11/2026 (T308), et
+    // pour la même raison que `temperatureC` : on n'ajoute rien au récit, dont
+    // la grammaire compilée a déjà dépassé une fois.
+    expect(Object.keys(releve.properties)).toEqual([
+      "coherenceAdditions",
+      "insights",
+      "temperatureC",
+      "livedFrom",
+      "livedTo",
+    ]);
     expect(releve.required).toContain("coherenceAdditions");
     expect(releve.properties.coherenceSheet).toBeUndefined();
   });

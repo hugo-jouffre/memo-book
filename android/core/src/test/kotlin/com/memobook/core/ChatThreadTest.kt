@@ -298,7 +298,8 @@ class ChatThreadDecodingTest {
               "sentAt": "2026-09-21T18:02:11.000Z", "stepId": "step-3", "disposition": "memory", "pauseMilliseconds": null },
             { "id": "m3", "seq": 3, "author": "memo", "authorName": null,
               "body": { "kind": "transcript", "transcript": { "title": "Retranscription du contexte",
-                        "capturedAt": "2026-09-21T18:02:11.000Z", "placeLabel": "Trastevere, Rome", "duration": 37,
+                        "capturedAt": "2026-09-21T18:02:11.000Z", "livedFrom": "2026-09-20T00:00:00.000Z",
+                        "livedTo": null, "placeName": "Trastevere", "duration": 37,
                         "text": "Ce matin…", "isSimulated": false, "entryId": "e1", "footnote": null,
                         "phase": "writing", "isValidated": false } },
               "sentAt": "2026-09-21T18:02:12.000Z", "stepId": "step-3", "disposition": null, "pauseMilliseconds": 2800 }

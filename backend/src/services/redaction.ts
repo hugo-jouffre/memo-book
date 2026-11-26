@@ -215,8 +215,15 @@ export interface RedactionInput {
     step?: {
       number: number;
       placeName: string | null;
-      startDate: Date | null;
-      endDate: Date | null;
+      /**
+       * **Les jours que l'étape raconte**, et non ceux où on les a envoyés
+       * (T308) : c'est ce que l'écrivain doit avoir sous les yeux pour poser
+       * « le lendemain ». Nuls tant qu'aucun récit de l'étape ne s'est situé,
+       * et le prompt n'affiche alors aucune date — la date d'envoi du vocal,
+       * elle, y est toujours.
+       */
+      livedFrom?: Date | null;
+      livedTo?: Date | null;
     } | null;
   };
   coherenceSheet: CoherenceSheet;
@@ -445,6 +452,26 @@ export interface RedactionResult {
    * pas la rédaction.
    */
   temperatureC: number | null;
+  /**
+   * **Le jour que ce récit raconte**, et le dernier quand il en couvre
+   * plusieurs (T308). `null` tous les deux le plus souvent, et c'est voulu.
+   *
+   * Un vocal dit **quand on en parle** ; il ne dit pas toujours quand on a
+   * vécu. L'étape affichait jusqu'ici le jour de l'enregistrement, c'est-à-dire
+   * une date que personne n'avait donnée : un dimanche pour une journée de
+   * vendredi, et une « tranche » de trois jours pour une étape racontée en
+   * trois fois.
+   *
+   * Relevés, jamais déduits — même règle que `temperatureC` juste au-dessus :
+   * « hier », « le premier jour », « on y a passé trois jours ». Au moindre
+   * doute, `null`, et l'étape se taira plutôt que d'inventer. Relus ensuite
+   * contre la fenêtre du voyage (``parseLivedDays``).
+   *
+   * `livedTo` ne se renseigne que pour une **période** : une journée n'a
+   * qu'un `livedFrom`.
+   */
+  livedFrom: LocalDate | null;
+  livedTo: LocalDate | null;
   funFact: string | null;
   funFactTitle: string | null;
   /** Le quiz de l'étape, ou `null` — le plus souvent. Voir `withinQuizLimits`. */
@@ -626,6 +653,30 @@ export function parsePartOfDay(value: unknown): PartOfDay | null {
   if (typeof value !== "string") return null;
   const found = PARTS_OF_DAY.find((part) => part === value.trim().toLowerCase());
   return found ?? null;
+}
+
+/**
+ * **Les jours que le récit raconte**, relus comme ceux d'un moment : contre la
+ * fenêtre du voyage, et sans rien accepter de bancal (T308).
+ *
+ * Trois refus, et dans les trois cas on ne garde rien plutôt qu'à moitié :
+ *
+ * - un **début** illisible ou hors du voyage efface aussi la fin : une fin
+ *   sans début ne situe rien, et afficherait « jusqu'au 14 avril » tout seul ;
+ * - une **fin** illisible ou hors du voyage redevient nulle, et l'étape
+ *   raconte alors une journée — ce qu'elle disait déjà sans elle ;
+ * - une fin **le même jour ou avant** le début n'est pas une période : nulle
+ *   aussi. C'est ce qui rend la règle simple partout ailleurs — une fin
+ *   renseignée veut dire une tranche, toujours.
+ */
+export function parseLivedDays(
+  value: { livedFrom?: unknown; livedTo?: unknown },
+  trip?: { startDate: Date | null; endDate: Date | null },
+): { livedFrom: LocalDate | null; livedTo: LocalDate | null } {
+  const from = parseMomentDay(value.livedFrom, trip);
+  if (!from) return { livedFrom: null, livedTo: null };
+  const to = parseMomentDay(value.livedTo, trip);
+  return { livedFrom: from, livedTo: to && to > from ? to : null };
 }
 
 /**
@@ -825,6 +876,23 @@ const REDACTION_SCHEMA = {
         "« moins 5 ce matin », « 86 degrés Fahrenheit » → convertis en Celsius). Entier, négatif " +
         "l'hiver. null dans tous les autres cas : rien ne se déduit du lieu, de la saison ni du " +
         "temps qu'il fait — une température supposée est une invention.",
+    },
+    livedFrom: {
+      anyOf: [{ type: "string" }, { type: "null" }],
+      description:
+        "Le premier jour que ce récit raconte, au format AAAA-MM-JJ, UNIQUEMENT si le récit le " +
+        "situe — « hier », « le premier jour », « mardi », « le lendemain » — et que la date " +
+        "d'envoi du vocal et les dates du voyage te permettent de le poser sans deviner. null " +
+        "dès qu'il y a le moindre doute, et c'est le cas le plus fréquent : un voyageur qui " +
+        "raconte sa journée ne la date pas. Ne le déduis jamais de la date d'envoi : parler le " +
+        "dimanche ne veut pas dire avoir vécu le dimanche.",
+    },
+    livedTo: {
+      anyOf: [{ type: "string" }, { type: "null" }],
+      description:
+        "Le dernier jour que ce récit raconte, au format AAAA-MM-JJ, UNIQUEMENT quand il couvre " +
+        "plusieurs journées et que le récit dit laquelle le termine — « on y a passé trois " +
+        "jours », « du lundi au jeudi ». null pour une seule journée, et c'est le cas courant.",
     },
     funFact: {
       anyOf: [{ type: "string" }, { type: "null" }],
@@ -1098,6 +1166,8 @@ const REDACTION_SCHEMA = {
     "quiz",
     "coherenceAdditions",
     "insights",
+    "livedFrom",
+    "livedTo",
     "doubts",
     "continuesPrevious",
     "moments",
@@ -1152,12 +1222,19 @@ const RECIT_KEYS = [
  * sans que rien ne le dise. On ne rajoute pas un champ dans ce bloc pour la
  * commodité.
  *
+ * **`livedFrom` et `livedTo` y sont pour la même raison** (T308). Leur place
+ * naturelle est aussi le récit : ce sont des faits relevés du vocal. Mais le
+ * récit est le bloc qui a fait dépasser la grammaire, et on n'y ajoute rien
+ * pour la commodité — surtout pas deux champs. Le relevé, lui, voit la
+ * transcription entière et la date d'envoi du vocal : il a tout ce qu'il faut
+ * pour situer « hier ».
+ *
  * Le relevé n'en compte que deux, et il voit la même chose : `buildRelevePrompt`
  * reprend **tout** le prompt du récit, transcription comprise, avant d'y
  * ajouter le texte écrit. Une température dite dans le vocal lui est donc
  * accessible, même si le récit ne l'a pas reprise.
  */
-const RELEVE_KEYS = ["coherenceAdditions", "insights", "temperatureC"] as const;
+const RELEVE_KEYS = ["coherenceAdditions", "insights", "temperatureC", "livedFrom", "livedTo"] as const;
 
 function sousSchema(keys: readonly string[]) {
   const properties = Object.fromEntries(
@@ -1175,10 +1252,13 @@ export const RELEVE_SCHEMA = sousSchema(RELEVE_KEYS);
  * entière, recousue par ``mergeCoherenceSheet``. C'est la seule différence
  * entre ce que le modèle rend et ce que la rédaction rend.
  */
-type RelevePart = Pick<RedactionResult, "insights" | "temperatureC"> & {
+type RelevePart = Pick<RedactionResult, "insights" | "temperatureC" | "livedFrom" | "livedTo"> & {
   coherenceAdditions: CoherenceAdditions;
 };
-type RecitPart = Omit<RedactionResult, "model" | "coherenceSheet" | "insights" | "temperatureC">;
+type RecitPart = Omit<
+  RedactionResult,
+  "model" | "coherenceSheet" | "insights" | "temperatureC" | "livedFrom" | "livedTo"
+>;
 
 /**
  * Le relevé ne rédige pas : il lit le texte écrit et en tire des listes. Un
@@ -1415,7 +1495,7 @@ export function buildRedactionPrompt(input: RedactionInput): string {
 
   lines.push("", "## L'étape à rédiger");
   if (entry.step) {
-    const stepDays = dayRange(entry.step.startDate, entry.step.endDate);
+    const stepDays = dayRange(entry.step.livedFrom ?? null, entry.step.livedTo ?? null);
     lines.push(
       `Étape n°${entry.step.number} du voyage` +
         (entry.step.placeName ? ` — ${entry.step.placeName}` : "") +
@@ -1501,7 +1581,8 @@ function buildRelevePrompt(input: RedactionInput, texte: string): string {
     texte,
     "",
     "## Ce qui t'est demandé maintenant",
-    "Tu n'écris plus : tu relèves. Rends seulement `coherenceAdditions`, `insights` et `temperatureC`.",
+    "Tu n'écris plus : tu relèves. Rends seulement `coherenceAdditions`, `insights`, " +
+      "`temperatureC`, `livedFrom` et `livedTo`.",
     "- `coherenceAdditions` : **seulement ce que cette étape ajoute** à la fiche de cohérence.",
     "  La fiche d'avant, donnée plus haut, est gardée telle quelle : ne la recopie pas. Une",
     "  personne, un lieu, un mot ou un chiffre qui y figure déjà ne se redonne pas, et rien ne",
@@ -1512,6 +1593,12 @@ function buildRelevePrompt(input: RedactionInput, texte: string): string {
     "- `temperatureC` : la température **dite** par le voyageur, en degrés Celsius entiers. Lis la",
     "  transcription, pas le texte réécrit — elle a pu y disparaître. `null` si elle n'est pas dite,",
     "  et c'est le cas courant : une température se relève, elle ne se devine pas.",
+    "- `livedFrom` et `livedTo` : **le ou les jours que ce récit raconte**, pas celui où il a été",
+    "  enregistré. La date d'envoi est donnée plus haut, les dates du voyage aussi : elles servent",
+    "  à poser « hier » ou « le premier jour », jamais à supposer qu'on raconte le jour même. Une",
+    "  seule journée ne remplit que `livedFrom` ; `livedTo` est pour une période que le récit",
+    "  borne lui-même. `null` au moindre doute — c'est le cas le plus fréquent, et une étape sans",
+    "  date vaut mieux qu'une étape mal datée.",
   ].join("\n");
 }
 
@@ -1655,6 +1742,12 @@ export class AnthropicRedactor implements Redactor {
       ...recit,
       insights: releve.insights,
       temperatureC: releve.temperatureC,
+      // Relus contre la fenêtre du voyage, comme le jour d'un moment : un
+      // « hier » mal posé rangerait l'étape hors du carnet (``parseLivedDays``).
+      ...parseLivedDays(releve, {
+        startDate: input.memo.startDate ?? null,
+        endDate: input.memo.endDate ?? null,
+      }),
       // La fiche entière se recoud **ici** : le modèle n'a rendu que le neuf.
       coherenceSheet: mergeCoherenceSheet(input.coherenceSheet, releve.coherenceAdditions),
     };
@@ -1731,6 +1824,10 @@ export class FakeRedactor implements Redactor {
       // Le faux rédacteur ne relève pas de température : les tests qui en
       // veulent une la posent eux-mêmes, et l'étape ira la chercher ailleurs.
       temperatureC: null,
+      // Le simulé ne relève pas de date : il ne lit pas, il nettoie. Les
+      // tests qui ont besoin d'un jour vécu l'écrivent eux-mêmes.
+      livedFrom: null,
+      livedTo: null,
       funFact: null,
       funFactTitle: null,
       // Ni fait du lieu ni mémoire du carnet : le faux rédacteur ne pose pas de quiz.

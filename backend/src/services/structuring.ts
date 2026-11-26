@@ -40,16 +40,40 @@ export interface StructuringEntry {
   quiz?: BookQuiz | null;
   /** Icône météo déjà choisie par la rédaction. */
   weatherKey: string | null;
-  capturedAt: Date;
-  placeLabel: string | null;
   /**
-   * **Le lieu de l'étape qui porte ce souvenir** (T267, 18/11/2026) — le
-   * repli de l'en-tête quand le vocal ne dit pas où l'on est.
+   * **Quand le souvenir a été enregistré.** Sert de repli pour dater la
+   * journée quand l'étape ne dit pas ce qu'elle raconte (``livedDay``).
+   */
+  capturedAt: Date;
+  /**
+   * **Le jour que l'étape raconte** (T308), `AAAA-MM-JJ`, quand un de ses
+   * récits l'a dit. C'est lui qui regroupe et qui date la journée du carnet.
+   *
+   * Pris sur l'**étape** et non sur le souvenir, et c'est ce qui compte : une
+   * photo ne raconte aucun jour, et prise sur elle-même elle partirait dans
+   * une autre journée que le récit qu'elle illustre. Les souvenirs d'une étape
+   * restent ensemble, et deux séances qui racontent le même jour se
+   * retrouvent sur la même page — « une étape se raconte en plusieurs fois ».
+   *
+   * Absent, et c'est le cas de tout ce qui précède le 26/11/2026 : la journée
+   * se regroupe et se date sur `capturedAt`, comme avant. Le carnet imprimé
+   * garde une date dans tous les cas — une page sans date n'a nulle part où
+   * mettre son blanc, là où un écran peut simplement se taire.
+   */
+  livedDay?: string | null;
+  /**
+   * **Le lieu de l'étape qui porte ce souvenir** (T267, 18/11/2026), et le
+   * seul qui nomme une journée depuis T308.
    *
    * Ce n'est pas une déduction : depuis T227, un souvenir est rangé dans une
    * étape, et cette étape a un lieu. L'en-tête d'une journée n'imprimait
-   * pourtant que `placeLabel`, relevé du vocal — absent, elle n'affichait
-   * qu'une date.
+   * pourtant que `placeLabel` — absent, elle n'affichait qu'une date.
+   *
+   * ⚠️ **Et `placeLabel` est parti** (T308) : ce champ-là n'était qu'un écho.
+   * L'app renvoie avec le vocal le lieu que le carnet lui avait donné, donc
+   * le lieu de l'étape **d'avant** le jour où l'on change de ville — et il
+   * passait devant celui de l'étape. Un lieu faux imprimé sur soixante pages
+   * est exactement la plainte de T280 ; l'étape, elle, se recalcule.
    *
    * Mesuré sur la production avant d'y toucher : **15 journées de carnet sur
    * 35 (43 %) sans lieu**, dont **7** que l'étape rattrape. Les journées
@@ -135,21 +159,47 @@ function dayKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Regroupe les entrées par journée civile, dans l'ordre chronologique. */
+/**
+ * **Le jour sous lequel ce souvenir se range** : celui que son étape raconte,
+ * sinon celui de son enregistrement (T308).
+ */
+function groupingDay(entry: StructuringEntry): string {
+  return entry.livedDay ?? dayKey(entry.capturedAt);
+}
+
+/**
+ * Regroupe les entrées par journée, dans l'ordre chronologique.
+ *
+ * **La journée est celle qu'on a vécue**, quand l'étape le dit (T308) : un
+ * vocal du dimanche qui raconte vendredi imprimait « dimanche » sur la page,
+ * et deux séances sur la même journée en faisaient deux pages. Le repli reste
+ * la date d'enregistrement, qui est ce que le carnet a toujours fait.
+ *
+ * L'ordre suit donc le jour vécu d'abord — sinon une journée rattrapée se
+ * serait rangée après celles d'après.
+ */
 export function groupEntriesByDay(
   entries: StructuringEntry[],
 ): { key: string; date: Date; entries: StructuringEntry[] }[] {
   const buckets = new Map<string, { key: string; date: Date; entries: StructuringEntry[] }>();
 
-  for (const entry of [...entries].sort(
-    (a, b) => a.capturedAt.getTime() - b.capturedAt.getTime(),
-  )) {
-    const key = dayKey(entry.capturedAt);
+  for (const entry of [...entries].sort((a, b) => {
+    const day = groupingDay(a).localeCompare(groupingDay(b));
+    return day !== 0 ? day : a.capturedAt.getTime() - b.capturedAt.getTime();
+  })) {
+    const key = groupingDay(entry);
     const bucket = buckets.get(key);
     if (bucket) {
       bucket.entries.push(entry);
     } else {
-      buckets.set(key, { key, date: entry.capturedAt, entries: [entry] });
+      // La date imprimée est celle de la clé : minuit UTC du jour vécu, ou
+      // l'instant de l'enregistrement quand on ne sait pas. Les deux
+      // formateurs lisent en UTC.
+      buckets.set(key, {
+        key,
+        date: entry.livedDay ? new Date(`${entry.livedDay}T00:00:00Z`) : entry.capturedAt,
+        entries: [entry],
+      });
     }
   }
 
@@ -415,15 +465,13 @@ export class HeuristicStructurer implements Structurer {
         .filter((text): text is string => Boolean(text))
         .join(" ");
 
-      // **Ce que le voyageur a dit d'abord, l'étape ensuite** (T267). Et rien
-      // de plus : pas la ville du voyage, qui imprimerait « Tokyo » sur une
-      // journée passée à Kyoto — c'est très exactement la plainte de T280, et
-      // deux journées rattrapées ne valent pas ce risque. Sans lieu, l'en-tête
-      // n'en affiche pas, et MEMO le demandera (reste de T267).
-      const place =
-        group.entries.find((entry) => entry.placeLabel)?.placeLabel ??
-        group.entries.find((entry) => entry.stepPlace)?.stepPlace ??
-        null;
+      // **Le lieu de l'étape, et lui seul** (T308). Pas l'écho que l'app
+      // renvoie avec le vocal, qui nomme l'étape d'avant le jour où l'on
+      // change de ville ; pas la ville du voyage non plus, qui imprimerait
+      // « Tokyo » sur une journée passée à Kyoto — c'est très exactement la
+      // plainte de T280. Sans lieu, l'en-tête n'en affiche pas, et MEMO le
+      // demandera (reste de T267).
+      const place = group.entries.find((entry) => entry.stepPlace)?.stepPlace ?? null;
 
       // Titre, météo et encart viennent de la rédaction quand elle est passée.
       // Le repli déterministe ne réinvente que ce qui manque.
@@ -588,9 +636,10 @@ export class LlmStructurer implements Structurer {
     for (const [index, group] of groups.entries()) {
       lines.push("", `### Journée ${index + 1} — ${DATE_FORMATTER.format(group.date)}`);
       for (const entry of group.entries) {
-        // Le lieu dit, sinon celui de l'étape (T267) : sans ça le modèle
-        // écrirait une journée sans lieu là où le repli déterministe en a un.
-        const lieu = entry.placeLabel ?? entry.stepPlace ?? null;
+        // Le lieu de l'étape (T308) : le même que celui du repli
+        // déterministe, sinon le modèle écrirait une journée sans lieu là où
+        // le repli en a un — ou, pire, le lieu de l'étape d'avant.
+        const lieu = entry.stepPlace ?? null;
         if (lieu) lines.push(`Lieu : ${lieu}`);
         if (entry.title) lines.push(`Titre (à reprendre tel quel) : ${entry.title}`);
         if (entry.weatherKey) lines.push(`weather_key (déjà choisi) : ${entry.weatherKey}`);

@@ -19,7 +19,15 @@ let clock = 0;
 /** Un souvenir raconté, dans l'ordre où il a été vécu. */
 function story(
   id: string,
-  options: { continues?: boolean; place?: string; pinnedStepId?: string; stepId?: string } = {},
+  options: {
+    continues?: boolean;
+    place?: string;
+    pinnedStepId?: string;
+    stepId?: string;
+    /** Le jour que le récit raconte, et le dernier d'une période (T308). */
+    livedFrom?: string;
+    livedTo?: string;
+  } = {},
 ) {
   clock += 1;
   const at = new Date(Date.UTC(2026, 0, 1, clock));
@@ -34,6 +42,8 @@ function story(
     continuesPrevious: options.continues ?? false,
     pinnedStepId: options.pinnedStepId ?? null,
     capturedPlaceName: null,
+    livedFromDay: options.livedFrom ? new Date(`${options.livedFrom}T00:00:00Z`) : null,
+    livedToDay: options.livedTo ? new Date(`${options.livedTo}T00:00:00Z`) : null,
   };
 }
 
@@ -58,6 +68,9 @@ function photo(id: string, place?: string) {
     continuesPrevious: false,
     pinnedStepId: null,
     capturedPlaceName: place ?? null,
+    // Une photo ne raconte rien : elle ne date aucune étape (T308).
+    livedFromDay: null,
+    livedToDay: null,
   };
 }
 

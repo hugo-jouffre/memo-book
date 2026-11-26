@@ -1,5 +1,6 @@
 package com.memobook.feature.chat
 
+import com.memobook.core.TranscriptCard
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -37,6 +38,50 @@ val Instant.chatFullDayLabel: String
 
 fun Instant.chatFullDayLabel(locale: Locale, zone: ZoneId): String =
     DateTimeFormatter.ofPattern("EEEE d MMMM y", locale).format(atZone(zone))
+
+/**
+ * **La date que la fiche affiche** : celle que le récit raconte, et `null`
+ * quand il ne s'est pas situé (T308). Jumeau de `TranscriptCard.livedDatesLabel`.
+ *
+ * Une journée donne « 28 août », une période « 28–30 août » : l'année n'y est
+ * pas, comme pour [chatDayLabel] — dans un fil, elle est presque toujours
+ * celle du jour. Ce que les deux bornes partagent ne s'écrit qu'une fois,
+ * comme l'intervalle de `TripDates`.
+ *
+ * `null` n'est pas un trou à combler : la fiche n'affichait le jour de
+ * l'**enregistrement** que faute de mieux, et un dimanche imprimé sur une
+ * journée de vendredi est pire qu'une fiche sans date.
+ */
+val TranscriptCard.livedDatesLabel: String?
+    get() = livedDatesLabel(Locale.getDefault(), ZoneId.systemDefault())
+
+fun TranscriptCard.livedDatesLabel(locale: Locale, zone: ZoneId): String? {
+    val from = livedFrom ?: return null
+    val to = livedTo
+    if (to == null || to <= from) return from.chatDayLabel(locale, zone)
+    val start = from.atZone(zone)
+    val end = to.atZone(zone)
+    val day = DateTimeFormatter.ofPattern("d", locale)
+    return if (start.monthValue == end.monthValue && start.year == end.year) {
+        "${day.format(start)}–${to.chatDayLabel(locale, zone)}"
+    } else {
+        "${from.chatDayLabel(locale, zone)} – ${to.chatDayLabel(locale, zone)}"
+    }
+}
+
+/**
+ * La même chose pour TalkBack : en toutes lettres, avec l'année — une annonce
+ * vocale ne se relit pas.
+ */
+val TranscriptCard.livedDatesSpokenLabel: String?
+    get() = livedDatesSpokenLabel(Locale.getDefault(), ZoneId.systemDefault())
+
+fun TranscriptCard.livedDatesSpokenLabel(locale: Locale, zone: ZoneId): String? {
+    val from = livedFrom ?: return null
+    val to = livedTo
+    if (to == null || to <= from) return from.chatFullDayLabel(locale, zone)
+    return "${from.chatFullDayLabel(locale, zone)} – ${to.chatFullDayLabel(locale, zone)}"
+}
 
 /**
  * « 0:37 » — la durée, en secondes (le `TimeInterval` d'iOS), sous une forme
