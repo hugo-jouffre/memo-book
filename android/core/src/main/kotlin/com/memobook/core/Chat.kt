@@ -838,6 +838,24 @@ data class ChatSuggestion(
          */
         data class Unknown(override val rawValue: String) : Intent
 
+        /**
+         * **La puce dit-elle quelque chose ?** (T304)
+         *
+         * Deux intentions n'envoient aucun libellé : importer des photos et
+         * ouvrir l'aperçu. Elles ouvrent un outil, c'est tout — « on ne dit
+         * pas *j'importe des photos*, on les importe ».
+         *
+         * Ce n'est pas qu'une affaire d'envoi : ce qui ne parle pas ne doit
+         * pas **voler** non plus. La bulle bleue qui partait de la puce vers
+         * le fil, puis disparaissait sans rien y laisser, se lisait comme un
+         * message perdu (T304).
+         */
+        val speaks: Boolean
+            get() = when (this) {
+                ImportPhotos, OpenPreview -> false
+                Send, SendThenWrite, SendThenEditTranscript, SendThenSpeak, is Unknown -> true
+            }
+
         companion object {
             fun from(raw: String): Intent = when (raw) {
                 "send" -> Send

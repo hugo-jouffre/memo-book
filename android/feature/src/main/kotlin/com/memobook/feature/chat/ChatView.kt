@@ -804,7 +804,12 @@ private fun ChatConversation(
                         onOpenFromServer(ChatIntent.OpenBookPreview(tripId))
                         return@launch
                     }
-                    if (reduceMotion || flight != null) {
+                    // **Ce qui ne parle pas ne vole pas** (T304) :
+                    // « Importer des photos » ouvre le sélecteur, et rien
+                    // d'autre. La bulle bleue qui partait de la puce et
+                    // s'effaçait au bas du fil sans rien y laisser se lisait
+                    // comme un message perdu — un bug, pour qui la regarde.
+                    if (!suggestion.intent.speaks || reduceMotion || flight != null) {
                         model.choose(suggestion, addPhotos = onAddPhotos)
                         return@launch
                     }
@@ -813,8 +818,6 @@ private fun ChatConversation(
                     scope.launch {
                         fly(
                             launched,
-                            // « Ajouter des photos » ne devient pas une bulle : rien à lever pour elle.
-                            lifts = suggestion.intent != ChatSuggestion.Intent.ImportPhotos,
                             wasAtBottom = isAtBottom,
                             minimumRow = with(density) { MemoBookSpacing.minimumTapTarget.toPx() },
                             spacing = with(density) { ChatMetrics.messageSpacing.toPx() },
@@ -851,22 +854,19 @@ private fun ChatConversation(
  */
 private suspend fun fly(
     flight: SuggestionFlight,
-    lifts: Boolean,
     wasAtBottom: Boolean,
     minimumRow: Float,
     spacing: Float,
     scrollDown: () -> Unit,
     land: () -> Unit,
 ) {
-    if (lifts && !wasAtBottom) scrollDown()
+    if (!wasAtBottom) scrollDown()
     // Une image pour que la bulle en vol soit mesurée et posée sur la puce
     // avant de partir — pas plus : le creux doit s'ouvrir **dès** l'appui.
     delay(16)
     kotlinx.coroutines.coroutineScope {
-        if (lifts) {
-            val row = maxOf(flight.size.height.toFloat(), minimumRow)
-            launch { flight.lift.animateTo(row + spacing, SwiftMotion.snappy(0.25f)) }
-        }
+        val row = maxOf(flight.size.height.toFloat(), minimumRow)
+        launch { flight.lift.animateTo(row + spacing, SwiftMotion.snappy(0.25f)) }
         launch { flight.progress.animateTo(1f, SwiftMotion.smooth(0.5f)) }
         delay(480)
     }

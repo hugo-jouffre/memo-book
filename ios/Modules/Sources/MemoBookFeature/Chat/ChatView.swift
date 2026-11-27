@@ -659,20 +659,25 @@ public struct ChatView: View {
             openFromServer(.openBookPreview(memoId: tripId))
             return
         }
+        // **Ce qui ne parle pas ne vole pas** (T304) : « Importer des photos »
+        // ouvre le sélecteur, et rien d'autre. La bulle bleue qui partait de
+        // la puce et s'effaçait au bas du fil sans rien y laisser se lisait
+        // comme un message perdu — un bug, pour qui la regarde.
+        guard suggestion.intent.speaks else {
+            model.choose(suggestion, addPhotos: photos.begin)
+            return
+        }
         guard !reduceMotion, flight == nil else {
             model.choose(suggestion, addPhotos: photos.begin)
             return
         }
 
         flight = SuggestionFlight(suggestion: suggestion, from: frame)
-        // « Ajouter des photos » ne devient pas une bulle : rien à lever pour
-        // elle.
-        let lifts = suggestion.intent != .importPhotos
         // **Remonté dans les anciens messages, le fil redescend d'abord**
         // (Hugo, 12/10/2026) : la bulle se pose au bas du fil, et sans ça
         // elle atterrissait par-dessus les derniers messages qu'on lisait. Il
         // redescend pendant qu'elle décolle, et se lève dans le même geste.
-        if lifts, !isAtBottom, let proxy = scrollProxy {
+        if !isAtBottom, let proxy = scrollProxy {
             withAnimation(.snappy(duration: 0.25)) {
                 proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
             }
@@ -689,7 +694,7 @@ public struct ChatView: View {
             // demi-seconde : elle trouve toujours la place faite. Et il prend
             // la hauteur d'une **ligne** du fil, pas celle de la bulle — la
             // ligne ne descend jamais sous ses boutons d'action.
-            if lifts, let size = flight?.size {
+            if let size = flight?.size {
                 withAnimation(.snappy(duration: 0.25)) {
                     flight?.lift = max(size.height, MemoBookSpacing.minimumTapTarget)
                         + ChatMetrics.messageSpacing
