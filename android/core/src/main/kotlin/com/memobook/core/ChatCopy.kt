@@ -686,6 +686,14 @@ object ChatCopy {
         /** Les deux coches : le serveur l'a reçu, la retranscription commence. */
         const val delivered = "Bien reçu"
 
+        /**
+         * **L'oreille posée sur un vocal qu'on transcrit** (T316). L'emoji est
+         * séparé de ce que TalkBack annonce : lu tel quel, il se dirait
+         * « oreille », ce qui ne dit pas ce qui se passe.
+         */
+        const val listeningEar = "👂"
+        const val listening = "MEMO écoute ton vocal"
+
         /** La bulle « Partira demain », dite en entier. */
         const val leavesTomorrow =
             "Gardé sur ton téléphone : partira demain, quand le crédit du jour se rechargera"

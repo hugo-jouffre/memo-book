@@ -50,6 +50,16 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Pendant qu'un vocal se transcrit, on ne montre rien** (T316, 27/11/2026) :
+  pas de fiche en construction, juste un petit 👂 posé à côté des deux coches,
+  sur le vocal lui-même. La fiche paraissait dès l'arrivée du vocal, avec un
+  tourniquet et « Je n'ai pas encore la transcription » — une bulle vide sous
+  le message qu'on venait d'envoyer, qui disait une attente que les coches
+  disent déjà. Elle arrive maintenant **avec son texte**.
+
+  ⚠️ Le fil, lui, la porte depuis le début : c'est cette fiche-là qui tient le
+  sondage en vie jusqu'à ce que la transcription arrive. L'écran en cache une,
+  le modèle les voit toutes (`visibleMessages` et `messages`).
 - **Une puce qui ne dit rien ne vole pas** (T304, 27/11/2026). Une puce
   **parle** : son libellé part en bulle bleue, et c'est pour ça qu'elle décolle
   de la barre vers le fil (T207). Deux n'envoient rien — « Importer des

@@ -22,6 +22,7 @@ import com.memobook.core.Entry
 import com.memobook.core.EntryKind
 import com.memobook.core.Status
 import com.memobook.core.TranscriptCard
+import com.memobook.core.VoiceNote
 import com.memobook.core.Trip
 import com.memobook.core.TripStage
 import com.memobook.feature.PaywallVariant
@@ -450,6 +451,91 @@ class ChatModelTest {
         assertEquals("Ça me convient", body.text)
         assertEquals("accept", body.suggestionId)
         assertEquals("e2", body.entryId)
+    }
+
+    // MARK: - Pendant qu'un vocal se transcrit (T316)
+
+    /** Le vocal du voyageur, celui que MEMO écoute. */
+    private fun voice(id: String, entryId: String, seq: Int): ChatMessage =
+        ChatMessage(
+            id = id,
+            author = ChatAuthor.Traveller,
+            body = ChatMessageBody.Voice(VoiceNote(id = "$id-audio", duration = 12.0)),
+            sentAt = Instant.now(),
+            seq = seq,
+            entryId = entryId,
+        )
+
+    /**
+     * **La fiche vide ne se montre pas**, et l'oreille se pose sur le vocal :
+     * c'est tout ce qu'on montre pendant la transcription. Le jumeau de
+     * `testACardWithoutATranscriptStaysOutOfTheThread`.
+     */
+    @Test
+    fun aCardWithoutATranscriptStaysOutOfTheThread() = runTest {
+        val script = Script(
+            thread = thread(
+                messages = listOf(
+                    voice("vocal", entryId = "e1", seq = 1),
+                    card("fiche", entryId = "e1", text = null, phase = TranscriptCard.Phase.Listening, seq = 2),
+                ),
+            ),
+        )
+        val model = model(script)
+        model.load()
+
+        assertEquals(listOf("vocal"), model.visibleMessages.map { it.id }, "La fiche attend d'avoir un texte.")
+        assertEquals(2, model.messages.size, "Le modèle, lui, la voit : c'est elle qui tient le sondage.")
+        assertTrue(model.isBeingTranscribed(model.visibleMessages.first()))
+    }
+
+    /** **La fiche arrivée, l'oreille s'en va** et la fiche prend sa place. */
+    @Test
+    fun theEarLeavesWhenTheTranscriptArrives() = runTest {
+        val script = Script(
+            thread = thread(
+                messages = listOf(
+                    voice("vocal", entryId = "e1", seq = 1),
+                    card(
+                        "fiche",
+                        entryId = "e1",
+                        text = "Le Colisée au petit matin.",
+                        phase = TranscriptCard.Phase.Writing,
+                        seq = 2,
+                    ),
+                ),
+            ),
+        )
+        val model = model(script)
+        model.load()
+
+        assertEquals(listOf("vocal", "fiche"), model.visibleMessages.map { it.id })
+        assertFalse(model.isBeingTranscribed(model.visibleMessages.first()))
+    }
+
+    /** **Rien sur un texte** : il n'y a pas de vocal à écouter. */
+    @Test
+    fun nothingIsListenedToOnAWrittenMessage() = runTest {
+        val written = ChatMessage(
+            id = "ecrit",
+            author = ChatAuthor.Traveller,
+            body = ChatMessageBody.Text("Le Colisée au petit matin."),
+            sentAt = Instant.now(),
+            seq = 1,
+            entryId = "e1",
+        )
+        val script = Script(
+            thread = thread(
+                messages = listOf(
+                    written,
+                    card("fiche", entryId = "e1", text = null, phase = TranscriptCard.Phase.Listening, seq = 2),
+                ),
+            ),
+        )
+        val model = model(script)
+        model.load()
+
+        assertFalse(model.isBeingTranscribed(model.visibleMessages.first()))
     }
 
     /**

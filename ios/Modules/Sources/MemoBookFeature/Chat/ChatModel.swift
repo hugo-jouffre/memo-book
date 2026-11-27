@@ -545,7 +545,55 @@ public final class ChatModel {
 
     // MARK: - Ce que la vue lit
 
+    /// Le fil tel qu'il est : **toutes** ses bulles, la fiche qui n'a pas
+    /// encore de texte comprise.
+    ///
+    /// C'est la liste que le modèle lit pour travailler — le sondage qui
+    /// attend une transcription, la dédup d'un message qui revient, le rang
+    /// d'une bulle qu'on remplace. ``visibleMessages`` est celle que l'écran
+    /// dessine, et elle en cache une.
     public var messages: [ChatMessage] { thread?.messages ?? [] }
+
+    /// Les bulles **que l'écran montre**.
+    ///
+    /// ⚠️ **Une fiche qui n'a encore rien à dire ne s'y trouve pas** (T316,
+    /// Hugo — « pendant qu'un vocal se transcrit, ne rien montrer : pas de
+    /// bulle en construction, juste un petit 👂 posé sur le message du
+    /// voyageur »).
+    ///
+    /// Elle s'affichait dès l'arrivée du vocal, avec un tourniquet et « Je
+    /// n'ai pas encore la transcription » : une bulle vide posée sous le
+    /// message qu'on venait d'envoyer, qui disait deux fois la même attente —
+    /// les deux coches la disent déjà. La fiche arrive maintenant **avec son
+    /// texte**, c'est-à-dire quand elle a quelque chose à montrer.
+    ///
+    /// ⚠️ **Le modèle, lui, continue de la voir** (``messages``), et il le
+    /// faut : c'est elle qui tient le sondage en vie jusqu'à ce que la
+    /// transcription arrive. Cacher la fiche au modèle l'aurait endormi, et
+    /// le texte ne serait jamais venu — un test Android l'a dit tout de
+    /// suite.
+    public var visibleMessages: [ChatMessage] {
+        messages.filter { message in
+            guard case .transcript(let card) = message.body else { return true }
+            return card.phase != .listening
+        }
+    }
+
+    /// **MEMO est en train d'écouter ce vocal-là** (T316) : son oreille se
+    /// pose à côté des coches, le temps de la transcription.
+    ///
+    /// Un vocal du voyageur, arrivé chez nous, dont la fiche existe et n'a pas
+    /// encore de texte. Rien pour un texte ni pour des photos : il n'y a rien
+    /// à transcrire.
+    public func isBeingTranscribed(_ message: ChatMessage) -> Bool {
+        guard case .voice = message.body, message.author.isTraveller, message.delivery == .sent,
+            let entryId = message.entryId
+        else { return false }
+        return (thread?.messages ?? []).contains { other in
+            guard case .transcript(let card) = other.body else { return false }
+            return card.entryId == entryId && card.phase == .listening
+        }
+    }
 
     public var suggestions: [ChatSuggestion] { thread?.suggestions ?? [] }
 

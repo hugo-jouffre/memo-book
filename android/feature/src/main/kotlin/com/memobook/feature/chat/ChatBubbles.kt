@@ -161,7 +161,7 @@ fun ChatMessageRow(
         AuthorCaption(message)
         BubbleAndActions(message, model, row, isExpanded, onToggleExpansion, onCallToAction)
         DeliveryNotice(message, model, onCallToAction)
-        DeliveryTicksIfOwn(message)
+        DeliveryTicksIfOwn(message, model)
     }
 }
 
@@ -514,13 +514,40 @@ private fun WaitingForUnlimitedNotice(message: ChatMessage, model: ChatModel, on
  * pas notre envoi.
  */
 @Composable
-private fun DeliveryTicksIfOwn(message: ChatMessage) {
+private fun DeliveryTicksIfOwn(message: ChatMessage, model: ChatModel) {
     if (!message.author.isTraveller || message.authorName != null) return
     when (message.delivery) {
         ChatDelivery.Sending -> ChatDeliveryTicks(isDelivered = false, Modifier.padding(horizontal = MemoBookSpacing.snug))
-        ChatDelivery.Sent -> ChatDeliveryTicks(isDelivered = true, Modifier.padding(horizontal = MemoBookSpacing.snug))
+        ChatDelivery.Sent -> Row(
+            Modifier.padding(horizontal = MemoBookSpacing.snug),
+            horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs / 2),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // **L'oreille, le temps de la transcription** (T316) : c'est tout
+            // ce qu'on montre pendant qu'un vocal se transcrit. La fiche, elle,
+            // attend d'avoir un texte (`ChatModel.messages`).
+            if (model.isBeingTranscribed(message)) ListeningEar()
+            ChatDeliveryTicks(isDelivered = true)
+        }
         is ChatDelivery.Failed, is ChatDelivery.WaitingForCredit, ChatDelivery.WaitingForUnlimited -> Unit
     }
+}
+
+/**
+ * **Le petit 👂 posé sur un vocal qu'on écoute** (T316, Hugo).
+ *
+ * L'emoji et non une icône du jeu de marque : c'est ce que le ticket demande
+ * nommément, et une oreille dessinée au trait, à treize points à côté des
+ * coches, ne se lirait pas. Il suit le corps du texte comme elles, et TalkBack
+ * le dit en toutes lettres — un emoji seul s'y annoncerait « oreille ».
+ */
+@Composable
+private fun ListeningEar() {
+    BrandText(
+        ChatCopy.Voice.listeningEar,
+        style = MemoBookFont.caption,
+        modifier = Modifier.semantics { contentDescription = ChatCopy.Voice.listening },
+    )
 }
 
 /**

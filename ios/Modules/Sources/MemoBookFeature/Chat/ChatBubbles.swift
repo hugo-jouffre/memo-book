@@ -96,12 +96,33 @@ struct ChatMessageRow: View {
                 ChatDeliveryTicks(isDelivered: false)
                     .padding(.horizontal, MemoBookSpacing.snug)
             case .sent:
-                ChatDeliveryTicks(isDelivered: true)
-                    .padding(.horizontal, MemoBookSpacing.snug)
+                HStack(spacing: MemoBookSpacing.xs / 2) {
+                    // **L'oreille, le temps de la transcription** (T316) :
+                    // c'est tout ce qu'on montre pendant qu'un vocal se
+                    // transcrit. La fiche, elle, attend d'avoir un texte
+                    // (``ChatModel/messages``).
+                    if model.isBeingTranscribed(message) { listeningEar }
+                    ChatDeliveryTicks(isDelivered: true)
+                }
+                .padding(.horizontal, MemoBookSpacing.snug)
             case .failed, .waitingForCredit, .waitingForUnlimited:
                 EmptyView()
             }
         }
+    }
+
+    /// **Le petit 👂 posé sur un vocal qu'on écoute** (T316, Hugo).
+    ///
+    /// L'emoji et non une icône du jeu de marque : c'est ce que le ticket
+    /// demande nommément, et une oreille dessinée au trait, à treize points
+    /// à côté des coches, ne se lirait pas. Il suit le corps du texte comme
+    /// elles, et VoiceOver le dit en toutes lettres — un emoji seul s'y
+    /// annoncerait « oreille ».
+    private var listeningEar: some View {
+        Text(ChatCopy.Voice.listeningEar)
+            .font(MemoBookFont.caption)
+            .accessibilityLabel(ChatCopy.Voice.listening)
+            .transition(.opacity)
     }
 
     /// Le prénom de l'autre voyageur, au-dessus de sa bulle, dans un fil à
