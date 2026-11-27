@@ -50,6 +50,11 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Le clavier n'avale plus les dernières bulles** (T313, 27/11/2026) : au bas
+  du fil, l'ouvrir laissait passer les deux dernières derrière lui, sans
+  pastille pour revenir — le fil se croyait toujours en bas. Il suit
+  maintenant le clavier comme il suit le pied qui grandit : seulement si on
+  était déjà en bas, jamais en volant un défilement à qui lit plus haut.
 - **Remonter le fil, c'est lire** (T289, 27/11/2026) : la barre de saisie et
   ses propositions descendent par le bas, et le fil récupère leur hauteur.
   Elles reviennent au premier geste vers le bas, d'office une fois en bas, et

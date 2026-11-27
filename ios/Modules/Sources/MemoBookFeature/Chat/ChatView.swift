@@ -461,6 +461,25 @@ public struct ChatView: View {
             // accueil.
             .defaultScrollAnchor(thread.isEmpty ? .center : .bottom)
             .onChange(of: model.visibleMessages.count) { _, _ in follow(proxy) }
+            // **Le clavier ne doit pas avaler les dernières bulles** (T313,
+            // mesuré le 27/11 : en bas du fil, clavier ouvert, les deux
+            // dernières passaient derrière lui — et sans pastille pour
+            // revenir, puisque le fil se croyait toujours en bas).
+            //
+            // ``keepPinned`` ne voyait pas ce cas : il surveille la **hauteur
+            // du pied**, et le clavier ne la change pas — il la pousse. On
+            // suit donc le clavier comme on suit le pied, aux mêmes
+            // conditions : seulement si on était déjà en bas, et jamais en
+            // volant un défilement à qui lit plus haut.
+            .onChange(of: isWriting) { _, writing in
+                guard writing, isAtBottom else { return }
+                Task { @MainActor in
+                    // Le temps que le clavier finisse de monter : avant ça,
+                    // le bas visé est encore l'ancien.
+                    try? await Task.sleep(for: .milliseconds(260))
+                    scrollToBottom(proxy)
+                }
+            }
             .task { await settleOnFocusedStep(proxy) }
             .onChange(of: model.isThinking) { _, isThinking in
                 guard isThinking else { return }
