@@ -27,6 +27,26 @@ enum ChatMetrics {
     /// Le pas entre deux messages du fil.
     static let messageSpacing = MemoBookSpacing.snug
 
+    /// **Combien de messages on tolère sous l'écran avant de proposer le
+    /// retour en bas** (T314, Hugo — « elle disparaît quand on est déjà dans
+    /// les dix derniers messages »).
+    static let backToBottomMessages = 10
+
+    /// La distance au bas du fil en deçà de laquelle le retour ne se propose
+    /// plus, en points.
+    ///
+    /// ⚠️ **Un plancher, et c'est voulu.** Le fil ne sait pas compter les
+    /// bulles qui restent sous l'écran sans les mesurer une par une — ce que
+    /// la liste paresseuse paie cher, et qui a déjà fait boucler la mise en
+    /// page sur un iPhone SE. Mais une bulle ne peut pas être plus courte que
+    /// sa cible tactile : dix messages font donc **au moins** cette hauteur.
+    /// En deçà, on est certainement dans les dix derniers ; au-delà, on y est
+    /// peut-être encore si les bulles sont longues, et la flèche paraît alors
+    /// un peu tôt. C'est le bon côté de l'erreur : le chemin du retour reste
+    /// offert.
+    static let backToBottomDistance: CGFloat =
+        CGFloat(backToBottomMessages) * (MemoBookSpacing.minimumTapTarget + messageSpacing)
+
     /// L'air laissé entre deux messages **du même auteur**. Plus serré : deux
     /// bulles de MEMO d'affilée sont une même prise de parole, pas deux.
     static let sameAuthorSpacing = MemoBookSpacing.xs / 2

@@ -62,6 +62,12 @@ public struct ChatView: View {
     /// changent pas : on n'a pas bougé.
     @State private var isAtBottom = true
 
+    /// **On est loin du bas** — plus de dix messages, à la louche
+    /// (``ChatMetrics/backToBottomDistance``). C'est la seule condition qui
+    /// fait paraître la flèche du retour (T314) : dans les dix derniers, on y
+    /// est presque, et une flèche de plus ne servirait qu'à encombrer.
+    @State private var isFarFromBottom = false
+
     /// Ce qui peut rester sous l'écran en étant encore « en bas » : le rebond
     /// d'un doigt qui s'arrête ne fait pas paraître la pastille.
     private static let bottomTolerance: CGFloat = 32
@@ -448,6 +454,10 @@ public struct ChatView: View {
                         // ce que le geste veut dire.
                         let atBottom = bottomGap <= Self.bottomTolerance
                         if atBottom != isAtBottom { isAtBottom = atBottom }
+                        // **La flèche du retour ne paraît que de loin** (T314) :
+                        // dans les dix derniers messages, on y est presque.
+                        let far = bottomGap > ChatMetrics.backToBottomDistance
+                        if far != isFarFromBottom { isFarFromBottom = far }
                         trackScroll(to: top)
                         // Revenu en bas, on n'est plus en train de lire (T289).
                         if atBottom { revealComposer() }
@@ -892,7 +902,7 @@ public struct ChatView: View {
     /// bande, transparente, au-dessus du matériau de la barre.
     private func footer(_ proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 0) {
-            if !isAtBottom, !model.visibleMessages.isEmpty {
+            if isFarFromBottom, !isAtBottom, !model.visibleMessages.isEmpty {
                 ChatBackToBottomPill { scrollToBottom(proxy) }
                     .padding(.bottom, MemoBookSpacing.xs)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -913,6 +923,7 @@ public struct ChatView: View {
             }
         }
         .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: isAtBottom)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: isFarFromBottom)
         .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: showsComposer)
         // **Se remettre à parler la rappelle** (T289), où qu'on en soit dans
         // le fil : une puce touchée en haut du fil, le micro de l'accueil qui

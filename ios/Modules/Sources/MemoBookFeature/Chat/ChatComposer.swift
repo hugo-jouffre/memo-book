@@ -929,11 +929,22 @@ struct ChatSendingBar: View {
     }
 }
 
-/// La pastille « Retourner en bas », qui n'apparaît que si on est remonté.
+/// **La flèche du retour en bas** (T314, Hugo — « "Retourner en bas" devient
+/// une flèche dans un cercle, discrète »).
 ///
 /// Elle flotte au-dessus de la barre d'envoi plutôt que d'y prendre place :
 /// c'est un raccourci de lecture, pas une commande de la conversation, et il
 /// disparaît dès qu'il a servi.
+///
+/// Elle portait son nom en toutes lettres, en corps gras, dans une pastille
+/// large de la moitié de l'écran — posée **par-dessus le fil**, elle cachait
+/// la bulle qu'on était en train de lire, c'est-à-dire exactement ce qu'on
+/// était remonté chercher. Un rond de la taille d'une cible tactile suffit :
+/// une flèche vers le bas se comprend sans légende, et VoiceOver, lui, garde
+/// la phrase entière.
+///
+/// ⚠️ Elle ne paraît que **loin** du bas (``ChatMetrics/backToBottomDistance``) :
+/// dans les dix derniers messages, on y est presque.
 struct ChatBackToBottomPill: View {
     let action: () -> Void
 
@@ -941,26 +952,21 @@ struct ChatBackToBottomPill: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: MemoBookSpacing.snug) {
-                Text(ChatCopy.backToBottom)
-                    .font(MemoBookFont.bodySemibold)
-                    .foregroundStyle(MemoBookColor.ink)
-
-                Image(brand: "IconLucideArrowDown")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: glyph, height: glyph)
-                    .foregroundStyle(MemoBookColor.ink)
-            }
-            .padding(.horizontal, MemoBookSpacing.s)
-            .padding(.vertical, MemoBookSpacing.xs)
-            .frame(minHeight: MemoBookSpacing.minimumTapTarget)
-            .background(
-                MemoBookColor.surface,
-                in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
-            )
-            .brandShadow(.soft)
+            Image(brand: "IconLucideArrowDown")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: glyph, height: glyph)
+                .foregroundStyle(MemoBookColor.ink)
+                .frame(
+                    width: MemoBookSpacing.minimumTapTarget,
+                    height: MemoBookSpacing.minimumTapTarget
+                )
+                // Un cercle, et non la capsule d'avant : sans texte, les deux
+                // se valent au dessin, et le cercle dit mieux « un geste » que
+                // « une étiquette ».
+                .background(MemoBookColor.surface, in: .circle)
+                .brandShadow(.soft)
         }
         .buttonStyle(CardPressStyle())
         .accessibilityLabel(ChatCopy.backToBottom)
