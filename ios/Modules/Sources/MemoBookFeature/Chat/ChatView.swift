@@ -445,6 +445,8 @@ public struct ChatView: View {
                         // N'écrit que ce qui change — voir ``revealBanner``.
                         let atBottom = bottomGap <= Self.bottomTolerance
                         if atBottom != isAtBottom { isAtBottom = atBottom }
+                        // Revenu en bas, on n'est plus en train de lire (T289).
+                        if atBottom { revealComposer() }
                     } else {
                         scroll.lastContentTop = top
                     }
@@ -724,6 +726,39 @@ public struct ChatView: View {
         model.thread?.tripContext?.isGathering == true
     }
 
+    /// **La barre s'efface quand on remonte lire** (T289, Hugo — « la barre de
+    /// saisie et ses propositions s'effacent quand on remonte le fil pour
+    /// lire, et reviennent dès qu'on redescend »).
+    ///
+    /// Elle descend par le bas avec ses propositions, et le fil récupère sa
+    /// hauteur : remonter dans la conversation, c'est **lire**, et une barre
+    /// d'envoi n'a rien à faire là pendant ce temps. Elle revient au premier
+    /// geste vers le bas, et d'office une fois en bas du fil.
+    ///
+    /// Les seuils sont ceux de la bannière, et pour la même raison : un geste
+    /// franc décide, un tremblement de doigt non (``trackScroll(to:)``).
+    @State private var showsComposer = true
+
+    /// **La barre ne s'efface pas pendant qu'on s'en sert.** On écrit, on
+    /// parle, ou une puce est en vol : elle reste, quoi que fasse le
+    /// défilement. Sans ça, remonter relire une phrase pendant qu'on dicte
+    /// emporterait le micro ouvert avec elle.
+    private var composerCanHide: Bool {
+        model.composer == .tools && !model.recorder.isRecording && flight == nil && !isWriting
+    }
+
+    /// Efface la barre, si le moment s'y prête.
+    private func hideComposer() {
+        guard composerCanHide, showsComposer else { return }
+        showsComposer = false
+    }
+
+    /// La rend. Appelée aussi dès qu'on touche le bas du fil : là, on n'est
+    /// plus en train de lire, on est revenu parler.
+    private func revealComposer() {
+        if !showsComposer { showsComposer = true }
+    }
+
     /// Ce que le défilement fait à la bannière — voir ``showsPreviewBanner``.
     ///
     /// Le haut du contenu **monte** quand on descend vers les messages récents
@@ -742,11 +777,19 @@ public struct ChatView: View {
             // On remonte : elle vient, et le délai repart de zéro tant que le
             // geste dure. C'est ce qui la fait **rester** pendant qu'on
             // remonte, au lieu de repartir au milieu du mouvement.
-            if scroll.scrolledUp >= Self.bannerRevealDistance { revealBanner() }
+            if scroll.scrolledUp >= Self.bannerRevealDistance {
+                revealBanner()
+                // On remonte pour lire : la barre s'en va (T289).
+                hideComposer()
+            }
         } else if delta < 0 {
             scroll.scrolledUp = 0
             scroll.scrolledDown -= delta
-            if scroll.scrolledDown >= Self.bannerDismissDistance { hideBanner() }
+            if scroll.scrolledDown >= Self.bannerDismissDistance {
+                hideBanner()
+                // On redescend : elle revient (T289).
+                revealComposer()
+            }
         }
     }
 
@@ -823,17 +866,30 @@ public struct ChatView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            ChatComposer(
-                model: model,
-                isWriting: $isWriting,
-                holdsKeyboard: $holdsKeyboard,
-                onAddPhotos: photos.begin,
-                onSubscribe: openPaywall,
-                flyingSuggestionId: flight?.suggestion.id,
-                onLaunch: launch
-            )
+            if showsComposer {
+                ChatComposer(
+                    model: model,
+                    isWriting: $isWriting,
+                    holdsKeyboard: $holdsKeyboard,
+                    onAddPhotos: photos.begin,
+                    onSubscribe: openPaywall,
+                    flyingSuggestionId: flight?.suggestion.id,
+                    onLaunch: launch
+                )
+                // Elle descend par le bas, d'où elle vient (T289).
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: isAtBottom)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: showsComposer)
+        // **Se remettre à parler la rappelle** (T289), où qu'on en soit dans
+        // le fil : une puce touchée en haut du fil, le micro de l'accueil qui
+        // arrive, une correction qui ouvre le clavier. Elle ne se cache que
+        // pendant qu'on lit.
+        .onChange(of: model.composer) { _, _ in revealComposer() }
+        .onChange(of: model.recorder.isRecording) { _, isRecording in
+            if isRecording { revealComposer() }
+        }
     }
 
     // MARK: - Ce qui ne va pas

@@ -513,6 +513,38 @@ class ChatModelTest {
         assertFalse(model.isBeingTranscribed(model.visibleMessages.first()))
     }
 
+    /**
+     * **Une fiche vide pour de bon ne se montre pas non plus** : un vocal
+     * silencieux rend un titre, une mention, et rien entre les deux. Une
+     * transcription **échouée**, elle, se montre : elle le dit en rouge.
+     */
+    @Test
+    fun aCardThatStaysEmptyIsNotShownEitherButAFailedOneIs() = runTest {
+        val vide = Script(
+            thread = thread(
+                messages = listOf(
+                    voice("vocal", entryId = "e1", seq = 1),
+                    card("fiche", entryId = "e1", text = "", phase = TranscriptCard.Phase.Ready, seq = 2),
+                ),
+            ),
+        )
+        val sansTexte = model(vide)
+        sansTexte.load()
+        assertEquals(listOf("vocal"), sansTexte.visibleMessages.map { it.id })
+
+        val echouee = Script(
+            thread = thread(
+                messages = listOf(
+                    voice("vocal", entryId = "e1", seq = 1),
+                    card("fiche", entryId = "e1", text = null, phase = TranscriptCard.Phase.Failed, seq = 2),
+                ),
+            ),
+        )
+        val rouge = model(echouee)
+        rouge.load()
+        assertEquals(listOf("vocal", "fiche"), rouge.visibleMessages.map { it.id })
+    }
+
     /** **Rien sur un texte** : il n'y a pas de vocal à écouter. */
     @Test
     fun nothingIsListenedToOnAWrittenMessage() = runTest {

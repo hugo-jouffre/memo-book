@@ -493,6 +493,10 @@ private fun ChatConversation(
     // arrive ne la changent pas : on n'a pas bougé.
     var isAtBottom by remember { mutableStateOf(true) }
 
+    // La barre d'envoi et ses propositions sont là — elles s'effacent quand on
+    // remonte lire (T289).
+    var showsComposer by remember { mutableStateOf(true) }
+
     // L'étape sur laquelle il reste à se poser en arrivant.
     var pendingFocus by remember { mutableStateOf(stepId) }
 
@@ -538,6 +542,25 @@ private fun ChatConversation(
         if (showsPreviewBanner) showsPreviewBanner = false
     }
 
+    // **La barre s'efface quand on remonte lire** (T289, Hugo — « la barre de
+    // saisie et ses propositions s'effacent quand on remonte le fil pour lire,
+    // et reviennent dès qu'on redescend »). Elle descend par le bas avec ses
+    // propositions, et le fil récupère sa hauteur. Les seuils sont ceux de la
+    // bannière, et pour la même raison : un geste franc décide, un tremblement
+    // de doigt non.
+    //
+    // **Elle ne s'efface pas pendant qu'on s'en sert** : on écrit, on parle,
+    // ou une puce est en vol. Sans ça, remonter relire une phrase pendant
+    // qu'on dicte emporterait le micro ouvert avec elle.
+    fun hideComposer() {
+        val canHide = state.composer == ChatComposerMode.Tools && !model.recorder.isRecording && flight == null
+        if (canHide && showsComposer) showsComposer = false
+    }
+
+    fun revealComposer() {
+        if (!showsComposer) showsComposer = true
+    }
+
     fun scrollToBottom() {
         if (!isAtBottom) isAtBottom = true
         // Quand une puce vient d'atterrir, le fil est **déjà** à sa place :
@@ -559,15 +582,25 @@ private fun ChatConversation(
                     tracker.scrolledUp += delta
                     // On remonte : elle vient, et le délai repart de zéro tant
                     // que le geste dure.
-                    if (tracker.scrolledUp >= revealDistance) revealBanner()
+                    if (tracker.scrolledUp >= revealDistance) {
+                        revealBanner()
+                        // On remonte pour lire : la barre s'en va (T289).
+                        hideComposer()
+                    }
                 } else if (delta < 0f) {
                     tracker.scrolledUp = 0f
                     tracker.scrolledDown -= delta
-                    if (tracker.scrolledDown >= dismissDistance) hideBanner()
+                    if (tracker.scrolledDown >= dismissDistance) {
+                        hideBanner()
+                        // On redescend : elle revient (T289).
+                        revealComposer()
+                    }
                 }
                 if (delta != 0f) {
                     val atBottom = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset <= bottomTolerance
                     if (atBottom != isAtBottom) isAtBottom = atBottom
+                    // Revenu en bas, on n'est plus en train de lire (T289).
+                    if (atBottom) revealComposer()
                 }
                 return Offset.Zero
             }
@@ -791,6 +824,12 @@ private fun ChatConversation(
                 ChatBackToBottomPill(action = ::scrollToBottom, modifier = Modifier.padding(bottom = MemoBookSpacing.xs))
             }
 
+            AnimatedVisibility(
+                visible = showsComposer,
+                // Elle descend par le bas, d'où elle vient (T289).
+                enter = if (reduceMotion) fadeIn(snap()) else fadeIn() + slideInVertically { it },
+                exit = if (reduceMotion) fadeOut(snap()) else fadeOut() + slideOutVertically { it },
+            ) {
             ChatComposer(
                 model = model,
                 keyboard = keyboard,
@@ -834,6 +873,7 @@ private fun ChatConversation(
                     }
                 },
             )
+            }
         }
 
         // La puce en vol, par-dessus le fil et la barre : elle part de la barre
