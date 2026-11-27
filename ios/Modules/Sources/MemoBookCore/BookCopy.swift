@@ -428,6 +428,13 @@ public enum BookCopy {
         /// composé son carnet à 21 h 47. ``RelativeDateTimeFormatter`` dirait
         /// « il y a 14 heures », ce qui demande un calcul mental pour la même
         /// information.
+        ///
+        /// ⚠️ **« Aujourd'hui » se compte depuis `now`, et non depuis
+        /// l'horloge** (27/11/2026). Les deux `isDateInToday` et
+        /// `isDateInYesterday` d'avant lisaient la vraie date du jour : le
+        /// paramètre `now` était accepté puis ignoré, et son test ne passait
+        /// que le 26 novembre — la CI l'a rougi le lendemain à minuit passé.
+        /// Rien ne change pour l'app, dont `now` **est** l'horloge.
         public static func moment(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
             let heure = calendar.component(.hour, from: date)
             let moment =
@@ -438,10 +445,11 @@ public enum BookCopy {
                 default: "soir"
                 }
 
-            if calendar.isDateInToday(date) {
+            if calendar.isDate(date, inSameDayAs: now) {
                 return moment == "cette nuit" ? moment : "ce \(moment)"
             }
-            if calendar.isDateInYesterday(date) {
+            let hier = calendar.date(byAdding: .day, value: -1, to: now)
+            if let hier, calendar.isDate(date, inSameDayAs: hier) {
                 return moment == "cette nuit" ? "la nuit dernière" : "hier \(moment)"
             }
 
