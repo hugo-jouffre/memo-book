@@ -339,6 +339,22 @@ public struct ChatView: View {
         .sheet(item: $model.shared) { sharing in
             ChatShareSheet(sharing: sharing)
         }
+        // **Les deux gestes d'une fiche qui demandent une valeur** (T288) :
+        // présentés par l'écran et non par la bulle, pour la même raison que
+        // « Partager » — une feuille présentée par une bulle s'en va avec elle
+        // au premier défilement.
+        .sheet(item: $model.editedFacts) { edit in
+            switch edit {
+            case .dates(let card):
+                TranscriptDatesSheet(card: card) { from, to in
+                    model.saveLivedDays(from: from, to: to, for: card)
+                }
+            case .place(let card):
+                TranscriptPlaceSheet(card: card) { name in
+                    model.savePlaceName(name, for: card)
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showsPaywall) {
             PaywallView(
                 subscription: .offer,

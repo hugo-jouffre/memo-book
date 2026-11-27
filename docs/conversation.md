@@ -50,6 +50,27 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Les gestes d'une fiche de MEMO** (T288, 26/11/2026) : son appui long ouvre
+  les cinq siens — ré-analyser, modifier à la main, **changer les dates**,
+  **changer le nom du lieu**, supprimer. Le pendant de l'appui long sur une
+  bulle du voyageur (T270), qui, lui, copie, partage, déplace et supprime.
+  Les deux premiers existaient déjà, posés sur la fiche ; le menu les réunit
+  avec les trois autres, parce que c'est là qu'on cherche ce qu'on peut faire
+  d'un souvenir. Rien sur une fiche qui écoute ou qui rédige : il n'y a pas
+  encore de texte à corriger.
+- **Une date et un lieu déduits se reprennent à la main** (T288) : ce que la
+  rédaction a compris du récit (T308, T280) est juste la plupart du temps, et
+  faux quelquefois — un « hier » dit un lundi férié, une ville nommée en
+  passant. La correction se range **à côté** de sa lecture, jamais à sa place
+  (`entries.pinnedLivedFromDay`, `pinnedPlaceName`) : une relance de la
+  rédaction réécrit sa version et ne touche pas à la main, et « revenir aux
+  dates déduites » lui rend la parole d'un simple `null`. C'est le même motif
+  que le texte corrigé à côté du texte rédigé.
+
+  Le nom écrit à la main **renomme l'étape sans rien regrouper** : le
+  découpage reste celui que les récits dictent. Deux fiches renommées du même
+  nom restent deux étapes — renommer ne doit pas déplacer un souvenir ailleurs
+  sans qu'on l'ait demandé.
 - **Un appui simple choisit une bulle** (T286, 26/11/2026) : elle se cerne
   d'un liseré bleu, et **les puces du bas répondent à elle**. Jusque-là elles
   répondaient au fil entier — sa dernière bulle décidait pour tout le monde,

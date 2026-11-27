@@ -2177,6 +2177,105 @@ public final class ChatModel {
         composer = .writing
     }
 
+    // MARK: - Les gestes d'une fiche de MEMO (T288)
+
+    /// **Ce qu'un appui long sur une fiche a ouvert** : sa feuille des dates,
+    /// ou celle du lieu. `nil` : rien d'ouvert.
+    ///
+    /// Une seule à la fois, et c'est l'identité qui présente — comme
+    /// ``shared`` : un second geste pendant qu'une feuille est ouverte la
+    /// remplace au lieu d'en empiler une seconde (`ios/CLAUDE.md`).
+    public var editedFacts: ChatFactsEdit?
+
+    /// « Ré-analyser », depuis le menu d'une fiche (T288) : le même geste que
+    /// la flèche circulaire posée sur elle, par son souvenir.
+    public func reanalyse(_ card: TranscriptCard) {
+        guard let entryId = card.entryId else { return }
+        reanalyse(entryId: entryId)
+    }
+
+    /// « Changer les dates » : la feuille s'ouvre sur ce que la fiche dit.
+    public func changeDates(of card: TranscriptCard) {
+        guard card.entryId != nil else { return }
+        editedFacts = .dates(card)
+    }
+
+    /// « Changer le nom du lieu ».
+    public func changePlace(of card: TranscriptCard) {
+        guard card.entryId != nil else { return }
+        editedFacts = .place(card)
+    }
+
+    /// **Fixe les jours que ce récit raconte.** `nil` partout revient aux
+    /// dates déduites — la rédaction reprend la parole.
+    ///
+    /// La fiche change tout de suite, puis le fil se relit : la correction
+    /// remonte sur l'étape côté serveur, et c'est l'étape qui date les autres
+    /// fiches de la même étape. Un échec le dit et remet la fiche d'avant.
+    public func saveLivedDays(from: Date?, to: Date?, for card: TranscriptCard) {
+        guard let entryId = card.entryId else { return }
+        editedFacts = nil
+        let before = card
+        apply(
+            card.situated(
+                from: from,
+                to: from == nil ? nil : to,
+                place: card.placeName,
+                livedDaysByHand: from != nil
+            ),
+            to: entryId
+        )
+
+        Task { [weak self, transport] in
+            do {
+                _ = try await transport.setLivedDays(entryId, from, from == nil ? nil : to)
+                await self?.load()
+            } catch {
+                guard let self else { return }
+                apply(before, to: entryId)
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// **Nomme le lieu à la main.** `nil` — ou un champ vidé — rend la parole
+    /// au lieu que les récits de l'étape nomment.
+    public func savePlaceName(_ name: String?, for card: TranscriptCard) {
+        guard let entryId = card.entryId else { return }
+        editedFacts = nil
+        let before = card
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wanted = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        apply(
+            card.situated(from: card.livedFrom, to: card.livedTo, place: wanted, placeByHand: wanted != nil),
+            to: entryId
+        )
+
+        Task { [weak self, transport] in
+            do {
+                _ = try await transport.setPlaceName(entryId, wanted)
+                await self?.load()
+            } catch {
+                guard let self else { return }
+                apply(before, to: entryId)
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// Repose une fiche dans le fil, à la place de celle qui porte le même
+    /// souvenir.
+    private func apply(_ card: TranscriptCard, to entryId: String) {
+        guard var thread else { return }
+        for index in thread.messages.indices {
+            guard case .transcript(let shown) = thread.messages[index].body,
+                shown.entryId == entryId
+            else { continue }
+            thread.messages[index].body = .transcript(card)
+        }
+        self.thread = thread
+    }
+
     // MARK: - L'appui long sur une bulle (T270)
 
     /// Ce qu'un appui long propose de partager, tant que la feuille du système

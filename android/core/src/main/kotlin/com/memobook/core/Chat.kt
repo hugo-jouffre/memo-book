@@ -210,6 +210,17 @@ data class TranscriptCard(
      * `null` : un serveur d'avant, ou une fiche du jeu d'essai.
      */
     val freeCorrectionCharactersLeft: Int? = null,
+    /**
+     * **Les jours affichés ont été fixés à la main** (T288), et non déduits du
+     * récit. C'est ce qui décide si la feuille propose « revenir aux dates
+     * déduites » : ailleurs, le lien ne ferait rien.
+     *
+     * `false` pour un serveur d'avant le 26/11/2026, et c'est le bon repli —
+     * le lien manque, les dates se changent quand même.
+     */
+    val livedDaysByHand: Boolean = false,
+    /** Même chose pour le nom du lieu. */
+    val placeByHand: Boolean = false,
 ) {
     /**
      * Où en est la fiche — `docs/conversation.md` § 5. Trois temps que la
@@ -262,6 +273,29 @@ data class TranscriptCard(
         copy(text = text, isSimulated = isSimulated, phase = Phase.Ready)
 
     /**
+     * **La même fiche, située à la main** (T288) — « changer les dates »,
+     * « changer le nom du lieu ».
+     *
+     * Posée tout de suite, avant que le serveur réponde : la feuille se
+     * referme sur une fiche qui dit déjà la bonne date. Le fil se relit
+     * derrière, parce que la correction remonte sur l'étape et que l'étape
+     * parle pour ses autres fiches.
+     */
+    fun situated(
+        from: Instant?,
+        to: Instant?,
+        place: String?,
+        livedDaysByHand: Boolean? = null,
+        placeByHand: Boolean? = null,
+    ): TranscriptCard = copy(
+        livedFrom = from,
+        livedTo = to,
+        placeName = place,
+        livedDaysByHand = livedDaysByHand ?: this.livedDaysByHand,
+        placeByHand = placeByHand ?: this.placeByHand,
+    )
+
+    /**
      * La fiche attend encore quelque chose du serveur : c'est ce qui décide
      * si l'écran continue de sonder le fil.
      */
@@ -295,6 +329,11 @@ data class TranscriptCard(
         val phase: Phase? = null,
         val isValidated: Boolean? = null,
         val freeCorrectionCharactersLeft: Int? = null,
+        // Qui a écrit les dates et le lieu (T288). Absents d'un serveur
+        // d'avant : la machine, donc — c'est le bon repli, le lien « revenir
+        // aux dates déduites » manque et rien d'autre ne change.
+        val livedDaysByHand: Boolean? = null,
+        val placeByHand: Boolean? = null,
     )
 
     internal object Serializer : ChatSurrogateSerializer<TranscriptCard, Surrogate>(
@@ -304,6 +343,7 @@ data class TranscriptCard(
                 it.title, it.heading, it.capturedAt, it.livedFrom, it.livedTo, it.placeName, it.duration,
                 it.text, it.isSimulated,
                 it.entryId, it.footnote, it.phase, it.isValidated, it.freeCorrectionCharactersLeft,
+                it.livedDaysByHand, it.placeByHand,
             )
         },
         {
@@ -322,6 +362,8 @@ data class TranscriptCard(
                 phase = it.phase ?: Phase.Ready,
                 isValidated = it.isValidated ?: false,
                 freeCorrectionCharactersLeft = it.freeCorrectionCharactersLeft,
+                livedDaysByHand = it.livedDaysByHand ?: false,
+                placeByHand = it.placeByHand ?: false,
             )
         },
     )

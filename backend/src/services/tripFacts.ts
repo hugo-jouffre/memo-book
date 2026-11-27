@@ -1,6 +1,7 @@
 import type { MemoStep, Prisma, PrismaClient, TripTransport } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import { promptAfterStep } from "./conversationCopy.js";
+import { livedDaysOf } from "./livedDays.js";
 import { parseInsights, type EntryInsights, type TransportKind } from "./redaction.js";
 
 /**
@@ -95,6 +96,9 @@ interface FactEntry {
    */
   livedFromDay: Date | null;
   livedToDay: Date | null;
+
+  /** **Le nom du lieu écrit à la main** sur ce souvenir (T288), ou `null`. */
+  pinnedPlaceName: string | null;
 }
 
 /** Un groupe de souvenirs qui deviendra une étape. */
@@ -432,6 +436,9 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
           capturedPlaceName: true,
           livedFromDay: true,
           livedToDay: true,
+          pinnedLivedFromDay: true,
+          pinnedLivedToDay: true,
+          pinnedPlaceName: true,
           media: { select: { cdnUrl: true } },
         },
       });
@@ -447,8 +454,12 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
         continuesPrevious: row.continuesPreviousStep && !row.separatedByTraveller,
         pinnedStepId: row.pinnedStepId,
         capturedPlaceName: row.capturedPlaceName,
-        livedFromDay: row.livedFromDay,
-        livedToDay: row.livedToDay,
+        // **Les jours vécus, main comprise** (T288) : la résolution se fait
+        // ici, une fois, et tout ce qui lit `FactEntry` lit déjà le bon jour —
+        // le découpage des photos comme les dates de l'étape.
+        livedFromDay: livedDaysOf(row).from,
+        livedToDay: livedDaysOf(row).to,
+        pinnedPlaceName: row.pinnedPlaceName,
       }));
 
       const before = [...memo.steps].sort((a, b) => b.number - a.number)[0] ?? null;
@@ -661,6 +672,14 @@ export function stepFields(group: StepGroup, step: ExistingStep | undefined) {
     }),
     placeKey,
   );
+  // **Le nom écrit à la main gagne sur tout** (T288) : le voyageur a lu la
+  // fiche et corrigé le lieu, c'est lui qui sait. Plusieurs souvenirs de
+  // l'étape renommés, c'est le nom le plus fréquent — la même règle que
+  // partout ici, et pas « le dernier a parlé ».
+  const handPlace = mostCommon(
+    group.entries.flatMap((entry) => (entry.pinnedPlaceName?.trim() ? [entry.pinnedPlaceName.trim()] : [])),
+    placeKey,
+  );
   const photoPlace = mostCommon(
     group.entries.flatMap((entry) => {
       const place = entry.kind === "photo" ? entry.capturedPlaceName?.trim() : null;
@@ -694,9 +713,11 @@ export function stepFields(group: StepGroup, step: ExistingStep | undefined) {
     // Une étape choisie par le voyageur garde son nom ; les autres prennent
     // celui de leur lieu. Ce que la rédaction ne sait pas, on ne l'efface pas.
     placeName:
-      (group.pinned
-        ? (step?.placeName ?? storyPlace ?? photoPlace)
-        : (group.place ?? storyPlace ?? photoPlace ?? step?.placeName)) ?? null,
+      (handPlace ??
+        (group.pinned
+          ? (step?.placeName ?? storyPlace ?? photoPlace)
+          : (group.place ?? storyPlace ?? photoPlace ?? step?.placeName))) ??
+      null,
     destinationName: country?.name ?? step?.destinationName ?? null,
     destinationCountryCode: country?.code ?? step?.destinationCountryCode ?? null,
     startDate: new Date(Math.min(...times)),

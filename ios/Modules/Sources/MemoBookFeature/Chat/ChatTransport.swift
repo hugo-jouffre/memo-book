@@ -262,6 +262,15 @@ public struct ChatTransport: Sendable {
     /// correction : ça ne coûte rien.
     public var keepTranscript: @Sendable (_ entryId: String, _ keeps: Bool) async throws -> Entry
 
+    /// **Les jours que ce récit raconte, fixés à la main** (T288) —
+    /// `PATCH /v1/entries/:id`. `nil` partout revient aux dates déduites.
+    /// Gratuit : ce n'est pas un texte, c'est une date.
+    public var setLivedDays: @Sendable (_ entryId: String, _ from: Date?, _ to: Date?) async throws -> Entry
+
+    /// **Le nom du lieu, écrit à la main** (T288) — même route. `nil` rend la
+    /// parole au lieu que les récits de l'étape nomment.
+    public var setPlaceName: @Sendable (_ entryId: String, _ name: String?) async throws -> Entry
+
     /// **Relancer l'analyse** d'un souvenir — `POST /v1/entries/:id/redaction`.
     /// L'IA le relit et en tire une version généralement plus complète ; le
     /// choix de garder la littérale tombe, puisqu'on redemande une rédaction.
@@ -302,6 +311,12 @@ public struct ChatTransport: Sendable {
         reanalyse: @escaping @Sendable (String) async throws -> Entry = { _ in
             throw APIError.server(statusCode: 0, code: nil, message: "Analyse indisponible ici.")
         },
+        setLivedDays: @escaping @Sendable (String, Date?, Date?) async throws -> Entry = { _, _, _ in
+            throw APIError.server(statusCode: 0, code: nil, message: "Dates indisponibles ici.")
+        },
+        setPlaceName: @escaping @Sendable (String, String?) async throws -> Entry = { _, _ in
+            throw APIError.server(statusCode: 0, code: nil, message: "Lieu indisponible ici.")
+        },
         // Les deux gestes du menu d'un appui long ne mènent nulle part par
         // défaut, pour la même raison que les deux de la fiche : un transport
         // qui ne les porte pas les refuse, au lieu de laisser croire que la
@@ -337,6 +352,8 @@ public struct ChatTransport: Sendable {
         self.remember = remember
         self.keepTranscript = keepTranscript
         self.reanalyse = reanalyse
+        self.setLivedDays = setLivedDays
+        self.setPlaceName = setPlaceName
         self.deleteMemory = deleteMemory
         self.moveMessage = moveMessage
         self.electStepCover = electStepCover
@@ -361,6 +378,24 @@ public struct ChatTransport: Sendable {
                 try await api.updateEntry(id: entryId, edit: EntryEdit.keepsTranscript(keeps))
             },
             reanalyse: { entryId in try await api.retryRedaction(entryId: entryId) },
+            // Les jours et le lieu fixés à la main (T288). Le serveur les
+            // écrit à côté de ce que la rédaction avait compris, puis remonte
+            // la correction sur l'étape — c'est elle que la fiche affiche.
+            setLivedDays: { entryId, from, to in
+                try await api.updateEntry(
+                    id: entryId,
+                    // **Le jour lu à l'écran**, et non l'instant qu'il
+                    // représente (``CalendarDay``) : le 14 touché à Paris ne
+                    // doit pas partir comme le 13.
+                    edit: EntryEdit.livedDays(
+                        from: from.map { CalendarDay($0).iso },
+                        to: to.map { CalendarDay($0).iso }
+                    )
+                )
+            },
+            setPlaceName: { entryId, name in
+                try await api.updateEntry(id: entryId, edit: EntryEdit.place(name))
+            },
             deleteMemory: { entryId in try await api.deleteEntry(id: entryId) },
             moveMessage: { messageId, stepId in
                 try await api.moveChatMessage(tripId: tripId, messageId: messageId, toStepId: stepId)

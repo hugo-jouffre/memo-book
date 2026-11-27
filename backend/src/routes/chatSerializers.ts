@@ -12,6 +12,7 @@ import {
 } from "../services/conversationCopy.js";
 import { firstNameOf, type ChatMessageRow, type EntryWithMedia } from "../services/conversationThread.js";
 import { avatarUrlOf } from "../services/avatars.js";
+import { livedDaysOf } from "../services/livedDays.js";
 import { displayablePhotoUrl } from "./tripPhotos.js";
 import {
   LIMITED_AUDIENCE,
@@ -306,9 +307,20 @@ function serializeBody(
           //
           // Pris sur l'étape et non sur le souvenir : une étape racontée en
           // deux fois porte une seule date, et ses deux fiches la montrent.
-          placeName: entry.step?.placeName ?? null,
-          livedFrom: (entry.step?.livedFromDay ?? entry.livedFromDay)?.toISOString() ?? null,
-          livedTo: (entry.step?.livedToDay ?? entry.livedToDay)?.toISOString() ?? null,
+          //
+          // **Ce que la main a écrit passe devant** (T288) : « changer le nom
+          // du lieu » et « changer les dates » corrigent *cette* fiche, et
+          // c'est sur elle qu'on doit le voir — tout de suite, sans attendre
+          // que le recalcul remonte la correction sur l'étape, et même si
+          // l'autre fiche de l'étape dit autre chose.
+          placeName: entry.pinnedPlaceName ?? entry.step?.placeName ?? null,
+          ...livedDatesOf(entry),
+          // **Qui a écrit ça** (T288) : la main, ou la machine. L'app ne
+          // propose « revenir aux dates déduites » que là où une main est
+          // passée — ailleurs, le lien ne ferait rien, et un geste qui ne fait
+          // rien se lit comme une panne.
+          livedDaysByHand: entry.pinnedLivedFromDay !== null,
+          placeByHand: entry.pinnedPlaceName !== null,
           duration: entry.media?.durationSeconds ?? null,
           text: finalTextOf(entry),
           // **Les deux versions, pour pouvoir les comparer** (Hugo,
@@ -339,6 +351,25 @@ function serializeBody(
       };
     }
   }
+}
+
+/**
+ * **Les jours que la fiche affiche** : la main, l'étape, puis le récit.
+ *
+ * La main d'abord (T288) — c'est cette fiche-là qu'on a corrigée. Sinon
+ * l'étape, qui parle pour toutes ses fiches : une étape racontée en deux fois
+ * porte une seule date (T308). Sinon ce que ce récit avait compris, pour un
+ * souvenir qu'aucun recalcul n'a encore rangé. Sinon rien, et la ligne de
+ * calendrier disparaît.
+ */
+function livedDatesOf(entry: EntryWithMedia): { livedFrom: string | null; livedTo: string | null } {
+  const days = entry.pinnedLivedFromDay
+    ? livedDaysOf(entry)
+    : {
+        from: entry.step?.livedFromDay ?? entry.livedFromDay,
+        to: entry.step?.livedToDay ?? entry.livedToDay,
+      };
+  return { livedFrom: days.from?.toISOString() ?? null, livedTo: days.to?.toISOString() ?? null };
 }
 
 /**

@@ -690,6 +690,44 @@ public enum ChatCopy {
         /// Ce que VoiceOver dit d'une bulle qui a un menu, en plus de son
         /// contenu : l'appui long ne s'annonce pas tout seul.
         public static let hint = "Appui long pour copier, partager ou supprimer"
+
+        /// **Les gestes d'une fiche de MEMO** (T288) : son appui long à elle.
+        ///
+        /// « Ré-analyser » et « Modifier à la main » existent aussi **sur** la
+        /// fiche, en petit : le menu ne les remplace pas, il réunit au même
+        /// endroit tout ce qu'on peut faire d'un souvenir — c'est ce que
+        /// demande le ticket.
+        public static let reanalyse = "Ré-analyser"
+        public static let editByHand = "Modifier à la main"
+        public static let changeDates = "Changer les dates"
+        public static let changePlace = "Changer le nom du lieu"
+    }
+
+    /// **Les deux feuilles des gestes d'une fiche** (T288) — « changer les
+    /// dates », « changer le nom du lieu ».
+    public enum Facts {
+        public static let datesTitle = "Les jours racontés"
+        public static let datesLead = """
+            Ces dates sont déduites de ton récit. Si elles tombent à côté, pose \
+            les bonnes : ce sont elles que ton carnet portera.
+            """
+        public static let from = "Le jour raconté"
+        public static let to = "Jusqu’au, si ça couvre plusieurs jours"
+
+        /// Retirer la main : la rédaction reprend la parole. Proposé seulement
+        /// quand une main est passée — sinon il ne ferait rien.
+        public static let revertDates = "Revenir aux dates déduites"
+
+        public static let placeTitle = "Le nom du lieu"
+        public static let placeLead = """
+            Il vient de ce que ton récit nomme. Écris-le comme tu le dis : \
+            c’est ce nom qui titrera l’étape.
+            """
+        public static let place = "Le lieu"
+        public static let placePlaceholder = "Apollonas"
+        public static let revertPlace = "Revenir au lieu deviné"
+
+        public static let save = "Enregistrer"
     }
 
     // MARK: - Ce que VoiceOver annonce

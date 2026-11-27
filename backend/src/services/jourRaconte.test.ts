@@ -35,6 +35,7 @@ function story(options: { livedFrom?: string; livedTo?: string; capturedOn?: str
     continuesPrevious: false,
     pinnedStepId: null,
     capturedPlaceName: null,
+    pinnedPlaceName: null,
     livedFromDay: options.livedFrom ? day(options.livedFrom) : null,
     livedToDay: options.livedTo ? day(options.livedTo) : null,
   };

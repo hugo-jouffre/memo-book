@@ -5,6 +5,7 @@ import { JOB_NAMES, type RedactJob, type TranscribeJob } from "../jobs/index.js"
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { lockThread } from "../services/conversationThread.js";
+import { calendarColumn } from "../services/localCalendar.js";
 import {
   CORRECTION_FREE_CHARACTERS,
   chargeDailyCredit,
@@ -54,7 +55,84 @@ const updateEntryBody = z.object({
    * caractères offerts ni crédit du jour — voir `entries.prefersTranscript`.
    */
   prefersTranscript: z.boolean().optional(),
+
+  /**
+   * **Les jours que ce récit raconte, fixés à la main** (T288) — « changer les
+   * dates » de l'appui long sur la fiche. Un jour civil (`2026-11-14`), ou
+   * `null` pour **revenir aux dates déduites** : la lecture de la rédaction
+   * n'a pas été écrasée, elle reprend la parole.
+   *
+   * `livedTo` ne vaut que pour une période, et seul `livedFrom` décide : une
+   * main qui dit « le 12 seulement » efface la fin que le modèle avait mise.
+   */
+  livedFrom: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Attendu : AAAA-MM-JJ.")
+    .nullable()
+    .optional(),
+  livedTo: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Attendu : AAAA-MM-JJ.")
+    .nullable()
+    .optional(),
+
+  /**
+   * **Le nom du lieu, écrit à la main** (T288). `null` rend la parole au lieu
+   * que les récits de l'étape nomment.
+   *
+   * Il renomme l'étape sans rien regrouper — voir `entries.pinnedPlaceName`.
+   */
+  placeName: z.string().max(200).nullable().optional(),
 });
+
+/** Le corps d'une correction, tel que la route le lit. */
+type UpdateEntryBody = z.infer<typeof updateEntryBody>;
+
+/**
+ * **Ce que la main fixe**, prêt pour Prisma (T288).
+ *
+ * `livedFrom` commande la paire entière : un jour seul efface la fin que la
+ * rédaction avait mise, et `null` efface les deux — « revenir aux dates
+ * déduites ». Une fin antérieure au départ n'est pas une période : elle tombe.
+ */
+export function handWrittenFields(body: UpdateEntryBody): {
+  pinnedLivedFromDay?: Date | null;
+  pinnedLivedToDay?: Date | null;
+  pinnedPlaceName?: string | null;
+} {
+  const fields: {
+    pinnedLivedFromDay?: Date | null;
+    pinnedLivedToDay?: Date | null;
+    pinnedPlaceName?: string | null;
+  } = {};
+
+  if (body.livedFrom !== undefined) {
+    const from = body.livedFrom ? calendarColumn(body.livedFrom) : null;
+    const to = from && body.livedTo ? calendarColumn(body.livedTo) : null;
+    fields.pinnedLivedFromDay = from;
+    fields.pinnedLivedToDay = to && to > from! ? to : null;
+  } else if (body.livedTo !== undefined) {
+    // Une fin sans départ ne dit rien : la paire se fixe ensemble.
+    fields.pinnedLivedToDay = null;
+  }
+
+  if (body.placeName !== undefined) {
+    const name = body.placeName?.trim();
+    fields.pinnedPlaceName = name ? name : null;
+  }
+
+  return fields;
+}
+
+/**
+ * La correction touche-t-elle au découpage du voyage (T288) ?
+ *
+ * Les jours et le lieu, oui : c'est `refreshTripFacts` qui les remonte sur
+ * l'étape, et c'est l'étape que la fiche affiche. Un texte corrigé, non.
+ */
+export function changesTripFacts(body: UpdateEntryBody): boolean {
+  return body.livedFrom !== undefined || body.livedTo !== undefined || body.placeName !== undefined;
+}
 
 /** Taille maximale d'un média. ~25 Mo couvre un vocal long et une photo pleine résolution. */
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
@@ -358,6 +436,11 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
               ? { prefersTranscript: body.prefersTranscript }
               : {}),
             ...(body.placeLabel !== undefined ? { placeLabel: body.placeLabel } : {}),
+            // **Ce que la main fixe** (T288), à côté de ce que la rédaction a
+            // compris et jamais à sa place. Gratuit : ce n'est ni un texte ni
+            // des caractères, c'est une date et un nom — comme
+            // `prefersTranscript`, ça ne coûte rien au crédit du jour.
+            ...handWrittenFields(body),
             ...(body.suggestedTitle !== undefined ? { suggestedTitle: body.suggestedTitle } : {}),
             ...(body.weatherKey !== undefined ? { weatherKey: body.weatherKey } : {}),
           },
@@ -374,6 +457,12 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
         return saved;
       }),
     );
+
+    // **L'étape suit la main** (T288) : c'est `refreshTripFacts` qui remonte
+    // les jours et le lieu du souvenir sur son étape, et c'est l'étape que la
+    // fiche affiche. Sans ce passage, la correction serait écrite et
+    // invisible.
+    if (changesTripFacts(body)) await refreshTripFactsQuietly(context, entry.memoId);
 
     return serializeEntry(updated);
   });

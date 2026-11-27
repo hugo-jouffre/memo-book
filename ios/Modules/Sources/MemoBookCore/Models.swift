@@ -292,16 +292,35 @@ public struct EntryEdit: Encodable, Sendable, Hashable {
     /// clavier : ça ne coûte ni caractères offerts ni crédit du jour.
     public var prefersTranscript: Bool?
 
+    /// **Les jours que ce récit raconte, fixés à la main** (T288) — « changer
+    /// les dates » de l'appui long sur la fiche. Un jour civil, `AAAA-MM-JJ`.
+    ///
+    /// `.some(nil)` revient aux dates **déduites** : la lecture de la
+    /// rédaction n'a pas été écrasée, elle reprend la parole. Et `livedFrom`
+    /// commande la paire — un départ seul efface la fin.
+    public var livedFrom: String??
+    public var livedTo: String??
+
+    /// **Le nom du lieu, écrit à la main** (T288). `.some(nil)` rend la parole
+    /// au lieu que les récits de l'étape nomment.
+    public var placeName: String??
+
     public init(
         editedText: String?? = nil,
         suggestedTitle: String?? = nil,
         weatherKey: String?? = nil,
-        prefersTranscript: Bool? = nil
+        prefersTranscript: Bool? = nil,
+        livedFrom: String?? = nil,
+        livedTo: String?? = nil,
+        placeName: String?? = nil
     ) {
         self.editedText = editedText
         self.suggestedTitle = suggestedTitle
         self.weatherKey = weatherKey
         self.prefersTranscript = prefersTranscript
+        self.livedFrom = livedFrom
+        self.livedTo = livedTo
+        self.placeName = placeName
     }
 
     /// Garder la version littérale (`true`) ou revenir au texte rédigé.
@@ -319,8 +338,26 @@ public struct EntryEdit: Encodable, Sendable, Hashable {
         EntryEdit(editedText: .some(nil))
     }
 
+    /// **Fixe les jours que ce récit raconte** (T288) : un jour, ou une
+    /// période. `nil` partout revient aux dates déduites.
+    ///
+    /// La fin part **toujours**, même nulle : corriger le départ seul doit
+    /// effacer la fin que la rédaction avait mise, sinon « en fait c'était le
+    /// 12 » sur « du 10 au 15 » donnerait « du 12 au 15 », une période que
+    /// personne n'a dite.
+    public static func livedDays(from: String?, to: String?) -> EntryEdit {
+        EntryEdit(livedFrom: .some(from), livedTo: .some(from == nil ? nil : to))
+    }
+
+    /// **Nomme le lieu à la main** (T288) ; `nil` rend la parole au lieu
+    /// deviné.
+    public static func place(_ name: String?) -> EntryEdit {
+        EntryEdit(placeName: .some(name))
+    }
+
     private enum CodingKeys: String, CodingKey {
         case editedText, suggestedTitle, weatherKey, prefersTranscript
+        case livedFrom, livedTo, placeName
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -329,6 +366,9 @@ public struct EntryEdit: Encodable, Sendable, Hashable {
         if let suggestedTitle { try container.encode(suggestedTitle, forKey: .suggestedTitle) }
         if let weatherKey { try container.encode(weatherKey, forKey: .weatherKey) }
         if let prefersTranscript { try container.encode(prefersTranscript, forKey: .prefersTranscript) }
+        if let livedFrom { try container.encode(livedFrom, forKey: .livedFrom) }
+        if let livedTo { try container.encode(livedTo, forKey: .livedTo) }
+        if let placeName { try container.encode(placeName, forKey: .placeName) }
     }
 }
 
