@@ -386,7 +386,7 @@ public struct ChatView: View {
                         ChatGreetingView(greeting: greeting)
                     }
 
-                    ForEach(model.messages) { message in
+                    ForEach(model.visibleMessages) { message in
                         ChatMessageRow(
                             message: message,
                             model: model,
@@ -422,7 +422,7 @@ public struct ChatView: View {
                 .padding(.vertical, MemoBookSpacing.s)
                 .animation(
                     reduceMotion ? nil : .smooth(duration: 0.3),
-                    value: model.messages.count
+                    value: model.visibleMessages.count
                 )
                 // **Le fil se lève dès que la puce décolle** (Hugo,
                 // 30/09/2026) : la bulle qui monte se pose dans le creux qu'il
@@ -458,7 +458,7 @@ public struct ChatView: View {
             // haut ni bas — il a un centre, et c'est là que la maquette pose son
             // accueil.
             .defaultScrollAnchor(thread.isEmpty ? .center : .bottom)
-            .onChange(of: model.messages.count) { _, _ in follow(proxy) }
+            .onChange(of: model.visibleMessages.count) { _, _ in follow(proxy) }
             .task { await settleOnFocusedStep(proxy) }
             .onChange(of: model.isThinking) { _, isThinking in
                 guard isThinking else { return }
@@ -817,7 +817,7 @@ public struct ChatView: View {
     /// bande, transparente, au-dessus du matériau de la barre.
     private func footer(_ proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 0) {
-            if !isAtBottom, !model.messages.isEmpty {
+            if !isAtBottom, !model.visibleMessages.isEmpty {
                 ChatBackToBottomPill { scrollToBottom(proxy) }
                     .padding(.bottom, MemoBookSpacing.xs)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -891,7 +891,7 @@ public struct ChatView: View {
         // vu la journée qu'on venait relire.
         guard pendingFocus == nil else { return }
 
-        let weJustSpoke = model.messages.last?.author.isTraveller == true
+        let weJustSpoke = model.visibleMessages.last?.author.isTraveller == true
         guard isAtBottom || weJustSpoke else { return }
         scrollToBottom(proxy)
     }
@@ -945,7 +945,7 @@ public struct ChatView: View {
 
         // Posé ailleurs qu'en bas : la pastille « Retourner en bas » le dit,
         // et une réponse de MEMO ne vient pas l'en arracher.
-        if target.id != model.messages.last?.id { isAtBottom = false }
+        if target.id != model.visibleMessages.last?.id { isAtBottom = false }
         pendingFocus = nil
     }
 
@@ -964,7 +964,7 @@ public struct ChatView: View {
         // n'a pas de bas, il a un centre. « En bas » ne change qu'au doigt
         // (``isAtBottom``) : le pied qui grandit ne le fait pas mentir.
         guard previous > 0, abs(height - previous) > 0.5, isAtBottom, pendingFocus == nil,
-            flight == nil, !model.messages.isEmpty
+            flight == nil, !model.visibleMessages.isEmpty
         else { return }
         // **Une image plus tard** : ce relevé arrive pendant la mise en page,
         // avant que le nouvel encart du bas ne soit appliqué au défilement. Un

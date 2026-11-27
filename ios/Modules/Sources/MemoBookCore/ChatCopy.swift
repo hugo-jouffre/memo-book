@@ -764,6 +764,11 @@ public enum ChatCopy {
         public static let storedOnPhone = "Gardé sur ton téléphone"
         /// Les deux coches : le serveur l'a reçu, la retranscription commence.
         public static let delivered = "Bien reçu"
+        /// **L'oreille posée sur un vocal qu'on transcrit** (T316). L'emoji
+        /// est séparé de ce que VoiceOver annonce : lu tel quel, il se dirait
+        /// « oreille », ce qui ne dit pas ce qui se passe.
+        public static let listeningEar = "👂"
+        public static let listening = "MEMO écoute ton vocal"
         /// La bulle « Partira demain », dite en entier.
         public static let leavesTomorrow =
             "Gardé sur ton téléphone : partira demain, quand le crédit du jour se rechargera"

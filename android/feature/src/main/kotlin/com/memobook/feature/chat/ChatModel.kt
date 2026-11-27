@@ -729,7 +729,62 @@ class ChatModel(
 
     // MARK: - Ce que la vue lit
 
+    /**
+     * Le fil tel qu'il est : **toutes** ses bulles, la fiche qui n'a pas
+     * encore de texte comprise.
+     *
+     * C'est la liste que le modèle lit pour travailler — le sondage qui
+     * attend une transcription, la dédup d'un message qui revient, le rang
+     * d'une bulle qu'on remplace. [visibleMessages] est celle que l'écran
+     * dessine, et elle en cache une.
+     */
     val messages: List<ChatMessage> get() = current.thread?.messages ?: emptyList()
+
+    /**
+     * Les bulles **que l'écran montre**.
+     *
+     * ⚠️ **Une fiche qui n'a encore rien à dire ne s'y trouve pas** (T316,
+     * Hugo — « pendant qu'un vocal se transcrit, ne rien montrer : pas de
+     * bulle en construction, juste un petit 👂 posé sur le message du
+     * voyageur »).
+     *
+     * Elle s'affichait dès l'arrivée du vocal, avec un tourniquet et « Je
+     * n'ai pas encore la transcription » : une bulle vide posée sous le
+     * message qu'on venait d'envoyer, qui disait deux fois la même attente —
+     * les deux coches la disent déjà. La fiche arrive maintenant **avec son
+     * texte**, c'est-à-dire quand elle a quelque chose à montrer.
+     *
+     * ⚠️ **Le modèle, lui, continue de la voir** ([messages]), et il le faut :
+     * c'est elle qui tient le sondage en vie jusqu'à ce que la transcription
+     * arrive. La cacher au modèle l'endort, et le texte ne vient jamais —
+     * c'est ce qu'a dit `aSettlingCardIsReplacedInPlaceAndPollingStopsWhenReady`
+     * à la première tentative.
+     */
+    val visibleMessages: List<ChatMessage>
+        get() = messages.filter { message ->
+            val body = message.body
+            body !is ChatMessageBody.Transcript || body.card.phase != TranscriptCard.Phase.Listening
+        }
+
+    /**
+     * **MEMO est en train d'écouter ce vocal-là** (T316) : son oreille se pose
+     * à côté des coches, le temps de la transcription.
+     *
+     * Un vocal du voyageur, arrivé chez nous, dont la fiche existe et n'a pas
+     * encore de texte. Rien pour un texte ni pour des photos : il n'y a rien à
+     * transcrire.
+     */
+    fun isBeingTranscribed(message: ChatMessage): Boolean {
+        if (message.body !is ChatMessageBody.Voice) return false
+        if (!message.author.isTraveller || message.delivery != ChatDelivery.Sent) return false
+        val entryId = message.entryId ?: return false
+        return (current.thread?.messages ?: emptyList()).any { other ->
+            val body = other.body
+            body is ChatMessageBody.Transcript &&
+                body.card.entryId == entryId &&
+                body.card.phase == TranscriptCard.Phase.Listening
+        }
+    }
 
     val suggestions: List<ChatSuggestion> get() = current.thread?.suggestions ?: emptyList()
 

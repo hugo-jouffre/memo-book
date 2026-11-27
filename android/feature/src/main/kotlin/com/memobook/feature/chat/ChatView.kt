@@ -475,7 +475,8 @@ private fun ChatConversation(
     val reduceMotion = isReduceMotionEnabled()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val messages = thread.messages
+    // Ce que l'écran montre : la fiche sans texte n'y est pas (T316).
+    val messages = model.visibleMessages
 
     // Les fiches de retranscription dépliées. Un état de **lecture**, pas de
     // donnée : il n'a rien à faire dans le modèle, et il se perd volontiers
@@ -588,7 +589,7 @@ private fun ChatConversation(
     // demandée, le fil ne suit rien.
     val follow = {
         if (pendingFocus == null) {
-            val weJustSpoke = model.messages.lastOrNull()?.author?.isTraveller == true
+            val weJustSpoke = model.visibleMessages.lastOrNull()?.author?.isTraveller == true
             if (isAtBottom || weJustSpoke) scrollToBottom()
         }
     }
@@ -612,7 +613,7 @@ private fun ChatConversation(
         if (index >= 0) listState.scrollToItem(index)
         // Posé ailleurs qu'en bas : la pastille « Retourner en bas » le dit, et
         // une réponse de MEMO ne vient pas l'en arracher.
-        if (target.id != model.messages.lastOrNull()?.id) isAtBottom = false
+        if (target.id != model.visibleMessages.lastOrNull()?.id) isAtBottom = false
         pendingFocus = null
     }
 
@@ -1048,7 +1049,7 @@ object ChatView {
         ) {
             add(Row.Nudge)
         }
-        thread.messages.asReversed().forEach { add(Row.Message(it)) }
+        model.visibleMessages.asReversed().forEach { add(Row.Message(it)) }
         if (thread.isEmpty && thread.greeting != null) add(Row.Greeting)
         add(Row.Privacy)
         add(Row.Notices)

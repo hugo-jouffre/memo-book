@@ -415,6 +415,92 @@ final class ChatModelTests: XCTestCase {
         ])
     }
 
+    // MARK: - Pendant qu'un vocal se transcrit (T316)
+
+    /// Le vocal du voyageur, et la fiche que MEMO pose dessus.
+    private func voice(_ id: String, entryId: String, seq: Int) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            author: .traveller,
+            body: .voice(VoiceNote(id: "\(id)-audio", duration: 12)),
+            sentAt: .now,
+            seq: seq,
+            entryId: entryId
+        )
+    }
+
+    /// **La fiche vide ne se montre pas** : tant que la transcription n'a rien
+    /// rendu, il n'y a rien à lire, et la bulle en construction disait une
+    /// attente que les deux coches disent déjà.
+    func testACardWithoutATranscriptStaysOutOfTheThread() async throws {
+        let script = Script(
+            thread: thread(messages: [
+                voice("vocal", entryId: "e1", seq: 1),
+                card("fiche", entryId: "e1", text: nil, phase: .listening, seq: 2),
+            ])
+        )
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertEqual(model.visibleMessages.map(\.id), ["vocal"], "La fiche attend d'avoir un texte.")
+        XCTAssertEqual(model.messages.count, 2, "Le modèle, lui, la voit : c'est elle qui tient le sondage.")
+    }
+
+    /// **Et l'oreille se pose sur le vocal** : c'est tout ce qu'on montre.
+    func testTheEarSitsOnTheVoiceBeingTranscribed() async throws {
+        let script = Script(
+            thread: thread(messages: [
+                voice("vocal", entryId: "e1", seq: 1),
+                card("fiche", entryId: "e1", text: nil, phase: .listening, seq: 2),
+            ])
+        )
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        let vocal = try XCTUnwrap(model.visibleMessages.first)
+        XCTAssertTrue(model.isBeingTranscribed(vocal))
+    }
+
+    /// **La fiche arrivée, l'oreille s'en va** et la fiche prend sa place dans
+    /// le fil : c'est elle qui dit la suite.
+    func testTheEarLeavesWhenTheTranscriptArrives() async throws {
+        let script = Script(
+            thread: thread(messages: [
+                voice("vocal", entryId: "e1", seq: 1),
+                card("fiche", entryId: "e1", text: "Le Colisée au petit matin.", phase: .writing, seq: 2),
+            ])
+        )
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertEqual(model.visibleMessages.map(\.id), ["vocal", "fiche"])
+        let vocal = try XCTUnwrap(model.visibleMessages.first)
+        XCTAssertFalse(model.isBeingTranscribed(vocal))
+    }
+
+    /// **Rien sur un texte** : il n'y a pas de vocal à écouter. La fiche d'un
+    /// texte, elle, se montre comme avant — son récit est déjà là.
+    func testNothingIsListenedToOnAWrittenMessage() async throws {
+        let written = ChatMessage(
+            id: "ecrit",
+            author: .traveller,
+            body: .text("Le Colisée au petit matin."),
+            sentAt: .now,
+            seq: 1,
+            entryId: "e1"
+        )
+        let script = Script(
+            thread: thread(messages: [
+                written,
+                card("fiche", entryId: "e1", text: nil, phase: .listening, seq: 2),
+            ])
+        )
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertFalse(model.isBeingTranscribed(try XCTUnwrap(model.visibleMessages.first)))
+    }
+
     // MARK: - « Importer des photos » ne dit rien (T304)
 
     /// **Elle ouvre le sélecteur, et c'est tout** : aucune bulle ne part, et
