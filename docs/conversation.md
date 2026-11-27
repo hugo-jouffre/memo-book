@@ -50,6 +50,17 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Pendant que MEMO écrit, les propositions s'en vont** (T306, 27/11/2026).
+  Elles descendent derrière la barre d'envoi — c'est de là qu'elles venaient —
+  et les suivantes en remontent quand elles sont prêtes. La bande **garde sa
+  hauteur** pendant ce temps : sans elle, la barre raccourcit au moment où le
+  message part, et le fil épinglé en bas se tasse sous la bulle qu'on vient de
+  poser (T207).
+
+  Elle tenait cette place avec trois puces grises qui chargeaient. Le reflet
+  qui les traversait disait « ça tourne » au moment précis où MEMO écrit déjà
+  dans le fil, en trois points : deux attentes pour un seul tour, et la plus
+  bruyante était celle qui n'avait rien à dire.
 - **Une puce qui ne dit rien ne vole pas** (T304, 27/11/2026). Une puce
   **parle** : son libellé part en bulle bleue, et c'est pour ça qu'elle décolle
   de la barre vers le fil (T207). Deux n'envoient rien — « Importer des
