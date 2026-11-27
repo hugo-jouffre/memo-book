@@ -441,10 +441,14 @@ public struct ChatView: View {
                 // ne repartait plus.
                 .brandScrollOffset { top, bottomGap, byUser in
                     if byUser {
-                        trackScroll(to: top)
-                        // N'écrit que ce qui change — voir ``revealBanner``.
+                        // **« En bas » se lit d'abord** (T289) : un seul relevé
+                        // peut porter tout un geste, et la barre se cachait
+                        // puis se rendait dans la même image — elle ne partait
+                        // jamais. On sait donc où l'on est **avant** de décider
+                        // ce que le geste veut dire.
                         let atBottom = bottomGap <= Self.bottomTolerance
                         if atBottom != isAtBottom { isAtBottom = atBottom }
+                        trackScroll(to: top)
                         // Revenu en bas, on n'est plus en train de lire (T289).
                         if atBottom { revealComposer() }
                     } else {
@@ -453,7 +457,13 @@ public struct ChatView: View {
                 }
             }
             .coordinateSpace(name: Self.scrollSpace)
-            .scrollIndicators(.hidden)
+            // **L'ascenseur du système, le long du bord droit** (T312, Hugo —
+            // « pour savoir où l'on en est »). C'est le seul endroit de l'app
+            // où il paraît : partout ailleurs on défile une page ou une
+            // bande, ici on parcourt une conversation qui fait des centaines
+            // de bulles, et rien ne disait où l'on en était. Celui d'iOS,
+            // sans rien redessiner : il s'efface tout seul après le geste.
+            .scrollIndicators(.visible)
             .scrollDismissesKeyboard(.interactively)
             // Une conversation s'ouvre sur sa fin : c'est le dernier message
             // qu'on vient lire, jamais le premier. Un fil **vide**, lui, n'a ni
@@ -763,7 +773,10 @@ public struct ChatView: View {
     /// défilement. Sans ça, remonter relire une phrase pendant qu'on dicte
     /// emporterait le micro ouvert avec elle.
     private var composerCanHide: Bool {
-        model.composer == .tools && !model.recorder.isRecording && flight == nil && !isWriting
+        // **Jamais en bas du fil** : c'est là qu'on parle, et la barre y est
+        // chez elle. Ailleurs, on lit.
+        guard !isAtBottom else { return false }
+        return model.composer == .tools && !model.recorder.isRecording && flight == nil && !isWriting
     }
 
     /// Efface la barre, si le moment s'y prête.

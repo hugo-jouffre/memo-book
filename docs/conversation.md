@@ -50,6 +50,9 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **L'ascenseur du système sur le fil** (T312, 27/11/2026) : le seul écran de
+  l'app qui le montre, parce que c'est le seul où l'on parcourt des centaines
+  de bulles sans savoir où l'on en est.
 - **Le clavier n'avale plus les dernières bulles** (T313, 27/11/2026) : au bas
   du fil, l'ouvrir laissait passer les deux dernières derrière lui, sans
   pastille pour revenir — le fil se croyait toujours en bas. Il suit
