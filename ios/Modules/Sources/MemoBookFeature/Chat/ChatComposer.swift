@@ -159,6 +159,18 @@ struct ChatComposer: View {
 /// défilement. Une puce plus large que l'écran se lit en faisant glisser la
 /// bande — c'est exactement ce que la maquette montre, la dernière puce sortant
 /// par le bord droit.
+/// **Le masque de la bande** (T306) : haut comme elle, infiniment large.
+///
+/// Les puces descendent derrière la barre d'envoi quand MEMO se met à écrire,
+/// et c'est lui qui les cache une fois passées dessous. Il ne coupe pas en
+/// largeur : la dernière puce doit pouvoir sortir par le bord de l'écran,
+/// comme la bande le permet depuis le premier jour.
+private struct RailSlot: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: -4_000, dy: 0))
+    }
+}
+
 struct ChatSuggestionRail: View {
     @Bindable var model: ChatModel
     let onAddPhotos: () -> Void
@@ -186,76 +198,76 @@ struct ChatSuggestionRail: View {
     /// vol quand on en touche une.
     @State private var frames: [String: CGRect] = [:]
 
+    /// Les mouvements de la bande se font **sans animation si on la refuse**
+    /// (T306) : elle apparaît et disparaît alors d'un coup, à sa place.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         let suggestions = model.visibleSuggestions
+        let showsChips = !suggestions.isEmpty
+        // La bande garde sa place le temps du tour : ses puces s'en vont, sa
+        // hauteur reste — voir ``ChatModel/reservesSuggestionRail``.
+        let keepsPlace = showsChips || model.reservesSuggestionRail
 
         if isMuted {
-            if !suggestions.isEmpty || model.reservesSuggestionRail {
+            if keepsPlace {
                 Color.clear
                     .frame(height: railHeight)
                     .padding(.vertical, MemoBookSpacing.xs / 2)
                     .accessibilityHidden(true)
             }
-        } else if !suggestions.isEmpty {
-            ScrollView(.horizontal) {
-                HStack(alignment: .center, spacing: MemoBookSpacing.xs) {
-                    ForEach(suggestions, content: chip)
-                }
-                .padding(.horizontal, MemoBookSpacing.snug)
+        } else if keepsPlace {
+            // **Les puces descendent derrière la barre, et en remontent**
+            // (T306, Hugo — « pendant la rédaction, les propositions s'en
+            // vont au lieu de tourner »).
+            //
+            // Elles tenaient leur place avec trois puces grises qui
+            // chargeaient (08/10/2026). Le reflet qui les traversait disait
+            // « ça tourne » au moment précis où MEMO écrit déjà dans le
+            // fil — deux attentes pour un seul tour, et la plus bruyante
+            // était celle qui n'avait rien à dire.
+            //
+            // La place, elle, reste gardée : sans elle la barre raccourcit à
+            // l'envoi, et le fil, épinglé en bas, se tasse sous le message
+            // qu'on vient de poser (T207).
+            ZStack {
+                if showsChips { rail(of: suggestions) }
             }
-            .scrollIndicators(.hidden)
-            // La bande prend toute la largeur ; ce sont ses puces qui
-            // s'alignent sur la colonne, pour que la dernière puisse sortir par
-            // le bord au lieu de buter sur une marge.
-            .scrollClipDisabled()
-            // ⚠️ **La bande impose sa hauteur.** Une `ScrollView` est gourmande
-            // sur ses deux axes : posée dans la barre du bas, elle se faisait
-            // attribuer une hauteur plus courte que ses puces. Elles restaient
-            // dessinées — `scrollClipDisabled` le permet — mais **hors de sa
-            // zone tactile** : on les voyait, et taper dessus ne faisait rien.
+            .frame(maxWidth: .infinity)
             .frame(height: railHeight)
+            // ⚠️ **On ne coupe qu'en hauteur.** La bande laisse sa dernière
+            // puce sortir par le bord (``scrollClipDisabled``) : un
+            // `clipped()` la rognerait. Ce masque est infiniment large et
+            // haut comme la bande — il ne fait que cacher ce qui passe sous
+            // la barre.
+            .clipShape(RailSlot())
             .padding(.vertical, MemoBookSpacing.xs / 2)
-            .transition(.opacity)
-        } else if model.reservesSuggestionRail {
-            // La place de la bande le temps que MEMO réponde — voir
-            // ``ChatModel/reservesSuggestionRail``. **Des puces grises qui
-            // chargent**, et non une ligne vide (Hugo, 08/10/2026) : la bande
-            // dit qu'elle attend les prochaines propositions.
-            pendingChips
-                .frame(height: railHeight)
-                .padding(.vertical, MemoBookSpacing.xs / 2)
-                .transition(.opacity)
-                .accessibilityHidden(true)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: showsChips)
         }
     }
 
-    /// Les largeurs des puces d'attente : trois propositions de longueurs
-    /// différentes, comme les vraies — trois barres égales se liraient comme
-    /// un motif, pas comme des phrases qui arrivent.
-    private static let pendingChipWidths: [CGFloat] = [132, 176, 112]
-
-    /// Trois puces de la forme et de la hauteur des vraies, en
-    /// ``BrandSkeleton`` : le reflet qui les traverse dit que ça charge, et la
-    /// place qu'elles tiennent est celle que les propositions prendront.
-    private var pendingChips: some View {
-        HStack(spacing: MemoBookSpacing.xs) {
-            ForEach(Self.pendingChipWidths, id: \.self) { width in
-                BrandSkeleton(width: width, height: chipHeight)
+    /// La bande elle-même, qui défile.
+    private func rail(of suggestions: [ChatSuggestion]) -> some View {
+        ScrollView(.horizontal) {
+            HStack(alignment: .center, spacing: MemoBookSpacing.xs) {
+                ForEach(suggestions, content: chip)
             }
+            .padding(.horizontal, MemoBookSpacing.snug)
         }
-        .padding(.horizontal, MemoBookSpacing.snug)
-        // ⚠️ **`minWidth: 0`, et pas seulement `maxWidth`** (Hugo,
-        // 12/10/2026 : « les skeleton loader élargissent la page du chat »).
-        // Les trois puces font ~450 pt, plus que l'écran : un cadre qui n'a
-        // qu'un maximum prend la largeur de son contenu quand celui-ci
-        // déborde, et la barre entière s'élargissait avec lui — le fil
-        // glissait de côté le temps que MEMO réponde. Bornée des deux côtés,
-        // la bande prend la largeur de l'écran, et c'est la dernière puce qui
-        // sort par le bord.
-        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-        // La bande ne défile pas : la dernière puce sort par le bord, comme
-        // une vraie proposition trop longue pour l'écran.
-        .clipped()
+        .scrollIndicators(.hidden)
+        // La bande prend toute la largeur ; ce sont ses puces qui
+        // s'alignent sur la colonne, pour que la dernière puisse sortir par
+        // le bord au lieu de buter sur une marge.
+        .scrollClipDisabled()
+        // ⚠️ **La bande impose sa hauteur.** Une `ScrollView` est gourmande
+        // sur ses deux axes : posée dans la barre du bas, elle se faisait
+        // attribuer une hauteur plus courte que ses puces. Elles restaient
+        // dessinées — `scrollClipDisabled` le permet — mais **hors de sa
+        // zone tactile** : on les voyait, et taper dessus ne faisait rien.
+        .frame(height: railHeight)
+        // Elles arrivent du bas et repartent par le bas : la barre est en
+        // dessous, c'est de là qu'une proposition vient.
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private func chip(_ suggestion: ChatSuggestion) -> some View {

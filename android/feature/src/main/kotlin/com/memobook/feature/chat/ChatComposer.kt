@@ -81,7 +81,6 @@ import com.memobook.core.ChatSuggestion
 import com.memobook.core.DailyCreditCopy
 import com.memobook.design.BrandButton
 import com.memobook.design.BrandNotice
-import com.memobook.design.BrandSkeleton
 import com.memobook.design.BrandText
 import com.memobook.design.BrandWaveform
 import com.memobook.design.MemoBookColor
@@ -299,13 +298,18 @@ fun ChatSuggestionRail(
     // cible tactile — la puce est plus basse que 3 rem, la bande non.
     val railHeight = maxOf(MemoBookSpacing.minimumTapTarget, chipHeight + MemoBookSpacing.xs)
     val suggestions = model.visibleSuggestions
+    val showsChips = suggestions.isNotEmpty()
+    // La bande garde sa place le temps du tour : ses puces s'en vont, sa
+    // hauteur reste — voir `ChatModel.reservesSuggestionRail`.
+    val keepsPlace = showsChips || model.reservesSuggestionRail
+    val reduceMotion = isReduceMotionEnabled()
     // Les cadres des puces à l'écran : le point de départ du vol. Une boîte
     // **non observée** : ils changent à chaque image d'un défilement de la
     // bande, et seul le toucher les lit.
     val frames = remember { mutableMapOf<String, Rect>() }
 
     when {
-        isMuted -> if (suggestions.isNotEmpty() || model.reservesSuggestionRail) {
+        isMuted -> if (keepsPlace) {
             Spacer(
                 Modifier
                     .padding(vertical = MemoBookSpacing.xs / 2)
@@ -313,76 +317,70 @@ fun ChatSuggestionRail(
                     .clearAndSetSemantics {},
             )
         }
-        suggestions.isNotEmpty() -> Row(
+        // **Les puces descendent derrière la barre, et en remontent** (T306,
+        // Hugo — « pendant la rédaction, les propositions s'en vont au lieu de
+        // tourner »).
+        //
+        // Elles tenaient leur place avec trois puces grises qui chargeaient
+        // (08/10/2026). Le reflet qui les traversait disait « ça tourne » au
+        // moment précis où MEMO écrit déjà dans le fil — deux attentes pour un
+        // seul tour, et la plus bruyante était celle qui n'avait rien à dire.
+        //
+        // La place, elle, reste gardée : sans elle la barre raccourcit à
+        // l'envoi, et le fil, épinglé en bas, se tasse sous le message qu'on
+        // vient de poser (T207).
+        keepsPlace -> Box(
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = MemoBookSpacing.xs / 2)
-                // ⚠️ **La bande impose sa hauteur.** Sur iOS, une `ScrollView`
-                // posée dans la barre se faisait attribuer une hauteur plus
-                // courte que ses puces, qui restaient dessinées hors de sa zone
-                // tactile. Ici aussi, la hauteur est celle de la cible.
                 .height(railHeight)
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = MemoBookSpacing.snug),
-            horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
+                // ⚠️ On ne coupe qu'en hauteur : la dernière puce doit pouvoir
+                // sortir par le bord de l'écran, comme la bande le permet
+                // depuis le premier jour.
+                .clipToBounds(),
         ) {
-            suggestions.forEach { suggestion ->
-                SuggestionChip(
-                    suggestion = suggestion,
-                    chipHeight = chipHeight,
-                    railHeight = railHeight,
-                    isFlying = flyingSuggestionId == suggestion.id,
-                    onPositioned = { frames[suggestion.id] = it },
+            AnimatedVisibility(
+                visible = showsChips,
+                // Elles arrivent du bas et repartent par le bas : la barre est
+                // en dessous, c'est de là qu'une proposition vient.
+                enter = if (reduceMotion) fadeIn(snap()) else fadeIn() + slideInVertically { it },
+                exit = if (reduceMotion) fadeOut(snap()) else fadeOut() + slideOutVertically { it },
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        // ⚠️ **La bande impose sa hauteur.** Sur iOS, une
+                        // `ScrollView` posée dans la barre se faisait attribuer
+                        // une hauteur plus courte que ses puces, qui restaient
+                        // dessinées hors de sa zone tactile. Ici aussi, la
+                        // hauteur est celle de la cible.
+                        .height(railHeight)
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = MemoBookSpacing.snug),
+                    horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    val frame = frames[suggestion.id]
-                    if (onLaunch != null && frame != null) {
-                        onLaunch(suggestion, frame)
-                    } else {
-                        model.choose(suggestion, addPhotos = onAddPhotos)
+                    suggestions.forEach { suggestion ->
+                        SuggestionChip(
+                            suggestion = suggestion,
+                            chipHeight = chipHeight,
+                            railHeight = railHeight,
+                            isFlying = flyingSuggestionId == suggestion.id,
+                            onPositioned = { frames[suggestion.id] = it },
+                        ) {
+                            val frame = frames[suggestion.id]
+                            if (onLaunch != null && frame != null) {
+                                onLaunch(suggestion, frame)
+                            } else {
+                                model.choose(suggestion, addPhotos = onAddPhotos)
+                            }
+                        }
                     }
                 }
             }
         }
-        // La place de la bande le temps que MEMO réponde — voir
-        // `ChatModel.reservesSuggestionRail`. **Des puces grises qui
-        // chargent**, et non une ligne vide (Hugo, 08/10/2026) : la bande dit
-        // qu'elle attend les prochaines propositions.
-        model.reservesSuggestionRail -> PendingChips(chipHeight, railHeight)
     }
 }
-
-/**
- * Trois puces de la forme et de la hauteur des vraies, en [BrandSkeleton] : le
- * reflet qui les traverse dit que ça charge, et la place qu'elles tiennent est
- * celle que les propositions prendront.
- *
- * Trois longueurs différentes, comme les vraies — trois barres égales se
- * liraient comme un motif, pas comme des phrases qui arrivent. ⚠️ **Bornée en
- * largeur** (Hugo, 12/10/2026 : « les skeleton loader élargissent la page du
- * chat ») : les trois puces font plus que l'écran, et c'est la dernière qui
- * sort par le bord, rognée — la bande ne défile pas.
- */
-@Composable
-private fun PendingChips(chipHeight: androidx.compose.ui.unit.Dp, railHeight: androidx.compose.ui.unit.Dp) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = MemoBookSpacing.xs / 2)
-            .height(railHeight)
-            .clipToBounds()
-            .padding(horizontal = MemoBookSpacing.snug)
-            .clearAndSetSemantics {},
-        horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        PENDING_CHIP_WIDTHS.forEach { width ->
-            BrandSkeleton(Modifier.wrapContentWidth(unbounded = true), width = width.dp, height = chipHeight)
-        }
-    }
-}
-
-private val PENDING_CHIP_WIDTHS = listOf(132, 176, 112)
 
 @Composable
 private fun SuggestionChip(
