@@ -952,22 +952,32 @@ private fun KeyboardHolder(keyboard: ChatKeyboard) {
 }
 
 /**
- * La pastille « Retourner en bas », qui n'apparaît que si on est remonté.
- * Jumeau de `ChatBackToBottomPill`.
+ * **La flèche du retour en bas** (T314), jumelle de `ChatBackToBottomPill`.
  *
  * Elle flotte au-dessus de la barre d'envoi plutôt que d'y prendre place :
  * c'est un raccourci de lecture, pas une commande de la conversation, et il
  * disparaît dès qu'il a servi.
+ *
+ * Elle portait son nom en toutes lettres, en corps gras, dans une pastille
+ * large de la moitié de l'écran — posée **par-dessus le fil**, elle cachait la
+ * bulle qu'on était en train de lire, c'est-à-dire ce qu'on était remonté
+ * chercher. Un rond de la taille d'une cible tactile suffit : une flèche vers
+ * le bas se comprend sans légende, et TalkBack garde la phrase entière.
+ *
+ * ⚠️ Elle ne paraît que **loin** du bas ([ChatMetrics.backToBottomDistance]) :
+ * dans les dix derniers messages, on y est presque.
  */
 @Composable
 fun ChatBackToBottomPill(action: () -> Unit, modifier: Modifier = Modifier) {
     val glyph = scaled(MemoBookSpacing.m)
-    val shape = RoundedCornerShape(MemoBookSpacing.largeCornerRadius)
-    Row(
+    Box(
         modifier
-            .heightIn(min = MemoBookSpacing.minimumTapTarget)
-            .brandShadow(MemoBookShadow.Soft, shape)
-            .background(MemoBookColor.surface, shape)
+            .size(MemoBookSpacing.minimumTapTarget)
+            // Un cercle, et non la capsule d'avant : sans texte, les deux se
+            // valent au dessin, et le cercle dit mieux « un geste » que
+            // « une étiquette ».
+            .brandShadow(MemoBookShadow.Soft, CircleShape)
+            .background(MemoBookColor.surface, CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = CardPressStyle,
@@ -977,12 +987,9 @@ fun ChatBackToBottomPill(action: () -> Unit, modifier: Modifier = Modifier) {
             .clearAndSetSemantics {
                 contentDescription = ChatCopy.backToBottom
                 onClick { action(); true }
-            }
-            .padding(horizontal = MemoBookSpacing.s, vertical = MemoBookSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.snug),
-        verticalAlignment = Alignment.CenterVertically,
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        BrandText(ChatCopy.backToBottom, MemoBookFont.bodySemibold)
         Image(
             painter = painterResource(R.drawable.icon_lucide_arrow_down),
             contentDescription = null,

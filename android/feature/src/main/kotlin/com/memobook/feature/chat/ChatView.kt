@@ -493,6 +493,12 @@ private fun ChatConversation(
     // arrive ne la changent pas : on n'a pas bougé.
     var isAtBottom by remember { mutableStateOf(true) }
 
+    // **On est loin du bas** — plus de dix messages, à la louche
+    // (`ChatMetrics.backToBottomDistance`). C'est la seule condition qui fait
+    // paraître la flèche du retour (T314) : dans les dix derniers, on y est
+    // presque, et une flèche de plus ne servirait qu'à encombrer.
+    var isFarFromBottom by remember { mutableStateOf(false) }
+
     // La barre d'envoi et ses propositions sont là — elles s'effacent quand on
     // remonte lire (T289).
     var showsComposer by remember { mutableStateOf(true) }
@@ -599,6 +605,12 @@ private fun ChatConversation(
                 if (delta != 0f) {
                     val atBottom = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset <= bottomTolerance
                     if (atBottom != isAtBottom) isAtBottom = atBottom
+                    // **La flèche du retour ne paraît que de loin** (T314) :
+                    // le fil est à l'envers, donc le rang de la première
+                    // bulle visible **est** le nombre de messages passés sous
+                    // l'écran. Ici, on les compte pour de vrai.
+                    val far = listState.firstVisibleItemIndex > ChatMetrics.BACK_TO_BOTTOM_MESSAGES
+                    if (far != isFarFromBottom) isFarFromBottom = far
                     // Revenu en bas, on n'est plus en train de lire (T289).
                     if (atBottom) revealComposer()
                 }
@@ -817,7 +829,7 @@ private fun ChatConversation(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             AnimatedVisibility(
-                visible = !isAtBottom && messages.isNotEmpty(),
+                visible = isFarFromBottom && !isAtBottom && messages.isNotEmpty(),
                 enter = if (reduceMotion) fadeIn(snap()) else fadeIn() + slideInVertically { it },
                 exit = if (reduceMotion) fadeOut(snap()) else fadeOut() + slideOutVertically { it },
             ) {

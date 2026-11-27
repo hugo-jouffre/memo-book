@@ -50,6 +50,10 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Le retour en bas est une flèche** (T314, 27/11/2026), dans un rond, et il
+  ne paraît que **loin** du bas : dans les dix derniers messages, on y est
+  presque. La pastille d'avant portait son nom en toutes lettres et cachait,
+  par-dessus le fil, la bulle qu'on était remonté lire.
 - **Les photos se rangent à leur format** (T305, 27/11/2026) : une rangée
   remplit la largeur de la bulle, ses photos y gardent leur forme — carré,
   portrait, paysage —, et un nombre impair ne laisse plus de trou : la
