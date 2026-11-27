@@ -441,17 +441,29 @@ public struct ChatView: View {
                 // ne repartait plus.
                 .brandScrollOffset { top, bottomGap, byUser in
                     if byUser {
-                        trackScroll(to: top)
-                        // N'écrit que ce qui change — voir ``revealBanner``.
+                        // **« En bas » se lit d'abord** (T289) : un seul relevé
+                        // peut porter tout un geste, et la barre se cachait
+                        // puis se rendait dans la même image — elle ne partait
+                        // jamais. On sait donc où l'on est **avant** de décider
+                        // ce que le geste veut dire.
                         let atBottom = bottomGap <= Self.bottomTolerance
                         if atBottom != isAtBottom { isAtBottom = atBottom }
+                        trackScroll(to: top)
+                        // Revenu en bas, on n'est plus en train de lire (T289).
+                        if atBottom { revealComposer() }
                     } else {
                         scroll.lastContentTop = top
                     }
                 }
             }
             .coordinateSpace(name: Self.scrollSpace)
-            .scrollIndicators(.hidden)
+            // **L'ascenseur du système, le long du bord droit** (T312, Hugo —
+            // « pour savoir où l'on en est »). C'est le seul endroit de l'app
+            // où il paraît : partout ailleurs on défile une page ou une
+            // bande, ici on parcourt une conversation qui fait des centaines
+            // de bulles, et rien ne disait où l'on en était. Celui d'iOS,
+            // sans rien redessiner : il s'efface tout seul après le geste.
+            .scrollIndicators(.visible)
             .scrollDismissesKeyboard(.interactively)
             // Une conversation s'ouvre sur sa fin : c'est le dernier message
             // qu'on vient lire, jamais le premier. Un fil **vide**, lui, n'a ni
@@ -459,6 +471,25 @@ public struct ChatView: View {
             // accueil.
             .defaultScrollAnchor(thread.isEmpty ? .center : .bottom)
             .onChange(of: model.visibleMessages.count) { _, _ in follow(proxy) }
+            // **Le clavier ne doit pas avaler les dernières bulles** (T313,
+            // mesuré le 27/11 : en bas du fil, clavier ouvert, les deux
+            // dernières passaient derrière lui — et sans pastille pour
+            // revenir, puisque le fil se croyait toujours en bas).
+            //
+            // ``keepPinned`` ne voyait pas ce cas : il surveille la **hauteur
+            // du pied**, et le clavier ne la change pas — il la pousse. On
+            // suit donc le clavier comme on suit le pied, aux mêmes
+            // conditions : seulement si on était déjà en bas, et jamais en
+            // volant un défilement à qui lit plus haut.
+            .onChange(of: isWriting) { _, writing in
+                guard writing, isAtBottom else { return }
+                Task { @MainActor in
+                    // Le temps que le clavier finisse de monter : avant ça,
+                    // le bas visé est encore l'ancien.
+                    try? await Task.sleep(for: .milliseconds(260))
+                    scrollToBottom(proxy)
+                }
+            }
             .task { await settleOnFocusedStep(proxy) }
             .onChange(of: model.isThinking) { _, isThinking in
                 guard isThinking else { return }
@@ -724,6 +755,42 @@ public struct ChatView: View {
         model.thread?.tripContext?.isGathering == true
     }
 
+    /// **La barre s'efface quand on remonte lire** (T289, Hugo — « la barre de
+    /// saisie et ses propositions s'effacent quand on remonte le fil pour
+    /// lire, et reviennent dès qu'on redescend »).
+    ///
+    /// Elle descend par le bas avec ses propositions, et le fil récupère sa
+    /// hauteur : remonter dans la conversation, c'est **lire**, et une barre
+    /// d'envoi n'a rien à faire là pendant ce temps. Elle revient au premier
+    /// geste vers le bas, et d'office une fois en bas du fil.
+    ///
+    /// Les seuils sont ceux de la bannière, et pour la même raison : un geste
+    /// franc décide, un tremblement de doigt non (``trackScroll(to:)``).
+    @State private var showsComposer = true
+
+    /// **La barre ne s'efface pas pendant qu'on s'en sert.** On écrit, on
+    /// parle, ou une puce est en vol : elle reste, quoi que fasse le
+    /// défilement. Sans ça, remonter relire une phrase pendant qu'on dicte
+    /// emporterait le micro ouvert avec elle.
+    private var composerCanHide: Bool {
+        // **Jamais en bas du fil** : c'est là qu'on parle, et la barre y est
+        // chez elle. Ailleurs, on lit.
+        guard !isAtBottom else { return false }
+        return model.composer == .tools && !model.recorder.isRecording && flight == nil && !isWriting
+    }
+
+    /// Efface la barre, si le moment s'y prête.
+    private func hideComposer() {
+        guard composerCanHide, showsComposer else { return }
+        showsComposer = false
+    }
+
+    /// La rend. Appelée aussi dès qu'on touche le bas du fil : là, on n'est
+    /// plus en train de lire, on est revenu parler.
+    private func revealComposer() {
+        if !showsComposer { showsComposer = true }
+    }
+
     /// Ce que le défilement fait à la bannière — voir ``showsPreviewBanner``.
     ///
     /// Le haut du contenu **monte** quand on descend vers les messages récents
@@ -742,11 +809,19 @@ public struct ChatView: View {
             // On remonte : elle vient, et le délai repart de zéro tant que le
             // geste dure. C'est ce qui la fait **rester** pendant qu'on
             // remonte, au lieu de repartir au milieu du mouvement.
-            if scroll.scrolledUp >= Self.bannerRevealDistance { revealBanner() }
+            if scroll.scrolledUp >= Self.bannerRevealDistance {
+                revealBanner()
+                // On remonte pour lire : la barre s'en va (T289).
+                hideComposer()
+            }
         } else if delta < 0 {
             scroll.scrolledUp = 0
             scroll.scrolledDown -= delta
-            if scroll.scrolledDown >= Self.bannerDismissDistance { hideBanner() }
+            if scroll.scrolledDown >= Self.bannerDismissDistance {
+                hideBanner()
+                // On redescend : elle revient (T289).
+                revealComposer()
+            }
         }
     }
 
@@ -823,17 +898,30 @@ public struct ChatView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            ChatComposer(
-                model: model,
-                isWriting: $isWriting,
-                holdsKeyboard: $holdsKeyboard,
-                onAddPhotos: photos.begin,
-                onSubscribe: openPaywall,
-                flyingSuggestionId: flight?.suggestion.id,
-                onLaunch: launch
-            )
+            if showsComposer {
+                ChatComposer(
+                    model: model,
+                    isWriting: $isWriting,
+                    holdsKeyboard: $holdsKeyboard,
+                    onAddPhotos: photos.begin,
+                    onSubscribe: openPaywall,
+                    flyingSuggestionId: flight?.suggestion.id,
+                    onLaunch: launch
+                )
+                // Elle descend par le bas, d'où elle vient (T289).
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: isAtBottom)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: showsComposer)
+        // **Se remettre à parler la rappelle** (T289), où qu'on en soit dans
+        // le fil : une puce touchée en haut du fil, le micro de l'accueil qui
+        // arrive, une correction qui ouvre le clavier. Elle ne se cache que
+        // pendant qu'on lit.
+        .onChange(of: model.composer) { _, _ in revealComposer() }
+        .onChange(of: model.recorder.isRecording) { _, isRecording in
+            if isRecording { revealComposer() }
+        }
     }
 
     // MARK: - Ce qui ne va pas

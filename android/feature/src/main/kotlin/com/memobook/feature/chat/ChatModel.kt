@@ -763,7 +763,16 @@ class ChatModel(
     val visibleMessages: List<ChatMessage>
         get() = messages.filter { message ->
             val body = message.body
-            body !is ChatMessageBody.Transcript || body.card.phase != TranscriptCard.Phase.Listening
+            if (body !is ChatMessageBody.Transcript) return@filter true
+            // Une fiche se montre quand elle a **quelque chose à montrer** :
+            // un texte, ou le rouge d'une transcription qui a échoué.
+            //
+            // ⚠️ Pas seulement pendant l'écoute : un vocal **silencieux** rend
+            // une fiche vide pour de bon — un titre, une mention, et rien
+            // entre les deux (vu à l'écran le 27/11). MEMO le dit déjà en
+            // toutes lettres dans le fil ; le cadre vide ne fait que répéter
+            // qu'il n'y a rien.
+            body.card.phase == TranscriptCard.Phase.Failed || !body.card.text.isNullOrEmpty()
         }
 
     /**

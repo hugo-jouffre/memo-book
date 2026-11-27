@@ -50,6 +50,26 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Les photos se rangent à leur format** (T305, 27/11/2026) : une rangée
+  remplit la largeur de la bulle, ses photos y gardent leur forme — carré,
+  portrait, paysage —, et un nombre impair ne laisse plus de trou : la
+  dernière prend toute la largeur. Les formats viennent du serveur
+  (`photoWidthPx`), jamais de l'image chargée : une hauteur de bulle qui se
+  découvre en cours de route ferait sauter le fil.
+- **L'ascenseur du système sur le fil** (T312, 27/11/2026) : le seul écran de
+  l'app qui le montre, parce que c'est le seul où l'on parcourt des centaines
+  de bulles sans savoir où l'on en est.
+- **Le clavier n'avale plus les dernières bulles** (T313, 27/11/2026) : au bas
+  du fil, l'ouvrir laissait passer les deux dernières derrière lui, sans
+  pastille pour revenir — le fil se croyait toujours en bas. Il suit
+  maintenant le clavier comme il suit le pied qui grandit : seulement si on
+  était déjà en bas, jamais en volant un défilement à qui lit plus haut.
+- **Remonter le fil, c'est lire** (T289, 27/11/2026) : la barre de saisie et
+  ses propositions descendent par le bas, et le fil récupère leur hauteur.
+  Elles reviennent au premier geste vers le bas, d'office une fois en bas, et
+  dès qu'on se remet à parler — elles ne s'effacent jamais pendant qu'on écrit
+  ou qu'on dicte. La pastille « Retourner en bas » reste : c'est le chemin du
+  retour.
 - **Pendant qu'un vocal se transcrit, on ne montre rien** (T316, 27/11/2026) :
   pas de fiche en construction, juste un petit 👂 posé à côté des deux coches,
   sur le vocal lui-même. La fiche paraissait dès l'arrivée du vocal, avec un

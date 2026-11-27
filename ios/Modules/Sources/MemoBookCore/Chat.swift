@@ -449,24 +449,46 @@ public struct PhotoAttachment: Codable, Sendable, Hashable, Identifiable {
     /// en page.
     public var isTripCover: Bool
 
+    /// **Le format de la photo**, en pixels (T305) : ce que le serveur a
+    /// mesuré à son arrivée (`entries.photoWidthPx`).
+    ///
+    /// La bulle s'en sert pour ranger ses photos **chacune à son format**, et
+    /// il lui faut ces deux nombres **avant** que l'image arrive : une hauteur
+    /// de bulle qui se découvre au chargement ferait sauter le fil (T295,
+    /// T313). `nil` — un serveur d'avant, une photo que le serveur n'a pas su
+    /// lire — vaut un carré, comme avant.
+    public let widthPx: Int?
+    public let heightPx: Int?
+
     public init(
         id: String,
         remoteUrl: URL? = nil,
         localUrl: URL? = nil,
         isStepCover: Bool = false,
-        isTripCover: Bool = false
+        isTripCover: Bool = false,
+        widthPx: Int? = nil,
+        heightPx: Int? = nil
     ) {
         self.id = id
         self.remoteUrl = remoteUrl
         self.localUrl = localUrl
         self.isStepCover = isStepCover
         self.isTripCover = isTripCover
+        self.widthPx = widthPx
+        self.heightPx = heightPx
+    }
+
+    /// Le rapport largeur / hauteur, ou `nil` sans mesure — voir
+    /// ``PhotoBubbleGrid``.
+    public var aspect: Double? {
+        guard let widthPx, let heightPx, widthPx > 0, heightPx > 0 else { return nil }
+        return Double(widthPx) / Double(heightPx)
     }
 
     public var displayUrl: URL? { localUrl ?? remoteUrl }
 
     private enum CodingKeys: String, CodingKey {
-        case id, remoteUrl, isStepCover, isTripCover
+        case id, remoteUrl, isStepCover, isTripCover, widthPx, heightPx
     }
 
     public init(from decoder: any Decoder) throws {
@@ -477,7 +499,12 @@ public struct PhotoAttachment: Codable, Sendable, Hashable, Identifiable {
             id: try container.decode(String.self, forKey: .id),
             remoteUrl: try container.decodeIfPresent(URL.self, forKey: .remoteUrl),
             isStepCover: try container.decodeIfPresent(Bool.self, forKey: .isStepCover) ?? false,
-            isTripCover: try container.decodeIfPresent(Bool.self, forKey: .isTripCover) ?? false
+            isTripCover: try container.decodeIfPresent(Bool.self, forKey: .isTripCover) ?? false,
+            // Le format mesuré par le serveur (T305). Absent d'un serveur
+            // d'avant, et d'une photo qu'il n'a pas su lire : la bulle la
+            // range alors carrée.
+            widthPx: try container.decodeIfPresent(Int.self, forKey: .widthPx),
+            heightPx: try container.decodeIfPresent(Int.self, forKey: .heightPx)
         )
     }
 }

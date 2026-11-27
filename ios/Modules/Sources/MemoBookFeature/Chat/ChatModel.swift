@@ -575,7 +575,16 @@ public final class ChatModel {
     public var visibleMessages: [ChatMessage] {
         messages.filter { message in
             guard case .transcript(let card) = message.body else { return true }
-            return card.phase != .listening
+            // Une fiche se montre quand elle a **quelque chose à montrer** :
+            // un texte, ou le rouge d'une transcription qui a échoué.
+            //
+            // ⚠️ Pas seulement pendant l'écoute : un vocal **silencieux** rend
+            // une fiche vide pour de bon — un titre, une mention, et rien
+            // entre les deux (vu à l'écran le 27/11). MEMO le dit déjà en
+            // toutes lettres dans le fil ; le cadre vide ne fait que répéter
+            // qu'il n'y a rien.
+            if case .failed = card.phase { return true }
+            return !(card.text?.isEmpty ?? true)
         }
     }
 

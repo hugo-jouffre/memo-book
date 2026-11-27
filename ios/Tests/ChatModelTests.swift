@@ -478,6 +478,37 @@ final class ChatModelTests: XCTestCase {
         XCTAssertFalse(model.isBeingTranscribed(vocal))
     }
 
+    /// **Une fiche vide pour de bon ne se montre pas non plus** : un vocal
+    /// silencieux rend un titre, une mention, et rien entre les deux (vu à
+    /// l'écran le 27/11). MEMO le dit déjà en toutes lettres dans le fil.
+    func testACardThatStaysEmptyIsNotShownEither() async throws {
+        let script = Script(
+            thread: thread(messages: [
+                voice("vocal", entryId: "e1", seq: 1),
+                card("fiche", entryId: "e1", text: "", phase: .ready, seq: 2),
+            ])
+        )
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertEqual(model.visibleMessages.map(\.id), ["vocal"])
+    }
+
+    /// **Mais une transcription qui a échoué se montre** : c'est la seule
+    /// fiche sans texte qui a quelque chose à dire, et elle le dit en rouge.
+    func testAFailedTranscriptIsStillShown() async throws {
+        let script = Script(
+            thread: thread(messages: [
+                voice("vocal", entryId: "e1", seq: 1),
+                card("fiche", entryId: "e1", text: nil, phase: .failed, seq: 2),
+            ])
+        )
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertEqual(model.visibleMessages.map(\.id), ["vocal", "fiche"])
+    }
+
     /// **Rien sur un texte** : il n'y a pas de vocal à écouter. La fiche d'un
     /// texte, elle, se montre comme avant — son récit est déjà là.
     func testNothingIsListenedToOnAWrittenMessage() async throws {
