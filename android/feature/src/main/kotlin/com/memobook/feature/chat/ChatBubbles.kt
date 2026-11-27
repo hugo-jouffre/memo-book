@@ -80,6 +80,7 @@ import com.memobook.core.ChatMessage
 import com.memobook.core.ChatMessageBody
 import com.memobook.core.DailyCreditCopy
 import com.memobook.core.PhotoAttachment
+import com.memobook.core.PhotoBubbleGrid
 import com.memobook.core.TranscriptCard
 import com.memobook.core.VoiceNote
 import com.memobook.design.ActivitySpinner
@@ -729,22 +730,39 @@ fun ChatPhotosBubble(attachments: List<PhotoAttachment>, author: ChatAuthor, mod
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs / 2)) {
-            if (attachments.size == 1) {
-                ChatPhoto(attachments[0], index = 0, side = thumbnail * 2.4f, attachments = attachments, model = model)
-            } else {
-                shown.chunked(2).forEachIndexed { rowIndex, pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs / 2)) {
-                        pair.forEachIndexed { column, attachment ->
-                            ChatPhoto(
-                                attachment,
-                                index = rowIndex * 2 + column,
-                                side = thumbnail * 1.4f,
-                                attachments = attachments,
-                                model = model,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+            // **Chacune à son format, la largeur entière occupée** (T305).
+            //
+            // Les photos étaient posées dans un carré commun, et un nombre
+            // impair laissait un **trou** à la dernière place — qui se lit
+            // comme une photo qui manque. Une rangée remplit maintenant la
+            // largeur, ses photos y gardent leur format, et la dernière, si
+            // elle est seule, la prend pour elle.
+            val gap = MemoBookSpacing.xs / 2
+            val usableWidth = BrandChatBubble.maximumContentWidth() - BrandBubbleShape.spur
+            shown.chunked(PhotoBubbleGrid.MAXIMUM_PER_ROW).forEachIndexed { rowIndex, row ->
+                val aspects = row.map { it.aspect ?: PhotoBubbleGrid.SQUARE_ASPECT }
+                val height = PhotoBubbleGrid.rowHeight(
+                    aspects = aspects,
+                    width = usableWidth.value.toDouble(),
+                    spacing = gap.value.toDouble(),
+                    maximum = (thumbnail * 2.4f).value.toDouble(),
+                )
+                val widths = PhotoBubbleGrid.widths(
+                    aspects = aspects,
+                    height = height,
+                    width = usableWidth.value.toDouble(),
+                    spacing = gap.value.toDouble(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    row.forEachIndexed { column, attachment ->
+                        ChatPhoto(
+                            attachment,
+                            index = rowIndex * PhotoBubbleGrid.MAXIMUM_PER_ROW + column,
+                            width = widths[column].toFloat().dp,
+                            height = height.toFloat().dp,
+                            attachments = attachments,
+                            model = model,
+                        )
                     }
                 }
             }
@@ -766,19 +784,23 @@ fun ChatPhotosBubble(attachments: List<PhotoAttachment>, author: ChatAuthor, mod
 private fun ChatPhoto(
     attachment: PhotoAttachment,
     index: Int,
-    side: Dp,
+    width: Dp,
+    height: Dp,
     attachments: List<PhotoAttachment>,
     model: ChatModel,
     modifier: Modifier = Modifier,
 ) {
     val url = attachment.displayUrl
-    val shape = RoundedCornerShape(MemoBookSpacing.snug)
+    // **Des coins parallèles à ceux de la bulle** (T305) : son rayon moins
+    // l'air qu'elle laisse au-dessus et au-dessous. Les deux courbes restent
+    // concentriques, et la photo ne se lit plus comme une carte dans une autre.
+    val shape = RoundedCornerShape(MemoBookSpacing.bubbleCornerRadius - MemoBookSpacing.xs)
     LaunchedEffect(url) { url?.let(model::loadImage) }
 
     Box(
         modifier
-            .fillMaxWidth()
-            .height(side)
+            .width(width)
+            .height(height)
             .clip(shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

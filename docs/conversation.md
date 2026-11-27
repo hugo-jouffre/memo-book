@@ -50,6 +50,12 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Les photos se rangent à leur format** (T305, 27/11/2026) : une rangée
+  remplit la largeur de la bulle, ses photos y gardent leur forme — carré,
+  portrait, paysage —, et un nombre impair ne laisse plus de trou : la
+  dernière prend toute la largeur. Les formats viennent du serveur
+  (`photoWidthPx`), jamais de l'image chargée : une hauteur de bulle qui se
+  découvre en cours de route ferait sauter le fil.
 - **L'ascenseur du système sur le fil** (T312, 27/11/2026) : le seul écran de
   l'app qui le montre, parce que c'est le seul où l'on parcourt des centaines
   de bulles sans savoir où l'on en est.

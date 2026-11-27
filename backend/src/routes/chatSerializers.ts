@@ -201,6 +201,17 @@ export interface SerializeMessageOptions {
   cover?: { tripEntryId: string | null; stepEntryIds: ReadonlySet<string> };
 
   /**
+   * **La taille de chaque photo** (T305) — `loadPhotoSizes`. La bulle range
+   * ses photos au format qu'elles ont, et il lui faut les dimensions avant
+   * que les images arrivent, sans quoi sa hauteur changerait au chargement.
+   *
+   * Absente d'un reçu de `POST` : les photos qu'on vient d'envoyer sont
+   * encore les fichiers du téléphone, qui connaît leur taille. La relecture
+   * du fil apporte les autres.
+   */
+  photoSizes?: ReadonlyMap<string, { widthPx: number; heightPx: number }>;
+
+  /**
    * **Les puces que cette bulle propose quand on la choisit** (T286).
    * Absentes d'un sondage, qui ne rend que ce qui a changé : l'app garde
    * alors celles qu'elle a déjà.
@@ -241,6 +252,7 @@ function serializeBody(
   publicBaseUrl: string,
   stepNumbers?: ReadonlyMap<string, number>,
   cover?: SerializeMessageOptions["cover"],
+  photoSizes?: SerializeMessageOptions["photoSizes"],
 ) {
   switch (message.kind) {
     case "text":
@@ -278,6 +290,10 @@ function serializeBody(
           // pas : une app d'avant ignore les clés qu'elle ne lit pas.
           isTripCover: cover?.tripEntryId === entryId,
           isStepCover: cover?.stepEntryIds.has(entryId) ?? false,
+          // **Son format** (T305). Absent d'une photo que le serveur n'a pas
+          // su mesurer, et d'un serveur d'avant : la bulle la range alors
+          // carrée, comme elle l'a toujours fait.
+          ...(photoSizes?.get(entryId) ?? {}),
         })),
       };
 
@@ -389,7 +405,13 @@ function livedDatesOf(entry: EntryWithMedia): { livedFrom: string | null; livedT
  */
 export function serializeChatMessage(message: ChatMessageRow, options: SerializeMessageOptions) {
   if (!isVisibleTo(message, options.viewerIsUnlimited)) return null;
-  const body = serializeBody(message, options.publicBaseUrl, options.stepNumbers, options.cover);
+  const body = serializeBody(
+    message,
+    options.publicBaseUrl,
+    options.stepNumbers,
+    options.cover,
+    options.photoSizes,
+  );
   if (!body) return null;
 
   const isOtherTraveller =
@@ -498,6 +520,9 @@ export interface SerializeThreadOptions {
   now: Date;
   /** Le crédit du jour du voyage, vu par celui qui lit. */
   dailyCredit: DailyCredit;
+
+  /** **La taille de chaque photo** (T305) — voir ``SerializeMessageOptions.photoSizes``. */
+  photoSizes?: ReadonlyMap<string, { widthPx: number; heightPx: number }>;
 }
 
 /**
@@ -649,6 +674,7 @@ export function serializeChatThread(options: SerializeThreadOptions) {
     stepNumbers: stepNumbersOf(options.messages),
     viewerIsUnlimited: options.dailyCredit.isUnlimited,
     cover: coverOf(options.memo),
+    photoSizes: options.photoSizes,
   };
 
   const tripContext = parseTripContext(memo.tripContext);
@@ -763,6 +789,8 @@ export function serializeChatUpdate(options: {
   publicBaseUrl: string;
   now: Date;
   dailyCredit: DailyCredit;
+  /** **La taille de chaque photo** (T305) — voir ``SerializeMessageOptions.photoSizes``. */
+  photoSizes?: ReadonlyMap<string, { widthPx: number; heightPx: number }>;
 }) {
   const memberCount = 1 + options.memo.members.filter((member) => member.status === "active").length;
   const messageOptions: SerializeMessageOptions = {
@@ -772,6 +800,7 @@ export function serializeChatUpdate(options: {
     stepNumbers: stepNumbersOf(options.allMessages),
     viewerIsUnlimited: options.dailyCredit.isUnlimited,
     cover: coverOf(options.memo),
+    photoSizes: options.photoSizes,
   };
   const pageCount =
     options.memo.pageCount > 0 ? options.memo.pageCount : options.memoryCount * 2;

@@ -599,6 +599,12 @@ struct ChatPhotosBubble: View {
 
     @ScaledMetric(relativeTo: .body) private var thumbnail: CGFloat = 76
 
+    /// La largeur de la bulle suit le corps du texte, comme la bulle elle-même.
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// Le rayon des photos : celui de la bulle moins son air vertical (T305).
+    private static let photoCornerRadius = MemoBookSpacing.bubbleCornerRadius - MemoBookSpacing.xs
+
     /// Ce qu'on montre, et ce qu'on compte.
     private var shown: [PhotoAttachment] {
         Array(attachments.prefix(ChatMetrics.visiblePhotoCount))
@@ -608,44 +614,70 @@ struct ChatPhotosBubble: View {
         max(0, attachments.count - ChatMetrics.visiblePhotoCount)
     }
 
-    /// Les vignettes deux par deux, telles que la grille les pose.
+    /// Les rangées de la bulle — ``PhotoBubbleGrid``.
     private var rows: [[PhotoAttachment]] {
-        stride(from: 0, to: shown.count, by: 2).map { Array(shown[$0..<min($0 + 2, shown.count)]) }
+        PhotoBubbleGrid.rows(of: shown.count).map { Array(shown[$0]) }
+    }
+
+    /// La largeur utile de la bulle : son maximum de contenu, moins ce que sa
+    /// queue réserve. Connue **sans mesurer** : une largeur lue à l'affichage
+    /// vaudrait zéro à la première image, et la bulle sauterait.
+    private var usableWidth: CGFloat {
+        BrandChatBubble<EmptyView>.maximumContentWidth(for: typeSize) - BrandBubbleShape.spur
+    }
+
+    /// La hauteur maximale d'une rangée : une photo portrait seule prendrait
+    /// sinon tout l'écran, et la bulle ne serait plus une bulle.
+    private var maximumRowHeight: CGFloat { thumbnail * 2.4 }
+
+    /// La hauteur d'une rangée et la largeur de chacune de ses photos —
+    /// ``PhotoBubbleGrid``, en points.
+    private func layout(of row: [PhotoAttachment]) -> (height: CGFloat, widths: [CGFloat]) {
+        let gap = Double(MemoBookSpacing.xs / 2)
+        let width = Double(usableWidth)
+        let aspects = row.map { $0.aspect ?? PhotoBubbleGrid.squareAspect }
+        let height = PhotoBubbleGrid.rowHeight(
+            aspects: aspects,
+            width: width,
+            spacing: gap,
+            maximum: Double(maximumRowHeight)
+        )
+        let widths = PhotoBubbleGrid.widths(aspects: aspects, height: height, width: width, spacing: gap)
+        return (CGFloat(height), widths.map { CGFloat($0) })
     }
 
     var body: some View {
         BrandChatBubble(author: author) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs / 2) {
-                if attachments.count == 1 {
-                    photo(attachments[0], at: 0, side: thumbnail * 2.4)
-                } else {
-                    // Deux colonnes, jamais plus : à trois, une vignette tombe
-                    // sous la largeur d'un pouce sur un iPhone SE.
-                    //
-                    // ⚠️ **Et une grille qui n'est pas paresseuse** (T295,
-                    // 26/11/2026). Une `LazyVGrid` ne connaît la hauteur que
-                    // des rangées qu'elle a déjà fabriquées : tant que la
-                    // bulle n'est qu'à moitié à l'écran, elle s'annonce plus
-                    // courte qu'elle ne sera, et tout ce qui la suit remonte —
-                    // puis redescend quand la rangée suivante naît. C'est le
-                    // saut que Maÿlis voit **à chaque passage devant ses
-                    // photos en attente**, et elles en ont six : la bulle la
-                    // plus haute du fil, celle qui ne tient jamais d'un coup.
-                    //
-                    // Six vignettes au plus (``visiblePhotoCount``) : la
-                    // paresse ne faisait rien gagner, elle ne coûtait que
-                    // cette hauteur-là.
-                    Grid(horizontalSpacing: MemoBookSpacing.xs / 2, verticalSpacing: MemoBookSpacing.xs / 2) {
-                        ForEach(Array(rows.enumerated()), id: \.offset) { rank, row in
-                            GridRow {
-                                ForEach(Array(row.enumerated()), id: \.element.id) { column, attachment in
-                                    photo(attachment, at: rank * 2 + column, side: thumbnail * 1.4)
-                                }
-                                // Un nombre impair laisse la dernière place
-                                // vide plutôt que d'étirer la vignette sur
-                                // toute la largeur.
-                                if row.count == 1 { Color.clear.frame(maxWidth: .infinity) }
-                            }
+                // **Chacune à son format, la largeur entière occupée** (T305).
+                //
+                // Les photos étaient posées dans un carré commun, et un nombre
+                // impair laissait un **trou** à la dernière place — qui se lit
+                // comme une photo qui manque. Une rangée remplit maintenant la
+                // largeur, ses photos y gardent leur format, et la dernière,
+                // si elle est seule, la prend pour elle.
+                ForEach(Array(rows.enumerated()), id: \.offset) { rank, row in
+                    let aspects = row.map { $0.aspect ?? PhotoBubbleGrid.squareAspect }
+                    let height = PhotoBubbleGrid.rowHeight(
+                        aspects: aspects,
+                        width: usableWidth,
+                        spacing: MemoBookSpacing.xs / 2,
+                        maximum: maximumRowHeight
+                    )
+                    let widths = PhotoBubbleGrid.widths(
+                        aspects: aspects,
+                        height: height,
+                        width: usableWidth,
+                        spacing: MemoBookSpacing.xs / 2
+                    )
+                    HStack(spacing: MemoBookSpacing.xs / 2) {
+                        ForEach(Array(row.enumerated()), id: \.element.id) { column, attachment in
+                            photo(
+                                attachment,
+                                at: rank * PhotoBubbleGrid.maximumPerRow + column,
+                                width: widths[column],
+                                height: height
+                            )
                         }
                     }
                 }
@@ -675,12 +707,16 @@ struct ChatPhotosBubble: View {
     ///
     /// Touchée, elle s'ouvre en plein écran (``ChatPhotoViewer``), avec les
     /// autres photos de la bulle à portée de glissé.
-    private func photo(_ attachment: PhotoAttachment, at index: Int, side: CGFloat) -> some View {
+    private func photo(
+        _ attachment: PhotoAttachment,
+        at index: Int,
+        width: CGFloat,
+        height: CGFloat
+    ) -> some View {
         let url = attachment.displayUrl
 
         return Color.clear
-            .frame(height: side)
-            .frame(maxWidth: .infinity)
+            .frame(width: width, height: height)
             .overlay {
                 if let image = url.flatMap({ model.image(at: $0) }) {
                     Image(uiImage: image).resizable().scaledToFill()
@@ -690,14 +726,18 @@ struct ChatPhotosBubble: View {
                     TripCoverPlaceholder(seed: attachment.id)
                 }
             }
-            .clipShape(.rect(cornerRadius: MemoBookSpacing.snug))
+            // **Des coins parallèles à ceux de la bulle** (T305) : son rayon
+            // (12) moins l'air qu'elle laisse au-dessus et au-dessous (8). Les
+            // deux courbes restent ainsi concentriques, et la photo ne se lit
+            // plus comme une carte posée dans une autre.
+            .clipShape(.rect(cornerRadius: Self.photoCornerRadius))
             // **Les étoiles, en haut à droite** (T270) : celle de l'étape,
             // celle du voyage, ou les deux — une photo peut être les deux.
             .overlay(alignment: .topTrailing) {
                 ChatCoverStars(photo: attachment)
                     .padding(MemoBookSpacing.xs / 2)
             }
-            .contentShape(.rect(cornerRadius: MemoBookSpacing.snug))
+            .contentShape(.rect(cornerRadius: Self.photoCornerRadius))
             .onTapGesture { model.viewPhotos(attachments, at: index, from: messageId) }
             .task(id: url) {
                 if let url { model.loadImage(url) }

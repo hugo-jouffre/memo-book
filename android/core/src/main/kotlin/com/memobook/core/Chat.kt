@@ -382,20 +382,42 @@ data class PhotoAttachment(
     val id: String,
     val remoteUrl: URI? = null,
     val localUrl: URI? = null,
+    /**
+     * **Le format de la photo**, en pixels (T305) : ce que le serveur a mesuré
+     * à son arrivée (`entries.photoWidthPx`).
+     *
+     * La bulle s'en sert pour ranger ses photos **chacune à son format**, et
+     * il lui faut ces deux nombres **avant** que l'image arrive : une hauteur
+     * de bulle qui se découvre au chargement ferait sauter le fil (T295,
+     * T313). `null` — un serveur d'avant, une photo que le serveur n'a pas su
+     * lire — vaut un carré, comme avant.
+     */
+    val widthPx: Int? = null,
+    val heightPx: Int? = null,
 ) {
     val displayUrl: URI? get() = localUrl ?: remoteUrl
+
+    /** Le rapport largeur / hauteur, ou `null` sans mesure — voir [PhotoBubbleGrid]. */
+    val aspect: Double?
+        get() {
+            val w = widthPx ?: return null
+            val h = heightPx ?: return null
+            return if (w > 0 && h > 0) w.toDouble() / h.toDouble() else null
+        }
 
     @Serializable
     @SerialName("com.memobook.core.PhotoAttachment")
     internal class Surrogate(
         val id: String,
         @Serializable(with = UriSerializer::class) val remoteUrl: URI? = null,
+        val widthPx: Int? = null,
+        val heightPx: Int? = null,
     )
 
     internal object Serializer : ChatSurrogateSerializer<PhotoAttachment, Surrogate>(
         Surrogate.serializer(),
-        { Surrogate(it.id, it.remoteUrl) },
-        { PhotoAttachment(it.id, it.remoteUrl) },
+        { Surrogate(it.id, it.remoteUrl, it.widthPx, it.heightPx) },
+        { PhotoAttachment(it.id, it.remoteUrl, widthPx = it.widthPx, heightPx = it.heightPx) },
     )
 }
 

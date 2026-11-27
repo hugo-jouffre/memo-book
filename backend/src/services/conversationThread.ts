@@ -318,6 +318,34 @@ export async function loadCurrentEntry(
  * bonne étape — même quand MEMO est revenu à une étape laissée en plan
  * (`services/tripFacts.ts`).
  */
+/**
+ * **La taille de chaque photo d'un carnet** (T305), par identifiant de
+ * souvenir : `{ widthPx, heightPx }`.
+ *
+ * La grille des bulles range les photos **au format qu'elles ont** — une
+ * portrait reste portrait, une panoramique prend la largeur. Elle a donc
+ * besoin de leurs dimensions **avant** que les images arrivent : les
+ * découvrir à l'affichage ferait changer la hauteur de la bulle une fois les
+ * photos chargées, c'est-à-dire le saut que T295 et T313 ont chassé.
+ *
+ * Rien à mesurer ici : `entries.photoWidthPx` et `photoHeightPx` sont déjà
+ * remplis à l'arrivée de la photo (`measurePhoto`). Les souvenirs sans
+ * mesure — un HEIC que `jimp` n'a pas su lire — n'entrent pas dans la carte,
+ * et la bulle les range alors carrés, comme avant.
+ */
+export async function loadPhotoSizes(
+  db: Db,
+  memoId: string,
+): Promise<Map<string, { widthPx: number; heightPx: number }>> {
+  const rows = await db.entry.findMany({
+    where: { memoId, kind: "photo", photoWidthPx: { not: null }, photoHeightPx: { not: null } },
+    select: { id: true, photoWidthPx: true, photoHeightPx: true },
+  });
+  return new Map(
+    rows.map((row) => [row.id, { widthPx: row.photoWidthPx!, heightPx: row.photoHeightPx! }]),
+  );
+}
+
 export async function photosTargetEntryId(db: Db, memoId: string): Promise<string | null> {
   const question = await db.chatMessage.findFirst({
     where: { memoId, author: "memo", kind: "text", payload: { path: ["asksPhotosFor"], not: Prisma.AnyNull } },

@@ -36,6 +36,7 @@ import {
   ensureOpening,
   findTurnInFlight,
   loadCurrentEntry,
+  loadPhotoSizes,
   lockThread,
   photosTargetEntryId,
   materializeEntriesWithoutMessages,
@@ -630,13 +631,16 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     });
 
     const since = query.since ? new Date(query.since) : null;
-    const [reads, viewer, turn, memoryCount, readyRender, isUnlimited] = await Promise.all([
+    const [reads, viewer, turn, memoryCount, readyRender, isUnlimited, photoSizes] = await Promise.all([
       loadThreadReads(context, memoId, since),
       loadViewer(context, accountId),
       turnStatusOf(context, memoId, now),
       memoryCountOf(context, memoId),
       hasReadyRender(context, memoId),
       hasUnlimitedAccess(context.prisma, accountId, now),
+      // **Le format de chaque photo** (T305) : la bulle les range comme elles
+      // sont, et il lui faut leurs dimensions avant que les images arrivent.
+      loadPhotoSizes(context.prisma, memoId),
     ]);
     // Le crédit du jour se lit au fuseau de celui qui lit : il fallait le
     // compte d'abord.
@@ -654,6 +658,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         publicBaseUrl,
         now,
         dailyCredit,
+        photoSizes,
       });
     }
 
@@ -668,6 +673,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       publicBaseUrl,
       now,
       dailyCredit,
+      photoSizes,
     });
   });
 
