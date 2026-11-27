@@ -901,6 +901,23 @@ public struct ChatSuggestion: Codable, Sendable, Hashable, Identifiable {
         /// Elle se comporte alors comme `send` — la puce marche, elle en fait
         /// juste un peu moins. Même parti pris que ``Status/unknown``.
         case unknown(String)
+
+        /// **La puce dit-elle quelque chose ?** (T304)
+        ///
+        /// Deux intentions n'envoient aucun libellé : importer des photos et
+        /// ouvrir l'aperçu. Elles ouvrent un outil, c'est tout — « on ne dit
+        /// pas *j'importe des photos*, on les importe ».
+        ///
+        /// Ce n'est pas qu'une affaire d'envoi : ce qui ne parle pas ne doit
+        /// pas **voler** non plus. La bulle bleue qui partait de la puce vers
+        /// le fil, puis disparaissait sans rien y laisser, se lisait comme un
+        /// message perdu (T304).
+        public var speaks: Bool {
+            switch self {
+            case .importPhotos, .openPreview: false
+            case .send, .sendThenWrite, .sendThenEditTranscript, .sendThenSpeak, .unknown: true
+            }
+        }
     }
 
     public let id: String

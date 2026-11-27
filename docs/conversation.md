@@ -50,6 +50,13 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
   la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
   l'a racontée, en haut de l'écran, sa fiche dessous.
+- **Une puce qui ne dit rien ne vole pas** (T304, 27/11/2026). Une puce
+  **parle** : son libellé part en bulle bleue, et c'est pour ça qu'elle décolle
+  de la barre vers le fil (T207). Deux n'envoient rien — « Importer des
+  photos » et « Voir ma page » : elles ouvrent un outil. Leur bulle partait
+  quand même, arrivait en bas et s'effaçait sans rien laisser : un message
+  perdu, pour qui le regarde. `ChatSuggestion.Intent.speaks` dit laquelle
+  parle, et seules celles-là volent.
 - **Les gestes d'une fiche de MEMO** (T288, 26/11/2026) : son appui long ouvre
   les cinq siens — ré-analyser, modifier à la main, **changer les dates**,
   **changer le nom du lieu**, supprimer. Le pendant de l'appui long sur une

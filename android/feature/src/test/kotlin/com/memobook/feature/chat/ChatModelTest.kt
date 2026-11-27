@@ -453,6 +453,53 @@ class ChatModelTest {
     }
 
     /**
+     * **« Importer des photos » ne dit rien** (T304) : elle ouvre le
+     * sélecteur, et c'est tout — aucune bulle ne part, rien ne va au serveur.
+     * Le jumeau de `testTheImportPhotosChipOpensThePickerWithoutSayingAnything`.
+     */
+    @Test
+    fun theImportPhotosChipOpensThePickerWithoutSayingAnything() = runTest {
+        val script = Script(thread = thread())
+        val model = model(script)
+        model.load()
+        val avant = model.messages.size
+
+        var ouvertures = 0
+        model.choose(
+            ChatSuggestion(
+                id = "photos",
+                label = "Importer des photos",
+                symbol = null,
+                intent = ChatSuggestion.Intent.ImportPhotos,
+            ),
+            addPhotos = { ouvertures += 1 },
+        )
+
+        assertEquals(1, ouvertures, "Le sélecteur s'ouvre.")
+        assertEquals(avant, model.messages.size, "Et rien n'est posé dans le fil.")
+        assertEquals(0, script.sent.size, "Rien ne part au serveur non plus.")
+    }
+
+    /**
+     * **Ce qui ne parle pas ne vole pas non plus.** C'est ce drapeau que
+     * l'écran lit pour décider si la bulle bleue décolle de la puce : sans
+     * lui, « Importer des photos » partait vers le fil et s'y effaçait sans
+     * rien laisser — un message perdu, pour qui le regarde.
+     */
+    @Test
+    fun onlyTheChipsThatSaySomethingFly() {
+        assertEquals(false, ChatSuggestion.Intent.ImportPhotos.speaks)
+        assertEquals(false, ChatSuggestion.Intent.OpenPreview.speaks)
+
+        assertEquals(true, ChatSuggestion.Intent.Send.speaks)
+        assertEquals(true, ChatSuggestion.Intent.SendThenWrite.speaks)
+        assertEquals(true, ChatSuggestion.Intent.SendThenEditTranscript.speaks)
+        assertEquals(true, ChatSuggestion.Intent.SendThenSpeak.speaks)
+        // Une intention inconnue se comporte comme `Send` : elle parle.
+        assertEquals(true, ChatSuggestion.Intent.Unknown("quelque-chose-de-neuf").speaks)
+    }
+
+    /**
      * La bande de suggestions garde sa place pendant le tour : ses puces
      * s'effacent, sa hauteur reste — sinon le fil se tassait sous le message
      * qu'on venait de poser (T207, 30/09/2026).

@@ -415,6 +415,45 @@ final class ChatModelTests: XCTestCase {
         ])
     }
 
+    // MARK: - « Importer des photos » ne dit rien (T304)
+
+    /// **Elle ouvre le sélecteur, et c'est tout** : aucune bulle ne part, et
+    /// le fil ne bouge pas. On ne dit pas « j'importe des photos », on les
+    /// importe.
+    func testTheImportPhotosChipOpensThePickerWithoutSayingAnything() async throws {
+        let script = Script(thread: thread(messages: []))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        let before = model.messages.count
+
+        var opened = 0
+        model.choose(
+            ChatSuggestion(id: "photos", label: "Importer des photos", intent: .importPhotos),
+            addPhotos: { opened += 1 }
+        )
+
+        XCTAssertEqual(opened, 1, "Le sélecteur s'ouvre.")
+        XCTAssertEqual(model.messages.count, before, "Et rien n'est posé dans le fil.")
+        let sent = await script.sent
+        XCTAssertTrue(sent.isEmpty, "Rien ne part au serveur non plus.")
+    }
+
+    /// **Ce qui ne parle pas ne vole pas non plus.** C'est ce drapeau que
+    /// l'écran lit pour décider si la bulle bleue décolle de la puce : sans
+    /// lui, « Importer des photos » partait vers le fil et s'y effaçait sans
+    /// rien laisser — un message perdu, pour qui le regarde.
+    func testOnlyTheChipsThatSaySomethingFly() {
+        XCTAssertFalse(ChatSuggestion.Intent.importPhotos.speaks)
+        XCTAssertFalse(ChatSuggestion.Intent.openPreview.speaks)
+
+        XCTAssertTrue(ChatSuggestion.Intent.send.speaks)
+        XCTAssertTrue(ChatSuggestion.Intent.sendThenWrite.speaks)
+        XCTAssertTrue(ChatSuggestion.Intent.sendThenEditTranscript.speaks)
+        XCTAssertTrue(ChatSuggestion.Intent.sendThenSpeak.speaks)
+        // Une intention inconnue se comporte comme `send` : elle parle.
+        XCTAssertTrue(ChatSuggestion.Intent.unknown("quelque-chose-de-neuf").speaks)
+    }
+
     // MARK: - Les gestes d'une fiche (T288)
 
     /// Un fil où la fiche **n'est pas seule** : le récit du voyageur, puis la
