@@ -42,6 +42,7 @@ function story(
     continuesPrevious: options.continues ?? false,
     pinnedStepId: options.pinnedStepId ?? null,
     capturedPlaceName: null,
+    pinnedPlaceName: null,
     livedFromDay: options.livedFrom ? new Date(`${options.livedFrom}T00:00:00Z`) : null,
     livedToDay: options.livedTo ? new Date(`${options.livedTo}T00:00:00Z`) : null,
   };
@@ -68,6 +69,7 @@ function photo(id: string, place?: string) {
     continuesPrevious: false,
     pinnedStepId: null,
     capturedPlaceName: place ?? null,
+    pinnedPlaceName: null,
     // Une photo ne raconte rien : elle ne date aucune étape (T308).
     livedFromDay: null,
     livedToDay: null,

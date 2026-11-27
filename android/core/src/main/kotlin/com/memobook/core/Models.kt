@@ -158,6 +158,18 @@ data class EntryEdit(
     var editedText: Some<String?>? = null,
     var suggestedTitle: Some<String?>? = null,
     var weatherKey: Some<String?>? = null,
+    /**
+     * **Les jours que ce récit raconte, fixés à la main** (T288) — « changer
+     * les dates » de l'appui long sur la fiche. Un jour civil, `AAAA-MM-JJ`.
+     *
+     * `Some(null)` revient aux dates **déduites** : la lecture de la rédaction
+     * n'a pas été écrasée, elle reprend la parole. Et `livedFrom` commande la
+     * paire — un départ seul efface la fin.
+     */
+    var livedFrom: Some<String?>? = null,
+    var livedTo: Some<String?>? = null,
+    /** **Le nom du lieu, écrit à la main** (T288). `Some(null)` rend la parole au lieu deviné. */
+    var placeName: Some<String?>? = null,
 ) {
     companion object {
         /** Reprend le texte à la main. */
@@ -165,6 +177,21 @@ data class EntryEdit(
 
         /** Revient au texte proposé par la rédaction. */
         val revertToRedaction: EntryEdit get() = EntryEdit(editedText = Some(null))
+
+        /**
+         * **Fixe les jours que ce récit raconte** (T288) : un jour, ou une
+         * période. `null` partout revient aux dates déduites.
+         *
+         * La fin part **toujours**, même nulle : corriger le départ seul doit
+         * effacer la fin que la rédaction avait mise, sinon « en fait c'était
+         * le 12 » sur « du 10 au 15 » donnerait « du 12 au 15 », une période
+         * que personne n'a dite.
+         */
+        fun livedDays(from: String?, to: String?): EntryEdit =
+            EntryEdit(livedFrom = Some(from), livedTo = Some(if (from == null) null else to))
+
+        /** **Nomme le lieu à la main** (T288) ; `null` rend la parole au lieu deviné. */
+        fun place(name: String?): EntryEdit = EntryEdit(placeName = Some(name))
     }
 
     /** Écrit seulement les clés présentes, et un `null` explicite pour `Some(null)`
@@ -174,6 +201,9 @@ data class EntryEdit(
             element<String?>("editedText", isOptional = true)
             element<String?>("suggestedTitle", isOptional = true)
             element<String?>("weatherKey", isOptional = true)
+            element<String?>("livedFrom", isOptional = true)
+            element<String?>("livedTo", isOptional = true)
+            element<String?>("placeName", isOptional = true)
         }
 
         override fun serialize(encoder: Encoder, value: EntryEdit) {
@@ -184,6 +214,9 @@ data class EntryEdit(
                     value.editedText?.let { put("editedText", it.value?.let(::JsonPrimitive) ?: JsonNull) }
                     value.suggestedTitle?.let { put("suggestedTitle", it.value?.let(::JsonPrimitive) ?: JsonNull) }
                     value.weatherKey?.let { put("weatherKey", it.value?.let(::JsonPrimitive) ?: JsonNull) }
+                    value.livedFrom?.let { put("livedFrom", it.value?.let(::JsonPrimitive) ?: JsonNull) }
+                    value.livedTo?.let { put("livedTo", it.value?.let(::JsonPrimitive) ?: JsonNull) }
+                    value.placeName?.let { put("placeName", it.value?.let(::JsonPrimitive) ?: JsonNull) }
                 },
             )
         }

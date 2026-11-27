@@ -325,6 +325,29 @@ final class BookKeptOnPhoneTests: XCTestCase {
             "le 12 novembre",
             "Passé hier, c'est la date qui parle : « il y a 14 jours » demande un calcul."
         )
+
+        // ⚠️ **Un « aujourd'hui » qui n'est pas aujourd'hui** (27/11/2026).
+        // Les trois cas ci-dessus tombaient le jour où ils ont été écrits :
+        // la fonction lisait la vraie date du jour et ignorait son `now`, si
+        // bien qu'ils passaient le 26 novembre et rougissaient le 27. Une
+        // année passée ne peut plus passer par accident.
+        let unJourDePrintemps = date(DateComponents(year: 2024, month: 3, day: 2, hour: 15))
+        XCTAssertEqual(
+            BookCopy.Preview.moment(
+                date(DateComponents(year: 2024, month: 3, day: 2, hour: 9)),
+                now: unJourDePrintemps,
+                calendar: calendar
+            ),
+            "ce matin"
+        )
+        XCTAssertEqual(
+            BookCopy.Preview.moment(
+                date(DateComponents(year: 2024, month: 3, day: 1, hour: 21)),
+                now: unJourDePrintemps,
+                calendar: calendar
+            ),
+            "hier soir"
+        )
     }
 
     // MARK: Un serveur de PDF, le temps d'un test

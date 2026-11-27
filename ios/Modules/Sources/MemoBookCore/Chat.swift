@@ -200,6 +200,17 @@ public struct TranscriptCard: Sendable, Hashable {
     /// rédigé — voir ``rawText``.
     public let prefersTranscript: Bool
 
+    /// **Les jours affichés ont été fixés à la main** (T288), et non déduits
+    /// du récit. C'est ce qui décide si la feuille propose « revenir aux dates
+    /// déduites » : ailleurs, le lien ne ferait rien.
+    ///
+    /// `false` pour un serveur d'avant le 26/11/2026, et c'est le bon repli —
+    /// le lien manque, les dates se changent quand même.
+    public let livedDaysByHand: Bool
+
+    /// Même chose pour le nom du lieu.
+    public let placeByHand: Bool
+
     /// Y a-t-il deux versions à comparer sur cette fiche ?
     public var hasTwoVersions: Bool { rawText != nil && writtenText != nil }
 
@@ -220,7 +231,9 @@ public struct TranscriptCard: Sendable, Hashable {
         freeCorrectionCharactersLeft: Int? = nil,
         rawText: String? = nil,
         writtenText: String? = nil,
-        prefersTranscript: Bool = false
+        prefersTranscript: Bool = false,
+        livedDaysByHand: Bool = false,
+        placeByHand: Bool = false
     ) {
         self.title = title
         self.heading = heading
@@ -239,6 +252,8 @@ public struct TranscriptCard: Sendable, Hashable {
         self.rawText = rawText
         self.writtenText = writtenText
         self.prefersTranscript = prefersTranscript
+        self.livedDaysByHand = livedDaysByHand
+        self.placeByHand = placeByHand
     }
 
     /// La même fiche, une fois le récit revenu.
@@ -260,7 +275,46 @@ public struct TranscriptCard: Sendable, Hashable {
             freeCorrectionCharactersLeft: freeCorrectionCharactersLeft,
             rawText: rawText,
             writtenText: writtenText,
-            prefersTranscript: prefersTranscript
+            prefersTranscript: prefersTranscript,
+            livedDaysByHand: livedDaysByHand,
+            placeByHand: placeByHand
+        )
+    }
+
+    /// **La même fiche, située à la main** (T288) — « changer les dates »,
+    /// « changer le nom du lieu ».
+    ///
+    /// Posée tout de suite, avant que le serveur réponde : la feuille se
+    /// referme sur une fiche qui dit déjà la bonne date. Le fil se relit
+    /// derrière, parce que la correction remonte sur l'étape et que l'étape
+    /// parle pour ses autres fiches.
+    public func situated(
+        from: Date?,
+        to: Date?,
+        place: String?,
+        livedDaysByHand: Bool? = nil,
+        placeByHand: Bool? = nil
+    ) -> TranscriptCard {
+        TranscriptCard(
+            title: title,
+            heading: heading,
+            capturedAt: capturedAt,
+            livedFrom: from,
+            livedTo: to,
+            placeName: place,
+            duration: duration,
+            text: text,
+            isSimulated: isSimulated,
+            entryId: entryId,
+            footnote: footnote,
+            phase: phase,
+            isValidated: isValidated,
+            freeCorrectionCharactersLeft: freeCorrectionCharactersLeft,
+            rawText: rawText,
+            writtenText: writtenText,
+            prefersTranscript: prefersTranscript,
+            livedDaysByHand: livedDaysByHand ?? self.livedDaysByHand,
+            placeByHand: placeByHand ?? self.placeByHand
         )
     }
 
@@ -280,6 +334,7 @@ extension TranscriptCard: Codable {
         case entryId, footnote
         case phase, isValidated, freeCorrectionCharactersLeft
         case rawText, writtenText, prefersTranscript
+        case livedDaysByHand, placeByHand
     }
 
     public init(from decoder: any Decoder) throws {
@@ -305,7 +360,12 @@ extension TranscriptCard: Codable {
                 Int.self, forKey: .freeCorrectionCharactersLeft),
             rawText: try container.decodeIfPresent(String.self, forKey: .rawText),
             writtenText: try container.decodeIfPresent(String.self, forKey: .writtenText),
-            prefersTranscript: try container.decodeIfPresent(Bool.self, forKey: .prefersTranscript) ?? false
+            prefersTranscript: try container.decodeIfPresent(Bool.self, forKey: .prefersTranscript) ?? false,
+            // Qui a écrit les dates et le lieu (T288). Absents d'un serveur
+            // d'avant : la machine, donc — c'est le bon repli, le lien
+            // « revenir aux dates déduites » manque et rien d'autre ne change.
+            livedDaysByHand: try container.decodeIfPresent(Bool.self, forKey: .livedDaysByHand) ?? false,
+            placeByHand: try container.decodeIfPresent(Bool.self, forKey: .placeByHand) ?? false
         )
     }
 
@@ -328,6 +388,8 @@ extension TranscriptCard: Codable {
         try container.encodeIfPresent(rawText, forKey: .rawText)
         try container.encodeIfPresent(writtenText, forKey: .writtenText)
         try container.encode(prefersTranscript, forKey: .prefersTranscript)
+        try container.encode(livedDaysByHand, forKey: .livedDaysByHand)
+        try container.encode(placeByHand, forKey: .placeByHand)
     }
 }
 

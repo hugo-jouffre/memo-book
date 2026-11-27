@@ -36,6 +36,7 @@ function entry(
     continuesPrevious: false,
     pinnedStepId,
     capturedPlaceName: null,
+    pinnedPlaceName: null,
     // Aucun récit situé ici : ces tests ne parlent que du rangement des
     // photos, et une étape sans jour raconté se range comme avant (T308).
     livedFromDay: null,

@@ -1434,6 +1434,39 @@ model Entry {
   /// `livedFromDay` renseigné veut dire une seule journée, le cas courant.
   livedFromDay DateTime? @db.Date
   livedToDay   DateTime? @db.Date
+
+  /// **Les jours que le voyageur a fixés lui-même** (T288), quand la rédaction
+  /// s'est trompée ou n'a rien compris — « changer les dates » de l'appui long
+  /// sur la fiche.
+  ///
+  /// Ils vivent **à côté** des deux du dessus, jamais à leur place : la
+  /// lecture de la rédaction reste intacte, et « revenir aux dates déduites »
+  /// est un simple `null`. Même motif qu'``editedText`` à côté de
+  /// ``redactedText``, et pour la même raison — une relance de la rédaction
+  /// réécrit `livedFromDay`, elle ne touche pas à ceux-ci.
+  ///
+  /// Tout ce qui lit les jours vécus passe par `livedDaysOf`
+  /// (`services/livedDays.ts`), qui préfère ceux-ci. `pinnedLivedToDay` suit
+  /// la même règle que son voisin : nul pour une seule journée.
+  pinnedLivedFromDay DateTime? @db.Date
+  pinnedLivedToDay   DateTime? @db.Date
+
+  /// **Le nom du lieu que le voyageur a écrit lui-même** (T288) — « changer le
+  /// nom du lieu » de l'appui long sur la fiche.
+  ///
+  /// L'étape tire son nom de ce que ses récits disent
+  /// (`insights.currentPlace`), et `refreshTripFacts` le recalcule à chaque
+  /// passage : un nom écrit sur l'étape s'effacerait tout seul. Celui-ci est
+  /// donc posé sur le **souvenir**, et c'est `stepFields` qui le fait gagner
+  /// sur le lieu deviné — exactement comme ``MemoStep.coverEntryId`` gagne sur
+  /// la vignette calculée.
+  ///
+  /// ⚠️ Il **renomme** l'étape, il ne regroupe rien : deux souvenirs renommés
+  /// du même nom ne se rejoignent pas pour autant. Le découpage reste celui
+  /// que les récits dictent — renommer une fiche ne doit pas déplacer un
+  /// souvenir dans une autre étape sans qu'on l'ait demandé.
+  pinnedPlaceName String?
+
   /// Lieu déclaré par l'app (nom lisible, ex. « Bogotá, Colombie »).
   ///
   /// ⚠️ C'est un **écho**, pas une mesure : l'app envoie le lieu de l'étape en

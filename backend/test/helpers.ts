@@ -102,7 +102,12 @@ function withDatabaseSuffix(url: string, suffix: string): string {
 export function testEnv() {
   return loadEnv({
     NODE_ENV: "test",
-    LOG_LEVEL: "silent",
+    // Muet par défaut — une suite entière de logs de requêtes noie les
+    // échecs. `TEST_LOG_LEVEL=error npx vitest run …` les rallume : c'est le
+    // seul moyen de lire la vraie cause d'un 500, que la réponse HTTP ne dit
+    // pas (et c'est comme ça qu'on a vu, le 27/11/2026, qu'une colonne
+    // manquait à `memobook_test` et non à la base de développement).
+    LOG_LEVEL: process.env["TEST_LOG_LEVEL"] ?? "silent",
     DATABASE_URL: testDatabaseUrl(),
     S3_ENDPOINT: "http://localhost:9000",
     S3_BUCKET: "memobook-media",

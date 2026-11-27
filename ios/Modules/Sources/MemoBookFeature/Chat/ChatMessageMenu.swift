@@ -37,6 +37,15 @@ struct ChatMessageMenu: View {
     let onDelete: () -> Void
 
     var body: some View {
+        // **Les gestes d'une fiche, d'abord** (T288) : ce sont les siens, et
+        // ils parlent du souvenir qu'elle raconte. Copier et partager suivent,
+        // comme sur n'importe quelle bulle.
+        if let card = transcriptCard {
+            Button(ChatCopy.Menu.reanalyse) { model.reanalyse(card) }
+            Button(ChatCopy.Menu.editByHand) { model.edit(message) }
+            Button(ChatCopy.Menu.changeDates) { model.changeDates(of: card) }
+            Button(ChatCopy.Menu.changePlace) { model.changePlace(of: card) }
+        }
         if message.spokenText?.isEmpty == false {
             Button(ChatCopy.Menu.copy) { model.copy(message) }
         }
@@ -72,6 +81,22 @@ struct ChatMessageMenu: View {
         }
     }
 
+    /// **La fiche de cette bulle**, quand elle en est une et que son souvenir
+    /// existe (T288) : c'est lui que les quatre gestes corrigent. Une fiche en
+    /// cours d'écoute ou de rédaction n'en a pas encore — rien à corriger d'un
+    /// texte qui n'est pas arrivé.
+    private var transcriptCard: TranscriptCard? { Self.transcriptCardOf(message) }
+
+    /// La même lecture pour le rotor VoiceOver, qui passe par une fonction
+    /// statique et n'a donc pas la vue sous la main.
+    private static func transcriptCardOf(_ message: ChatMessage) -> TranscriptCard? {
+        guard case .transcript(let card) = message.body, card.entryId != nil else { return nil }
+        switch card.phase {
+        case .ready, .unwritten, .failed: return card
+        case .listening, .writing, .unknown: return nil
+        }
+    }
+
     /// La photo de cette bulle, **s'il n'y en a qu'une** — et si elle est
     /// arrivée chez nous : une photo qui attend le réseau n'a pas de souvenir
     /// à élire.
@@ -98,6 +123,14 @@ struct ChatMessageMenu: View {
     /// Trastevere ». Un sous-menu ne s'ouvre pas au rotor.
     @ViewBuilder
     static func accessibilityActions(for message: ChatMessage, model: ChatModel, onShare: @escaping () -> Void, onDelete: @escaping () -> Void) -> some View {
+        // Les gestes de la fiche y sont aussi (T288) : rien ne se touche
+        // longuement au rotor, et ce sont pourtant les mêmes gestes.
+        if let card = transcriptCardOf(message) {
+            Button(ChatCopy.Menu.reanalyse) { model.reanalyse(card) }
+            Button(ChatCopy.Menu.editByHand) { model.edit(message) }
+            Button(ChatCopy.Menu.changeDates) { model.changeDates(of: card) }
+            Button(ChatCopy.Menu.changePlace) { model.changePlace(of: card) }
+        }
         if message.spokenText?.isEmpty == false {
             Button(ChatCopy.Menu.copy) { model.copy(message) }
             Button(ChatCopy.Menu.share, action: onShare)

@@ -154,4 +154,43 @@ class EntryEditEncodingTest {
         assertFalse(json.contains("editedText"), "Un champ absent ne doit pas écraser le texte")
         assertTrue(json.contains("rain"))
     }
+
+    /**
+     * **Les jours fixés à la main** (T288) : le jumeau de
+     * `EntryEditEncodingTests` côté iOS. Un jour part seul, et la fin part
+     * **toujours** avec lui — corriger le départ sur une période que la
+     * rédaction avait devinée doit l'effacer, sinon on lirait « du 12 au 15 »
+     * sans que personne ne l'ait dit.
+     */
+    @Test
+    fun aHandWrittenDaySendsItsDayAndClearsTheEnd() {
+        val json = encoded(EntryEdit.livedDays(from = "2026-11-14", to = null))
+
+        assertTrue(json.contains("\"livedFrom\":\"2026-11-14\""))
+        assertTrue(json.contains("\"livedTo\":null"), "La fin part avec le départ, même nulle")
+    }
+
+    @Test
+    fun aHandWrittenPeriodSendsBothDays() {
+        val json = encoded(EntryEdit.livedDays(from = "2026-11-14", to = "2026-11-16"))
+
+        assertTrue(json.contains("\"livedFrom\":\"2026-11-14\""))
+        assertTrue(json.contains("\"livedTo\":\"2026-11-16\""))
+    }
+
+    /** « Revenir aux dates déduites » : deux nulls explicites. */
+    @Test
+    fun revertingTheDaysSendsExplicitNulls() {
+        val json = encoded(EntryEdit.livedDays(from = null, to = "2026-11-16"))
+
+        assertTrue(json.contains("\"livedFrom\":null"))
+        assertTrue(json.contains("\"livedTo\":null"), "Une fin sans départ ne dit rien")
+    }
+
+    /** « Changer le nom du lieu », et « revenir au lieu deviné ». */
+    @Test
+    fun aHandWrittenPlaceIsSentAndCleared() {
+        assertTrue(encoded(EntryEdit.place("Apollonas")).contains("\"placeName\":\"Apollonas\""))
+        assertTrue(encoded(EntryEdit.place(null)).contains("\"placeName\":null"))
+    }
 }

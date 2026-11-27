@@ -108,6 +108,69 @@ final class ChatModelTests: XCTestCase {
             )
         }
 
+        /// **Les jours fixés à la main** (T288), comme le serveur : il les
+        /// écrit, remonte la correction sur l'étape, et le fil relu les porte.
+        /// Le double fait les trois — sans quoi la relecture qui suit
+        /// l'enregistrement effacerait ce qu'on vient de poser.
+        func setLivedDays(_ entryId: String, _ from: Date?, _ to: Date?) throws -> Entry {
+            situated.append((entryId, from, to))
+            if let failsSituating { throw failsSituating }
+            situate(entryId, from: from, to: to, place: nil, placeByHand: nil)
+            return entry(entryId)
+        }
+
+        /// **Le nom du lieu écrit à la main** (T288).
+        func setPlaceName(_ entryId: String, _ name: String?) throws -> Entry {
+            named.append((entryId, name))
+            if let failsSituating { throw failsSituating }
+            situate(entryId, from: nil, to: nil, place: name, placeByHand: name != nil)
+            return entry(entryId)
+        }
+
+        /// Repose la fiche du fil, dates ou lieu compris — le fil que la
+        /// relecture rendra.
+        private func situate(
+            _ entryId: String,
+            from: Date?,
+            to: Date?,
+            place: String?,
+            placeByHand: Bool?
+        ) {
+            var updated = thread
+            for index in updated.messages.indices {
+                guard case .transcript(let card) = updated.messages[index].body,
+                    card.entryId == entryId
+                else { continue }
+                updated.messages[index].body = .transcript(
+                    card.situated(
+                        from: placeByHand == nil ? from : card.livedFrom,
+                        to: placeByHand == nil ? to : card.livedTo,
+                        place: placeByHand == nil ? card.placeName : place,
+                        livedDaysByHand: placeByHand == nil ? from != nil : card.livedDaysByHand,
+                        placeByHand: placeByHand ?? card.placeByHand
+                    )
+                )
+            }
+            thread = updated
+        }
+
+        private func entry(_ entryId: String) -> Entry {
+            Entry(
+                id: entryId,
+                memoId: "trip",
+                kind: .audio,
+                status: .ready,
+                redactionStatus: .ready,
+                capturedAt: .now,
+                createdAt: .now
+            )
+        }
+
+        private(set) var situated: [(String, Date?, Date?)] = []
+        private(set) var named: [(String, String?)] = []
+        private var failsSituating: (any Error)?
+        func failSituating(with error: (any Error)?) { failsSituating = error }
+
         private(set) var kept: [(String, Bool)] = []
         private(set) var reanalysed: [String] = []
 
@@ -138,6 +201,8 @@ final class ChatModelTests: XCTestCase {
             editTranscript: { entryId, text in try await script.edit(entryId, text) },
             keepTranscript: { entryId, keeps in await script.keepTranscript(entryId, keeps) },
             reanalyse: { entryId in await script.reanalyse(entryId) },
+            setLivedDays: { entryId, from, to in try await script.setLivedDays(entryId, from, to) },
+            setPlaceName: { entryId, name in try await script.setPlaceName(entryId, name) },
             media: { _ in Data() },
             waiting: { await script.waiting },
             deliveries: { await script.deliveries() },
@@ -348,6 +413,135 @@ final class ChatModelTests: XCTestCase {
                 seq: 1
             )
         ])
+    }
+
+    // MARK: - Les gestes d'une fiche (T288)
+
+    /// Un fil où la fiche **n'est pas seule** : le récit du voyageur, puis la
+    /// fiche que MEMO en a tirée.
+    ///
+    /// ⚠️ Deux messages et non un, et ce n'est pas un détail : un fil d'un
+    /// seul message de MEMO est un **bonjour**, que le modèle retire le temps
+    /// d'une pause avant de le poser (``revealOpening``). La fiche
+    /// disparaissait donc à chaque relecture, ce qu'aucun vrai fil ne fait —
+    /// une fiche a toujours devant elle la bulle qui l'a racontée.
+    private func storyAndCardThread() -> ChatThread {
+        thread(messages: [
+            ChatMessage(id: "recit", author: .traveller, body: .text("Le Colisée au petit matin."), sentAt: .now, seq: 1),
+            ChatMessage(
+                id: "fiche",
+                author: .memo,
+                body: .transcript(
+                    TranscriptCard(
+                        title: "Retranscription étape 1",
+                        capturedAt: .now,
+                        text: "Le Colisée au petit matin.",
+                        entryId: "entry-1"
+                    )
+                ),
+                sentAt: .now,
+                seq: 2
+            )
+        ])
+    }
+
+    /// Le jour civil, tel que le serveur le reçoit — c'est lui qu'on compare.
+    private func day(_ iso: String) -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = .current
+        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+        return formatter.date(from: iso)!
+    }
+
+    /// **« Changer les dates »** : la feuille s'ouvre sur ce que la fiche dit,
+    /// et le jour posé part au serveur.
+    func testChangingTheDaysOfACardPostsThemAndShowsThemAtOnce() async throws {
+        let script = Script(thread: storyAndCardThread())
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        let fiche = try XCTUnwrap(card(of: model))
+        model.changeDates(of: fiche)
+        XCTAssertEqual(model.editedFacts, .dates(fiche), "La feuille s'ouvre sur cette fiche-là.")
+
+        model.saveLivedDays(from: day("2026-11-14"), to: nil, for: fiche)
+        XCTAssertNil(model.editedFacts, "Elle se referme sur le geste.")
+        XCTAssertEqual(card(of: model)?.livedFrom, day("2026-11-14"), "La fiche le dit tout de suite.")
+
+        try await until("le serveur a reçu le jour") { await script.situated.count == 1 }
+        let sent = await script.situated.first
+        XCTAssertEqual(sent?.0, "entry-1")
+        XCTAssertEqual(sent?.1, day("2026-11-14"))
+        XCTAssertNil(sent?.2, "Une journée n'a pas de fin.")
+        try await until("le fil relu porte le jour de la main") {
+            self.card(of: model)?.livedDaysByHand == true
+        }
+        XCTAssertEqual(card(of: model)?.livedFrom, day("2026-11-14"), "Et c'est bien le jour posé.")
+    }
+
+    /// **Une fin sans départ n'existe pas** : corriger le départ seul efface
+    /// la fin que la rédaction avait mise, sinon on lirait une période que
+    /// personne n'a dite.
+    func testClearingTheDaysHandsThePenBackToTheRedaction() async throws {
+        let script = Script(thread: storyAndCardThread())
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        let fiche = try XCTUnwrap(card(of: model))
+
+        model.saveLivedDays(from: nil, to: day("2026-11-16"), for: fiche)
+
+        try await until("le serveur a reçu le retour aux dates déduites") { await script.situated.count == 1 }
+        let sent = await script.situated.first
+        XCTAssertNil(sent?.1)
+        XCTAssertNil(sent?.2, "La fin part avec le départ.")
+    }
+
+    /// **« Changer le nom du lieu »** : le nom part sans ses espaces, et un
+    /// champ vidé rend la parole au lieu deviné.
+    func testChangingThePlaceNamePostsItTrimmed() async throws {
+        let script = Script(thread: storyAndCardThread())
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        let fiche = try XCTUnwrap(card(of: model))
+
+        model.changePlace(of: fiche)
+        XCTAssertEqual(model.editedFacts, .place(fiche))
+
+        model.savePlaceName("  Apollonas ", for: fiche)
+        XCTAssertEqual(card(of: model)?.placeName, "Apollonas")
+
+        try await until("le serveur a reçu le lieu") { await script.named.count == 1 }
+        let firstName = await script.named.first?.1
+        XCTAssertEqual(firstName, "Apollonas")
+
+        try await until("le fil relu porte le lieu de la main") { self.card(of: model)?.placeByHand == true }
+        model.savePlaceName("   ", for: try XCTUnwrap(card(of: model)))
+        try await until("le serveur a reçu le retour au lieu deviné") { await script.named.count == 2 }
+        let lastName = await script.named.last?.1
+        XCTAssertNil(lastName, "Un champ vidé, c'est « reviens au lieu deviné ».")
+    }
+
+    /// **Un refus remet la fiche d'avant**, et le dit : mieux vaut une date
+    /// qui revient en place avec un bandeau qu'une date corrigée pour de faux.
+    func testARefusedCorrectionPutsTheCardBack() async throws {
+        let script = Script(thread: storyAndCardThread())
+        await script.failSituating(with: APIError.server(statusCode: 500, code: nil, message: "Non."))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        let fiche = try XCTUnwrap(card(of: model))
+
+        model.saveLivedDays(from: day("2026-11-14"), to: nil, for: fiche)
+
+        try await until("la fiche est revenue en place") { self.card(of: model)?.livedFrom == nil }
+        XCTAssertEqual(model.errorMessage, "Non.")
+    }
+
+    /// **Une fiche qui n'a pas encore de souvenir n'ouvre rien** : il n'y a
+    /// rien à corriger d'un texte qui n'est pas arrivé.
+    func testACardWithoutAMemoryOpensNothing() {
+        let model = ChatModel(transport: transport(Script(thread: thread())))
+        model.changeDates(of: TranscriptCard(title: "Retranscription étape 1", capturedAt: .now))
+        XCTAssertNil(model.editedFacts)
     }
 
     /// Le card de la fiche, tel que la vue le lit.

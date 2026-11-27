@@ -182,7 +182,7 @@ régénérer avec elle (deux tests le vérifient).
 | `NewNotebookSheet` et son second temps `JoinTripStep` (Polarsteps reste « à venir ») | ✅ |
 | `TripCreationView` : six étapes, création hors ligne, code d'accès, invitation par la feuille de partage | ✅ |
 | `TripHomeView` : en-tête, étapes, validation, suppression d'étape | ✅ |
-| `ChatView` : texte, vocal, photos, suggestions, appels à l'action, lecture à voix haute, photo plein écran, contexte du voyage, fil hors ligne | ✅ |
+| `ChatView` : texte, vocal, photos, suggestions, appels à l'action, lecture à voix haute, photo plein écran, contexte du voyage, fil hors ligne | ✅ — **sauf le menu d'un appui long** sur une bulle (T270, T288), voir plus bas |
 | `RecordingSheet` : forme d'onde, pause, crédit du jour (30 s, 5 s, zéro) — **forme d'onde seule**, sans transcription en direct (voir les risques) | ✅ |
 | `RecordingOutbox`, `PendingRecordingStore`, `PendingTripStore`, vidés aussi app fermée par WorkManager | ✅ |
 | `PhotoFlow` : sélecteur de photos du système (sans permission), appareil photo | ✅ |
@@ -319,6 +319,30 @@ mégaoctets qui dépasse les 60 s du client, retombe dans la file et recommence.
 Le serveur, lui, ne voit rien d'anormal — une photo sans `lightweight` est
 traitée comme une pleine définition, ce qu'elle est. **C'est un ticket à
 lui**, et il se mesure avant de se corriger, comme le 26/11 côté iOS.
+
+### Ce qui n'est pas porté non plus — l'appui long sur une bulle
+
+⚠️ **Le menu d'un appui long dans la conversation manque en entier**
+(constaté le 26/11/2026). `ChatView` est marqué ✅ plus haut, et il l'est pour
+tout le reste ; mais aucune bulle n'a de menu contextuel, et avec lui il manque
+tous les gestes que T270 a posés sur iOS :
+
+| iOS (`ChatMessageMenu.swift`) | Android |
+|---|---|
+| T270 (19/11) : copier, partager, « déplacer dans une autre étape », les deux étoiles de photo principale, supprimer (avec confirmation) | absent — rien ne réagit à l'appui long |
+| T288 (26/11) : les cinq gestes d'une fiche de MEMO — ré-analyser, modifier à la main, changer les dates, changer le nom du lieu, supprimer | **sans support** : il n'y a pas de menu où les poser |
+
+Ce que T288 a quand même porté, parce que ça ne dépend d'aucun menu :
+`EntryEdit.livedDays` / `EntryEdit.place` (le contrat d'envoi, testé cas pour
+cas), les deux drapeaux `TranscriptCard.livedDaysByHand` / `placeByHand` et
+`TranscriptCard.situated(…)`. La route serveur, elle, est commune aux deux
+apps : elle est déjà là.
+
+Ce qu'il reste à écrire est donc l'**hôte** : le menu, la feuille de partage du
+système, le sous-menu des étapes, la confirmation de suppression, le rotor
+d'actions de TalkBack — et seulement ensuite les deux feuilles de T288
+(`ChatFactsSheets.swift`). **C'est un ticket à lui**, et il porte T270 et T288
+ensemble : les séparer ferait écrire deux fois le même menu.
 
 ### Ce qui ne se porte pas
 
