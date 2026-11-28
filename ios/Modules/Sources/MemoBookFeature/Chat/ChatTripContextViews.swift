@@ -10,12 +10,12 @@ import SwiftUI
 /// ligne à ligne, et ce qui manque encore.
 ///
 /// Capsule bleue sur verre dépoli : c'était aussi, jusqu'au 15/10/2026, le
-/// dessin de la bannière de l'aperçu (``ChatPreviewBanner``), pour que les deux
-/// se lisent comme la même famille d'objets — un état du carnet, pas un message.
-/// L'autre est passée au verre crème, parce qu'elle **flotte sur le fil** et s'y
-/// fondait ; celle-ci est posée dans la marge de l'en-tête, sur le verre de
-/// l'en-tête, et le bleu n'y concurrence aucune bulle. Les deux ne paraissent
-/// jamais ensemble.
+/// dessin de la capsule de l'aperçu, pour que les deux se lisent comme la même
+/// famille d'objets — un état du carnet, pas un message. L'autre est passée au
+/// verre crème, parce qu'elle **flotte sur le fil** et s'y fondait, puis le
+/// petit livre de T297 a pris sa place ; celle-ci est posée dans la marge de
+/// l'en-tête, sur le verre de l'en-tête, et le bleu n'y concurrence aucune
+/// bulle. Elle et le livre ne paraissent jamais ensemble.
 struct ChatTripContextBanner: View {
     let context: ChatTripContext
     let onOpen: () -> Void

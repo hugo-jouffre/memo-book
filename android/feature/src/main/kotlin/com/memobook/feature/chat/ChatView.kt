@@ -516,37 +516,14 @@ private fun ChatConversation(
     // du temps.
     var flight by remember { mutableStateOf<SuggestionFlight?>(null) }
 
-    // La bannière d'aperçu en direct est **posée sur le fil**, pas dedans
-    // (Hugo, 17/09/2026). **Une règle, et deux sens** (Hugo, 19/09/2026) : on
-    // remonte vers les anciens messages, elle vient ; on redescend vers les
-    // récents, elle s'en va. **Le temps ne la reprend qu'à l'arrivée** : elle se
-    // montre quatre secondes en ouvrant le fil, puis se retire. Rappelée par un
-    // geste, elle **reste** : c'est une descente qui la renvoie, et rien
-    // d'autre.
-    var showsPreviewBanner by remember { mutableStateOf(!arrivesWithRecording) }
-    var bannerLingerTask by remember { mutableStateOf<Job?>(null) }
+    // **La porte du PDF est posée sur le fil**, pas dedans (Hugo,
+    // 17/09/2026). C'était une bannière qui allait et venait au défilement ;
+    // c'est, depuis T297, un petit livre qui dépasse du bord droit et qui
+    // reste — voir [ChatBookDoor].
     val tracker = remember { ChatScrollTracker() }
-    val revealDistance = with(density) { BANNER_REVEAL_DISTANCE.toPx() }
-    val dismissDistance = with(density) { BANNER_DISMISS_DISTANCE.toPx() }
+    val hideDistance = with(density) { READING_HIDE_DISTANCE.toPx() }
+    val revealDistance = with(density) { READING_REVEAL_DISTANCE.toPx() }
     val bottomTolerance = with(density) { BOTTOM_TOLERANCE.toPx() }
-
-    // ⚠️ **N'écrit que ce qui change.** Appelée à chaque image d'une remontée.
-    fun revealBanner(withdrawing: Boolean = false) {
-        if (!showsPreviewBanner) showsPreviewBanner = true
-        bannerLingerTask?.cancel()
-        bannerLingerTask = null
-        if (!withdrawing) return
-        bannerLingerTask = scope.launch {
-            delay(BANNER_LINGER_MS)
-            showsPreviewBanner = false
-        }
-    }
-
-    fun hideBanner() {
-        bannerLingerTask?.cancel()
-        bannerLingerTask = null
-        if (showsPreviewBanner) showsPreviewBanner = false
-    }
 
     // **La barre s'efface quand on remonte lire** (T289, Hugo — « la barre de
     // saisie et ses propositions s'effacent quand on remonte le fil pour lire,
@@ -588,19 +565,13 @@ private fun ChatConversation(
                     tracker.scrolledUp += delta
                     // On remonte : elle vient, et le délai repart de zéro tant
                     // que le geste dure.
-                    if (tracker.scrolledUp >= revealDistance) {
-                        revealBanner()
-                        // On remonte pour lire : la barre s'en va (T289).
-                        hideComposer()
-                    }
+                    // On remonte pour lire : la barre s'en va (T289).
+                    if (tracker.scrolledUp >= hideDistance) hideComposer()
                 } else if (delta < 0f) {
                     tracker.scrolledUp = 0f
                     tracker.scrolledDown -= delta
-                    if (tracker.scrolledDown >= dismissDistance) {
-                        hideBanner()
-                        // On redescend : elle revient (T289).
-                        revealComposer()
-                    }
+                    // On redescend : elle revient (T289).
+                    if (tracker.scrolledDown >= revealDistance) revealComposer()
                 }
                 if (delta != 0f) {
                     val atBottom = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset <= bottomTolerance
@@ -618,14 +589,6 @@ private fun ChatConversation(
             }
         }
     }
-
-    // Quatre secondes à l'arrivée, puis elle s'en va toute seule. Pas
-    // d'arrivée du tout avec un vocal de l'accueil.
-    LaunchedEffect(thread.preview != null) {
-        if (thread.preview == null || arrivesWithRecording) return@LaunchedEffect
-        revealBanner(withdrawing = true)
-    }
-    DisposableEffect(Unit) { onDispose { bannerLingerTask?.cancel() } }
 
     // Suit la conversation **sans voler le défilement** : on ne redescend que
     // si on était déjà en bas, ou si c'est nous qui venons de parler. Quelqu'un
@@ -732,26 +695,27 @@ private fun ChatConversation(
             }
         }
 
-        // **La bannière, par-dessus le fil**, sous l'imprimante. Elle glisse vers
-        // le haut avec un rebond quand elle s'en va, et revient de la même façon.
-        // Pendant le contexte du voyage, sa pastille tient la place : deux
-        // capsules l'une sur l'autre se liraient comme une pile.
+        // **Le petit livre, par-dessus le fil**, sous l'imprimante (T297). Il
+        // dépasse du bord droit et ne s'en va plus. Pendant le contexte du
+        // voyage, la pastille tient la place : deux objets l'un sur l'autre se
+        // liraient comme une pile.
         val preview = thread.preview
-        AnimatedVisibility(
-            visible = showsPreviewBanner && !isGatheringContext && preview != null,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                // À l'aplomb de l'imprimante de l'en-tête, qui ouvre le même
-                // aperçu (Hugo, 15/10/2026) : la marge de l'app, celle de
-                // l'encre des commandes de l'en-tête.
-                .padding(top = with(density) { headerHeight.toDp() } + MemoBookSpacing.xs)
-                .padding(horizontal = MemoBookSpacing.screenMargin),
-            enter = if (reduceMotion) fadeIn() else slideInVertically(SwiftMotion.spring(0.55f, 0.65f)) { -it } + fadeIn(),
-            exit = if (reduceMotion) fadeOut() else slideOutVertically(SwiftMotion.spring(0.55f, 0.65f)) { -it } + fadeOut(),
-        ) {
-            val shown = remember { mutableStateOf(preview) }
-            if (preview != null) shown.value = preview
-            shown.value?.let { ChatPreviewBanner(it, onOpen = { onOpenFromServer(ChatIntent.OpenBookPreview(tripId)) }) }
+        if (!isGatheringContext && preview != null) {
+            Column(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = with(density) { headerHeight.toDp() } + MemoBookSpacing.xs),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs / 2),
+            ) {
+                ChatBookDoor(preview, onOpen = { onOpenFromServer(ChatIntent.OpenBookPreview(tripId)) })
+                val steps = preview.stepsBeforeCover
+                // L'étiquette ne dépasse pas, elle : un texte coupé par le
+                // bord de la dalle ne se lit pas.
+                if (steps != null && steps > 0) {
+                    ChatBookDoorCaption(steps, Modifier.padding(end = MemoBookSpacing.screenMargin))
+                }
+            }
         }
 
         // **Sous l'en-tête et la barre d'envoi**, posé avant elles dans la
@@ -1144,13 +1108,17 @@ object ChatView {
 private val BOTTOM_TOLERANCE = 32.dp
 
 /**
- * Les seuils de la bannière : remonter demande un geste franc (60 dp) ;
- * redescendre en demande un aussi (40 dp, et non 20 : à vingt points, le rebond
- * d'un doigt qui s'arrête suffisait à la faire partir).
+ * **Les seuils de la barre d'envoi** (T289) — remonter, c'est lire. Remonter
+ * demande un geste franc (60 dp) ; redescendre en demande un aussi (40 dp, et
+ * non 20 : à vingt points, le rebond d'un doigt qui s'arrête suffisait à la
+ * faire revenir).
+ *
+ * Ils portaient le nom de la bannière « Ton carnet prend forme », qu'ils
+ * pilotaient aussi : le petit livre de T297 ne va plus et ne vient plus, et ils
+ * ne servent qu'ici.
  */
-private val BANNER_REVEAL_DISTANCE = 60.dp
-private val BANNER_DISMISS_DISTANCE = 40.dp
-private const val BANNER_LINGER_MS = 4_000L
+private val READING_HIDE_DISTANCE = 60.dp
+private val READING_REVEAL_DISTANCE = 40.dp
 
 // MARK: - Aperçus
 

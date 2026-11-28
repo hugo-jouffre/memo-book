@@ -4,6 +4,7 @@ package com.memobook.feature.chat
 
 import android.content.ContextWrapper
 import com.memobook.core.ChatAuthor
+import com.memobook.core.ChatBookPreview
 import com.memobook.core.ChatCallToAction
 import com.memobook.core.ChatCallToActionState
 import com.memobook.core.ChatContext
@@ -226,6 +227,48 @@ class ChatModelTest {
 
     private fun traveller(id: String, text: String, seq: Int): ChatMessage =
         ChatMessage(id = id, author = ChatAuthor.Traveller, body = ChatMessageBody.Text(text), sentAt = Instant.now(), seq = seq)
+
+    // MARK: - Le petit livre (T297)
+
+    /**
+     * **Le serveur décide de l'âge du livre**, l'app le lit. Jumeau de
+     * `ChatModelTests.testTheBookReadsItsAgeFromTheServer`.
+     */
+    @Test
+    fun theBookReadsItsAgeFromTheServer() {
+        val couvert = MemoBookJson.decodeFromString(
+            ChatBookPreview.serializer(),
+            """
+            {"memoryCount":3,"pageCount":6,"isOpenable":false,
+             "coverUrl":"https://cdn.memo-book.com/cover.jpg","stepsBeforeCover":null}
+            """.trimIndent(),
+        )
+        assertEquals("https://cdn.memo-book.com/cover.jpg", couvert.coverUrl?.toString())
+        assertNull(couvert.stepsBeforeCover)
+        assertFalse(couvert.isOpenable)
+
+        val nu = MemoBookJson.decodeFromString(
+            ChatBookPreview.serializer(),
+            """{"memoryCount":1,"pageCount":2,"isOpenable":true,"stepsBeforeCover":3}""",
+        )
+        assertNull(nu.coverUrl)
+        assertEquals(3, nu.stepsBeforeCover)
+    }
+
+    /**
+     * Une adresse illisible laisse le livre nu — elle ne fait pas tomber
+     * l'aperçu, ni le fil avec lui.
+     */
+    @Test
+    fun anUnreadableCoverLeavesTheBookBare() {
+        val preview = MemoBookJson.decodeFromString(
+            ChatBookPreview.serializer(),
+            """{"memoryCount":4,"pageCount":9,"isOpenable":true,"coverUrl":42}""",
+        )
+
+        assertNull(preview.coverUrl)
+        assertEquals(9, preview.pageCount)
+    }
 
     // MARK: - Les pastilles (T296)
 

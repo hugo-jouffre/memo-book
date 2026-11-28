@@ -355,6 +355,13 @@ private fun preview(trip: Trip): ChatBookPreview? {
         memoryCount = progress.memoryCount,
         pageCount = progress.pageCount,
         isOpenable = trip.isPrintable || progress.pageCount > 0,
+        // **Les deux âges du petit livre** (T297), d'après ce que le jeu
+        // d'essai a : sa photo de couverture s'il en a une, sinon le plat nu
+        // et l'étiquette qui décompte. Un jeu d'essai sans photo doit montrer
+        // **quelque chose** — sans ça, le livre s'y regarderait toujours à
+        // moitié.
+        coverUrl = trip.coverPhotoUrl,
+        stepsBeforeCover = if (trip.coverPhotoUrl == null) 2 else null,
     )
 }
 

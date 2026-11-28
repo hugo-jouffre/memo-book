@@ -1055,10 +1055,52 @@ public struct ChatBookPreview: Codable, Sendable, Hashable {
     /// c'est lui qui dit si le carnet se compose encore.
     public let isOpenable: Bool
 
-    public init(memoryCount: Int, pageCount: Int, isOpenable: Bool = true) {
+    /// **La couverture du petit livre** (T297), quand il l'a. `nil` tant que
+    /// le carnet n'a pas assez d'étapes illustrées — voir ``stepsBeforeCover``.
+    ///
+    /// La photo existe bien avant : le voyage en élit une dès la première
+    /// reçue. C'est le **serveur** qui la retient, pour que le livre ait
+    /// quelque chose à devenir ; l'app ne refait pas ce calcul, elle dessine
+    /// ce qu'elle reçoit.
+    public let coverUrl: URL?
+
+    /// **Combien d'étapes avec photos séparent encore le livre de sa
+    /// couverture** (T297), ou `nil` quand elle est là. C'est le décompte que
+    /// l'étiquette sous le livre annonce.
+    public let stepsBeforeCover: Int?
+
+    public init(
+        memoryCount: Int,
+        pageCount: Int,
+        isOpenable: Bool = true,
+        coverUrl: URL? = nil,
+        stepsBeforeCover: Int? = nil
+    ) {
         self.memoryCount = memoryCount
         self.pageCount = pageCount
         self.isOpenable = isOpenable
+        self.coverUrl = coverUrl
+        self.stepsBeforeCover = stepsBeforeCover
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case memoryCount, pageCount, isOpenable, coverUrl, stepsBeforeCover
+    }
+
+    /// Une adresse illisible ne fait pas tomber l'aperçu : le livre reste nu,
+    /// et il mène toujours au carnet.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            memoryCount: try container.decode(Int.self, forKey: .memoryCount),
+            pageCount: try container.decode(Int.self, forKey: .pageCount),
+            // Exigé, comme avant que ce décodage s'écrive à la main : le
+            // serveur le rend toujours, et son jumeau Android le marque
+            // `@Required`. Les deux apps doivent refuser la même réponse.
+            isOpenable: try container.decode(Bool.self, forKey: .isOpenable),
+            coverUrl: (try? container.decodeIfPresent(URL.self, forKey: .coverUrl)) ?? nil,
+            stepsBeforeCover: try container.decodeIfPresent(Int.self, forKey: .stepsBeforeCover)
+        )
     }
 }
 

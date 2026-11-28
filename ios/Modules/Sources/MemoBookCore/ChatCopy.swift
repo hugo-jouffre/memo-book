@@ -22,7 +22,27 @@ import Foundation
 // (D9), et R9 l'emportait de toute façon sur R8 pour cette phrase.
 public enum ChatCopy {
 
-    // MARK: - La bannière « Aperçu en direct »
+    // MARK: - Le petit livre, et la bannière qu'il remplace
+
+    /// **Le petit livre qui dépasse du bord** (T297, Hugo, 28/11/2026) : ce
+    /// que VoiceOver lit à sa place, et l'étiquette de sa couverture à venir.
+    ///
+    /// La capsule « Ton carnet prend forme » lui a laissé la place — deux
+    /// portes vers le même écran à vingt points l'une de l'autre se lisent
+    /// comme une seule. Son titre reste ici : c'est lui que VoiceOver annonce
+    /// sur le livre, et le mot est juste.
+    public enum BookDoor {
+        /// Ce que l'étiquette dit tant que la couverture n'est pas là. Elle
+        /// décompte, et disparaît d'elle-même à l'arrivée de la photo.
+        public static func coverAfter(steps: Int) -> String {
+            steps <= 1
+                ? "Ta couverture après une étape avec photos"
+                : "Ta couverture après \(steps) étapes avec photos"
+        }
+
+        /// Le livre nu, pour VoiceOver : il mène au carnet quand même.
+        public static let bareBook = "Ton carnet, sans couverture pour l’instant"
+    }
 
     /// « Votre Carnet » dans la maquette : tutoyé, comme tout le reste (R9).
     public static let previewTitle = "Ton carnet prend forme"

@@ -137,7 +137,6 @@ public struct ChatView: View {
         if let handoff { model.expect(handoff) }
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
-        _showsPreviewBanner = State(initialValue: handoff == nil)
     }
 
     /// Pour les aperçus et les tests, qui fournissent leur propre modèle.
@@ -165,31 +164,16 @@ public struct ChatView: View {
     /// L'espace de coordonnées du fil, pour mesurer de combien il a défilé.
     private static let scrollSpace = "chat-scroll"
 
-    // MARK: La bannière « Ton carnet prend forme »
+    // MARK: Le petit livre
 
-    /// La bannière d'aperçu en direct est **posée sur le fil**, pas dedans
-    /// (Hugo, 17/09/2026).
+    /// **La porte du PDF est posée sur le fil**, pas dedans (Hugo,
+    /// 17/09/2026). C'était une bannière qui allait et venait au défilement ;
+    /// c'est, depuis T297, un petit livre qui dépasse du bord droit et qui
+    /// reste — voir ``ChatBookDoor``.
     ///
-    /// **Une règle, et deux sens** (Hugo, 19/09/2026) : on remonte vers les
-    /// anciens messages, elle vient ; on redescend vers les récents, elle s'en
-    /// va. Rien d'autre. Elle allait et venait trop vite — trois seuils se
-    /// contredisaient : elle apparaissait à 80 pt de remontée et **repartait**
-    /// à 200 pt du même geste, c'est-à-dire au milieu du défilement qui venait
-    /// de la faire venir.
-    ///
-    /// **Le temps ne la reprend qu'à l'arrivée.** Elle se montre quatre
-    /// secondes en ouvrant le fil, puis se retire. Rappelée par un geste, en
-    /// revanche, elle **reste** : c'est une descente qui la renvoie, et rien
-    /// d'autre. Un minuteur qui l'effaçait pendant qu'on lisait faisait
-    /// exactement ce que Hugo décrit — elle allait et venait toute seule.
-    @State private var showsPreviewBanner = true
 
     /// La fiche du contexte du voyage, ouverte depuis sa pastille.
     @State private var showsTripContext = false
-
-    /// Le retrait différé de la bannière. Une tâche et non un minuteur : elle
-    /// s'annule quand on quitte le fil, et se relance à chaque remontée.
-    @State private var bannerLingerTask: Task<Void, Never>?
 
     /// Le bas de l'en-tête, en coordonnées globales : la bannière se pose
     /// juste dessous. Le bas et non la hauteur — l'en-tête s'étend sous la
@@ -246,14 +230,17 @@ public struct ChatView: View {
     /// chaque image de défilement, et rien à l'écran n'en dépend directement.
     @State private var scroll = ChatScrollTracker()
 
-    /// Les seuils de la bannière — voir ``showsPreviewBanner``.
+    /// **Les seuils de la barre d'envoi** (T289) — remonter, c'est lire.
     ///
     /// Remonter demande un geste franc (60 pt) ; redescendre en demande un
     /// aussi (40 pt, et non 20 : à vingt points, le rebond d'un doigt qui
-    /// s'arrête suffisait à la faire partir).
-    private static let bannerRevealDistance: CGFloat = 60
-    private static let bannerDismissDistance: CGFloat = 40
-    private static let bannerLinger: Duration = .seconds(4)
+    /// s'arrête suffisait à la faire revenir).
+    ///
+    /// Ils portaient le nom de la bannière « Ton carnet prend forme », qu'ils
+    /// pilotaient aussi : le petit livre de T297 ne va plus et ne vient plus,
+    /// et ils ne servent qu'ici.
+    private static let readingHideDistance: CGFloat = 60
+    private static let readingRevealDistance: CGFloat = 40
 
     public var body: some View {
         Group {
@@ -505,55 +492,34 @@ public struct ChatView: View {
                 guard isThinking else { return }
                 follow(proxy)
             }
-            // **La bannière, par-dessus le fil**, sous l'imprimante. Elle
-            // glisse vers le haut avec un rebond quand elle s'en va, et revient
-            // de la même façon. En Reduce Motion, un fondu.
-            .overlay(alignment: .top) {
+            // **Le petit livre, par-dessus le fil**, sous l'imprimante
+            // (T297). Il dépasse du bord droit et ne s'en va plus : c'est son
+            // dessin qui le rend discret, pas son absence.
+            .overlay(alignment: .topTrailing) {
                 // Pendant le contexte du voyage, sa pastille tient la place :
-                // deux capsules l'une sur l'autre se liraient comme une pile.
-                if showsPreviewBanner, !isGatheringContext, let preview = thread.preview {
+                // deux objets l'un sur l'autre se liraient comme une pile.
+                if !isGatheringContext, let preview = thread.preview {
                     GeometryReader { proxy in
-                        ChatPreviewBanner(preview: preview) { openFromServer(.openBookPreview(memoId: tripId)) }
-                            // À l'aplomb de l'imprimante de l'en-tête, qui ouvre
-                            // le même aperçu (Hugo, 15/10/2026).
-                            //
-                            // La marge de l'app, et non celle de l'en-tête
-                            // (``xs``) : une commande de l'en-tête est une cible
-                            // de 44 pt pour 32 pt de dessin, et c'est son
-                            // **encre** qu'on aligne, pas sa boîte — elle tombe
-                            // à 14 pt du bord, soit ``screenMargin`` à deux
-                            // points près (R2). Sur le bord de la boîte, la
-                            // capsule débordait de l'imprimante de huit points.
-                            // À gauche, la même marge arrête une capsule
-                            // élargie par une grande taille de texte avant le
-                            // bord de la dalle.
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                            .padding(.horizontal, MemoBookSpacing.screenMargin)
-                            .padding(.top, max(0, headerBottom - proxy.frame(in: .global).minY) + MemoBookSpacing.xs)
+                        VStack(alignment: .trailing, spacing: MemoBookSpacing.xs / 2) {
+                            ChatBookDoor(preview: preview) {
+                                openFromServer(.openBookPreview(memoId: tripId))
+                            }
+                            // L'étiquette ne dépasse pas, elle : un texte
+                            // coupé par le bord de la dalle ne se lit pas.
+                            if let steps = preview.stepsBeforeCover, steps > 0 {
+                                ChatBookDoorCaption(steps: steps)
+                                    .padding(.trailing, MemoBookSpacing.screenMargin)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.top, max(0, headerBottom - proxy.frame(in: .global).minY) + MemoBookSpacing.xs)
                     }
-                    .transition(
-                        reduceMotion
-                            ? .opacity
-                            : .move(edge: .top).combined(with: .opacity)
-                    )
+                    .transition(.opacity)
                 }
             }
-            .animation(
-                reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.55, bounce: 0.35),
-                value: showsPreviewBanner
-            )
-            // Quatre secondes à l'arrivée, puis elle s'en va toute seule. Pas
-            // d'arrivée du tout avec un vocal de l'accueil — voir
-            // ``arrivesWithRecording``.
-            .task(id: thread.preview != nil) {
-                guard thread.preview != nil, !arrivesWithRecording else { return }
-                revealBanner(withdrawing: true)
-            }
-            // Quitter le fil emporte le retrait différé avec lui.
-            .onDisappear {
-                bannerLingerTask?.cancel()
-                bannerLingerTask = nil
-            }
+            // L'étiquette s'efface quand la couverture arrive, et le livre
+            // reste : un fondu, jamais un glissement — rien ne se déplace.
+            .animation(.easeInOut(duration: 0.25), value: thread.preview?.stepsBeforeCover)
             // **Sous l'en-tête et la barre d'envoi**, posé avant elles : la
             // maquette les garde visibles autour de l'alerte d'iOS. Opaque,
             // donc le fil ne se lit ni ne se touche pendant ce temps-là.
@@ -801,7 +767,8 @@ public struct ChatView: View {
         if !showsComposer { showsComposer = true }
     }
 
-    /// Ce que le défilement fait à la bannière — voir ``showsPreviewBanner``.
+    /// Ce que le défilement fait à la barre d'envoi (T289) : remonter, c'est
+    /// lire.
     ///
     /// Le haut du contenu **monte** quand on descend vers les messages récents
     /// (il devient plus négatif) et **descend** quand on remonte vers les
@@ -816,58 +783,14 @@ public struct ChatView: View {
         if delta > 0 {
             scroll.scrolledDown = 0
             scroll.scrolledUp += delta
-            // On remonte : elle vient, et le délai repart de zéro tant que le
-            // geste dure. C'est ce qui la fait **rester** pendant qu'on
-            // remonte, au lieu de repartir au milieu du mouvement.
-            if scroll.scrolledUp >= Self.bannerRevealDistance {
-                revealBanner()
-                // On remonte pour lire : la barre s'en va (T289).
-                hideComposer()
-            }
+            // On remonte pour lire : la barre s'en va (T289).
+            if scroll.scrolledUp >= Self.readingHideDistance { hideComposer() }
         } else if delta < 0 {
             scroll.scrolledUp = 0
             scroll.scrolledDown -= delta
-            if scroll.scrolledDown >= Self.bannerDismissDistance {
-                hideBanner()
-                // On redescend : elle revient (T289).
-                revealComposer()
-            }
+            // On redescend : elle revient (T289).
+            if scroll.scrolledDown >= Self.readingRevealDistance { revealComposer() }
         }
-    }
-
-    /// Montre la bannière, et la laisse.
-    ///
-    /// - Parameter withdrawing: elle se retire toute seule au bout de
-    ///   ``bannerLinger``. Vrai **à l'arrivée seulement** : c'est une
-    ///   présentation, pas une invitation qu'on garde sous les yeux. Rappelée
-    ///   au doigt, elle attend qu'on redescende.
-    ///
-    /// ⚠️ **N'écrit que ce qui change.** Elle est appelée à chaque image d'une
-    /// remontée : réécrire la même valeur dans un `@State` à chaque fois
-    /// redessinait tout le fil, et sur un iPhone SE la liste paresseuse
-    /// bougeait d'un cheveu en retour — une boucle, l'app à 100 % d'un cœur
-    /// conversation ouverte et personne ne la touchant (recette du 30/09/2026).
-    private func revealBanner(withdrawing: Bool = false) {
-        if !showsPreviewBanner { showsPreviewBanner = true }
-        if bannerLingerTask != nil {
-            bannerLingerTask?.cancel()
-            bannerLingerTask = nil
-        }
-
-        guard withdrawing else { return }
-        bannerLingerTask = Task {
-            try? await Task.sleep(for: Self.bannerLinger)
-            guard !Task.isCancelled else { return }
-            showsPreviewBanner = false
-        }
-    }
-
-    private func hideBanner() {
-        if bannerLingerTask != nil {
-            bannerLingerTask?.cancel()
-            bannerLingerTask = nil
-        }
-        if showsPreviewBanner { showsPreviewBanner = false }
     }
 
     private func header(_ thread: ChatThread) -> some View {

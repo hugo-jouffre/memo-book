@@ -286,76 +286,6 @@ private fun ChatHeaderButton(@DrawableRes icon: Int, label: String, action: () -
 }
 
 /**
- * « Ton carnet prend forme » — la capsule posée sous l'en-tête, qui mène à
- * l'aperçu du carnet. Jumeau de `ChatPreviewBanner` (`ChatHeader.swift`).
- *
- * **Une capsule, pas une carte** (Hugo, 18/09/2026). La version d'avant tenait
- * trois lignes et toute la largeur du fil : elle se lisait comme un message de
- * plus, et un message qui revient toutes les dix secondes agace. Celle-ci
- * tient sur une ligne : elle se pose sur le fil sans le couvrir. Le compte de
- * souvenirs et de pages n'est plus écrit — il est dit à TalkBack, et l'aperçu
- * le montre.
- *
- * **Elle se détache par l'ombre, pas par la couleur** (Hugo, 15/10/2026). Elle
- * était en verre teinté du bleu du voyageur — c'est-à-dire de la couleur des
- * bulles qui défilent dessous : un calque ne porte pas la teinte de ce qu'il
- * survole, sinon il s'y fond. Crème, filet bleu et [MemoBookShadow.Raised]
- * désormais, l'ombre que la marque réserve à ce qui flotte au-dessus du fil.
- * Le filet et l'ombre sont aussi ce qui la distingue d'une bulle de MEMO, en
- * `surface` elle aussi, mais posée à plat sur la page.
- *
- * **Et à droite, sous l'imprimante de l'en-tête** plutôt qu'au milieu (même
- * jour) : les deux ouvrent le même aperçu, et deux portes alignées se lisent
- * comme une seule.
- *
- * **Toujours tapable** (Hugo, 30/09/2026). Elle se désactivait tant que le
- * serveur n'avait pas de PDF prêt (`isOpenable`) — donc presque toujours, sans
- * rien dire, alors que l'icône de carnet de l'en-tête ouvre le même aperçu sans
- * condition. C'est l'aperçu qui dit où en est le carnet, pas la capsule.
- */
-@Composable
-fun ChatPreviewBanner(preview: ChatBookPreview, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val iconSide = scaled(18.dp)
-    val shape = RoundedCornerShape(percent = 50)
-    val description = "${ChatCopy.previewTitle}. ${ChatCopy.previewSubtitle(memories = preview.memoryCount, pages = preview.pageCount)}"
-
-    Row(
-        modifier
-            .brandShadow(MemoBookShadow.Raised, shape)
-            .background(MemoBookColor.surface.copy(alpha = 0.95f), shape)
-            .border(1.dp, MemoBookColor.outline, shape)
-            .clip(shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = CardPressStyle,
-                role = Role.Button,
-                onClick = onOpen,
-            )
-            .clearAndSetSemantics {
-                contentDescription = description
-                onClick(label = ChatCopy.Voice.openPreview) { onOpen(); true }
-            }
-            .padding(horizontal = MemoBookSpacing.s, vertical = MemoBookSpacing.xs + 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Image(
-            painter = painterResource(R.drawable.icon_pdf),
-            contentDescription = null,
-            colorFilter = ColorFilter.tint(MemoBookColor.ink),
-            modifier = Modifier.size(iconSide),
-        )
-        BrandText(ChatCopy.previewTitle, MemoBookFont.label, Modifier.weight(1f, fill = false), maxLines = 1)
-        Image(
-            painter = painterResource(R.drawable.icon_arrow_right),
-            contentDescription = null,
-            colorFilter = ColorFilter.tint(MemoBookColor.ink),
-            modifier = Modifier.size(iconSide),
-        )
-    }
-}
-
-/**
  * L'accueil d'une conversation qui n'a rien dedans : le signe de la marque, le
  * voyage qu'on ouvre, et ce que MEMO propose d'en faire. Jumeau de
  * `ChatGreetingView`.
@@ -445,7 +375,6 @@ private fun ChatHeaderPreview() {
     Column(Modifier.background(MemoBookColor.background), verticalArrangement = Arrangement.spacedBy(MemoBookSpacing.s)) {
         ChatHeader(thread, onBack = {}, onSettings = {}, onBook = {})
         ChatHeader(thread, onBack = {}, onSettings = {}, onBook = {}, isAwaitingServer = true)
-        ChatPreviewBanner(ChatBookPreview(memoryCount = 4, pageCount = 12), onOpen = {}, Modifier.padding(horizontal = MemoBookSpacing.screenMargin))
         ChatPrivacyNote()
         thread.greeting?.let { ChatGreetingView(it) }
     }

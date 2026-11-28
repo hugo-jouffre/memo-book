@@ -930,8 +930,8 @@ data class ChatSuggestion(
 }
 
 /**
- * La bannière « Aperçu en direct » en haut de la conversation : ce que la
- * conversation a déjà produit.
+ * Ce que la conversation a déjà produit, et l'âge du petit livre qui l'ouvre
+ * (T297).
  *
  * Elle est là pour une seule raison — raconter dans le vide est décourageant.
  * Deux compteurs suffisent à montrer que le carnet monte pendant qu'on parle.
@@ -941,11 +941,29 @@ data class ChatBookPreview(
     val memoryCount: Int,
     val pageCount: Int,
     /**
-     * Un PDF composé existe. La capsule ne s'en sert plus pour se
-     * désactiver (30/09/2026) : elle mène à l'aperçu dans tous les cas, et
-     * c'est lui qui dit si le carnet se compose encore.
+     * Un PDF composé existe. La porte ne s'en sert plus pour se désactiver
+     * (30/09/2026) : elle mène à l'aperçu dans tous les cas, et c'est lui qui
+     * dit si le carnet se compose encore.
      */
     @Required val isOpenable: Boolean = true,
+    /**
+     * **La couverture du petit livre** (T297), quand il l'a. `null` tant que
+     * le carnet n'a pas assez d'étapes illustrées — voir [stepsBeforeCover].
+     *
+     * La photo existe bien avant : le voyage en élit une dès la première
+     * reçue. C'est le **serveur** qui la retient, pour que le livre ait
+     * quelque chose à devenir ; l'app ne refait pas ce calcul, elle dessine
+     * ce qu'elle reçoit. Une adresse illisible ne fait pas tomber l'aperçu :
+     * le livre reste nu, et il mène toujours au carnet.
+     */
+    @Serializable(with = LenientUriSerializer::class)
+    val coverUrl: URI? = null,
+    /**
+     * **Combien d'étapes avec photos séparent encore le livre de sa
+     * couverture** (T297), ou `null` quand elle est là. C'est le décompte que
+     * l'étiquette sous le livre annonce.
+     */
+    val stepsBeforeCover: Int? = null,
 )
 
 /**
