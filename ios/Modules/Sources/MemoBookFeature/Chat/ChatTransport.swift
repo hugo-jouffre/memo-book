@@ -42,13 +42,24 @@ public struct OutgoingTurn: Sendable, Hashable, Identifiable {
     /// (``PendingTurn/queuedAt``), jamais celui de la relecture.
     public let postedAt: Date
 
+    /// **La bulle de MEMO qu'un 👍 salue** (T296) : réagir vaut « Ça me
+    /// convient », sans écrire.
+    ///
+    /// C'est une propriété **du tour** et non de son corps : le tour est une
+    /// puce comme une autre — même texte, même puce, même gratuité —, et
+    /// seule sa destination change ce qu'on en dessine. La mettre dans
+    /// ``Body/text(_:suggestionId:entryId:)`` aurait demandé de rouvrir
+    /// chaque filtrage de corps pour une clé qui ne les concerne pas.
+    public let reactionTo: String?
+
     public init(
         id: String = UUID().uuidString.lowercased(),
         stepId: String? = nil,
         body: Body,
         waitingForCreditUntil: Date? = nil,
         waitingForUnlimited: Bool = false,
-        postedAt: Date = .now
+        postedAt: Date = .now,
+        reactionTo: String? = nil
     ) {
         self.id = id
         self.stepId = stepId
@@ -56,6 +67,7 @@ public struct OutgoingTurn: Sendable, Hashable, Identifiable {
         self.waitingForCreditUntil = waitingForCreditUntil
         self.waitingForUnlimited = waitingForUnlimited
         self.postedAt = postedAt
+        self.reactionTo = reactionTo
     }
 
     /// Le tour est retenu sur le disque — par le crédit de demain, ou par
@@ -443,6 +455,7 @@ public struct ChatTransport: Sendable {
                     stepId: turn.stepId,
                     suggestionId: suggestionId,
                     entryId: entryId,
+                    reactionTo: turn.reactionTo,
                     postedAt: turn.postedAt
                 )
             )
@@ -517,7 +530,9 @@ public struct ChatTransport: Sendable {
                         disposition: .memory
                     )
                 }
-                return .received(await box.send(tripId: tripId, message: message))
+                return .received(
+                    await box.send(tripId: tripId, message: message, reactionTo: turn.reactionTo)
+                )
             },
             editTranscript: { entryId, text in
                 await box.edit(entryId: entryId, text: text)

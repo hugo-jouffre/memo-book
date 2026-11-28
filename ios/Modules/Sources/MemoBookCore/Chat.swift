@@ -611,6 +611,33 @@ public enum ChatDelivery: Sendable, Hashable {
     }
 }
 
+/// **La pastille posée sur une bulle** — T296.
+///
+/// « MEMO répond par un emoji plutôt que par un message » (Hugo, 28/11/2026).
+/// Un tour du voyageur en porte une, et c'est **l'état de ce tour** qu'elle
+/// dit : ⬆️ il attend le réseau, 👀 MEMO le lit, 🚂 ✈️ ⛵️ … le déplacement
+/// qu'il raconte, ✅ il est pris en compte. Sur une bulle de MEMO, c'est le 👍
+/// que le voyageur y a posé.
+///
+/// **Le libellé vient avec le glyphe, et c'est tout l'intérêt** : un emoji ne
+/// se lit pas à voix haute — VoiceOver annoncerait « visage avec des yeux ».
+/// Le serveur rend les deux, comme il rend ses messages d'erreur en français,
+/// et l'app n'a pas de table d'emojis à tenir d'accord avec lui. La seule
+/// pastille que l'app décide est ⬆️ (``ChatCopy/Reaction``) : le serveur n'a
+/// jamais vu ce tour-là.
+public struct ChatReaction: Codable, Sendable, Hashable {
+    /// Le glyphe, tel que la bulle le dessine.
+    public let emoji: String
+
+    /// Ce que VoiceOver lit à sa place.
+    public let label: String
+
+    public init(emoji: String, label: String) {
+        self.emoji = emoji
+        self.label = label
+    }
+}
+
 /// Un message de la conversation.
 public struct ChatMessage: Sendable, Hashable, Identifiable {
     public let id: String
@@ -709,6 +736,15 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
     /// d'un serveur d'avant, et pour ce qui ne parle d'aucun souvenir.
     public let entryId: String?
 
+    /// **La pastille de cette bulle** (T296) — ``ChatReaction``. `nil` pour
+    /// une bulle qui n'en porte pas, et d'un serveur d'avant le 28/11/2026 :
+    /// les coches d'acheminement reprennent alors leur place.
+    ///
+    /// Modifiable, comme ``body`` : le 👍 se pose sur la bulle de MEMO **avant**
+    /// l'aller-retour, pour que la réaction ne paraisse pas mettre une seconde
+    /// à prendre.
+    public var reaction: ChatReaction?
+
     public init(
         id: String,
         author: ChatAuthor,
@@ -725,7 +761,8 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         pauseMilliseconds: Int? = nil,
         disposition: ChatDisposition? = nil,
         callToAction: ChatCallToAction? = nil,
-        entryId: String? = nil
+        entryId: String? = nil,
+        reaction: ChatReaction? = nil
     ) {
         self.id = id
         self.author = author
@@ -743,6 +780,7 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         self.disposition = disposition
         self.callToAction = callToAction
         self.entryId = entryId
+        self.reaction = reaction
     }
 
     /// Le texte qu'on peut copier ou faire lire à voix haute. `nil` pour un
@@ -834,7 +872,7 @@ extension ChatMessage: Codable {
         case id, author, body, sentAt, stepId
         case authorName, authorInitials, authorAvatarUrl, seq, postedAt, suggestions
         case pauseMilliseconds, disposition
-        case callToAction, entryId
+        case callToAction, entryId, reaction
     }
 
     /// L'acheminement n'est **pas** décodé : un message qui arrive du serveur
@@ -863,7 +901,10 @@ extension ChatMessage: Codable {
             // Un bouton illisible ne fait jamais tomber la bulle : son texte
             // se suffit à lui-même, le bouton n'est qu'un raccourci.
             callToAction: (try? container.decodeIfPresent(ChatCallToAction.self, forKey: .callToAction)) ?? nil,
-            entryId: try container.decodeIfPresent(String.self, forKey: .entryId)
+            entryId: try container.decodeIfPresent(String.self, forKey: .entryId),
+            // Une pastille illisible ne fait pas tomber la bulle : elle n'est
+            // qu'un état, et les coches le disent encore.
+            reaction: (try? container.decodeIfPresent(ChatReaction.self, forKey: .reaction)) ?? nil
         )
     }
 
@@ -884,6 +925,7 @@ extension ChatMessage: Codable {
         try container.encodeIfPresent(disposition, forKey: .disposition)
         try container.encodeIfPresent(callToAction, forKey: .callToAction)
         try container.encodeIfPresent(entryId, forKey: .entryId)
+        try container.encodeIfPresent(reaction, forKey: .reaction)
     }
 }
 
@@ -1549,6 +1591,12 @@ public struct ChatTextTurn: Encodable, Sendable, Hashable {
     /// Le souvenir visé par « Ça me convient ».
     public let entryId: String?
 
+    /// **La bulle de MEMO qu'on vient de saluer d'un 👍** (T296) : réagir vaut
+    /// « Ça me convient », sans écrire. Le tour part donc avec sa puce, mais
+    /// le serveur ne le dessinera pas — c'est la pastille sur la bulle visée
+    /// qui en reste.
+    public let reactionTo: String?
+
     /// **Le moment où le voyageur a posé ce tour** (T309) : c'est lui qui
     /// range la bulle dans le fil, et non l'instant où l'envoi aboutit.
     public let postedAt: Date
@@ -1559,6 +1607,7 @@ public struct ChatTextTurn: Encodable, Sendable, Hashable {
         stepId: String? = nil,
         suggestionId: String? = nil,
         entryId: String? = nil,
+        reactionTo: String? = nil,
         postedAt: Date = .now
     ) {
         self.id = id
@@ -1566,11 +1615,12 @@ public struct ChatTextTurn: Encodable, Sendable, Hashable {
         self.stepId = stepId
         self.suggestionId = suggestionId
         self.entryId = entryId
+        self.reactionTo = reactionTo
         self.postedAt = postedAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, text, stepId, suggestionId, entryId, postedAt
+        case id, kind, text, stepId, suggestionId, entryId, reactionTo, postedAt
     }
 }
 

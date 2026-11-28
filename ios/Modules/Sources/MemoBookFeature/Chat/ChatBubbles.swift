@@ -43,6 +43,10 @@ struct ChatMessageRow: View {
             deliveryTicks
         }
         .frame(maxWidth: .infinity, alignment: horizontalAlignment)
+        // La pastille **change d'état sous les yeux** (T296) : ⬆️, 👀, puis
+        // ✅ ou le déplacement raconté. Sans animation, elle sauterait d'un
+        // glyphe à l'autre entre deux sondages.
+        .animation(.snappy(duration: 0.2), value: message.reaction)
     }
 
     /// **Un appui simple choisit la bulle** (T286, Hugo — « un clic simple sur
@@ -93,8 +97,17 @@ struct ChatMessageRow: View {
         if isTraveller, message.authorName == nil {
             switch message.delivery {
             case .sending:
-                ChatDeliveryTicks(isDelivered: false)
-                    .padding(.horizontal, MemoBookSpacing.snug)
+                // **⬆️ quand le tour attend le réseau** (T296) : la pastille
+                // le dit mieux qu'une coche grise, qui ne disait pas ce qu'on
+                // attendait. En vol — parti, pas encore accusé —, la coche
+                // garde sa place : il n'y a rien de plus à en dire.
+                if model.isWaitingForNetwork(message.id), let reaction = model.reaction(for: message) {
+                    reactionBadge(reaction)
+                        .padding(.horizontal, MemoBookSpacing.snug)
+                } else {
+                    ChatDeliveryTicks(isDelivered: false)
+                        .padding(.horizontal, MemoBookSpacing.snug)
+                }
             case .sent:
                 HStack(spacing: MemoBookSpacing.xs / 2) {
                     // **L'oreille, le temps de la transcription** (T316) :
@@ -102,13 +115,74 @@ struct ChatMessageRow: View {
                     // transcrit. La fiche, elle, attend d'avoir un texte
                     // (``ChatModel/messages``).
                     if model.isBeingTranscribed(message) { listeningEar }
-                    ChatDeliveryTicks(isDelivered: true)
+                    // **La pastille prend la place des deux coches** (T296) :
+                    // « arrivé » et « pris en compte » côte à côte seraient
+                    // deux objets pour un seul trajet. Sans pastille — un
+                    // serveur d'avant le 28/11/2026 —, les coches reprennent
+                    // la leur, et rien n'est perdu.
+                    if let reaction = model.reaction(for: message) {
+                        reactionBadge(reaction)
+                    } else {
+                        ChatDeliveryTicks(isDelivered: true)
+                    }
                 }
                 .padding(.horizontal, MemoBookSpacing.snug)
             case .failed, .waitingForCredit, .waitingForUnlimited:
                 EmptyView()
             }
+        } else if !isTraveller {
+            memoReaction
         }
+    }
+
+    /// **Le 👍 d'une bulle de MEMO** (T296) : posé, ou proposé.
+    ///
+    /// Proposé seulement là où une validation attend — la bulle qui offre
+    /// « Ça me convient » (``ChatModel/canReact(to:)``). C'est la règle du
+    /// menu de l'appui long : ce qui ne s'applique pas à une bulle n'y figure
+    /// pas.
+    ///
+    /// **Creux, il propose ; plein, il est posé** — le même langage que
+    /// l'étoile d'une photo principale, et non la pâleur des choses
+    /// indisponibles : celui-ci se touche, et il marche.
+    @ViewBuilder
+    private var memoReaction: some View {
+        if let reaction = message.reaction {
+            reactionBadge(reaction)
+                .padding(.horizontal, MemoBookSpacing.snug)
+        } else if model.canReact(to: message) {
+            Button {
+                model.react(to: message)
+            } label: {
+                Text(ChatCopy.Reaction.validated.emoji)
+                    .font(MemoBookFont.caption)
+                    .opacity(0.5)
+                    .padding(.horizontal, MemoBookSpacing.xs)
+                    .padding(.vertical, 3)
+                    .overlay(Capsule().stroke(MemoBookColor.hairline, lineWidth: 1))
+                    .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(ChatCopy.Reaction.validateHint)
+            .padding(.horizontal, MemoBookSpacing.snug)
+            .transition(.opacity)
+        }
+    }
+
+    /// La pastille elle-même : le glyphe sur un rond de papier, et le libellé
+    /// du serveur pour VoiceOver — un emoji seul s'annoncerait « visage avec
+    /// des yeux ».
+    private func reactionBadge(_ reaction: ChatReaction) -> some View {
+        Text(reaction.emoji)
+            .font(MemoBookFont.caption)
+            .padding(.horizontal, MemoBookSpacing.xs)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(MemoBookColor.surface))
+            .overlay(Capsule().stroke(MemoBookColor.hairline, lineWidth: 1))
+            .accessibilityLabel(reaction.label)
+            .transition(.scale(scale: 0.6).combined(with: .opacity))
+            .id(reaction.emoji)
     }
 
     /// **Le petit 👂 posé sur un vocal qu'on écoute** (T316, Hugo).

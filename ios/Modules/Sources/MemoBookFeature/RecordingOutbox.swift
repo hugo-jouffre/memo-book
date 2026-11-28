@@ -998,6 +998,7 @@ public final class RecordingOutbox {
                 text: text,
                 suggestionId: suggestionId,
                 entryId: entryId,
+                reactionTo: turn.reactionTo,
                 stepId: turn.stepId,
                 recordedAt: .now
             )
@@ -1095,7 +1096,8 @@ public final class RecordingOutbox {
                 waitingForCreditUntil: waitingForCreditUntil,
                 waitingForUnlimited: record.waitingForUnlimited,
                 // L'instant du geste, pas celui de la relecture (T309).
-                postedAt: record.queuedAt
+                postedAt: record.queuedAt,
+                reactionTo: record.reactionTo
             )
         case .voice:
             guard let data = files.first, let filename = record.filenames.first,

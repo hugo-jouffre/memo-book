@@ -2712,6 +2712,60 @@ public final class ChatModel {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
         thread?.messages[index].delivery = delivery
     }
+
+    // MARK: - Les pastilles (T296)
+
+    /// **La pastille à dessiner sur cette bulle** — ``ChatReaction``.
+    ///
+    /// Presque toujours celle du serveur : lui seul sait s'il a lu le tour, et
+    /// ce que le récit raconte. L'app n'en décide qu'une, et c'est celle qu'il
+    /// ne peut pas connaître — ⬆️, le tour qui attend encore le réseau sur le
+    /// disque. Elle passe donc **devant** : un tour en attente n'a pas été lu.
+    public func reaction(for message: ChatMessage) -> ChatReaction? {
+        if isWaitingForNetwork(message.id) { return ChatCopy.Reaction.waitingForNetwork }
+        return message.reaction
+    }
+
+    /// Ce tour attend le réseau sur le disque de la file — voir
+    /// ``showsQueuedNotice``.
+    public func isWaitingForNetwork(_ id: String) -> Bool { queuedTurnIds.contains(id) }
+
+    /// **Cette bulle de MEMO attend une validation** : elle propose « Ça me
+    /// convient », donc un 👍 y répond.
+    ///
+    /// C'est la règle du menu de l'appui long, appliquée aux réactions : ce
+    /// qui ne s'applique pas à une bulle n'y figure pas. Une réaction
+    /// décorative, sur une bulle qui n'attend rien, n'existe pas (choix de
+    /// Hugo, 28/11/2026).
+    public func canReact(to message: ChatMessage) -> Bool {
+        guard message.author == .memo, message.reaction == nil else { return false }
+        return message.suggestions?.contains { $0.id == "accept" } ?? false
+    }
+
+    /// **Réagir d'un 👍 vaut « Ça me convient »** (T296) : le tour part comme
+    /// la puce qu'il est — il valide le souvenir, MEMO répond avec des mots —,
+    /// mais **aucune bulle ne se pose**. C'est tout l'objet du geste : valider
+    /// sans écrire.
+    ///
+    /// La pastille se pose avant l'aller-retour, comme la coche d'une feuille
+    /// de réglage : une réaction qui mettrait une seconde à prendre se
+    /// toucherait deux fois.
+    public func react(to message: ChatMessage) {
+        guard thread != nil, canReact(to: message) else { return }
+        guard let accept = message.suggestions?.first(where: { $0.id == "accept" }) else { return }
+        hideExhaustedNotice()
+        clearSelection()
+        if let index = messages.firstIndex(where: { $0.id == message.id }) {
+            thread?.messages[index].reaction = ChatCopy.Reaction.validated
+        }
+        start(
+            OutgoingTurn(
+                stepId: activeStepId,
+                body: .text(accept.label, suggestionId: accept.id, entryId: latestTranscriptCard?.entryId),
+                reactionTo: message.id
+            )
+        )
+    }
 }
 
 // MARK: - Aperçus

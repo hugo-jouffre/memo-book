@@ -59,6 +59,15 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
     public let suggestionId: String?
     public let entryId: String?
 
+    /// **La bulle de MEMO qu'un 👍 salue** (T296) : réagir vaut « Ça me
+    /// convient », et le tour attend le réseau comme les autres.
+    ///
+    /// ⚠️ **Une clé de plus, et optionnelle** : c'est la règle de ce format.
+    /// Absente de toute fiche écrite avant le 28/11/2026, elle n'est écrite
+    /// que si elle porte quelque chose — une fiche ordinaire ne change pas
+    /// d'un octet (même précaution que ``photoMetas``).
+    public let reactionTo: String?
+
     public let stepId: String?
 
     /// Les fichiers, dans l'ordre : un pour un vocal, un à quatre pour des
@@ -116,6 +125,7 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
         text: String? = nil,
         suggestionId: String? = nil,
         entryId: String? = nil,
+        reactionTo: String? = nil,
         stepId: String? = nil,
         filenames: [String] = [],
         mimeTypes: [String] = [],
@@ -134,6 +144,7 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
         self.text = text
         self.suggestionId = suggestionId
         self.entryId = entryId
+        self.reactionTo = reactionTo
         self.stepId = stepId
         self.filenames = filenames
         self.mimeTypes = mimeTypes
@@ -163,7 +174,7 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
 
 extension PendingTurn: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, tripId, kind, text, suggestionId, entryId, stepId
+        case id, tripId, kind, text, suggestionId, entryId, reactionTo, stepId
         case filenames, mimeTypes, photoMetas, duration, levels, placeLabel, recordedAt, queuedAt
         case waitingForCreditUntil, waitingForUnlimited
         // La fiche d'avant le 22/09/2026 : un vocal, plusieurs carnets.
@@ -198,6 +209,9 @@ extension PendingTurn: Codable {
             text: try container.decodeIfPresent(String.self, forKey: .text),
             suggestionId: try container.decodeIfPresent(String.self, forKey: .suggestionId),
             entryId: try container.decodeIfPresent(String.self, forKey: .entryId),
+            // Absente de toute fiche d'avant le 28/11/2026 (T296) : le tour
+            // part alors comme la puce qu'il est, et rien ne manque.
+            reactionTo: try container.decodeIfPresent(String.self, forKey: .reactionTo),
             stepId: try container.decodeIfPresent(String.self, forKey: .stepId),
             filenames: try container.decodeIfPresent([String].self, forKey: .filenames)
                 ?? legacyFilename.map { [$0] } ?? [],
@@ -225,6 +239,7 @@ extension PendingTurn: Codable {
         try container.encodeIfPresent(text, forKey: .text)
         try container.encodeIfPresent(suggestionId, forKey: .suggestionId)
         try container.encodeIfPresent(entryId, forKey: .entryId)
+        try container.encodeIfPresent(reactionTo, forKey: .reactionTo)
         try container.encodeIfPresent(stepId, forKey: .stepId)
         try container.encode(filenames, forKey: .filenames)
         try container.encode(mimeTypes, forKey: .mimeTypes)

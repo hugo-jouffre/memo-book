@@ -260,6 +260,132 @@ final class ChatModelTests: XCTestCase {
         )
     }
 
+    // MARK: - Les pastilles (T296)
+
+    /// Une bulle de MEMO qui attend une validation : c'est elle qui offre
+    /// « Ça me convient », donc elle qui accepte un 👍.
+    private var acceptChip: ChatSuggestion {
+        ChatSuggestion(id: "accept", label: "Ça me convient", symbol: "👌", intent: .send)
+    }
+
+    /// **Réagir vaut « Ça me convient », sans écrire** (T296, Hugo —
+    /// « le voyageur peut réagir aux messages de MEMO pour valider sans
+    /// écrire »).
+    ///
+    /// Le tour part comme la puce qu'il est, avec sa cible ; aucune bulle ne
+    /// s'ajoute au fil, et le 👍 se pose sur la bulle visée **avant**
+    /// l'aller-retour.
+    func testReactingValidatesWithoutWritingABubble() async throws {
+        let question = ChatMessage(
+            id: "question",
+            author: .memo,
+            body: .text("Voilà ton texte pour le carnet."),
+            sentAt: .now,
+            seq: 2,
+            suggestions: [acceptChip],
+            entryId: "e1"
+        )
+        let fiche = card("fiche", entryId: "e1", text: "Une journée à Rome.", phase: .ready, seq: 1)
+        let script = Script(thread: thread(messages: [fiche, question]))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        let before = model.messages.count
+
+        XCTAssertTrue(model.canReact(to: question))
+        model.react(to: question)
+
+        XCTAssertEqual(model.messages.count, before, "Réagir n'écrit pas de bulle.")
+        XCTAssertEqual(
+            model.messages.first(where: { $0.id == "question" })?.reaction,
+            ChatCopy.Reaction.validated,
+            "La pastille se pose tout de suite."
+        )
+        XCTAssertFalse(model.canReact(to: try XCTUnwrap(model.messages.first { $0.id == "question" })),
+                       "Posée, elle ne se repropose pas.")
+
+        try await until("le tour parti") { await script.sent.count == 1 }
+        let sentTurns = await script.sent
+        let sent = try XCTUnwrap(sentTurns.first)
+        XCTAssertEqual(sent.reactionTo, "question")
+        guard case .text(let text, let suggestionId, let entryId) = sent.body else {
+            return XCTFail("Un 👍 part comme une puce.")
+        }
+        XCTAssertEqual(text, "Ça me convient")
+        XCTAssertEqual(suggestionId, "accept", "C'est le serveur qui valide, par la puce.")
+        XCTAssertEqual(entryId, "e1", "La fiche visée est la dernière du fil.")
+    }
+
+    /// **Ce qui ne s'applique pas à une bulle n'y figure pas** : une réaction
+    /// décorative n'existe pas (choix de Hugo, 28/11/2026).
+    func testOnlyABubbleThatAwaitsAValidationOffersAReaction() async throws {
+        let sansPuce = ChatMessage(id: "m1", author: .memo, body: .text("Bonjour 👋"), sentAt: .now, seq: 1)
+        let autrePuce = ChatMessage(
+            id: "m2",
+            author: .memo,
+            body: .text("Tu veux en ajouter ?"),
+            sentAt: .now,
+            seq: 2,
+            suggestions: [ChatSuggestion(id: "photos", label: "Importer des photos", symbol: "📷", intent: .send)]
+        )
+        let mienne = ChatMessage(id: "m3", author: .traveller, body: .text("Une journée à Rome."), sentAt: .now, seq: 3)
+        let script = Script(thread: thread(messages: [sansPuce, autrePuce, mienne]))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertFalse(model.canReact(to: sansPuce))
+        XCTAssertFalse(model.canReact(to: autrePuce))
+        XCTAssertFalse(model.canReact(to: mienne), "On ne réagit pas à soi-même.")
+
+        model.react(to: sansPuce)
+        let nothingSent = await script.sent
+        XCTAssertTrue(nothingSent.isEmpty, "Rien n'est parti.")
+    }
+
+    /// **⬆️ passe devant la pastille du serveur** : un tour qui attend le
+    /// réseau sur le disque n'a pas été lu, quoi que dise un fil relu avant
+    /// la coupure.
+    func testWaitingForTheNetworkWinsOverTheServerBadge() async throws {
+        let script = Script(thread: thread())
+        await script.queueSends()
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        model.draft = "On a marché jusqu’au port."
+        model.sendDraft()
+
+        try await until("le tour gardé") { model.messages.last?.delivery == .sending }
+        let posted = try XCTUnwrap(model.messages.last)
+        try await until("la file") { model.isWaitingForNetwork(posted.id) }
+        XCTAssertEqual(model.reaction(for: posted), ChatCopy.Reaction.waitingForNetwork)
+    }
+
+    /// Un serveur d'avant le 28/11/2026 ne rend aucune pastille : les coches
+    /// d'acheminement gardent leur place, et rien ne manque à l'écran.
+    func testAnOlderServerLeavesTheTicksInPlace() async throws {
+        let script = Script(thread: thread(messages: [
+            ChatMessage(id: "m1", author: .traveller, body: .text("Une journée à Rome."), sentAt: .now, seq: 1),
+        ]))
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertNil(model.reaction(for: try XCTUnwrap(model.messages.first)))
+    }
+
+    /// Une pastille illisible ne fait pas tomber la bulle : elle n'est qu'un
+    /// état, et les coches le disent encore.
+    func testAnUnreadableBadgeKeepsTheBubble() throws {
+        let json = """
+        {"id":"m1","author":"traveller","body":{"kind":"text","text":"Une journée à Rome."},
+         "sentAt":"2026-11-28T09:00:00Z","reaction":42}
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let message = try decoder.decode(ChatMessage.self, from: Data(json.utf8))
+
+        XCTAssertEqual(message.id, "m1")
+        XCTAssertNil(message.reaction)
+    }
+
     // MARK: - Envoyer
 
     /// **Choisir une bulle change les puces** (T286, Hugo — « un clic simple
