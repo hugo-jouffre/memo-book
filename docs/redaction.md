@@ -307,6 +307,18 @@ est une réécriture de son rythme, pas un ajout : offrir cette manière sans un
 second passage, c'est proposer au voyageur une page dont on sait qu'elle se
 lisait comme un inventaire. Un passage coûte 1 à 2 $.
 
+**Second passage reporté** — Hugo, 28/11/2026 : « Plus tard ». T292 part donc
+avec une consigne `factual` réécrite et non mesurée, et c'est un choix, pas un
+oubli : la manière est offerte dans l'app, et la seule chose qu'on sait de son
+rythme vient de la version d'avant correction. À relancer avant de la mettre
+devant les bêta-testeurs :
+
+```bash
+cd backend && npm run redaction:eval -- --manner factual --label t292-factuel-relu
+```
+
+puis `npm run redaction:eval -- --compare avant-t291 t292-factuel-relu --judge`.
+
 ### 28/11/2026 — Combler un oubli : mesuré, puis retiré (T291)
 
 Hugo : « La rédaction comble les oublis sans demander : un nom de lieu,
