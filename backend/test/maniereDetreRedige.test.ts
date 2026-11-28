@@ -141,7 +141,9 @@ describe("le garde-fou", () => {
     const response = await patch(memoId, { redactionManner: "literary" });
 
     expect(response.statusCode).toBe(402);
-    expect(response.json<{ code: string }>().code).toBe("redaction_manner_needs_unlimited");
+    // La clé du corps est `error`, pas `code` — c'est le contrat de
+    // `setErrorHandler` (`src/app.ts`), et celui que l'app lit.
+    expect(response.json<{ error: string }>().error).toBe("redaction_manner_needs_unlimited");
     // **Rien n'est écrit** : un refus qui aurait quand même posé la colonne
     // laisserait le carnet dans une manière que son propriétaire ne peut pas
     // changer.
