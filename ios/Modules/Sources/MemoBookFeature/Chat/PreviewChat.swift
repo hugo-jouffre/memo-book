@@ -75,7 +75,11 @@ public actor PreviewChatBox {
 
     /// Pose la bulle du voyageur, fait répondre MEMO, et date ses bulles **après**
     /// le reçu : c'est ce qui les fait arriver au sondage suivant.
-    public func send(tripId: String, message: ChatMessage) async -> ChatTurnReceipt {
+    /// - Parameter reactionTo: la bulle de MEMO qu'un 👍 salue (T296). Le tour
+    ///   compte comme la puce qu'il est — il valide, MEMO répond —, mais il
+    ///   **n'entre pas dans le fil** : seule la pastille sur la bulle visée en
+    ///   reste. Exactement ce que fait le serveur.
+    public func send(tripId: String, message: ChatMessage, reactionTo: String? = nil) async -> ChatTurnReceipt {
         var thread = thread(for: tripId)
         let now = Date.now
         var written: [ChatMessage] = []
@@ -90,9 +94,17 @@ public actor PreviewChatBox {
         }
 
         let history = thread.messages
-        thread.messages.append(message)
-        stamp(message, in: tripId, at: now)
-        written.append(message)
+        if let reactionTo {
+            if let index = thread.messages.firstIndex(where: { $0.id == reactionTo }) {
+                thread.messages[index].reaction = ChatCopy.Reaction.validated
+                stamp(thread.messages[index], in: tripId, at: now)
+                written.append(thread.messages[index])
+            }
+        } else {
+            thread.messages.append(message)
+            stamp(message, in: tripId, at: now)
+            written.append(message)
+        }
         thread.suggestions = []
 
         let reply = (try? await responder.reply(
@@ -100,8 +112,13 @@ public actor PreviewChatBox {
         )) ?? MemoReply(beats: [], suggestions: [])
 
         let later = now.addingTimeInterval(0.001)
-        for beat in reply.beats {
-            var bubble = beat.message.stamped(sentAt: later, stepId: message.stepId, pause: beat.pauseMilliseconds)
+        for (index, beat) in reply.beats.enumerated() {
+            var bubble = beat.message.stamped(
+                sentAt: later,
+                stepId: message.stepId,
+                pause: beat.pauseMilliseconds,
+                suggestions: index == reply.beats.count - 1 ? reply.suggestions : nil
+            )
             // Une fiche vient avec l'identifiant de son souvenir, comme sur le
             // serveur : c'est elle qu'on valide et qu'on corrige.
             if case .transcript(let card) = bubble.body, card.entryId == nil {
@@ -292,7 +309,14 @@ extension PreviewAPI {
         if turn.suggestionId == "accept", let entryId = turn.entryId {
             _ = await chat.validate(entryId: entryId)
         }
-        return await receipt(of: chat.send(tripId: tripId, message: message), tripId: tripId, credit: credit)
+        // **Un 👍 ne se dessine pas** (T296), ici comme sur le serveur : le
+        // tour valide, MEMO répond, et seule la pastille sur la bulle visée
+        // en reste.
+        return await receipt(
+            of: chat.send(tripId: tripId, message: message, reactionTo: turn.reactionTo),
+            tripId: tripId,
+            credit: credit
+        )
     }
 
     public func sendChatVoice(tripId: String, turn: ChatVoiceTurn) async throws -> ChatTurnReceipt {
@@ -397,13 +421,24 @@ extension PreviewAPI {
 extension ChatMessage {
     /// La bulle du répondeur local, datée et rattachée à l'étape — ce que le
     /// serveur fait en l'écrivant.
-    fileprivate func stamped(sentAt: Date, stepId: String?, pause: Int) -> ChatMessage {
+    fileprivate func stamped(
+        sentAt: Date,
+        stepId: String?,
+        pause: Int,
+        suggestions: [ChatSuggestion]? = nil
+    ) -> ChatMessage {
         ChatMessage(
             id: id,
             author: author,
             body: body,
             sentAt: sentAt,
             stepId: stepId,
+            // **Les puces de cette bulle-là** (T286), comme le serveur les
+            // pose : sur la **dernière** de la réponse, et nulle part
+            // ailleurs. Sans elles, choisir une bulle ne changeait rien dans
+            // le bac à sable — et le 👍 de T296, qui ne se propose que sous
+            // une bulle offrant « Ça me convient », ne s'y voyait jamais.
+            suggestions: suggestions,
             pauseMilliseconds: pause,
             // Le bouton que le répondeur a posé reste sur la bulle.
             callToAction: callToAction

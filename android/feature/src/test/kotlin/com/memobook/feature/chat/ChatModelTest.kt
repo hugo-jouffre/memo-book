@@ -20,6 +20,7 @@ import com.memobook.core.DailyCredit
 import com.memobook.core.DailyCreditCopy
 import com.memobook.core.Entry
 import com.memobook.core.EntryKind
+import com.memobook.core.MemoBookJson
 import com.memobook.core.Status
 import com.memobook.core.TranscriptCard
 import com.memobook.core.VoiceNote
@@ -225,6 +226,132 @@ class ChatModelTest {
 
     private fun traveller(id: String, text: String, seq: Int): ChatMessage =
         ChatMessage(id = id, author = ChatAuthor.Traveller, body = ChatMessageBody.Text(text), sentAt = Instant.now(), seq = seq)
+
+    // MARK: - Les pastilles (T296)
+
+    /** Une bulle de MEMO qui attend une validation offre « Ça me convient ». */
+    private val acceptChip = ChatSuggestion(id = "accept", label = "Ça me convient", symbol = "👌")
+
+    /**
+     * **Réagir vaut « Ça me convient », sans écrire** (T296). Jumeau de
+     * `ChatModelTests.testReactingValidatesWithoutWritingABubble`.
+     */
+    @Test
+    fun reactingValidatesWithoutWritingABubble() = runTest(dispatcher) {
+        val question = ChatMessage(
+            id = "question",
+            author = ChatAuthor.Memo,
+            body = ChatMessageBody.Text("Voilà ton texte pour le carnet."),
+            sentAt = Instant.now(),
+            seq = 2,
+            suggestions = listOf(acceptChip),
+            entryId = "e1",
+        )
+        val fiche = card("fiche", entryId = "e1", text = "Une journée à Rome.", phase = TranscriptCard.Phase.Ready, seq = 1)
+        val script = Script(thread(messages = listOf(fiche, question)))
+        val model = model(script)
+        model.load()
+        val before = model.messages.size
+
+        assertTrue(model.canReact(question))
+        model.react(question)
+
+        assertEquals(before, model.messages.size, "Réagir n'écrit pas de bulle.")
+        assertEquals(
+            ChatCopy.Reaction.validated,
+            model.messages.first { it.id == "question" }.reaction,
+            "La pastille se pose tout de suite.",
+        )
+        assertFalse(
+            model.canReact(model.messages.first { it.id == "question" }),
+            "Posée, elle ne se repropose pas.",
+        )
+
+        until("le tour parti") { script.sent.size == 1 }
+        val sent = assertNotNull(script.sent.firstOrNull())
+        assertEquals("question", sent.reactionTo)
+        val body = assertIs<OutgoingTurn.Body.Text>(sent.body)
+        assertEquals("Ça me convient", body.text)
+        assertEquals("accept", body.suggestionId, "C'est le serveur qui valide, par la puce.")
+        assertEquals("e1", body.entryId, "La fiche visée est la dernière du fil.")
+    }
+
+    /**
+     * **Ce qui ne s'applique pas à une bulle n'y figure pas** : une réaction
+     * décorative n'existe pas (choix de Hugo, 28/11/2026).
+     */
+    @Test
+    fun onlyABubbleThatAwaitsAValidationOffersAReaction() = runTest(dispatcher) {
+        val sansPuce = memo("m1", "Bonjour 👋", seq = 1)
+        val autrePuce = ChatMessage(
+            id = "m2",
+            author = ChatAuthor.Memo,
+            body = ChatMessageBody.Text("Tu veux en ajouter ?"),
+            sentAt = Instant.now(),
+            seq = 2,
+            suggestions = listOf(ChatSuggestion(id = "photos", label = "Importer des photos", symbol = "📷")),
+        )
+        val mienne = traveller("m3", "Une journée à Rome.", seq = 3)
+        val script = Script(thread(messages = listOf(sansPuce, autrePuce, mienne)))
+        val model = model(script)
+        model.load()
+
+        assertFalse(model.canReact(sansPuce))
+        assertFalse(model.canReact(autrePuce))
+        assertFalse(model.canReact(mienne), "On ne réagit pas à soi-même.")
+
+        model.react(sansPuce)
+        assertTrue(script.sent.isEmpty(), "Rien n'est parti.")
+    }
+
+    /**
+     * **⬆️ passe devant la pastille du serveur** : un tour qui attend le réseau
+     * sur le disque n'a pas été lu.
+     */
+    @Test
+    fun waitingForTheNetworkWinsOverTheServerBadge() = runTest(dispatcher) {
+        val script = Script(thread())
+        script.queuesSends = true
+        val model = model(script)
+        model.load()
+
+        model.draft = "On a marché jusqu’au port."
+        model.sendDraft()
+
+        until("le tour gardé") { model.messages.lastOrNull()?.delivery == ChatDelivery.Sending }
+        val posted = assertNotNull(model.messages.lastOrNull())
+        until("la file") { model.isWaitingForNetwork(posted.id) }
+        assertEquals(ChatCopy.Reaction.waitingForNetwork, model.reaction(posted))
+    }
+
+    /**
+     * Un serveur d'avant le 28/11/2026 ne rend aucune pastille : les coches
+     * d'acheminement gardent leur place.
+     */
+    @Test
+    fun anOlderServerLeavesTheTicksInPlace() = runTest(dispatcher) {
+        val script = Script(thread(messages = listOf(traveller("m1", "Une journée à Rome.", seq = 1))))
+        val model = model(script)
+        model.load()
+
+        assertNull(model.reaction(assertNotNull(model.messages.firstOrNull())))
+    }
+
+    /**
+     * Une pastille illisible ne fait pas tomber la bulle : elle n'est qu'un
+     * état, et les coches le disent encore.
+     */
+    @Test
+    fun anUnreadableBadgeKeepsTheBubble() {
+        val json = """
+        {"id":"m1","author":"traveller","body":{"kind":"text","text":"Une journée à Rome."},
+         "sentAt":"2026-11-28T09:00:00Z","reaction":42}
+        """.trimIndent()
+        val message = MemoBookJson.decodeFromString(ChatMessage.serializer(), json)
+
+        assertEquals("m1", message.id)
+        assertNull(message.reaction)
+    }
 
     // MARK: - Envoyer
 

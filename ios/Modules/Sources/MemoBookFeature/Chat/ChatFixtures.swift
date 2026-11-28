@@ -201,7 +201,15 @@ extension ChatThread {
                     // souvenir, pas une bulle, et une bulle qui n'en porte
                     // aucun n'a rien à effacer.
                     disposition: .memory,
-                    entryId: "\(step.id)-entry"
+                    entryId: "\(step.id)-entry",
+                    // **La pastille de MEMO** (T296) : sans elle, le bac à
+                    // sable ne montrerait ni le déplacement relevé ni le ✅,
+                    // et les deux ne se regarderaient qu'avec un serveur. Le
+                    // libellé vient du serveur en vrai — ici c'est un jeu
+                    // d'essai, donc il est écrit à la main.
+                    reaction: index == 0
+                        ? ChatReaction(emoji: "🚂", label: "MEMO a noté ton trajet en train")
+                        : ChatReaction(emoji: "✅", label: "MEMO l’a pris en compte")
                 )
             )
             messages.append(
@@ -261,24 +269,41 @@ extension ChatThread {
                     entryId: "\(step.id)-photo-1"
                 )
             )
+            // **Validée d'un 👍 pour la première étape** (T296) : la bulle
+            // de MEMO porte la pastille, et aucune bulle « Ça me convient »
+            // ne suit — c'est exactement ce que le geste évite d'écrire. Les
+            // suivantes gardent la puce, pour que le bac à sable montre les
+            // deux chemins.
+            let validatedByReaction = index == 0
+            // **La dernière étape racontée attend encore** (T296) : sa bulle
+            // offre « Ça me convient », donc le 👍 en creux se propose
+            // dessous. Sans elle, le bac à sable ne montrerait que des
+            // pastilles déjà posées, et le geste lui-même ne s'y
+            // regarderait pas.
+            let awaitsValidation = index == detail.steps.count - 2
             messages.append(
                 ChatMessage(
                     id: "memo-\(step.id)-after",
                     author: .memo,
                     body: .text(ChatCopy.afterTranscript),
                     sentAt: day,
-                    stepId: step.id
+                    stepId: step.id,
+                    suggestions: awaitsValidation ? validationTrio : nil,
+                    reaction: validatedByReaction ? ChatCopy.Reaction.validated : nil
                 )
             )
-            messages.append(
-                ChatMessage(
-                    id: "traveller-\(step.id)-accept",
-                    author: .traveller,
-                    body: .text(ChatCopy.Suggest.accept),
-                    sentAt: day,
-                    stepId: step.id
+            if awaitsValidation { continue }
+            if !validatedByReaction {
+                messages.append(
+                    ChatMessage(
+                        id: "traveller-\(step.id)-accept",
+                        author: .traveller,
+                        body: .text(ChatCopy.Suggest.accept),
+                        sentAt: day,
+                        stepId: step.id
+                    )
                 )
-            )
+            }
             messages.append(
                 ChatMessage(
                     id: "memo-\(step.id)-acknowledged",
@@ -301,6 +326,19 @@ extension ChatThread {
     /// d'essai : raconter la suite, ou plus tard. Le même jeu que le répondeur
     /// local donne après une validation. **Pas** le trio de validation :
     /// celui-là ne suit qu'une fiche qui porte du vrai texte.
+    /// **Le trio de validation**, sous une fiche qui porte du vrai texte :
+    /// c'est lui qui fait qu'un 👍 se propose sur la bulle (T296).
+    private static let validationTrio = [
+        ChatSuggestion(id: "accept", label: ChatCopy.Suggest.accept, symbol: ChatCopy.Suggest.acceptSymbol, intent: .send),
+        ChatSuggestion(
+            id: "edit-hand",
+            label: ChatCopy.Suggest.editByHand,
+            symbol: ChatCopy.Suggest.editByHandSymbol,
+            intent: .sendThenEditTranscript
+        ),
+        ChatSuggestion(id: "edit-voice", label: ChatCopy.Suggest.editByVoice, symbol: ChatCopy.Suggest.editByVoiceSymbol, intent: .sendThenSpeak),
+    ]
+
     private static let afterAcceptTrio = [
         ChatSuggestion(
             id: "dictate",

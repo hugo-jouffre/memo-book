@@ -9,6 +9,7 @@ import com.memobook.core.ChatGreeting
 import com.memobook.core.ChatMessage
 import com.memobook.core.ChatMessageBody
 import com.memobook.core.ChatPhotosTurn
+import com.memobook.core.ChatSuggestion
 import com.memobook.core.ChatTextTurn
 import com.memobook.core.ChatThread
 import com.memobook.core.ChatThreadUpdate
@@ -147,7 +148,7 @@ internal class PreviewChatBox : ChatTransport.LocalBox {
      * Pose la bulle du voyageur, fait répondre MEMO, et date ses bulles
      * **après** le reçu : c'est ce qui les fait arriver au sondage suivant.
      */
-    override suspend fun send(tripId: String, message: ChatMessage): ChatTurnReceipt {
+    override suspend fun send(tripId: String, message: ChatMessage, reactionTo: String?): ChatTurnReceipt {
         val now = Instant.now()
         val written = mutableListOf<ChatMessage>()
         val (pending, history) = synchronized(lock) {
@@ -164,9 +165,18 @@ internal class PreviewChatBox : ChatTransport.LocalBox {
             }
 
             val history = messages.toList()
-            messages += message
-            stamp(message, tripId, now)
-            written += message
+            if (reactionTo != null) {
+                val index = messages.indexOfFirst { it.id == reactionTo }
+                if (index >= 0) {
+                    messages[index] = messages[index].copy(reaction = ChatCopy.Reaction.validated)
+                    stamp(messages[index], tripId, now)
+                    written += messages[index]
+                }
+            } else {
+                messages += message
+                stamp(message, tripId, now)
+                written += message
+            }
             thread.copy(messages = messages, suggestions = emptyList()) to history
         }
 
@@ -181,8 +191,18 @@ internal class PreviewChatBox : ChatTransport.LocalBox {
         synchronized(lock) {
             val later = now.plusMillis(1)
             val messages = pending.messages.toMutableList()
-            for (beat in reply.beats) {
-                var bubble = beat.message.stamped(sentAt = later, stepId = message.stepId, pause = beat.pauseMilliseconds)
+            for ((index, beat) in reply.beats.withIndex()) {
+                var bubble = beat.message.stamped(
+                    sentAt = later,
+                    stepId = message.stepId,
+                    pause = beat.pauseMilliseconds,
+                    // **Les puces de cette bulle-là** (T286), comme le serveur
+                    // les pose : sur la **dernière** de la réponse. Sans elles,
+                    // le 👍 de T296 — qui ne se propose que sous une bulle
+                    // offrant « Ça me convient » — ne se voyait jamais dans le
+                    // bac à sable.
+                    suggestions = if (index == reply.beats.lastIndex) reply.suggestions else null,
+                )
                 // Une fiche vient avec l'identifiant de son souvenir, comme sur le
                 // serveur : c'est elle qu'on valide et qu'on corrige.
                 val body = bubble.body
@@ -309,7 +329,9 @@ internal suspend fun PreviewApi.sandboxSendChatText(tripId: String, turn: ChatTe
     )
     val entryId = turn.entryId
     if (turn.suggestionId == "accept" && entryId != null) chat.validate(entryId)
-    return receipt(chat.send(tripId, message), tripId, credit)
+    // **Un 👍 ne se dessine pas** (T296), ici comme sur le serveur : le tour
+    // valide, MEMO répond, et seule la pastille sur la bulle visée en reste.
+    return receipt(chat.send(tripId, message, turn.reactionTo), tripId, credit)
 }
 
 internal suspend fun PreviewApi.sandboxSendChatVoice(tripId: String, turn: ChatVoiceTurn): ChatTurnReceipt {
@@ -399,13 +421,19 @@ internal fun PreviewApi.sandboxClearChat(tripId: String) {
  * La bulle du répondeur local, datée et rattachée à l'étape — ce que le serveur
  * fait en l'écrivant. Le bouton que le répondeur a posé reste sur la bulle.
  */
-private fun ChatMessage.stamped(sentAt: Instant, stepId: String?, pause: Int): ChatMessage =
+private fun ChatMessage.stamped(
+    sentAt: Instant,
+    stepId: String?,
+    pause: Int,
+    suggestions: List<ChatSuggestion>? = null,
+): ChatMessage =
     ChatMessage(
         id = id,
         author = author,
         body = body,
         sentAt = sentAt,
         stepId = stepId,
+        suggestions = suggestions,
         pauseMilliseconds = pause,
         callToAction = callToAction,
     )

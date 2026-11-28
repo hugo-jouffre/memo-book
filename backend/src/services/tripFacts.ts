@@ -37,7 +37,7 @@ const DAY_MS = 86_400_000;
  * étape (`TripTransport`, et l'icône de l'app). Le métro roule sur des rails,
  * le taxi et la moto sur la route, la trottinette se range avec le vélo.
  */
-const STEP_TRANSPORT: Record<TransportKind, TripTransport> = {
+export const STEP_TRANSPORT: Record<TransportKind, TripTransport> = {
   plane: "plane",
   train: "train",
   bus: "bus",

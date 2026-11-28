@@ -57,6 +57,7 @@ import {
   serializeChatReceipt,
   serializeChatThread,
   serializeChatUpdate,
+  reactionTargetOf,
   suggestionIdsOf,
   type ChatTurnStatus,
   type MemoForChat,
@@ -102,6 +103,16 @@ const textTurnBody = z.object({
   suggestionId: z.string().max(64).nullable().optional(),
   /** Le souvenir visé par « Ça me convient ». */
   entryId: z.string().uuid().nullable().optional(),
+  /**
+   * **La bulle de MEMO sur laquelle le voyageur a posé un 👍** (T296) :
+   * réagir vaut « Ça me convient », sans écrire.
+   *
+   * Le tour part donc comme la puce qu'il est — il valide le souvenir, MEMO
+   * lui répond, le crédit n'est pas touché —, mais il ne se dessine pas :
+   * c'est le 👍 posé sur la bulle visée qui en reste
+   * (`chatSerializers.reactionTargetOf`).
+   */
+  reactionTo: z.string().uuid().nullable().optional(),
   /**
    * **Le moment où le voyageur a posé ce tour** (T309), et non celui où il
    * arrive : c'est lui qui range la bulle dans le fil. Absent d'une app
@@ -230,7 +241,7 @@ interface ThreadOutline {
  * dépend plus du poids du fil, et c'est ça qu'on est venu chercher.
  */
 async function loadOutline(context: AppContext, memoId: string): Promise<ThreadOutline> {
-  const [messages, withSuggestions, entries] = await Promise.all([
+  const [messages, withSuggestions, entries, reactions] = await Promise.all([
     context.prisma.chatMessage.findMany({
       where: { memoId },
       select: { id: true, seq: true, author: true, kind: true, entryId: true, createdAt: true },
@@ -245,9 +256,17 @@ async function loadOutline(context: AppContext, memoId: string): Promise<ThreadO
       where: { memoId },
       select: { id: true, validatedAt: true, updatedAt: true },
     }),
+    // Les 👍 (T296). Une lecture de plus, mais minuscule et bornée : seul un
+    // tour « Ça me convient » peut en porter un, et le `payload` d'un vocal —
+    // qui pèse, avec ses niveaux de forme d'onde — n'est pas relu pour ça.
+    context.prisma.chatMessage.findMany({
+      where: { memoId, author: "traveller", suggestionId: "accept" },
+      select: { id: true, payload: true },
+    }),
   ]);
 
   const suggestions = new Map(withSuggestions.map((row) => [row.id, suggestionIdsOf(row.payload)]));
+  const reactionTargets = new Map(reactions.map((row) => [row.id, reactionTargetOf(row.payload)]));
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
   // `entryId` non nul vaut « le souvenir est là » : la clé est posée
   // `SetNull`. La ligne ne manquerait que si un souvenir disparaissait entre
@@ -266,6 +285,7 @@ async function loadOutline(context: AppContext, memoId: string): Promise<ThreadO
         entryId: message.entryId,
         isEntryValidated: entry !== undefined && entry.validatedAt !== null,
         suggestionIds: suggestions.get(message.id) ?? [],
+        reactionTo: reactionTargets.get(message.id) ?? null,
       };
     }),
     changedSince: (since) =>
@@ -774,6 +794,25 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
 
       await assertUnderTurnCap();
 
+      // **Une réaction ne vaut que là où une validation attend** (T296, choix
+      // de Hugo du 28/11/2026 : « 👍 sur la question seule »). C'est la règle
+      // du menu contextuel — ce qui ne s'applique pas à une bulle n'y figure
+      // pas —, et elle se tient ici : un 👍 arrivé sans « Ça me convient »,
+      // ou sur une bulle du voyageur, serait une réaction décorative, et il
+      // n'y en a pas.
+      let reactionTo: string | null = null;
+      if (body.reactionTo) {
+        if (suggestionId !== "accept") {
+          throw HttpError.badRequest("Une réaction vaut « Ça me convient » : la puce manque.");
+        }
+        const target = await context.prisma.chatMessage.findFirst({
+          where: { id: body.reactionTo, memoId, author: "memo" },
+          select: { id: true },
+        });
+        if (!target) throw HttpError.badRequest("Cette bulle n’est pas une bulle de MEMO de ce carnet.");
+        reactionTo = target.id;
+      }
+
       let validatedEntryId: string | null = null;
       if (suggestionId === "accept") {
         // « Ça me convient » valide **dans la même requête** : la fiche passe
@@ -833,7 +872,9 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
               entryId: validatedEntryId ?? revisedEntryId ?? body.entryId ?? null,
               disposition: command ? "command" : null,
               stepId: body.stepId ?? null,
-              ...(platform.platform ? { payload: platform } : {}),
+              ...(platform.platform || reactionTo
+                ? { payload: { ...platform, ...(reactionTo ? { reactionTo } : {}) } }
+                : {}),
             },
           });
           ids.push(message.id);

@@ -613,6 +613,33 @@ object ChatCopy {
     const val retry = "Réessayer"
 
     /**
+     * **Les pastilles que l'app décide elle-même** (T296).
+     *
+     * Toutes les autres viennent du serveur avec leur libellé
+     * ([ChatReaction]) : lui seul sait s'il a lu le tour, et ce que le récit
+     * raconte. Les deux d'ici sont celles qu'il n'a pas pu voir — un tour qui
+     * n'est pas encore parti, et le 👍 posé à l'instant, avant son
+     * aller-retour.
+     */
+    object Reaction {
+        /** Le tour attend le réseau, sur le téléphone. */
+        val waitingForNetwork = ChatReaction(emoji = "⬆️", label = "Partira au retour du réseau")
+
+        /**
+         * Le 👍 qu'on vient de poser, le temps que le serveur le confirme. Le
+         * même libellé que le sien : la bulle ne doit pas changer de phrase
+         * quand la réponse arrive.
+         */
+        val validated = ChatReaction(emoji = "👍", label = "Tu as validé ce texte")
+
+        /**
+         * Le bouton qui propose de réagir, sous une bulle qui attend une
+         * validation. Il porte le même glyphe, en creux.
+         */
+        const val validateHint = "Valider d’un pouce"
+    }
+
+    /**
      * Sous une bulle que le serveur a refusée faute de crédit du jour : elle
      * attend sur le téléphone et repart toute seule à minuit. Gris, sans
      * « Réessayer » : il n'y a rien à faire (Hugo, 03/10/2026).

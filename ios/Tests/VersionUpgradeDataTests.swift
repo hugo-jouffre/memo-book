@@ -281,6 +281,45 @@ final class VersionUpgradeDataTests: XCTestCase {
         XCTAssertTrue(ancien.photoMetas.isEmpty)
     }
 
+    /// **Le 👍 traverse la file** (T296) : un tour de réaction attend le réseau
+    /// comme les autres, et il doit repartir en sachant **quelle** bulle il
+    /// salue — sans quoi il se dessinerait comme une bulle « Ça me convient »
+    /// de plus, ce que le geste cherchait justement à éviter.
+    ///
+    /// Et la clé ne coûte rien aux fiches qui n'en portent pas : une fiche
+    /// ordinaire ne change pas d'un octet.
+    func testAReactionTurnKeepsItsTargetAndCostsNothingWhenAbsent() async throws {
+        let directory = scratch()
+        let store = PendingRecordingStore(directory: directory)
+
+        let ordinaire = PendingTurn(
+            id: "cccccccc-0000-0000-0000-000000000000",
+            tripId: "voyage",
+            kind: .text,
+            text: "On a marché jusqu’au port.",
+            recordedAt: Date(timeIntervalSince1970: 1_775_000_000)
+        )
+        _ = try await store.enqueue(ordinaire, files: [])
+        let ecrit = try String(contentsOf: directory.appending(path: "\(ordinaire.id).json"), encoding: .utf8)
+        XCTAssertFalse(ecrit.contains("reactionTo"), "Rien à dire, rien à écrire : \(ecrit)")
+
+        let pouce = PendingTurn(
+            id: "dddddddd-0000-0000-0000-000000000000",
+            tripId: "voyage",
+            kind: .text,
+            text: "Ça me convient",
+            suggestionId: "accept",
+            entryId: "e1",
+            reactionTo: "bulle-de-memo",
+            recordedAt: Date(timeIntervalSince1970: 1_775_300_000)
+        )
+        _ = try await store.enqueue(pouce, files: [])
+
+        let relus = await PendingRecordingStore(directory: directory).all()
+        XCTAssertEqual(relus.first { $0.id == pouce.id }?.reactionTo, "bulle-de-memo")
+        XCTAssertNil(relus.first { $0.id == ordinaire.id }?.reactionTo)
+    }
+
     /// Un tour retenu jusqu'au crédit de demain garde sa retenue : relu sans
     /// elle, il partirait tout de suite et se ferait refuser.
     func testATurnHeldUntilTomorrowKeepsItsHold() async throws {

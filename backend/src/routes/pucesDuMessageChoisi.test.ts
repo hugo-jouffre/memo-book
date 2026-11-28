@@ -22,6 +22,7 @@ const memo = (id: string, suggestionIds: string[] = []): Row => ({
   entryId: null,
   isEntryValidated: false,
   suggestionIds,
+  reactionTo: null,
 });
 
 const traveller = (id: string): Row => ({
@@ -31,6 +32,7 @@ const traveller = (id: string): Row => ({
   entryId: null,
   isEntryValidated: false,
   suggestionIds: [],
+  reactionTo: null,
 });
 
 const card = (id: string, entryId: string | null, isEntryValidated = false): Row => ({
@@ -40,6 +42,7 @@ const card = (id: string, entryId: string | null, isEntryValidated = false): Row
   entryId,
   isEntryValidated,
   suggestionIds: [],
+  reactionTo: null,
 });
 
 describe("les puces de chaque message", () => {

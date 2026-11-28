@@ -12,6 +12,7 @@ import com.memobook.core.ChatDelivery
 import com.memobook.core.ChatMessage
 import com.memobook.core.ChatMessageBody
 import com.memobook.core.ChatPhotoUpload
+import com.memobook.core.ChatReaction
 import com.memobook.core.ChatSuggestion
 import com.memobook.core.ChatThread
 import com.memobook.core.ChatThreadUpdate
@@ -2500,6 +2501,71 @@ class ChatModel(
         if (index < 0 || thread.messages[index].delivery == delivery) return
         val list = thread.messages.toMutableList().apply { set(index, get(index).copy(delivery = delivery)) }
         change { copy(thread = thread.copy(messages = list)) }
+    }
+
+    // --- Les pastilles (T296) ---------------------------------------------
+
+    /**
+     * **La pastille à dessiner sur cette bulle** — [ChatReaction].
+     *
+     * Presque toujours celle du serveur : lui seul sait s'il a lu le tour, et
+     * ce que le récit raconte. L'app n'en décide qu'une, et c'est celle qu'il
+     * ne peut pas connaître — ⬆️, le tour qui attend encore le réseau sur le
+     * disque. Elle passe donc **devant** : un tour en attente n'a pas été lu.
+     */
+    fun reaction(message: ChatMessage): ChatReaction? =
+        if (isWaitingForNetwork(message.id)) ChatCopy.Reaction.waitingForNetwork else message.reaction
+
+    /** Ce tour attend le réseau sur le disque de la file — voir [showsQueuedNotice]. */
+    fun isWaitingForNetwork(id: String): Boolean = id in current.queuedTurnIds
+
+    /**
+     * **Cette bulle de MEMO attend une validation** : elle propose « Ça me
+     * convient », donc un 👍 y répond.
+     *
+     * C'est la règle du menu de l'appui long, appliquée aux réactions : ce qui
+     * ne s'applique pas à une bulle n'y figure pas. Une réaction décorative,
+     * sur une bulle qui n'attend rien, n'existe pas (choix de Hugo,
+     * 28/11/2026).
+     */
+    fun canReact(message: ChatMessage): Boolean =
+        message.author == ChatAuthor.Memo &&
+            message.reaction == null &&
+            message.suggestions?.any { it.id == "accept" } == true
+
+    /**
+     * **Réagir d'un 👍 vaut « Ça me convient »** (T296) : le tour part comme la
+     * puce qu'il est — il valide le souvenir, MEMO répond avec des mots —,
+     * mais **aucune bulle ne se pose**. C'est tout l'objet du geste : valider
+     * sans écrire.
+     *
+     * La pastille se pose avant l'aller-retour, comme la coche d'une feuille
+     * de réglage : une réaction qui mettrait une seconde à prendre se
+     * toucherait deux fois.
+     */
+    fun react(message: ChatMessage) {
+        val thread = current.thread ?: return
+        if (!canReact(message)) return
+        val accept = message.suggestions?.firstOrNull { it.id == "accept" } ?: return
+        hideExhaustedNotice()
+        clearSelection()
+        val index = thread.messages.indexOfFirst { it.id == message.id }
+        if (index >= 0) {
+            val list = thread.messages.toMutableList()
+                .apply { set(index, get(index).copy(reaction = ChatCopy.Reaction.validated)) }
+            change { copy(thread = thread.copy(messages = list)) }
+        }
+        start(
+            OutgoingTurn(
+                stepId = activeStepId,
+                body = OutgoingTurn.Body.Text(
+                    text = accept.label,
+                    suggestionId = accept.id,
+                    entryId = latestTranscriptCard?.entryId,
+                ),
+                reactionTo = message.id,
+            ),
+        )
     }
 
     companion object {
