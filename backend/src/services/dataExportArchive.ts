@@ -679,6 +679,7 @@ function memoryDocument(entry: ExportedEntry, file: string | null) {
             heightPx: entry.photoHeightPx,
             verdict: entry.photoVerdict,
             sharpness: entry.photoSharpness,
+            blur: entry.photoBlur,
             exposure: entry.photoExposure,
             tapeCorner: entry.tapeCorner,
             focus: entry.focusX !== null && entry.focusY !== null ? { x: entry.focusX, y: entry.focusY } : null,

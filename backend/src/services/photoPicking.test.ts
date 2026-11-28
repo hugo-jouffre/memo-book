@@ -35,26 +35,57 @@ describe("choisir les photos que la page montre", () => {
     expect(choisir(photos, 3)).toEqual(["1-matin", "3-midi", "4-soir", "2-floue"]);
   });
 
-  it("repousse une photo refusée derrière toutes les autres", () => {
+  /**
+   * 🔴 **Ce test disait l'inverse jusqu'au 28/11/2026** (T310) : il exigeait
+   * qu'un verdict `reject` repousse la photo derrière toutes les autres.
+   *
+   * La mesure dont ce verdict découle a été vérifiée, et elle ne mesure pas
+   * le flou mais le **contraste** : une photo illisible de flou garde une
+   * valeur haute, et un **ciel uni parfaitement net** tombe à zéro et sort
+   * `reject`. Le test protégeait donc un bug — il faisait passer la photo
+   * floue devant le ciel.
+   */
+  it("ne repousse plus une photo sur un verdict qui mesure le contraste", () => {
     const photos: Photo[] = [
-      { nom: "refusée", sharpness: 900, verdict: "reject" },
-      { nom: "ordinaire", sharpness: 40 },
+      { nom: "ciel-uni-net", sharpness: 0, verdict: "reject", blur: 0.28 },
+      { nom: "floue", sharpness: 900, blur: 0.82 },
     ];
-    // Même très « détaillée » : `reject` est le seul jugement franc que la
-    // mesure porte, et il prime sur le chiffre.
-    expect(choisir(photos, 1)[0]).toBe("ordinaire");
+    // La page en dessine une : c'est le ciel, qui est net.
+    expect(choisir(photos, 1)[0]).toBe("ciel-uni-net");
   });
 
-  it("ne condamne pas une photo faute de mesure", () => {
+  it("départage deux photos sur le flou mesuré, sans seuil", () => {
+    const photos: Photo[] = [
+      { nom: "molle", blur: 0.71 },
+      { nom: "nette", blur: 0.26 },
+      { nom: "entre-deux", blur: 0.48 },
+    ];
+    // Classer est relatif : la moins floue devant, quels que soient les
+    // chiffres. Aucun seuil n'est nécessaire pour ça, et aucun n'est posé.
+    expect(choisir(photos, 2)).toEqual(["nette", "entre-deux", "molle"]);
+  });
+
+  it("ne condamne pas une photo faute de mesure du flou", () => {
+    const photos: Photo[] = [
+      { nom: "nette", blur: 0.26, sharpness: 200 },
+      { nom: "non-mesurée", sharpness: 200 },
+      { nom: "floue", blur: 0.84, sharpness: 200 },
+    ];
+    // Entre les deux : après la nette, avant la floue. Une photo d'avant le
+    // 28/11/2026, ou une image sans aucun bord à juger, ne doit pas être
+    // écartée pour une mesure qui manque.
+    expect(choisir(photos, 2)).toEqual(["nette", "non-mesurée", "floue"]);
+  });
+
+  it("ne condamne pas une photo faute de toute mesure", () => {
     const photos: Photo[] = [
       { nom: "nette", sharpness: 200 },
       { nom: "non-mesurée" },
-      { nom: "refusée", verdict: "reject", sharpness: 10 },
     ];
-    // Entre les deux : après la nette, avant la refusée. Une photo d'avant le
-    // 18/11/2026 ou un format que jimp n'a pas lu ne doit pas être écartée
-    // pour une mesure qui manque.
-    expect(choisir(photos, 2)).toEqual(["nette", "non-mesurée", "refusée"]);
+    // Une photo que `jimp` n'a pas su lire passe derrière celle qu'on a
+    // mesurée — rien ne permet de la situer autrement —, mais elle reste
+    // dans la liste.
+    expect(choisir(photos, 2)).toEqual(["nette", "non-mesurée"]);
   });
 
   it("ne touche à rien quand la page montre tout", () => {

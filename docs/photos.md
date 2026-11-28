@@ -501,7 +501,7 @@ Trois mesures, dans cet ordre :
 | Mesure | Seuil | Pourquoi |
 |---|---|---|
 | **Résolution effective** | ≥ 200 dpi à la taille d'affichage prévue | En dessous, l'impression pixellise |
-| **Netteté** (variance du laplacien) | seuil à calibrer sur un lot réel | Écarte les photos floues ou bougées |
+| **Netteté** (re-flou, `photoAnalysis.blurOf`) | seuil à calibrer sur un lot réel | Écarte les photos floues ou bougées |
 | **Exposition** (histogramme) | < 60 % des pixels dans les 5 % extrêmes | Écarte les photos cramées ou noires |
 
 La résolution effective se calcule à partir du layout : une photo de galerie
@@ -520,10 +520,16 @@ Verdict en trois états, jamais un simple rejet :
 
 ### Ce qui est branché, et ce qui ne l'est pas (18/11/2026, T265)
 
-**La netteté est mesurée et écrite.** À l'arrivée d'une photo, dans le même
-décodage que ses dimensions (`services/photoOrientation.ts`) : la variance de
-détail moyenne des neuf cases, et le verdict qui en découle, sur
-`entries.photoSharpness` et `entries.photoVerdict`.
+**Une mesure est écrite à l'arrivée d'une photo**, dans le même décodage que
+ses dimensions (`services/photoOrientation.ts`) : la variance de détail moyenne
+des neuf cases, et le verdict qui en découle, sur `entries.photoSharpness` et
+`entries.photoVerdict`.
+
+> 🔴 **Mais ce n'est pas la netteté** — établi le 28/11/2026 (T310), trois
+> mois après. Voir « La netteté, mesurée pour de vrai » plus bas : cette
+> mesure-là est le **contraste**, elle ne voit pas le flou, et elle condamne
+> les photos unies. La phrase ci-dessous, « on choisit par la qualité », doit
+> se lire « on choisit par le contraste ».
 
 > ⚠️ **Ces colonnes existaient depuis longtemps et restaient vides.**
 > `services/photoAnalysis.ts` savait les calculer, et n'était appelé par
@@ -540,6 +546,82 @@ récit — les deux ordres sont différents, et il faut les deux.
 ne l'écrit), l'agrandissement sur verdict `upscale`, le déplacement vers une
 vignette sur `downgrade`, et l'avertissement à l'utilisateur sur `reject`. Le
 verdict ne sert, pour l'instant, qu'à ranger une photo en dernier.
+
+⚠️ **L'avertissement sur `reject` ne doit pas être branché tel quel** : c'est
+ce qu'a montré T310. Dit au voyageur aujourd'hui, il ne parlerait jamais d'une
+photo floue et accuserait ses ciels.
+
+### La netteté, mesurée pour de vrai (28/11/2026, T310)
+
+T310 demandait une chose simple : « une photo trop mauvaise se signale et
+n'entre pas dans le carnet ». La netteté étant déjà mesurée, il ne restait
+qu'à **le dire**. On a mesuré avant de le dire, et la mesure ne tenait pas.
+
+**Ce que `photoSharpness` mesure vraiment : le contraste.** `detailGrid`
+calcule la variance de luminance *à l'intérieur* de neuf cases. Aucune
+différence entre pixels voisins n'y entre, donc aucune information de netteté.
+Trois photos réelles, floutées de plus en plus fort :
+
+| | laplacien réel | `photoSharpness` | verdict rendu |
+|---|---|---|---|
+| nette | 2 077 | 4 459 | `ok` |
+| floutée d'un rayon de 2 px | 16,6 | 3 462 | `ok` |
+| floutée d'un rayon de 20 px | 0,7 | 1 649 | `ok` |
+
+Le laplacien s'effondre d'un facteur 125 dès le premier flou ; la mesure perd
+22 % et reste 55 fois au-dessus de son seuil de 30. **Une photo illisible reste
+`ok`.** Et dans l'autre sens : un **ciel uni, parfaitement net**, mesure `0.00`
+et sort `reject`.
+
+Deux conséquences. T310 branché sur cette mesure aurait dit au voyageur
+l'inverse du vrai. Et un bug vivait là depuis le 18/11 : `photoPicking` classe
+par ce chiffre et met `reject` en dernier, donc **entre deux photos du même
+souvenir, MemoBook préférait déjà la floue au ciel**.
+
+**La mesure qui la remplace : le re-flou** (`photoAnalysis.blurOf`). On compare
+l'énergie des bords de la photo à celle de la même photo re-floutée. Une photo
+nette perd beaucoup à ce deuxième flou ; une photo déjà floue n'a plus rien à
+perdre. Le résultat est un **rapport**, de 0 (nette) à 1 (bouillie) :
+
+| | nette | flou r=1 | r=2 | r=5 | r=10 |
+|---|---|---|---|---|---|
+| trois photos réelles | 0,24 à 0,34 | 0,43 à 0,52 | 0,61 à 0,67 | 0,84 à 0,86 | 0,87 |
+
+Parce que c'est un rapport, **ni le contraste ni l'obscurité ne le trompent** :
+la même photo à 40 % de contraste rend 0,237 au lieu de 0,238, et ramenée à
+12 % de lumière 0,271 au lieu de 0,308. C'était tout le défaut de la
+précédente.
+
+**Un chiffre, une taille.** Le flou se mesure en pixels, donc il dépend de la
+taille à laquelle on regarde : la même photo nette rend 0,264 à 400 px et 0,336
+à 1920, la même floutée 0,416 et 0,821. La mesure se prend donc sur la photo
+**réduite à 1200 px de grand côté** (`BLUR_REFERENCE_PX`), jamais agrandie. Ce
+n'est pas qu'une commodité de calcul (60 ms au lieu de 630 ms à 2400 px) :
+c'est la même doctrine que les dpi plus haut, **c'est le layout qui fixe
+l'exigence**. Un flou de deux pixels sur une photo de 4000 px ne se voit pas
+imprimé, et la réduction l'efface comme l'impression l'effacera.
+
+**Sans bord, pas de jugement.** Une image dont aucun pixel ne diffère de son
+voisin rend `null`, pas un reproche : elle est peut-être parfaitement nette, et
+rien ne permet de le dire. Repères d'énergie de bord à la taille de référence :
+ciel uni `0.000`, dégradé doux `0.075`, photo nette de nuit `0.798`, photo
+nette `6.537`. L'obscurité ne déclenche donc pas ce silence, seule l'absence de
+bord le fait.
+
+**Limite connue** : quand le détail est plus fin que le rayon du re-flou, le
+deuxième flou n'a presque plus rien à détruire et la mesure relit l'image comme
+nette (un damier de 6 px flouté d'un rayon de 3 rend 0,105, contre 0,035 net).
+Ça ne se produit pas sur une photo, qui porte des détails de plusieurs tailles,
+et le sens de l'erreur est le bon : **on rate un flou, on n'accuse pas une
+photo nette.**
+
+**Ce qui reste à faire**, et pourquoi ça s'arrête là : la colonne
+`entries.photoBlur` se remplit à chaque photo reçue, et **rien ne la lit**.
+Dire « floue » au voyageur demande un seuil, et un seuil demande un vrai lot de
+photos, dont des photos franchement bougées — les repères ci-dessus viennent de
+trois photos et de flous fabriqués, ce qui suffit à condamner l'ancienne mesure
+et pas à calibrer la nouvelle. Une fois la colonne remplie sur de vraies
+photos, le seuil se pose, et c'est là que T310 peut se finir.
 
 ## 2. Agrandissement
 

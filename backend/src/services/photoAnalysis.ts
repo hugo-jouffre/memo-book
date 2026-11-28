@@ -163,3 +163,159 @@ export async function analyseImage(
   const { width, height, data } = image.bitmap;
   return analysePixels(new Uint8Array(data), width, height, options);
 }
+
+/**
+ * **Le flou, mesuré pour de vrai** — T310 (28/11/2026).
+ *
+ * ⚠️ ``detail`` ci-dessus **ne mesure pas la netteté**, malgré son nom et
+ * malgré ce que le schéma Prisma et ``docs/photos.md`` ont longtemps annoncé
+ * (« variance du laplacien »). ``detailGrid`` calcule la variance de luminance
+ * *à l'intérieur* de chaque case, c'est-à-dire le **contraste** : aucune
+ * différence entre pixels voisins n'y entre, donc aucune information de
+ * netteté. Mesuré le 28/11/2026 sur trois photos réelles, floutées de plus en
+ * plus fort :
+ *
+ * | | laplacien réel | ``detail`` | verdict rendu |
+ * |---|---|---|---|
+ * | nette | 2 077 | 4 459 | `ok` |
+ * | floutée r=2 | 16,6 | 3 462 | `ok` |
+ * | floutée r=20 | 0,7 | 1 649 | `ok` |
+ *
+ * Une photo réduite en bouillie reste donc `ok`, 55 fois au-dessus du seuil ;
+ * et un **ciel uni, parfaitement net**, mesure `0.00` et sort `reject`. La
+ * mesure condamnait exactement l'inverse de ce qu'on croyait.
+ *
+ * ## Ce que celle-ci fait
+ *
+ * On compare l'énergie des bords de la photo à celle de la **même photo
+ * re-floutée**. Une photo nette perd beaucoup à ce deuxième flou ; une photo
+ * déjà floue n'a plus rien à perdre. Le résultat est un **rapport**, de 0
+ * (parfaitement nette) à 1 (bouillie), donc le contraste s'annule : la même
+ * photo à 40 % de contraste rend 0,237 au lieu de 0,238. C'était tout le
+ * défaut de l'ancienne.
+ *
+ * Mesuré le 28/11/2026, à la taille de référence :
+ *
+ * | | nette | flou r=1 | r=2 | r=5 | r=10 |
+ * |---|---|---|---|---|---|
+ * | trois photos réelles | 0,24 à 0,34 | 0,43 à 0,52 | 0,61 à 0,67 | 0,84 à 0,86 | 0,87 |
+ *
+ * Et elle tient dans le noir : la même photo ramenée à 12 % de lumière rend
+ * 0,271 nette contre 0,590 floutée.
+ *
+ * ## ⚠️ Le chiffre n'a de sens qu'à une taille fixée
+ *
+ * Le flou se mesure en pixels, donc il dépend de la taille à laquelle on
+ * regarde. La même photo nette rend 0,264 à 400 px de haut et 0,336 à 1920 ;
+ * la même floutée, 0,416 et 0,821. Un seuil posé sur des tailles natives
+ * différentes ne voudrait donc rien dire, et c'est pourquoi l'appelant réduit
+ * d'abord à ``BLUR_REFERENCE_PX``.
+ *
+ * Ce n'est pas qu'une commodité, c'est **plus juste** : ce qui compte est le
+ * flou à la taille où le carnet montre la photo, pas dans ses pixels d'
+ * origine. Même doctrine que les dpi (``docs/photos.md``) — « c'est le layout
+ * qui fixe l'exigence, pas une valeur absolue ». Un flou de deux pixels sur
+ * une photo de 4000 px ne se voit pas imprimé, et la réduction l'efface comme
+ * l'impression l'effacera.
+ *
+ * ## Pas de seuil ici
+ *
+ * **Rien ne décide encore qu'une photo est trop mauvaise.** Dire « floue » au
+ * voyageur demande un seuil, et un seuil demande un vrai lot de photos, dont
+ * des photos franchement bougées. La mesure s'écrit en base
+ * (``entries.photoBlur``) et attend là son calibrage ; ``photoVerdict`` n'y
+ * touche pas.
+ */
+export const BLUR_REFERENCE_PX = 1200;
+
+/** Rayon du re-flou, en pixels, à la taille de référence. */
+const REBLUR_RADIUS = 4;
+
+/** Plan de luminance, un flottant par pixel. */
+function lumaPlane(pixels: Uint8Array, width: number, height: number): Float32Array {
+  const plane = new Float32Array(width * height);
+  for (let i = 0, j = 0; j < plane.length; i += 4, j += 1) {
+    plane[j] = 0.299 * pixels[i]! + 0.587 * pixels[i + 1]! + 0.114 * pixels[i + 2]!;
+  }
+  return plane;
+}
+
+/** Flou séparable, horizontal puis vertical : deux passes au lieu d'une carrée. */
+function blurPlane(plane: Float32Array, width: number, height: number): Float32Array {
+  const pass = (source: Float32Array, horizontal: boolean) => {
+    const out = new Float32Array(source.length);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        let sum = 0;
+        let count = 0;
+        for (let k = -REBLUR_RADIUS; k <= REBLUR_RADIUS; k += 1) {
+          const xx = horizontal ? x + k : x;
+          const yy = horizontal ? y : y + k;
+          if (xx < 0 || xx >= width || yy < 0 || yy >= height) continue;
+          sum += source[yy * width + xx]!;
+          count += 1;
+        }
+        out[y * width + x] = sum / count;
+      }
+    }
+    return out;
+  };
+  return pass(pass(plane, true), false);
+}
+
+/**
+ * Somme des variations absolues entre pixels voisins, horizontales et
+ * verticales : l'énergie des bords.
+ */
+function edgeEnergy(plane: Float32Array, width: number, height: number): Float32Array {
+  const energy = new Float32Array(plane.length);
+  for (let y = 1; y < height; y += 1) {
+    for (let x = 1; x < width; x += 1) {
+      const i = y * width + x;
+      energy[i] = Math.abs(plane[i]! - plane[i - 1]!) + Math.abs(plane[i]! - plane[i - width]!);
+    }
+  }
+  return energy;
+}
+
+export interface BlurMeasurement {
+  /**
+   * De 0 (nette) à 1 (bouillie). `null` quand la photo n'a **aucun bord** à
+   * juger — un ciel uni, un mur : elle est peut-être parfaitement nette, et
+   * rien dans ses pixels ne permet de le dire. On se taît plutôt que
+   * d'accuser.
+   */
+  blur: number | null;
+  /**
+   * L'énergie de bord moyenne par pixel, gardée pour calibrer. Repères du
+   * 28/11/2026 à la taille de référence : ciel uni `0.000`, dégradé doux
+   * `0.075`, photo nette de nuit `0.798`, photo nette `6.537`.
+   */
+  edges: number;
+}
+
+/**
+ * Mesure le flou d'un bitmap **déjà réduit à ``BLUR_REFERENCE_PX``**.
+ *
+ * À appeler sur le bitmap que l'appelant a déjà en main : la mesure coûte
+ * environ 60 ms à la taille de référence, contre 630 ms à 2400 px — et à
+ * 2400 px le chiffre ne serait pas comparable d'une photo à l'autre.
+ */
+export function blurOf(pixels: Uint8Array, width: number, height: number): BlurMeasurement {
+  const plane = lumaPlane(pixels, width, height);
+  const original = edgeEnergy(plane, width, height);
+  const reblurred = edgeEnergy(blurPlane(plane, width, height), width, height);
+
+  let total = 0;
+  let lost = 0;
+  for (let i = 0; i < original.length; i += 1) {
+    const o = original[i]!;
+    total += o;
+    lost += Math.max(0, o - reblurred[i]!);
+  }
+
+  const edges = Math.round((total / original.length) * 1000) / 1000;
+  // Aucun bord : le rapport n'existe pas, et l'inventer accuserait un ciel.
+  if (total === 0) return { blur: null, edges };
+  return { blur: Math.round(((total - lost) / total) * 1000) / 1000, edges };
+}

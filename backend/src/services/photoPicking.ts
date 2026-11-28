@@ -36,8 +36,22 @@
 export interface PhotoQuality {
   /** La variance de détail mesurée à l'arrivée. Plus haut, plus net. */
   sharpness?: number | null;
-  /** `reject` pour une photo jugée floue, `upscale` pour une trop petite. */
+  /**
+   * ⚠️ `upscale` pour une photo trop petite. **Pas** « floue » : ce verdict
+   * découle de ``sharpness`` ci-dessus, qui mesure le contraste (T310,
+   * 28/11/2026).
+   */
   verdict?: string | null;
+  /**
+   * **Le flou, mesuré pour de vrai** (T310, `services/photoAnalysis.blurOf`) :
+   * de 0 (nette) à 1 (bouillie). `null` ou absent : pas de jugement — une
+   * photo d'avant le 28/11/2026, ou une image sans aucun bord.
+   *
+   * C'est **lui** qui départage deux photos sur leur netteté, et non
+   * ``sharpness``. Classer n'a pas besoin de seuil : entre deux photos du même
+   * souvenir, la moins floue passe devant, quels que soient les chiffres.
+   */
+  blur?: number | null;
   /**
    * Ce que la photo vaut à regarder, de 0 à 100 (`services/photoBeauty.ts`,
    * T265). `null` ou absent : pas encore notée.
@@ -61,6 +75,15 @@ export interface PhotoQuality {
  */
 const BEAUTE_INCONNUE = 50;
 
+/**
+ * Le flou d'une photo qu'on n'a pas mesurée : **le milieu**.
+ *
+ * Même doctrine que ``BEAUTE_INCONNUE``. Les photos nettes mesurées tombent
+ * entre 0,24 et 0,34, les floues au-delà de 0,6 : 0,5 range donc une photo non
+ * mesurée derrière les nettes et devant les floues, sans la condamner.
+ */
+const FLOU_INCONNU = 0.5;
+
 function note(valeur: number | null | undefined): number | null {
   return typeof valeur === "number" && Number.isFinite(valeur) ? valeur : null;
 }
@@ -80,6 +103,10 @@ function note(valeur: number | null | undefined): number | null {
  * une netteté absente — on ne privilégie ni ne condamne une photo pour une
  * note qui manque.
  */
+function flou(photo: PhotoQuality): number {
+  return note(photo.blur) ?? FLOU_INCONNU;
+}
+
 function beaute(photo: PhotoQuality): number {
   const connues = [note(photo.beauty), note(photo.relevance)].filter(
     (valeur): valeur is number => valeur !== null,
@@ -91,15 +118,24 @@ function beaute(photo: PhotoQuality): number {
 /**
  * Le rang d'une photo : plus bas, plus elle mérite sa place.
  *
- * Le verdict d'abord, la netteté ensuite. Une photo **refusée** passe après
- * toutes les autres, même très nette — c'est le seul jugement franc que la
- * mesure porte. Une photo **non mesurée** (un HEIC d'avant la conversion à
- * l'arrivée, une photo d'avant le 18/11/2026) se range entre les deux : on ne
- * la privilégie pas, mais on ne la condamne pas non plus pour une mesure qui
- * manque.
+ * Une photo **non mesurée** (un HEIC d'avant la conversion à l'arrivée, une
+ * photo d'avant le 18/11/2026) passe derrière celles qu'on a mesurées : on ne
+ * la privilégie pas, mais rien d'autre ne permet de la situer.
+ *
+ * 🔴 **Le verdict `reject` ne rétrograde plus rien** (T310, 28/11/2026). Il
+ * le faisait, et il rétrogradait les mauvaises photos : mesuré, il ne découle
+ * pas du flou mais du **contraste** (``photoAnalysis``, tableau du 28/11).
+ * Une photo illisible de flou le passait haut la main, et un ciel uni
+ * parfaitement net sortait `reject` — donc **entre deux photos du même
+ * souvenir, la floue passait devant le ciel**. C'était un bug vivant depuis
+ * le 18/11.
+ *
+ * Une rétrogradation franche « trop floue pour être imprimée » reviendra ici
+ * quand ``blur`` aura un seuil calibré sur un vrai lot de photos. D'ici là le
+ * flou **classe** sans condamner, plus bas dans le tri : c'est tout ce dont
+ * une sélection a besoin.
  */
 function rang(photo: PhotoQuality): number {
-  if (photo.verdict === "reject") return 2;
   if (typeof photo.sharpness !== "number" || !Number.isFinite(photo.sharpness)) return 1;
   return 0;
 }
@@ -136,6 +172,13 @@ export function photosLesPlusNettes<T>(
       // se rattrape pas en étant jolie.
       const parBeaute = beaute(b.qualite) - beaute(a.qualite);
       if (parBeaute !== 0) return parBeaute;
+      // **La netteté, et c'est `blur` qui la dit** (T310) : la moins floue
+      // devant. Sous la beauté, comme la netteté l'était — une photo nette
+      // d'un mur ne vaut toujours pas une photo un peu molle d'un visage.
+      const parFlou = flou(a.qualite) - flou(b.qualite);
+      if (parFlou !== 0) return parFlou;
+      // Le contraste en dernier recours. Il ne dit pas la netteté, mais entre
+      // deux photos du même endroit il vaut encore mieux que l'ordre d'arrivée.
       const nettete = (b.qualite.sharpness ?? 0) - (a.qualite.sharpness ?? 0);
       if (nettete !== 0) return nettete;
       return a.index - b.index;

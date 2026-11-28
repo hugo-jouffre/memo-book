@@ -314,6 +314,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
                   photoIsLandscape: measure.isLandscape,
                   photoSharpness: measure.sharpness,
                   photoVerdict: measure.verdict,
+                  photoBlur: measure.blur,
                 }
               : {}),
             media: {
@@ -551,6 +552,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
               photoIsLandscape: measure.isLandscape,
               photoSharpness: measure.sharpness,
               photoVerdict: measure.verdict,
+              photoBlur: measure.blur,
             }
           : {},
       });

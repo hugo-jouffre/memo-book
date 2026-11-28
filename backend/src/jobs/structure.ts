@@ -292,6 +292,7 @@ export async function structureRender(
         // partie. Nuls pour une photo d'avant le 18/11/2026.
         photoSharpness: entry.photoSharpness,
         photoVerdict: entry.photoVerdict,
+        photoBlur: entry.photoBlur,
         photoBeauty: entry.photoBeauty,
       });
     }

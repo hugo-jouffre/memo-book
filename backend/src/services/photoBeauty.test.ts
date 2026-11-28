@@ -62,13 +62,23 @@ describe("la note du juge dans le choix", () => {
     expect(choisir(photos, 1)[0]).toBe("visage-mou");
   });
 
-  /** Une photo trop floue pour l'impression ne se rattrape pas en étant jolie. */
-  it("ne sauve pas une photo refusée", () => {
+  /**
+   * 🔴 **Ce test disait « ne sauve pas une photo refusée » jusqu'au
+   * 28/11/2026** (T310). Le verdict dont il parlait mesure le contraste et
+   * non le flou : il écartait les photos unies, pas les floues.
+   *
+   * Ce qui reste vrai, et que le test garde : **une photo vraiment floue ne
+   * se rattrape pas en étant jolie** — mais c'est ``blur`` qui le dit
+   * maintenant, et il est sous la beauté, donc une photo un peu molle d'un
+   * visage passe toujours devant une photo nette d'un mur. Ici l'écart de
+   * flou est franc et les beautés proches : c'est la nette qui gagne.
+   */
+  it("ne sauve pas une photo franchement floue", () => {
     const photos: Photo[] = [
-      { nom: "refusee-mais-belle", sharpness: 5, beauty: 99, verdict: "reject" },
-      { nom: "ordinaire", sharpness: 80, beauty: 30 },
+      { nom: "floue-un-peu-plus-belle", blur: 0.84, beauty: 50 },
+      { nom: "nette", blur: 0.27, beauty: 50 },
     ];
-    expect(choisir(photos, 1)[0]).toBe("ordinaire");
+    expect(choisir(photos, 1)[0]).toBe("nette");
   });
 
   /**
