@@ -3,6 +3,7 @@ package com.memobook.feature
 import com.memobook.core.TripDraft
 import com.memobook.recording.PendingRecordingStore
 import com.memobook.recording.PendingTurn
+import kotlin.test.assertNull
 import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.time.Instant
@@ -214,6 +215,46 @@ class VersionUpgradeDataTest {
         assertEquals(2, turn.filenames.size)
         assertEquals("entry-7", turn.entryId)
         assertEquals("step-2", turn.stepId)
+    }
+
+    /**
+     * **Le 👍 traverse la file** (T296) : un tour de réaction attend le réseau
+     * comme les autres, et il doit repartir en sachant **quelle** bulle il
+     * salue — sans quoi il se dessinerait comme une bulle « Ça me convient »
+     * de plus, ce que le geste cherchait justement à éviter. Et la clé ne
+     * coûte rien aux fiches qui n'en portent pas.
+     */
+    @Test
+    fun `un pouce garde sa cible, et ne coute rien quand il n'y en a pas`() = runTest {
+        val directory = directory()
+        val store = PendingRecordingStore(directory)
+
+        val ordinaire = PendingTurn(
+            id = "cccccccc-0000-0000-0000-000000000000",
+            tripId = "voyage",
+            kind = PendingTurn.Kind.Text,
+            text = "On a marché jusqu’au port.",
+            recordedAt = Instant.parse("2026-11-28T09:00:00Z"),
+        )
+        store.enqueue(ordinaire, files = emptyList())
+        val ecrit = File(directory, "${ordinaire.id}.json").readText()
+        assertFalse(ecrit.contains("reactionTo"), "Rien à dire, rien à écrire : $ecrit")
+
+        val pouce = PendingTurn(
+            id = "dddddddd-0000-0000-0000-000000000000",
+            tripId = "voyage",
+            kind = PendingTurn.Kind.Text,
+            text = "Ça me convient",
+            suggestionId = "accept",
+            entryId = "e1",
+            reactionTo = "bulle-de-memo",
+            recordedAt = Instant.parse("2026-11-28T09:05:00Z"),
+        )
+        store.enqueue(pouce, files = emptyList())
+
+        val relus = PendingRecordingStore(directory).all()
+        assertEquals("bulle-de-memo", relus.first { it.id == pouce.id }.reactionTo)
+        assertNull(relus.first { it.id == ordinaire.id }.reactionTo)
     }
 
     /**

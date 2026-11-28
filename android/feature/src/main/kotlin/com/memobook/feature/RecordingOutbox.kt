@@ -1165,6 +1165,7 @@ class RecordingOutbox(
                 text = body.text,
                 suggestionId = body.suggestionId,
                 entryId = body.entryId,
+                reactionTo = turn.reactionTo,
                 stepId = turn.stepId,
                 recordedAt = Instant.now(),
             )
@@ -1246,6 +1247,7 @@ class RecordingOutbox(
                 waitingForUnlimited = record.waitingForUnlimited,
                 // L'instant du geste, pas celui de la relecture (T309).
                 postedAt = record.queuedAt,
+                reactionTo = record.reactionTo,
             )
         }
 

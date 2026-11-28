@@ -60,6 +60,15 @@ data class OutgoingTurn(
      * l'instant où il y est entré (`PendingTurn.queuedAt`).
      */
     val postedAt: Instant = Instant.now(),
+    /**
+     * **La bulle de MEMO qu'un 👍 salue** (T296) : réagir vaut « Ça me
+     * convient », sans écrire.
+     *
+     * C'est une propriété **du tour** et non de son corps : le tour est une
+     * puce comme une autre — même texte, même puce, même gratuité —, et seule
+     * sa destination change ce qu'on en dessine.
+     */
+    val reactionTo: String? = null,
 ) {
     sealed interface Body {
         /**
@@ -266,8 +275,13 @@ data class ChatTransport(
         /**
          * Pose la bulle du voyageur, fait répondre MEMO, et date ses bulles
          * **après** le reçu : c'est ce qui les fait arriver au sondage suivant.
+         *
+         * @param reactionTo la bulle de MEMO qu'un 👍 salue (T296). Le tour
+         *   compte comme la puce qu'il est — il valide, MEMO répond —, mais il
+         *   **n'entre pas dans le fil** : seule la pastille sur la bulle visée
+         *   en reste. Exactement ce que fait le serveur.
          */
-        suspend fun send(tripId: String, message: ChatMessage): ChatTurnReceipt
+        suspend fun send(tripId: String, message: ChatMessage, reactionTo: String? = null): ChatTurnReceipt
         suspend fun validate(entryId: String): Boolean
 
         /** « À la main » : le texte corrigé remplace celui de la fiche, qui reste prête. */
@@ -321,6 +335,7 @@ data class ChatTransport(
                         stepId = turn.stepId,
                         suggestionId = body.suggestionId,
                         entryId = body.entryId,
+                        reactionTo = turn.reactionTo,
                         postedAt = turn.postedAt,
                     ),
                 )
@@ -398,7 +413,7 @@ data class ChatTransport(
                         disposition = ChatDisposition.Memory,
                     )
                 }
-                ChatSendOutcome.Received(box.send(tripId, message))
+                ChatSendOutcome.Received(box.send(tripId, message, turn.reactionTo))
             },
             editTranscript = { entryId, text ->
                 box.edit(entryId, text)

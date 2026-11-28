@@ -544,6 +544,30 @@ sealed interface ChatDelivery {
     val isWaitingForUnlimited: Boolean get() = this == WaitingForUnlimited
 }
 
+/**
+ * **La pastille posée sur une bulle** — T296.
+ *
+ * « MEMO répond par un emoji plutôt que par un message » (Hugo, 28/11/2026).
+ * Un tour du voyageur en porte une, et c'est **l'état de ce tour** qu'elle
+ * dit : ⬆️ il attend le réseau, 👀 MEMO le lit, 🚂 ✈️ ⛵️ … le déplacement
+ * qu'il raconte, ✅ il est pris en compte. Sur une bulle de MEMO, c'est le 👍
+ * que le voyageur y a posé.
+ *
+ * **Le libellé vient avec le glyphe, et c'est tout l'intérêt** : un emoji ne
+ * se lit pas à voix haute — TalkBack annoncerait « visage avec des yeux ». Le
+ * serveur rend les deux, comme il rend ses messages d'erreur en français, et
+ * l'app n'a pas de table d'emojis à tenir d'accord avec lui. La seule
+ * pastille que l'app décide est ⬆️ ([ChatCopy.Reaction]) : le serveur n'a
+ * jamais vu ce tour-là.
+ */
+@Serializable
+data class ChatReaction(
+    /** Le glyphe, tel que la bulle le dessine. */
+    val emoji: String,
+    /** Ce que TalkBack lit à sa place. */
+    val label: String,
+)
+
 /** Un message de la conversation. */
 @Serializable(with = ChatMessage.Serializer::class)
 data class ChatMessage(
@@ -640,6 +664,12 @@ data class ChatMessage(
      * d'un serveur d'avant, et pour ce qui ne parle d'aucun souvenir.
      */
     val entryId: String? = null,
+    /**
+     * **La pastille de cette bulle** (T296) — [ChatReaction]. `null` pour une
+     * bulle qui n'en porte pas, et d'un serveur d'avant le 28/11/2026 : les
+     * coches d'acheminement reprennent alors leur place.
+     */
+    val reaction: ChatReaction? = null,
 ) {
     /**
      * Le texte qu'on peut copier ou faire lire à voix haute. `null` pour un
@@ -719,6 +749,7 @@ data class ChatMessage(
         val disposition: ChatDisposition? = null,
         val callToAction: JsonElement? = null,
         val entryId: String? = null,
+        val reaction: JsonElement? = null,
     )
 
     internal object Serializer : ChatSurrogateSerializer<ChatMessage, Surrogate>(
@@ -740,6 +771,7 @@ data class ChatMessage(
                 disposition = it.disposition,
                 callToAction = it.callToAction?.let { cta -> MemoBookJson.encodeToJsonElement(ChatCallToAction.serializer(), cta) },
                 entryId = it.entryId,
+                reaction = it.reaction?.let { badge -> MemoBookJson.encodeToJsonElement(ChatReaction.serializer(), badge) },
             )
         },
         {
@@ -759,6 +791,9 @@ data class ChatMessage(
                 disposition = it.disposition,
                 callToAction = it.callToAction.decodeOrNull(ChatCallToAction.serializer()),
                 entryId = it.entryId,
+                // Une pastille illisible ne fait pas tomber la bulle : elle
+                // n'est qu'un état, et les coches le disent encore.
+                reaction = it.reaction.decodeOrNull(ChatReaction.serializer()),
             )
         },
     )
@@ -1424,6 +1459,13 @@ data class ChatTextTurn(
     val suggestionId: String? = null,
     /** Le souvenir visé par « Ça me convient ». */
     val entryId: String? = null,
+    /**
+     * **La bulle de MEMO qu'on vient de saluer d'un 👍** (T296) : réagir vaut
+     * « Ça me convient », sans écrire. Le tour part donc avec sa puce, mais le
+     * serveur ne le dessinera pas — c'est la pastille sur la bulle visée qui
+     * en reste.
+     */
+    val reactionTo: String? = null,
     /**
      * **Le moment où le voyageur a posé ce tour** (T309) : c'est lui qui range
      * la bulle dans le fil, et non l'instant où l'envoi aboutit.

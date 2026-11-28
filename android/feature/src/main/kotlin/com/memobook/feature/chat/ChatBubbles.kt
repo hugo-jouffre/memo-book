@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -78,6 +79,7 @@ import com.memobook.core.ChatCopy
 import com.memobook.core.ChatDelivery
 import com.memobook.core.ChatMessage
 import com.memobook.core.ChatMessageBody
+import com.memobook.core.ChatReaction
 import com.memobook.core.DailyCreditCopy
 import com.memobook.core.PhotoAttachment
 import com.memobook.core.PhotoBubbleGrid
@@ -516,9 +518,21 @@ private fun WaitingForUnlimitedNotice(message: ChatMessage, model: ChatModel, on
  */
 @Composable
 private fun DeliveryTicksIfOwn(message: ChatMessage, model: ChatModel) {
-    if (!message.author.isTraveller || message.authorName != null) return
+    if (!message.author.isTraveller || message.authorName != null) {
+        if (!message.author.isTraveller) MemoReaction(message, model)
+        return
+    }
+    val reaction = model.reaction(message)
     when (message.delivery) {
-        ChatDelivery.Sending -> ChatDeliveryTicks(isDelivered = false, Modifier.padding(horizontal = MemoBookSpacing.snug))
+        // **⬆️ quand le tour attend le réseau** (T296) : la pastille le dit
+        // mieux qu'une coche grise, qui ne disait pas ce qu'on attendait. En
+        // vol — parti, pas encore accusé —, la coche garde sa place.
+        ChatDelivery.Sending ->
+            if (model.isWaitingForNetwork(message.id) && reaction != null) {
+                ReactionBadge(reaction, Modifier.padding(horizontal = MemoBookSpacing.snug))
+            } else {
+                ChatDeliveryTicks(isDelivered = false, Modifier.padding(horizontal = MemoBookSpacing.snug))
+            }
         ChatDelivery.Sent -> Row(
             Modifier.padding(horizontal = MemoBookSpacing.snug),
             horizontalArrangement = Arrangement.spacedBy(MemoBookSpacing.xs / 2),
@@ -528,10 +542,65 @@ private fun DeliveryTicksIfOwn(message: ChatMessage, model: ChatModel) {
             // ce qu'on montre pendant qu'un vocal se transcrit. La fiche, elle,
             // attend d'avoir un texte (`ChatModel.messages`).
             if (model.isBeingTranscribed(message)) ListeningEar()
-            ChatDeliveryTicks(isDelivered = true)
+            // **La pastille prend la place des deux coches** (T296) : « arrivé »
+            // et « pris en compte » côte à côte seraient deux objets pour un
+            // seul trajet. Sans pastille — un serveur d'avant le 28/11/2026 —,
+            // les coches reprennent la leur.
+            if (reaction != null) ReactionBadge(reaction) else ChatDeliveryTicks(isDelivered = true)
         }
         is ChatDelivery.Failed, is ChatDelivery.WaitingForCredit, ChatDelivery.WaitingForUnlimited -> Unit
     }
+}
+
+/**
+ * **Le 👍 d'une bulle de MEMO** (T296) : posé, ou proposé.
+ *
+ * Proposé seulement là où une validation attend — la bulle qui offre « Ça me
+ * convient » ([ChatModel.canReact]). C'est la règle du menu de l'appui long :
+ * ce qui ne s'applique pas à une bulle n'y figure pas.
+ *
+ * **Creux, il propose ; plein, il est posé** — le même langage que l'étoile
+ * d'une photo principale, et non la pâleur des choses indisponibles : celui-ci
+ * se touche, et il marche.
+ */
+@Composable
+private fun MemoReaction(message: ChatMessage, model: ChatModel) {
+    val reaction = message.reaction
+    when {
+        reaction != null -> ReactionBadge(reaction, Modifier.padding(horizontal = MemoBookSpacing.snug))
+        model.canReact(message) -> BrandText(
+            ChatCopy.Reaction.validated.emoji,
+            style = MemoBookFont.caption,
+            modifier = Modifier
+                .padding(horizontal = MemoBookSpacing.snug)
+                .clip(CircleShape)
+                .clickable(onClickLabel = ChatCopy.Reaction.validateHint) { model.react(message) }
+                .border(1.dp, MemoBookColor.hairline, CircleShape)
+                .defaultMinSize(minHeight = MemoBookSpacing.minimumTapTarget)
+                .padding(horizontal = MemoBookSpacing.xs, vertical = 3.dp)
+                .alpha(0.5f)
+                .semantics { contentDescription = ChatCopy.Reaction.validateHint },
+        )
+        else -> Unit
+    }
+}
+
+/**
+ * La pastille elle-même : le glyphe sur un rond de papier, et le libellé du
+ * serveur pour TalkBack — un emoji seul s'y annoncerait « visage avec des
+ * yeux ».
+ */
+@Composable
+private fun ReactionBadge(reaction: ChatReaction, modifier: Modifier = Modifier) {
+    BrandText(
+        reaction.emoji,
+        style = MemoBookFont.caption,
+        modifier = modifier
+            .background(MemoBookColor.surface, CircleShape)
+            .border(1.dp, MemoBookColor.hairline, CircleShape)
+            .padding(horizontal = MemoBookSpacing.xs, vertical = 3.dp)
+            .semantics { contentDescription = reaction.label },
+    )
 }
 
 /**

@@ -9,6 +9,7 @@ import com.memobook.core.ChatDelivery
 import com.memobook.core.ChatGreeting
 import com.memobook.core.ChatMessage
 import com.memobook.core.ChatMessageBody
+import com.memobook.core.ChatReaction
 import com.memobook.core.ChatSuggestion
 import com.memobook.core.ChatThread
 import com.memobook.core.DailyCredit
@@ -173,6 +174,26 @@ internal fun ChatThread.Companion.tooLongForADayFixture(tripId: String): ChatThr
 // region Ce qui a déjà été raconté
 
 /**
+ * **Le trio de validation**, sous une fiche qui porte du vrai texte : c'est lui
+ * qui fait qu'un 👍 se propose sur la bulle (T296).
+ */
+private val validationTrio = listOf(
+    ChatSuggestion("accept", ChatCopy.Suggest.accept, ChatCopy.Suggest.acceptSymbol, ChatSuggestion.Intent.Send),
+    ChatSuggestion(
+        "edit-hand",
+        ChatCopy.Suggest.editByHand,
+        ChatCopy.Suggest.editByHandSymbol,
+        ChatSuggestion.Intent.SendThenEditTranscript,
+    ),
+    ChatSuggestion(
+        "edit-voice",
+        ChatCopy.Suggest.editByVoice,
+        ChatCopy.Suggest.editByVoiceSymbol,
+        ChatSuggestion.Intent.SendThenSpeak,
+    ),
+)
+
+/**
  * Une journée par étape : un vocal, la fiche que MEMO en a tirée, sa relance,
  * et la validation du voyageur.
  *
@@ -208,6 +229,15 @@ private fun history(detail: TripDetail): List<ChatMessage> {
             body = ChatMessageBody.Voice(note),
             sentAt = day,
             stepId = step.id,
+            // **La pastille de MEMO** (T296) : sans elle, le bac à sable ne
+            // montrerait ni le déplacement relevé ni le ✅, et les deux ne se
+            // regarderaient qu'avec un serveur. Le libellé vient du serveur en
+            // vrai — ici c'est un jeu d'essai, donc il est écrit à la main.
+            reaction = if (index == 0) {
+                ChatReaction(emoji = "🚂", label = "MEMO a noté ton trajet en train")
+            } else {
+                ChatReaction(emoji = "✅", label = "MEMO l’a pris en compte")
+            },
         )
         messages += ChatMessage(
             id = "memo-${step.id}-transcript",
@@ -230,20 +260,33 @@ private fun history(detail: TripDetail): List<ChatMessage> {
             sentAt = day,
             stepId = step.id,
         )
+        // **Validée d'un 👍 pour la première étape** (T296) : la bulle de MEMO
+        // porte la pastille, et aucune bulle « Ça me convient » ne suit — c'est
+        // exactement ce que le geste évite d'écrire. **La dernière étape
+        // racontée attend encore** : sa bulle offre « Ça me convient », donc le
+        // 👍 en creux se propose dessous. Le bac à sable montre ainsi les trois
+        // états.
+        val validatedByReaction = index == 0
+        val awaitsValidation = index == detail.steps.size - 2
         messages += ChatMessage(
             id = "memo-${step.id}-after",
             author = ChatAuthor.Memo,
             body = ChatMessageBody.Text(ChatCopy.afterTranscript),
             sentAt = day,
             stepId = step.id,
+            suggestions = if (awaitsValidation) validationTrio else null,
+            reaction = if (validatedByReaction) ChatCopy.Reaction.validated else null,
         )
-        messages += ChatMessage(
-            id = "traveller-${step.id}-accept",
-            author = ChatAuthor.Traveller,
-            body = ChatMessageBody.Text(ChatCopy.Suggest.accept),
-            sentAt = day,
-            stepId = step.id,
-        )
+        if (awaitsValidation) return@forEachIndexed
+        if (!validatedByReaction) {
+            messages += ChatMessage(
+                id = "traveller-${step.id}-accept",
+                author = ChatAuthor.Traveller,
+                body = ChatMessageBody.Text(ChatCopy.Suggest.accept),
+                sentAt = day,
+                stepId = step.id,
+            )
+        }
         messages += ChatMessage(
             id = "memo-${step.id}-acknowledged",
             author = ChatAuthor.Memo,

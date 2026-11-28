@@ -74,6 +74,16 @@ data class PendingTurn(
     val text: String? = null,
     val suggestionId: String? = null,
     val entryId: String? = null,
+    /**
+     * **La bulle de MEMO qu'un 👍 salue** (T296) : réagir vaut « Ça me
+     * convient », et le tour attend le réseau comme les autres.
+     *
+     * ⚠️ **Une clé de plus, et optionnelle** : c'est la règle de ce format.
+     * Absente de toute fiche écrite avant le 28/11/2026, et jamais écrite
+     * quand elle ne porte rien — une fiche ordinaire ne change pas d'un
+     * octet.
+     */
+    val reactionTo: String? = null,
     val stepId: String? = null,
     val filenames: List<String> = emptyList(),
     val mimeTypes: List<String> = emptyList(),
@@ -120,6 +130,7 @@ data class PendingTurn(
         val text: String? = null,
         val suggestionId: String? = null,
         val entryId: String? = null,
+        val reactionTo: String? = null,
         val stepId: String? = null,
         val filenames: List<String> = emptyList(),
         val mimeTypes: List<String> = emptyList(),
@@ -146,6 +157,7 @@ data class PendingTurn(
                 text = record.text,
                 suggestionId = record.suggestionId,
                 entryId = record.entryId,
+                reactionTo = record.reactionTo,
                 stepId = record.stepId,
                 filenames = record.filenames,
                 mimeTypes = record.mimeTypes,
@@ -171,6 +183,7 @@ data class PendingTurn(
                     text = value.text,
                     suggestionId = value.suggestionId,
                     entryId = value.entryId,
+                    reactionTo = value.reactionTo,
                     stepId = value.stepId,
                     filenames = value.filenames,
                     mimeTypes = value.mimeTypes,

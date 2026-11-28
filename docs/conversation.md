@@ -255,9 +255,14 @@ un déroulé fixe, écrit par le code, sans modèle :
    tout ; un cas de `chat.test.ts` le tient. Le jour où elle perdrait ce que
    l'écrivain écarte, se taire deviendrait une perte silencieuse.
 3. **On attend la validation.** Une précision tapée entre-temps (« c'était
-   avec Clara ») reçoit « C'est noté, je reprends le texte avec ça. », le
-   texte se réécrit, et la question revient avec lui. Une correction à la main
-   reçoit l'accusé habituel et propose encore « Ça me convient ».
+   avec Clara ») reçoit **un ✅ sur sa bulle, et aucune phrase** (T296,
+   28/11/2026) : le texte se réécrit, la fiche passe en « j'écris » juste
+   au-dessus, et la question revient avec lui. MEMO disait « C'est noté, je
+   reprends le texte avec ça. » — un accusé qui répétait l'écran, comme la
+   phrase des doutes retirée le 16/11. Il en va de même d'une correction
+   dictée, entendue. Une correction à la main, elle, reçoit toujours son
+   accusé — il dit que la main l'emporte — et propose encore « Ça me
+   convient ».
 4. **« Ça me convient »** → « C'est enregistré… », puis **le nombre exact de
    photos** qui remplit l'étape : « Illustre ce souvenir avec 3 photos : c'est
    ce qu'il faut pour remplir sa page. » Puces : importer des photos, ou
@@ -890,6 +895,73 @@ vaut pour les deux chemins qui effacent un souvenir — la croix du tiroir d'une
 **Et ce n'est pas le « Supprimer » d'une bulle qui attend** (§ 6 bis) : celui-là
 retire un envoi du téléphone, celui-ci retire un souvenir du carnet, pour tous
 les voyageurs. Deux confirmations, deux phrases.
+
+## 6 quater. La pastille, et réagir pour valider (T296, 28/11/2026)
+
+Hugo : « MEMO répond par un emoji plutôt que par un message : 👀 lecture en
+cours, ⬆️ partira au retour du réseau, 🚘 ✈️ 🚂 ⛵️ selon le déplacement
+raconté, ✅ pris en compte. Et le voyageur peut réagir aux messages de MEMO
+pour valider sans écrire. »
+
+**Une bulle à soi porte une pastille, et c'est l'état de ce tour qu'elle dit.**
+Elle prend la place des deux coches d'acheminement (08/10/2026) : « arrivé » et
+« pris en compte » côte à côte seraient deux objets pour un seul trajet. Sans
+pastille — un serveur d'avant —, les coches reprennent la leur.
+
+| Pastille | Ce qu'elle dit | Qui la décide |
+|---|---|---|
+| ⬆️ | partira au retour du réseau | **l'app seule** : le serveur n'a jamais vu ce tour |
+| 👀 | MEMO est en train de le lire | `repliedAt` encore nul |
+| 🚂 ✈️ 🚘 ⛵️ 🚌 🚲 🚶 | le déplacement que le récit nomme | `entry.insights.transports` |
+| ✅ | pris en compte | le reste |
+| 👍 | tu as validé ce texte | une réaction du voyageur, sur une bulle de MEMO |
+
+⚠️ **Rien de tout ça n'est stocké** (`services/chatReaction.ts`) : la pastille
+se *calcule* à chaque lecture. Une colonne de plus serait une seconde vérité à
+tenir d'accord avec `repliedAt` et les relevés de la rédaction, et T296 n'a
+donc aucune migration. Le ticket nommait quatre transports ; les sept de
+l'étape y sont, parce qu'un trajet en bus qui s'afficherait ✅ pendant qu'un
+trajet en voiture s'affiche 🚘 se lirait comme un bug.
+
+⚠️ **L'emoji part avec son libellé français.** Un glyphe ne se lit pas à voix
+haute — VoiceOver annoncerait « visage avec des yeux ». Le serveur rend les
+deux, comme il rend ses messages d'erreur, et il n'y a pas de table d'emojis à
+tenir d'accord des deux côtés (même règle que les cinq icônes météo).
+
+**Le transport arrive après coup, et c'est voulu** : `repliedAt` tombe dès que
+`converse` est passé, les relevés seulement quand la rédaction a écrit le
+souvenir. La pastille passe donc ✅ puis 🚂, et le fil se relit tout seul entre
+les deux. L'inverse laisserait 👀 une minute de trop sur un message déjà lu.
+
+### Ce que l'emoji remplace, et ce qu'il ne remplace pas
+
+Choix de Hugo (28/11/2026) : l'emoji remplace **les accusés muets**, ceux qui
+ne disaient rien d'autre qu'« j'ai entendu ». Deux phrases ont disparu —
+« C'est noté, je reprends le texte avec ça. » (une précision) et « C'est noté,
+je corrige le texte avec ce que tu viens de me dire. » (une correction dictée
+entendue). Ce qui **porte une information** reste écrit : « C'est enregistré.
+Ton carnet compte une étape de plus. », le nombre exact de photos, ce qui a
+raté. Un silence ne s'explique pas par un emoji.
+
+### Réagir vaut « Ça me convient »
+
+**Un 👍, et seulement là où une validation attend** : sous la bulle qui offre
+« Ça me convient ». Ailleurs, rien — c'est la règle du menu de l'appui long
+(§ 6 ter), appliquée aux réactions : ce qui ne s'applique pas à une bulle n'y
+figure pas, et une réaction décorative n'existe pas. **Creux, il propose ;
+plein, il est posé** — le langage de l'étoile d'une photo principale, et non la
+pâleur des choses indisponibles : celui-ci se touche, et il marche.
+
+Le tour part **comme la puce qu'il est** — même texte, même `suggestionId`,
+même gratuité, et c'est lui qui valide le souvenir dans la même requête —,
+mais il **ne se dessine pas** : `payload.reactionTo` est tout ce qu'il laisse,
+et c'est lui qui pose le 👍 sur la bulle visée. Une bulle « Ça me convient » de
+plus dirait précisément ce que le geste évite d'écrire. Le serveur refuse un
+👍 sans sa puce, ou posé sur une bulle du voyageur.
+
+Hors ligne, le 👍 attend le réseau comme le reste : `reactionTo` est une clé
+**optionnelle** de la file sur le disque, absente de toute fiche d'avant le
+28/11/2026, et jamais écrite quand elle ne porte rien.
 
 ## 7. Supprimer la conversation
 
