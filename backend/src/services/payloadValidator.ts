@@ -303,13 +303,37 @@ export function pagesAvantEtapes(payload: Record<string, unknown>): number {
 }
 
 /**
+ * **Le prénom de qui raconte** (T317) : la classe que porte son `<p>` dans
+ * `body_html`. Le gabarit la pose sur une ligne de réglure pleine, et le
+ * validateur l'écarte du récit (``sansAttributions``).
+ */
+export const ATTRIBUTION_CLASS = "mb-note__qui";
+
+const ATTRIBUTION_HTML = new RegExp(`<p class="${ATTRIBUTION_CLASS}">[^<]*</p>`, "g");
+
+/**
+ * Le récit sans les attributions : ce n'est pas du récit, et sa place est déjà
+ * payée ailleurs.
+ *
+ * ⚠️ **Deux comptes, et il ne faut pas payer deux fois.** Une attribution
+ * occupe bien deux lignes de la page, la sienne et sa ligne vide — mais
+ * ``structuring`` les a déjà retirées de la capacité avant d'y verser le récit
+ * (``ATTRIBUTION_COST``). La compter ici comme un paragraphe de plus
+ * rétrécirait la page une seconde fois, et un carnet à deux voix se ferait
+ * refuser des pages qui tiennent.
+ */
+export function sansAttributions(html: string): string {
+  return html.replace(ATTRIBUTION_HTML, "");
+}
+
+/**
  * Le récit d'une journée, en paragraphes : `body_html`, puis `body_html_apres`
  * — la suite du récit sous la bande du milieu (`layout_recit_encart_milieu`).
  */
 function paragraphsOf(day: Record<string, unknown>): string[] {
   return (["body_html", "body_html_apres"] as const).flatMap((champ) => {
     const valeur = day[champ];
-    return typeof valeur === "string" ? splitParagraphs(valeur) : [];
+    return typeof valeur === "string" ? splitParagraphs(sansAttributions(valeur)) : [];
   });
 }
 
@@ -629,7 +653,10 @@ function checkDay(
     if (photos < 3) {
       errors.push({ path: at("photos"), message: `\`${layout}\` exige 3 photos (${photos} fournie(s)).` });
     }
-    const paragraphs = typeof day["body_html"] === "string" ? splitParagraphs(day["body_html"]).length : 0;
+    const paragraphs =
+      typeof day["body_html"] === "string"
+        ? splitParagraphs(sansAttributions(day["body_html"])).length
+        : 0;
     if (paragraphs > TRIO_MAX_PARAGRAPHS) {
       errors.push({
         path: at("body_html"),
@@ -642,7 +669,7 @@ function checkDay(
     const value = day[field];
     if (typeof value !== "string") continue;
 
-    const paragraphs = splitParagraphs(value);
+    const paragraphs = splitParagraphs(sansAttributions(value));
     for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
       if (paragraph.length > EDITORIAL_LIMITS.bodyHtmlCharsPerParagraph) {
         errors.push({

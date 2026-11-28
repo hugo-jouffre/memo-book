@@ -5,7 +5,10 @@ import { escapeHtml } from "../lib/html.js";
 import { photosLesPlusNettes, type PhotoQuality } from "./photoPicking.js";
 import { loadLayoutKnowledgeBase, loadPayloadSchema } from "../lib/templates.js";
 import {
+  ATTRIBUTION_CLASS,
   EDITORIAL_LIMITS,
+  bodyLength,
+  sansAttributions,
   STEP_SIZES,
   groupSteps,
   pageCapacity,
@@ -102,6 +105,17 @@ export interface StructuringEntry {
    * pas vue ; la photo se range alors sur sa netteté, comme avant.
    */
   photoBeauty?: number | null;
+  /**
+   * **Qui raconte ce souvenir** (T317, 28/11/2026) : le prénom du compte qui a
+   * envoyé le vocal (`jobs/structure.ts`, même règle et même prénom que
+   * ``narratorOf`` et que la bulle du fil). Nul pour un souvenir dont aucune
+   * bulle ne dit l'auteur.
+   *
+   * ⚠️ **Le carnet ne le dit que s'il a plusieurs voix.** Un voyage raconté
+   * par une seule personne n'écrit aucun prénom : il n'y a rien à distinguer,
+   * et le chemin d'avant T317 est alors suivi **à l'octet près**.
+   */
+  narrator?: string | null;
 }
 
 /** Le quiz tel que le gabarit le lit (`day.quiz`, `index.html`). */
@@ -320,6 +334,199 @@ function splitAt(text: string, max: number): [string, string] {
 }
 
 /**
+ * **Dire qui raconte** — T317 (28/11/2026).
+ *
+ * « Dire qui raconte, en tête de chaque paragraphe, quand le voyage se raconte
+ * à plusieurs » (Hugo). Deux choses ont demandé d'interpréter la demande.
+ *
+ * **Un paragraphe n'est pas une unité d'auteur.** ``toBodyHtml`` découpe le
+ * récit d'une journée au nombre de caractères : deux phrases de deux personnes
+ * peuvent tomber dans le même paragraphe, et une phrase se couper en deux. La
+ * vraie unité est le **souvenir**, dont on connaît l'auteur
+ * (``StructuringEntry.narrator``). L'attribution se pose donc par souvenir.
+ *
+ * **Et elle se pose au changement** (choix de Hugo, 28/11/2026) : écrire
+ * « Maÿlis » au-dessus de chaque paragraphe d'une journée qu'elle raconte
+ * seule serait du bruit. Le prénom paraît quand la voix change, et en tête de
+ * chaque page — un lecteur qui tourne la page a besoin qu'on le lui rappelle.
+ *
+ * ⚠️ **Un carnet à une seule voix ne change pas d'un octet** : ``segmentsDe``
+ * rend alors un seul morceau sans narrateur, et le code suit le chemin d'avant
+ * T317, les mêmes appels à ``splitAt`` et au même ``toBodyHtml``. C'est ce que
+ * garantit le test « un carnet à une voix est inchangé ».
+ */
+
+/** Un morceau de récit, et qui le raconte. */
+interface Segment {
+  text: string;
+  /** `null` : personne de nommé, donc rien à attribuer. */
+  narrator: string | null;
+  /** L'attribution se pose-t-elle devant ce morceau ? Décidé à la découpe. */
+  attribue?: boolean;
+}
+
+/**
+ * La classe du prénom dans `body_html` — définie par le validateur, qui est le
+ * module qui connaît le contrat du HTML, et réexportée ici pour les appelants.
+ * Le gabarit la pose sur une ligne de réglure pleine (`style.css`).
+ */
+export { ATTRIBUTION_CLASS };
+
+/**
+ * Ce qu'une attribution coûte à la capacité d'une page, en signes de récit.
+ *
+ * Le barème des capacités (`payloadValidator.LAYOUT_CAPACITY`) compte des
+ * signes, et chaque `<p>` du carnet traîne déjà une ligne vide derrière lui
+ * (`.mb-note p { margin-bottom: var(--mb-line) }`). Une attribution est un
+ * `<p>` de plus : elle coûte donc **deux lignes**, la sienne et sa ligne vide.
+ * À 45 à 55 signes par ligne sur une page A5, cela fait une centaine de
+ * signes.
+ *
+ * ⚠️ **C'est une arithmétique, pas une mesure.** Elle penche exprès du côté de
+ * la page un peu trop vide, qui est le bon côté de l'erreur : un récit qui
+ * déborde de sa page est un carnet raté, un récit qui s'arrête deux lignes
+ * trop tôt ne se voit pas. À confirmer sur un carnet rendu.
+ */
+const ATTRIBUTION_COST = 100;
+
+/**
+ * Sous ce reste de place, on ne commence pas une nouvelle voix : un prénom
+ * suivi de trois mots au bas d'une page ne se lit pas. La voix attend la page
+ * suivante, où elle est nommée en tête.
+ *
+ * ⚠️ **Ce n'est pas « on ne dit rien et on continue »**, et c'est une erreur
+ * qu'il a fallu voir sur un carnet rendu pour la corriger : laisser le texte
+ * de Paul sans prénom juste après celui de Maÿlis le fait lire **comme du
+ * Maÿlis**. Un prénom manquant n'est pas une petite perte de confort, c'est
+ * une fausse attribution — précisément ce que le ticket veut empêcher. Quand
+ * on ne peut pas nommer, on ne place pas.
+ *
+ * Une ligne de récit, soit 45 à 55 signes sur une page A5, et non deux : une
+ * voix qui commence au bas d'une page et continue au verso est la chose la
+ * plus ordinaire d'un livre, et la page suivante la renomme en tête. Exiger
+ * deux lignes laissait une page remplie à 43 % — vu sur un carnet rendu.
+ */
+const MIN_APRES_ATTRIBUTION = 60;
+
+/** Ce qu'il reste de récit à placer, en signes. */
+function longueurDe(segments: readonly Segment[]): number {
+  return segments.reduce((total, segment) => total + segment.text.length, 0);
+}
+
+/** Le prénom, tel qu'il entre dans `body_html`. */
+function attributionHtml(name: string): string {
+  return `<p class="${ATTRIBUTION_CLASS}">${escapeHtml(name)}</p>`;
+}
+
+/**
+ * Les narrateurs d'un carnet, sans doublon. Deux ou plus : le carnet se
+ * raconte à plusieurs, et c'est la seule condition qui ouvre l'attribution.
+ */
+export function narrateursDe(entries: readonly StructuringEntry[]): string[] {
+  const noms = entries
+    .filter((entry) => entry.transcript?.trim())
+    .map((entry) => entry.narrator?.trim())
+    .filter((nom): nom is string => Boolean(nom));
+  return [...new Set(noms)];
+}
+
+/**
+ * Le récit d'une journée, en morceaux porteurs de leur auteur.
+ *
+ * À une seule voix, un seul morceau sans narrateur : exactement la chaîne que
+ * le code joignait avant T317.
+ */
+function segmentsDe(entries: readonly StructuringEntry[], plusieursVoix: boolean): Segment[] {
+  const textes = entries
+    .map((entry) => ({ text: entry.transcript?.trim() ?? "", narrator: entry.narrator?.trim() || null }))
+    .filter((segment) => segment.text.length > 0);
+
+  if (!plusieursVoix) {
+    const joint = textes.map((segment) => segment.text).join(" ");
+    return joint.length > 0 ? [{ text: joint, narrator: null }] : [];
+  }
+  return textes;
+}
+
+/**
+ * Ce qu'une page prend, et ce qu'elle laisse — en suivant les morceaux, pour
+ * qu'une attribution ne se retrouve jamais devant le texte de quelqu'un
+ * d'autre.
+ *
+ * Le premier morceau d'une page est toujours attribué : c'est ce qui nomme la
+ * voix après un tournement de page. Les suivants ne le sont qu'au changement.
+ */
+function decouperEnPage(segments: Segment[], capacite: number): [Segment[], Segment[]] {
+  // Une seule voix : le chemin d'avant T317, au caractère près.
+  if (segments.length === 1 && segments[0]!.narrator === null) {
+    const [page, suite] = splitAt(segments[0]!.text, capacite);
+    return [
+      page.length > 0 ? [{ text: page, narrator: null }] : [],
+      suite.length > 0 ? [{ text: suite, narrator: null }] : [],
+    ];
+  }
+
+  const page: Segment[] = [];
+  let reste = capacite;
+  let precedent: string | null | undefined;
+
+  for (const [index, segment] of segments.entries()) {
+    const changement = segment.narrator !== precedent;
+    const nommable = segment.narrator !== null;
+    const peutNommer = nommable && reste - ATTRIBUTION_COST >= MIN_APRES_ATTRIBUTION;
+
+    // **La voix change et on ne peut pas la nommer : la page s'arrête ici.**
+    // Le placer quand même le ferait lire comme la voix d'avant.
+    if (changement && !peutNommer && page.length > 0) return [page, segments.slice(index)];
+
+    // Sur une page encore vide, on place quoi qu'il arrive : rien ne précède
+    // ce texte, donc rien ne peut se l'attribuer, et refuser ferait tourner la
+    // boucle sans avancer.
+    const attribue = changement && peutNommer;
+    const place = reste - (attribue ? ATTRIBUTION_COST : 0);
+
+    if (place <= 0) return [page, segments.slice(index)];
+
+    if (segment.text.length <= place) {
+      page.push({ ...segment, attribue });
+      reste = place - segment.text.length;
+      precedent = segment.narrator;
+      continue;
+    }
+
+    const [debut, suite] = splitAt(segment.text, place);
+    // Rien n'a tenu : la page s'arrête ici plutôt que de pousser un morceau
+    // vide, qui ferait tourner la boucle sans avancer.
+    if (debut.length === 0) return [page, segments.slice(index)];
+    page.push({ ...segment, text: debut, attribue });
+    return [page, [{ ...segment, text: suite }, ...segments.slice(index + 1)]];
+  }
+
+  return [page, []];
+}
+
+/**
+ * Le récit d'une page en HTML, attributions comprises.
+ *
+ * Les paragraphes se remplissent **à l'intérieur** d'un morceau : un
+ * paragraphe appartient à une voix, sans quoi l'attribution qui le précède
+ * mentirait sur sa fin.
+ */
+function corpsDeLaPage(segments: Segment[]): string {
+  if (segments.length === 1 && segments[0]!.narrator === null) {
+    // Le chemin d'avant T317.
+    return toBodyHtml(segments[0]!.text);
+  }
+
+  const morceaux = segments.map((segment) => {
+    const prenom = segment.attribue && segment.narrator ? attributionHtml(segment.narrator) : "";
+    return `${prenom}${toBodyHtml(segment.text)}`;
+  });
+  const html = morceaux.join("");
+  return html.length > 0 ? html : "<p>Journée sans récit enregistré.</p>";
+}
+
+/**
  * Une étape commence toujours sur une page de gauche : quand le colophon et
  * l'introduction font un nombre pair de pages, une page libre les complète.
  */
@@ -457,6 +664,11 @@ export function completerEtapesImpaires(days: Record<string, unknown>[]): Record
 export class HeuristicStructurer implements Structurer {
   async structure(input: StructuringInput): Promise<BookPayload> {
     const groups = groupEntriesByDay(input.entries);
+    // **Le carnet se raconte-t-il à plusieurs ?** (T317) Décidé une fois, sur
+    // tout le carnet et non sur la journée : un voyage à deux voix dont une
+    // journée n'a qu'un narrateur dit quand même qui la raconte, sans quoi le
+    // lecteur attribuerait cette journée à la dernière voix nommée.
+    const plusieursVoix = narrateursDe(input.entries).length > 1;
 
     const days: Record<string, unknown>[] = [];
     let numero = 0;
@@ -466,10 +678,9 @@ export class HeuristicStructurer implements Structurer {
         .map((entry) => entry.photoUrl)
         .filter((url): url is string => Boolean(url));
 
-      const narrative = group.entries
-        .map((entry) => entry.transcript?.trim())
-        .filter((text): text is string => Boolean(text))
-        .join(" ");
+      // **Le récit de la journée, en morceaux porteurs de leur auteur** (T317).
+      // À une seule voix, c'est un seul morceau : la chaîne jointe d'avant.
+      const segments = segmentsDe(group.entries, plusieursVoix);
 
       // **Le lieu de l'étape, et lui seul** (T308). Pas l'écho que l'app
       // renvoie avec le vocal, qui nomme l'étape d'avant le jour où l'on
@@ -492,10 +703,10 @@ export class HeuristicStructurer implements Structurer {
       // pages — la première porte le bandeau, la seconde enchaîne sans lui.
       // Au-delà, c'est une nouvelle étape, pas une page de plus : c'est ce que
       // dit le barème, et ce que le validateur vérifiera.
-      let reste = narrative;
+      let reste = segments;
       let premierePage = true;
 
-      while (reste.length > 0 || premierePage) {
+      while (longueurDe(reste) > 0 || premierePage) {
         const ouvreEtape = premierePage || days.length === 0 || pagesDeLEtape(days) >= STEP_SIZES.XL.pages;
 
         if (ouvreEtape) numero += 1;
@@ -505,7 +716,7 @@ export class HeuristicStructurer implements Structurer {
           // mais vide, parce que le schéma l'exige et que le gabarit ne rend
           // que les titres non vides.
           title: "",
-          [pickLayout(ouvreEtape ? photos.length : 0, reste.length)]: true,
+          [pickLayout(ouvreEtape ? photos.length : 0, longueurDe(reste))]: true,
         };
 
         if (ouvreEtape) {
@@ -528,8 +739,8 @@ export class HeuristicStructurer implements Structurer {
         // La capacité se lit sur la page telle qu'elle vient d'être montée :
         // le bandeau, la carte info et les photos la font varier du simple au
         // quadruple.
-        const [page, suite] = splitAt(reste, pageCapacity(day));
-        day["body_html"] = toBodyHtml(page);
+        const [page, suite] = decouperEnPage(reste, pageCapacity(day));
+        day["body_html"] = corpsDeLaPage(page);
         // Posé après la coupe : un quiz élargit la page par défaut
         // (`pageCapacity`), mais c'est le composeur qui lui trouve sa page.
         if (premierePage && withQuiz?.quiz) day["quiz"] = withQuiz.quiz;
@@ -723,7 +934,11 @@ export class LlmStructurer implements Structurer {
       const result = validatePayload(payload);
       if (result.valid) {
         return withBestPhotosFirst(
-          withToldQuizzesOnly(withToldWeatherOnly(payload as BookPayload, input.entries), input.entries),
+          // **Qui raconte** (T317) : posé après le modèle, et non par lui.
+          avecLesVoix(
+            withToldQuizzesOnly(withToldWeatherOnly(payload as BookPayload, input.entries), input.entries),
+            input.entries,
+          ),
           input.entries,
         );
       }
@@ -741,6 +956,125 @@ export class LlmStructurer implements Structurer {
 
     return this.fallback.structure(input);
   }
+}
+
+/**
+ * **Reposer les prénoms sur un carnet arrangé par le modèle** — T317.
+ *
+ * En production, ce n'est pas le repli déterministe qui monte les pages : un
+ * modèle reçoit les textes déjà rédigés et les arrange (``LlmStructurer``).
+ * Son prompt lui interdit d'inventer le moindre mot, et il **ne sait rien**
+ * des attributions : on ne lui en demande pas, et on ne lui en montre pas.
+ *
+ * C'est ce qui rend cette passe sûre. Elle ne vérifie pas le travail du
+ * modèle, elle le refait : elle retire toute attribution présente, retrouve à
+ * quel souvenir appartient chaque paragraphe en cherchant son texte dans les
+ * souvenirs du carnet, puis repose les prénoms aux changements de voix. Le
+ * modèle n'a qu'une chose à tenir, celle qu'il tient déjà et dont tout le
+ * reste du montage dépend : **ne pas réécrire les mots**.
+ *
+ * Elle est donc idempotente, et sans effet sur un carnet à une seule voix.
+ *
+ * ⚠️ **Un paragraphe qui mêle deux souvenirs n'est pas attribué.** Le modèle a
+ * le droit de réunir deux souvenirs dans un même paragraphe ; aucun prénom
+ * n'est alors vrai pour tout le paragraphe, et on se taît plutôt que d'en
+ * choisir un. Même silence pour un paragraphe dont le texte ne se retrouve
+ * dans aucun souvenir — s'il a été réécrit, on ne sait plus qui l'a dit.
+ *
+ * ⚠️ **Et jamais au prix d'un débordement.** Le modèle a rempli la page sans
+ * savoir que des lignes s'ajouteraient : chaque prénom posé est retiré de ce
+ * qu'il reste de place (``ATTRIBUTION_COST``), et les prénoms qui ne tiennent
+ * plus ne sont pas posés. C'est aussi ce qui autorise le validateur à ignorer
+ * les attributions (``sansAttributions``) : leur place est toujours payée
+ * avant qu'elles soient écrites, ici comme dans le repli.
+ */
+export function avecLesVoix<T extends BookPayload>(
+  payload: T,
+  entries: readonly StructuringEntry[],
+): T {
+  const days = payload["days"];
+  if (!Array.isArray(days)) return payload;
+
+  const plusieursVoix = narrateursDe(entries).length > 1;
+  const sources = entries
+    .filter((entry) => entry.transcript?.trim() && entry.narrator?.trim())
+    .map((entry) => ({ narrator: entry.narrator!.trim(), texte: normaliseTexte(entry.transcript!) }));
+
+  const refaits = (days as unknown[]).map((day) => {
+    if (!day || typeof day !== "object") return day;
+    const page = day as Record<string, unknown>;
+
+    // Un carnet à une voix n'écrit aucun prénom — y compris si le modèle en
+    // avait inventé un, ce que rien ne lui demande.
+    const nettoyes = CHAMPS_DE_RECIT.map((champ) =>
+      typeof page[champ] === "string" ? sansAttributions(page[champ]) : null,
+    );
+    if (!plusieursVoix) {
+      return remplaceLesRecits(page, nettoyes);
+    }
+
+    const sansPrenoms = remplaceLesRecits(page, nettoyes);
+    let reste = pageCapacity(sansPrenoms) - bodyLength(sansPrenoms);
+    let precedent: string | null = null;
+
+    const ecrits = nettoyes.map((html) => {
+      if (html === null) return null;
+      return html.replace(PARAGRAPHE, (entier: string, dedans: string) => {
+        const voix = voixDuParagraphe(dedans, sources);
+        if (voix === null || voix === precedent) return entier;
+        if (reste - ATTRIBUTION_COST < 0) return entier;
+        reste -= ATTRIBUTION_COST;
+        precedent = voix;
+        return `${attributionHtml(voix)}${entier}`;
+      });
+    });
+
+    return remplaceLesRecits(page, ecrits);
+  });
+
+  return { ...payload, days: refaits };
+}
+
+/** Les deux champs qui portent le récit d'une page. */
+const CHAMPS_DE_RECIT = ["body_html", "body_html_apres"] as const;
+
+const PARAGRAPHE = /<p(?:\s[^>]*)?>([\s\S]*?)<\/p>/g;
+
+function remplaceLesRecits(
+  page: Record<string, unknown>,
+  valeurs: readonly (string | null)[],
+): Record<string, unknown> {
+  const sortie = { ...page };
+  CHAMPS_DE_RECIT.forEach((champ, index) => {
+    const valeur = valeurs[index];
+    if (valeur !== null && valeur !== undefined) sortie[champ] = valeur;
+  });
+  return sortie;
+}
+
+/** Comparer des textes sans se laisser arrêter par les espaces ni la casse. */
+function normaliseTexte(texte: string): string {
+  return texte.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
+ * À quel souvenir appartient ce paragraphe, et donc à qui.
+ *
+ * `null` dès que la réponse n'est pas franche : aucun souvenir ne contient ce
+ * texte, ou plusieurs voix le contiennent. Dans les deux cas on ne nomme
+ * personne.
+ */
+function voixDuParagraphe(
+  dedans: string,
+  sources: readonly { narrator: string; texte: string }[],
+): string | null {
+  const texte = normaliseTexte(dedans.replace(/<[^>]+>/g, " "));
+  if (texte.length === 0) return null;
+
+  const voix = new Set(
+    sources.filter((source) => source.texte.includes(texte)).map((source) => source.narrator),
+  );
+  return voix.size === 1 ? [...voix][0]! : null;
 }
 
 /**

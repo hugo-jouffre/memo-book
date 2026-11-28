@@ -98,6 +98,53 @@ Deux choses que ce tableau rend visibles :
 | Modération | — | **gratuite** (Moderation 2) | non publiée | non publiée |
 | Repli de MEMO (1 tour) | — | 0,54 ¢ (Medium 3.5) | 0,27 ¢ (3.8 Flash) | 0,72 ¢ (GPT-6 Sol) |
 
+### Reconnaître les voix d'un même téléphone : ce que ça coûterait (28/11/2026, T317)
+
+T317 demande de dire qui raconte, et ajoute : « l'IA devrait aussi
+**reconnaître les voix** de ceux qui parlent dans le même téléphone ». La
+première moitié est livrée et ne coûte rien — le compte qui a envoyé le vocal
+suffit. Celle-ci demande une **séparation des locuteurs**, et voici le prix.
+
+**Ce n'est pas un supplément, c'est un critère de choix de plus.**
+`gpt-4o-transcribe`, le transcripteur d'aujourd'hui, ne sépare pas les
+locuteurs — aucune option ne l'y ajoute. La question ne se pose donc pas en
+« combien ça coûte en plus », mais en « lequel des candidats sait le faire »,
+et ce poste est **déjà à rebrancher** (§ 1, « sans compte »). C'est une ligne
+de plus dans un tableau qu'on remplissait de toute façon.
+
+Pour les 30 minutes d'audio d'un carnet complet, sur les tarifs annoncés par
+les comparateurs fin novembre 2026 :
+
+| Transcripteur | Séparation des voix | 30 min |
+|---|---|---|
+| **Aujourd'hui** (`gpt-4o-transcribe`) | **non, à aucun prix** | 13,5 ¢ |
+| AssemblyAI Universal-2 + option | oui, en supplément | ~8 ¢ |
+| Deepgram Nova-3 + option | oui, en supplément | 13 à 29 ¢ |
+| Gladia (offre enregistrée) | oui, comprise | ~30 ¢ |
+| Speechmatics | oui, selon l'offre | pas de tarif public |
+
+**Donc : entre 1,5 ¢ de moins et 17 ¢ de plus par carnet**, sur un carnet qui
+se vend 89,90 €. Le moins cher des transcripteurs qui savent séparer les voix
+coûte **moins** que celui d'aujourd'hui, qui ne sait pas le faire. Comme pour
+le reste du § 2, le prix ne tranche rien.
+
+⚠️ **Ces chiffres viennent de comparateurs, qui se contredisent entre eux** —
+Deepgram y est annoncé à la fois à 0,0043 et 0,0077 $ la minute, et la
+séparation des voix tantôt comprise, tantôt en supplément. À confirmer sur les
+pages des fournisseurs avant tout engagement, le jour où la transcription
+déménage.
+
+**Ce qui coûte vraiment, c'est après.** Une séparation de locuteurs rend
+« locuteur 1 » et « locuteur 2 », pas « Maÿlis » et « Paul ». Pour nommer, il
+faut soit **demander une fois** au voyageur à qui appartient chaque voix d'un
+vocal, soit lui faire enregistrer un échantillon par personne. C'est du
+produit, pas de l'API, et c'est là qu'est le vrai travail.
+
+**Un premier pas qui ne demande rien de tout ça** : se contenter de
+**détecter** qu'un vocal porte plus d'une voix, et le dire à MEMO, qui
+demande. Le carnet gagne la bonne attribution sans qu'aucun modèle n'ait à
+reconnaître qui que ce soit, et le voyageur répond une fois.
+
 ### Choisir les photos par la vision : ce que ça coûterait (23/11/2026)
 
 T265 demande, quand une étape porte plus de photos que sa page n'en dessine,
@@ -407,6 +454,7 @@ cd backend && npm run redaction:eval -- --compare opus-5 opus-5-5 --judge
 | 17/11/2026 | **Chaque appel au modèle écrit ce qu'il a consommé** (`services/modelUsage.ts`) : une ligne par appel, posée au pied de l'appel plutôt que remontée par les types, et **avant** les gardes — un appel qui bute au plafond est facturé comme les autres. Elle porte l'entrée, la sortie (réflexion comprise), le cache lu et écrit, et `headroomPercent` : la marge qui restait sous le plafond, avec une alerte sous 20 %. C'est ce rapport qui aurait annoncé la panne ci-dessus au lieu de la subir. Les **prix ne sont pas dans le code** : ils vivent au § 2, et une constante de tarif oubliée mentirait longtemps. Les six appels payés sont couverts — cinq sites de code, le rédacteur en servant deux : récit, relevé, réponse, contexte, journée manquante, thème | reco Claude |
 | 20/11/2026 | **L'écrivain peut dire qu'il n'ose pas écrire un nom propre** (`namesToConfirm`), et MEMO en fait une question dans le fil. Aucun appel de plus : un champ dans un schéma qui partait déjà. Il répond à T282 — un prénom imprimé au jugé entrait dans la fiche de cohérence et se répétait sur tout le carnet. Le champ est vide dans presque tous les souvenirs, et il faut que ça le reste : la bulle des doutes a été retirée le 16/11 parce qu'à chaque souvenir elle sonnait comme un refus. **Le banc n'a pas tourné dessus** : la fréquence du doute, et sa justesse, restent à mesurer — 1 à 2 $ le passage | reco Claude |
 | 20/11/2026 | **L'écrivain dit maintenant QUAND chaque moment d'un récit découpé a été vécu** (`day`, `partOfDay` dans `REDACTION_SCHEMA`). Aucun appel de plus, aucun modèle de plus : deux champs dans un schéma qui partait déjà. Ils répondent à T279 — les souvenirs gardaient l'ordre du vocal parce qu'on ne demandait à personne quand ils avaient eu lieu. Les deux valent `null` le plus souvent, et le code s'en remet alors à l'ordre du récit, comme avant. **Le banc n'a pas encore tourné dessus** : la fréquence à laquelle l'écrivain ose situer un moment, et sa justesse quand il le fait, restent à mesurer — 1 à 2 $ le passage | reco Claude |
+| 28/11/2026 | **La séparation des voix est un critère de choix du transcripteur, pas une dépense à décider** : `gpt-4o-transcribe` ne sait pas la faire à aucun prix, et le moins cher de ceux qui savent coûte **moins** que lui. De −1,5 ¢ à +17 ¢ par carnet. Le vrai travail est après — une voix séparée s'appelle « locuteur 1 », pas « Maÿlis » (T317) | reco Claude |
 
 ## Sources
 

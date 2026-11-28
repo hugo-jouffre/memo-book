@@ -3,6 +3,7 @@ import type { AppContext } from "../context.js";
 import { bookCoversOf, coverPhotoEntryIds } from "../services/bookCovers.js";
 import { currentBookFingerprint } from "../services/bookFingerprint.js";
 import { applyBookSettings, keepsPhotos } from "../services/bookSettings.js";
+import { firstNameOf } from "../services/conversationThread.js";
 import { calendarDate } from "../services/localCalendar.js";
 import { validatePayload } from "../services/payloadValidator.js";
 import {
@@ -220,8 +221,24 @@ export async function structureRender(
             // est le repli de l'en-tête quand le vocal n'en dit pas. Ce n'est
             // pas une déduction, c'est le lieu de cette étape-là.
             step: { select: { placeName: true, destinationName: true, livedFromDay: true } },
+            /**
+             * **Qui raconte ce souvenir** (T317) : le compte qui a envoyé le
+             * vocal, c'est-à-dire la première bulle de voyageur qui porte ce
+             * souvenir. Même règle que ``narratorOf`` côté rédaction, et même
+             * prénom que celui que le fil affiche sur la bulle
+             * (``firstNameOf``) — le carnet et la conversation doivent
+             * nommer la même personne de la même façon.
+             */
+            chatMessages: {
+              where: { author: "traveller", accountId: { not: null } },
+              orderBy: { seq: "asc" },
+              take: 1,
+              select: { account: { select: { firstName: true, lastName: true } } },
+            },
           },
         },
+        /** Le repli de ``narrator`` : un souvenir sans bulle est au propriétaire. */
+        owner: { select: { firstName: true, lastName: true } },
         // Les deux plats du carnet lisent le voyage : les étapes et les pays
         // traversés font les chiffres du dos, les photos importées font les
         // couvertures (`services/bookCovers.ts`).
@@ -286,6 +303,10 @@ export async function structureRender(
         // Le lieu de l'étape qui porte ce souvenir, quand il y en a une
         // (T267) — et le seul qui nomme une journée depuis T308.
         stepPlace: entry.step?.placeName?.trim() || entry.step?.destinationName?.trim() || null,
+        // **Qui raconte** (T317). Le carnet ne le dira que s'il a plusieurs
+        // voix : c'est `structuring.ts` qui en décide, lui seul voyant tous
+        // les souvenirs à la fois.
+        narrator: firstNameOf(entry.chatMessages[0]?.account ?? null) ?? firstNameOf(memo.owner),
         photoUrl,
         // Ce qu'on a mesuré de la photo à son arrivée (T265) : c'est ce qui
         // départage les photos d'une étape quand la page n'en dessine qu'une
