@@ -6,6 +6,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.nullable
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
@@ -14,8 +15,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.JsonUnquotedLiteral
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.math.BigDecimal
 import java.net.URI
@@ -113,6 +116,39 @@ object UriSerializer : KSerializer<URI> {
 
     override fun serialize(encoder: Encoder, value: URI) {
         encoder.encodeString(value.toString())
+    }
+}
+
+/**
+ * **Le `try?` de Swift sur une adresse** : illisible ou d'un autre type, elle
+ * vaut `null` au lieu de faire tomber la réponse entière.
+ *
+ * Pour ce qui n'est qu'un ornement — la couverture du petit livre (T297) —,
+ * jamais pour une adresse dont l'écran a besoin : celles-là passent par
+ * [UriSerializer], et une erreur se voit.
+ */
+object LenientUriSerializer : KSerializer<URI?> {
+    @OptIn(ExperimentalSerializationApi::class)
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("com.memobook.core.LenientURI", PrimitiveKind.STRING).nullable
+
+    override fun deserialize(decoder: Decoder): URI? {
+        val raw = (decoder as? JsonDecoder)?.decodeJsonElement() as? JsonPrimitive ?: return null
+        // **Un nombre n'est pas une adresse**, et `URI("42")` en est pourtant
+        // une pour Java : c'est une référence relative. Swift refuse la
+        // valeur parce qu'elle n'est pas une chaîne, et les deux apps doivent
+        // retomber sur le même `null`.
+        if (!raw.isString) return null
+        val text = raw.contentOrNull ?: return null
+        return try {
+            URI(text)
+        } catch (_: URISyntaxException) {
+            null
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: URI?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeString(value.toString())
     }
 }
 

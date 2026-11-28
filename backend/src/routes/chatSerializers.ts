@@ -536,6 +536,40 @@ export type MemoForChat = Memo & {
 };
 
 /**
+ * **Le petit livre qui dépasse du bord** — T297.
+ *
+ * « Un petit livre dépasse du bord, en haut à droite, et sautille quand
+ * l'aperçu se met à jour — la porte d'entrée du PDF » (Hugo, 28/11/2026). Il
+ * **évolue** : d'abord nu, avec le nombre d'étapes qui le séparent de sa
+ * couverture ; puis la couverture s'affiche, et le livre s'épaissit.
+ *
+ * ⚠️ **La couverture existe bien avant qu'on la montre.** La photo élue du
+ * voyage est choisie dès la première photo reçue : si le livre la portait
+ * tout de suite, il n'aurait plus rien à devenir, et le voyageur n'aurait
+ * aucune raison d'illustrer ses étapes. Le serveur la retient donc jusqu'à
+ * ``COVER_AFTER_STEPS``, et c'est **lui** qui décide — l'app ne refait pas le
+ * calcul, elle lit `coverUrl` et `stepsBeforeCover`.
+ *
+ * **Une étape « avec photos » est une étape qui a une photo élue**
+ * (`steps.coverEntryId`), ce que `refreshTripFacts` pose dès qu'une photo s'y
+ * range. Rien à charger de plus : les étapes sont déjà là pour les étoiles.
+ */
+export const COVER_AFTER_STEPS = 4;
+
+export function bookDoorOf(memo: MemoForChat, publicBaseUrl: string) {
+  const withPhotos = memo.steps.filter((step) => step.coverEntryId !== null).length;
+  if (withPhotos < COVER_AFTER_STEPS) {
+    return { coverUrl: null, stepsBeforeCover: COVER_AFTER_STEPS - withPhotos };
+  }
+  return {
+    // La même photo que l'en-tête du fil : celle choisie à la main, sinon
+    // celle que le voyage a élue.
+    coverUrl: memo.coverPhotoUrl ?? displayablePhotoUrl(publicBaseUrl, memo.entries?.[0]?.media) ?? null,
+    stepsBeforeCover: null,
+  };
+}
+
+/**
  * **Les deux étoiles d'un carnet** (T270) : la photo principale du voyage, et
  * celles des étapes. Lues une fois par réponse, puis posées sur chaque photo —
  * voir ``SerializeMessageOptions.cover``.
@@ -774,7 +808,13 @@ export function serializeChatThread(options: SerializeThreadOptions) {
     // Un voyage sans souvenir n'a pas de carnet à annoncer : la bannière reste absente.
     preview:
       options.memoryCount > 0
-        ? { memoryCount: options.memoryCount, pageCount, isOpenable: options.hasReadyRender }
+        ? {
+            memoryCount: options.memoryCount,
+            pageCount,
+            isOpenable: options.hasReadyRender,
+            // Le petit livre et son âge (T297).
+            ...bookDoorOf(memo, options.publicBaseUrl),
+          }
         : null,
     context: {
       tripId: memo.id,
@@ -872,7 +912,12 @@ export function serializeChatUpdate(options: {
     tripContext: serializeTripContext(tripContext),
     preview:
       options.memoryCount > 0
-        ? { memoryCount: options.memoryCount, pageCount, isOpenable: options.hasReadyRender }
+        ? {
+            memoryCount: options.memoryCount,
+            pageCount,
+            isOpenable: options.hasReadyRender,
+            ...bookDoorOf(options.memo, options.publicBaseUrl),
+          }
         : null,
     turn: options.turn,
     // Rendu à chaque sondage : un co-voyageur raconte peut-être en même temps,

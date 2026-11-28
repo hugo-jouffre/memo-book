@@ -29,6 +29,7 @@ import {
   type RedactionResult,
 } from "../src/services/redaction.js";
 import { photoBudgetFor } from "../src/services/photoBudget.js";
+import { COVER_AFTER_STEPS } from "../src/routes/chatSerializers.js";
 import {
   CONTEXT_COMPLETE,
   CONTEXT_INVITATION,
@@ -398,7 +399,15 @@ describe("lire le fil", () => {
     // Dans l'ordre des dates, pas de l'écriture.
     expect(thread.messages[1]?.body).toEqual({ kind: "text", text: "Premier jour à Bogotá." });
     expect(thread.messages[1]?.disposition).toBe("memory");
-    expect(thread.preview).toEqual({ memoryCount: 2, pageCount: 4, isOpenable: false });
+    // Le petit livre est encore nu (T297) : aucune étape n'a de photo, et il
+    // en faut quatre pour que la couverture paraisse.
+    expect(thread.preview).toEqual({
+      memoryCount: 2,
+      pageCount: 4,
+      isOpenable: false,
+      coverUrl: null,
+      stepsBeforeCover: COVER_AFTER_STEPS,
+    });
 
     const again = await readThread(memo.id);
     expect(again.messages).toHaveLength(5);

@@ -260,6 +260,39 @@ final class ChatModelTests: XCTestCase {
         )
     }
 
+    // MARK: - Le petit livre (T297)
+
+    /// **Le serveur décide de l'âge du livre**, l'app le lit : la couverture
+    /// qu'il retient tant que le carnet n'a pas ses étapes illustrées, et le
+    /// décompte que l'étiquette annonce.
+    func testTheBookReadsItsAgeFromTheServer() throws {
+        let json = """
+        {"memoryCount":3,"pageCount":6,"isOpenable":false,
+         "coverUrl":"https://cdn.memo-book.com/cover.jpg","stepsBeforeCover":null}
+        """
+        let couvert = try JSONDecoder().decode(ChatBookPreview.self, from: Data(json.utf8))
+        XCTAssertEqual(couvert.coverUrl?.absoluteString, "https://cdn.memo-book.com/cover.jpg")
+        XCTAssertNil(couvert.stepsBeforeCover)
+        XCTAssertFalse(couvert.isOpenable)
+
+        let nu = try JSONDecoder().decode(
+            ChatBookPreview.self,
+            from: Data(#"{"memoryCount":1,"pageCount":2,"isOpenable":true,"stepsBeforeCover":3}"#.utf8)
+        )
+        XCTAssertNil(nu.coverUrl)
+        XCTAssertEqual(nu.stepsBeforeCover, 3)
+    }
+
+    /// Une adresse illisible laisse le livre nu — elle ne fait pas tomber
+    /// l'aperçu, ni le fil avec lui.
+    func testAnUnreadableCoverLeavesTheBookBare() throws {
+        let json = #"{"memoryCount":4,"pageCount":9,"isOpenable":true,"coverUrl":42}"#
+        let preview = try JSONDecoder().decode(ChatBookPreview.self, from: Data(json.utf8))
+
+        XCTAssertNil(preview.coverUrl)
+        XCTAssertEqual(preview.pageCount, 9)
+    }
+
     // MARK: - Les pastilles (T296)
 
     /// Une bulle de MEMO qui attend une validation : c'est elle qui offre

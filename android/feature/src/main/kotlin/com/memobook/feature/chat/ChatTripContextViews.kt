@@ -62,7 +62,7 @@ import com.memobook.feature.home.CardPressStyle
  * ligne, et ce qui manque encore.
  *
  * Capsule bleue : c'était aussi, jusqu'au 15/10/2026, le dessin de la bannière
- * de l'aperçu ([ChatPreviewBanner]), pour que les deux se lisent comme la même
+ * de l'aperçu, pour que les deux se lisent comme la même
  * famille d'objets — un état du carnet, pas un message. L'autre est passée au
  * crème, parce qu'elle **flotte sur le fil** et s'y fondait ; celle-ci est
  * posée dans la marge de l'en-tête, et le bleu n'y concurrence aucune bulle.
