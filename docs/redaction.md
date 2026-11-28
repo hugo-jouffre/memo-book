@@ -143,6 +143,64 @@ Clara, Tom).
 
 ## 4. Journal
 
+### 28/11/2026 — Combler un oubli : mesuré, puis retiré (T291)
+
+Hugo : « La rédaction comble les oublis sans demander : un nom de lieu,
+d'hôtel, un mot de vocabulaire que le voyageur cherche et n'a pas dit. Le récit
+en sort plus complet et plus naturel. ⚠️ À border — c'est la frontière avec
+l'invention. »
+
+**La règle a été écrite, mesurée, et retirée.** Elle n'est pas dans le prompt :
+`agents/agent-transcription.md` est resté tel qu'il était. Ce qui suit est la
+trace de la tentative, pour qu'on ne la refasse pas à l'aveugle.
+
+**La frontière qu'on avait retenue** : ce que *ce carnet-ci* sait déjà. Le
+prompt autorise trois sources (le récit, les métadonnées vérifiables, la
+culture générale — celle-ci à l'encart seulement) ; la règle en ajoutait une
+quatrième, la fiche de cohérence, le contexte du voyage et les trois dernières
+étapes, qui sont **déjà** dans la requête de rédaction. Elle autorisait dans le
+récit deux gestes et deux seulement : **nommer ce que le voyageur cherche**
+quand le carnet porte déjà le nom (« le petit resto d'hier soir » → son nom
+s'il est dans `places`), et **dire le mot qu'il décrit sans le trouver** quand
+sa description ne laisse aucun doute (« le truc en verre au-dessus de la
+gare » → « la verrière »). Avec quatre interdits explicites : pas de nom
+plausible, pas de complément depuis la culture générale, pas de nom pour ce
+qu'il n'a pas décrit, pas d'arbitrage entre deux candidats de la fiche.
+
+**Ce que le banc a dit** (`avant-t291` → `apres-t291`, claude-opus-5 effort
+`high`, règles `2a7f8ef02c` → `a631df7552`, rapport
+`.redaction-eval/avant-t291-vs-apres-t291-relu.md`) :
+
+| Critère | avant | après | |
+|---|---|---|---|
+| intention | 4.2 | 4.1 | −0,1 |
+| fluidite | 4.2 | 3.9 | **−0,3** |
+| fidelite | 3.4 | 3.7 | +0,3 |
+| voix | 3.7 | 4.0 | +0,3 |
+| francais | 4.3 | 4.0 | **−0,3** |
+
+Pièges ratés : **4 avant, 5 après**.
+
+**Aucun nom inventé** côté « après » — le garde-fou tenait. Mais deux dérives
+nouvelles, de la même famille : « On s'est consolés avec le coucher de soleil »
+(un lien de consolation que le voyageur ne fait pas, il juxtapose) et
+« L'objectif du jour, c'était un pantalon en lin pour Maxime » (un détail promu
+en intention de la journée). C'est le défaut propre à une règle qui autorise à
+relier : elle fait relier un cran trop loin.
+
+**Et surtout, le gain visé n'a jamais été mis à l'épreuve.** Le corpus des neuf
+vocaux (`test/fixtures/redaction/grece-maxime.json`) ne contient **aucun cas**
+où le voyageur cherche un nom : zéro « je sais plus », « j'ai oublié », « le
+truc », « comment ça s'appelle ». La seule occurrence de « s'appelle » est un
+nom que Maxime **donne** (« la plage qui s'appelle la plage Hawaii »). Les
+écarts mesurés ne sont donc que les effets de bord de la règle, pas son effet.
+
+**Pour rouvrir le ticket, il faut de la matière** : deux ou trois vocaux réels
+où quelqu'un cherche un nom, dans un **jeu séparé**. Pas un dixième vocal
+inventé dans le corpus des neuf — il perdrait sa valeur de ligne de base de
+non-régression. Avec ce jeu, la règle se mesure là où elle agit, et les neuf
+continuent de dire ce qu'elle casse ailleurs.
+
 ### 26/11/2026 (nuit) — Le jour que le récit raconte (T308)
 
 Le carnet datait une étape du moment où on en avait **parlé**. Un vocal du
@@ -788,5 +846,6 @@ Prime) et ajoutait des bons mots (« une sieste stratégique »).
 | 23/10/2026 | Dans l'atelier, encarts et quiz restent à l'analyse d'étape : une seule source par carnet | reco Claude |
 | 23/10/2026 | La rédaction de l'atelier a son propre fournisseur : `claude-opus-5`, comme l'app, pendant que le découpage reste sur OpenAI | Hugo |
 | 02/10/2026 | Toute modification des règles se mesure sur le banc, avant et après ; l'historique s'écrit ici, jamais dans le prompt | Hugo, reco Claude |
+| 28/11/2026 | Combler un oubli reste **interdit** : la règle a été écrite et mesurée (−0,3 fluidité, −0,3 français, un piège de plus), et le corpus ne l'exerçait pas — elle n'entre pas dans le prompt (T291) | Hugo, reco Claude |
 | 02/11/2026 | La page écrite se lit et se corrige dans l'atelier **avant** la génération, pas dans le PDF | Hugo |
 | 02/11/2026 | Le texte imprimé part dans le JSON exporté (`texte`, `texte_source`), à côté des vocaux | Hugo |
