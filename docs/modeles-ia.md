@@ -12,6 +12,15 @@
 > Réécrit le 23/09/2026 : **il n'y a plus de compte OpenAI** (Hugo). Deux postes
 > pointaient dessus, et l'argument « c'est déjà dans la maison » — qui pesait
 > dans la version précédente — ne vaut plus rien.
+>
+> ⚠️ **À vérifier, 28/11/2026** : cette phrase est datée du 23/09, et deux faits
+> plus récents la contredisent. Les deux juges de photos (T265) n'appellent le
+> modèle que si `OPENAI_API_KEY` est renseignée — sans elle ils rendent un
+> jugement aveugle — et le journal note « **mesuré en production le 24/11** :
+> 60 photos réelles notées, de 15 à 91 ». Soit une clé est en service depuis,
+> soit cette mesure n'a pas été faite en production. Tout le § 1 repose sur
+> cette phrase : il faut trancher laquelle des deux est vraie avant de s'y
+> appuyer encore.
 
 ## 1. Le point de départ : un second fournisseur n'est pas un choix
 
@@ -205,6 +214,74 @@ Trois leviers, dans cet ordre :
 
 Relevé sur `developers.openai.com/api/docs/guides/images` et
 `/api/docs/pricing`, consultés le 23/11/2026.
+
+#### Ce que la pertinence coûte vraiment, le garde-fou posé (28/11/2026, T311)
+
+T311 attend un « choix d'argent » depuis le 23/11, et le chiffre qui le bloque
+est **1,59 $ par carnet**. Ce chiffre est celui d'**avant le garde-fou**.
+
+Il se relit dans le tableau ci-dessus : 0,047 ¢ × 109 photos = 5,1 ¢, et
+5,1 ¢ × 31 compositions = 1,59 $. Autrement dit, il suppose que **toutes** les
+photos sont jugées à **chaque** composition. Or `etapesQuiDebordent`, posé le
+même jour, ne fait juger que les photos des étapes **dont la page ne dessine
+pas tout**. La facture réelle n'a jamais été reprise avec lui.
+
+**Ce n'est pas une remise, c'est une marche.** Simulé avec le monteur
+déterministe du dépôt, sur 109 photos réparties également, en faisant varier
+le nombre de photos par journée :
+
+| photos par journée | étapes qui débordent | photos jugées | sur 31 compositions |
+|---|---|---|---|
+| 1 à 5 | **aucune** | 0 | **0,00 $** |
+| 6 | 18 | 108 sur 109 | 1,57 $ |
+| 8 | 13 | 104 | 1,52 $ |
+| 10 | 11 | 109 | 1,59 $ |
+| 15 | 7 | 105 | 1,53 $ |
+
+**Le seuil est à six, et il s'explique.** Les gabarits dessinent une à trois
+photos, mais `completerEtapesImpaires` ajoute aux étapes impaires une page de
+photos qui en montre **cinq** : le surplus y est absorbé tant qu'il tient. À
+partir de la sixième photo d'une journée, l'étape déborde pour de bon, et
+alors ce sont **toutes** ses photos qui partent chez le juge, pas seulement le
+surplus — d'où le passage brutal de 0 à presque tout.
+
+**La décision tient donc à une seule question mesurable** : les carnets
+portent-ils six photos par journée, ou moins ? À moins de six, la pertinence
+est déjà gratuite et il n'y a rien à décider. À six et plus, elle coûte le
+plein tarif annoncé, et c'est là qu'il faut trancher.
+
+```sql
+-- La part des photos qui tombe dans une journée de six photos ou plus.
+SELECT CASE WHEN photos >= 6 THEN 'six et plus' ELSE 'moins de six' END AS journee,
+       count(*) AS journees,
+       sum(photos) AS photos
+FROM (
+  SELECT e."memoId",
+         date(coalesce(s."livedFromDay", e."capturedAt")) AS jour,
+         count(*) AS photos
+    FROM entries e
+    LEFT JOIN memo_steps s ON s.id = e."stepId"
+   WHERE e.kind = 'photo'
+   GROUP BY 1, 2
+) parJour
+GROUP BY 1;
+```
+
+⚠️ **Deux réserves.** La simulation passe par le **repli déterministe** ; en
+production c'est un modèle qui choisit les gabarits, et ses choix décalent le
+seuil sans le déplacer de beaucoup, les gabarits étant les mêmes. Et le carnet
+de référence s'appelle « 100 jours de miel » pour 109 photos : s'il les porte
+à raison d'une par jour, la pertinence ne lui coûte **rien** depuis le 23/11 —
+mais si elles sont groupées sur quelques journées, elle lui coûte le plein
+tarif. La requête ci-dessus le dit en une fois.
+
+**Et un levier, si la réponse est « six et plus ».** La note se refait à
+chaque composition parce qu'elle dépend du couple photo-texte. Mais entre deux
+compositions d'un même carnet, ce qui change est le plus souvent la **mise en
+page**, pas le récit : le texte d'une journée est le même, redécoupé
+autrement. Une note gardée contre le texte des **souvenirs** de la journée, et
+non contre celui de la page composée, se paierait une fois ou deux au lieu de
+trente-et-une — soit 5 à 10 ¢ au lieu de 1,59 $, sans rien perdre du jugement.
 
 ## 3. Ce qui tranche vraiment
 
@@ -407,6 +484,7 @@ cd backend && npm run redaction:eval -- --compare opus-5 opus-5-5 --judge
 | 17/11/2026 | **Chaque appel au modèle écrit ce qu'il a consommé** (`services/modelUsage.ts`) : une ligne par appel, posée au pied de l'appel plutôt que remontée par les types, et **avant** les gardes — un appel qui bute au plafond est facturé comme les autres. Elle porte l'entrée, la sortie (réflexion comprise), le cache lu et écrit, et `headroomPercent` : la marge qui restait sous le plafond, avec une alerte sous 20 %. C'est ce rapport qui aurait annoncé la panne ci-dessus au lieu de la subir. Les **prix ne sont pas dans le code** : ils vivent au § 2, et une constante de tarif oubliée mentirait longtemps. Les six appels payés sont couverts — cinq sites de code, le rédacteur en servant deux : récit, relevé, réponse, contexte, journée manquante, thème | reco Claude |
 | 20/11/2026 | **L'écrivain peut dire qu'il n'ose pas écrire un nom propre** (`namesToConfirm`), et MEMO en fait une question dans le fil. Aucun appel de plus : un champ dans un schéma qui partait déjà. Il répond à T282 — un prénom imprimé au jugé entrait dans la fiche de cohérence et se répétait sur tout le carnet. Le champ est vide dans presque tous les souvenirs, et il faut que ça le reste : la bulle des doutes a été retirée le 16/11 parce qu'à chaque souvenir elle sonnait comme un refus. **Le banc n'a pas tourné dessus** : la fréquence du doute, et sa justesse, restent à mesurer — 1 à 2 $ le passage | reco Claude |
 | 20/11/2026 | **L'écrivain dit maintenant QUAND chaque moment d'un récit découpé a été vécu** (`day`, `partOfDay` dans `REDACTION_SCHEMA`). Aucun appel de plus, aucun modèle de plus : deux champs dans un schéma qui partait déjà. Ils répondent à T279 — les souvenirs gardaient l'ordre du vocal parce qu'on ne demandait à personne quand ils avaient eu lieu. Les deux valent `null` le plus souvent, et le code s'en remet alors à l'ordre du récit, comme avant. **Le banc n'a pas encore tourné dessus** : la fréquence à laquelle l'écrivain ose situer un moment, et sa justesse quand il le fait, restent à mesurer — 1 à 2 $ le passage | reco Claude |
+| 28/11/2026 | **Le « 1,59 $ » de la pertinence est le chiffre d'avant le garde-fou** : il suppose toutes les photos jugées à chaque composition. Avec `etapesQuiDebordent`, c'est une marche — **0 $ en dessous de six photos par journée, plein tarif au-dessus**. Une requête tranche, et un levier (garder la note contre le texte des souvenirs, pas de la page) ramènerait le plein tarif à 5-10 ¢ (T311) | reco Claude |
 
 ## Sources
 
