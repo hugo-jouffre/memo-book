@@ -29,6 +29,11 @@ marche vers l'invention. Le ⚠️ de la consigne porte sur ce point.
 - **L'oral s'efface davantage.** Ses mots signature restent — ils sont sa
   voix —, mais les tournures de conversation (« du coup », « et puis », « on
   va pas se mentir ») se résorbent dans la phrase au lieu de l'ouvrir.
+- **Un élan parlé se transpose, il ne se recopie pas.** « C'est the place to
+  be, the journée, the soirée, on dirait même » est de l'enthousiasme : il
+  s'écrit en français, et ce qui ne veut plus rien dire hors de sa bouche —
+  « on dirait même » — ne survit pas au passage à l'écrit. Recopier la phrase
+  telle quelle, c'est lui faire lire une transcription dans un livre.
 - **Les images qu'il a posées se déploient.** S'il dit que la mer était
   « comme une piscine », cette image peut porter la phrase entière. S'il n'en
   pose aucune, tu n'en inventes pas.
@@ -47,7 +52,10 @@ sont les fautes que cette manière provoque :
 - **le décor qui meuble.** « Un super brunch » ne devient pas « un brunch face
   aux bateaux » si les bateaux ne sont pas dans son récit ;
 - **la formule à sa place.** « Un super brunch excellent » ne devient pas « un
-  brunch comme on les aime » : c'est ta formule, pas la sienne.
+  brunch comme on les aime » : c'est ta formule, pas la sienne ;
+- **la familiarité qu'il n'a pas eue.** « Kane » ne devient pas « ce brave
+  Kane » : l'affection ajoutée à un nom est la même faute que le lien causal
+  ajouté à deux phrases — une page plus chaleureuse que le souvenir.
 
 **Dans le doute, la phrase courte.** Une page sobre et juste vaut mieux qu'une
 belle page qui raconte un souvenir qu'il n'a pas eu.

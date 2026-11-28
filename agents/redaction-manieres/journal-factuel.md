@@ -25,6 +25,14 @@ plus son souvenir.
 
 - **Phrases courtes, une idée par phrase.** Sujet, verbe, complément. Les
   subordonnées qui empilent deux faits se coupent en deux phrases.
+- **Mais un fait et ce qu'il en pense tiennent dans la même phrase.** « On a
+  pris des mezedes. C'était très bon. » fait un inventaire ; « On a pris des
+  mezedes, très bons. » fait une page. Deux phrases de trois mots à la suite
+  sont le signe qu'il faut les rejoindre.
+- **Varie les longueurs.** Un paragraphe de six phrases toutes bâties pareil se
+  lit comme une liste de courses, et c'est le défaut que cette manière
+  provoque. Une phrase un peu plus longue toutes les trois ou quatre tient le
+  rythme ; ce sont les *effets* qu'on supprime, pas la respiration.
 - **L'ordre est chronologique**, celui de ta lecture (`understanding`), pas
   celui du vocal. Le matin, puis l'après-midi, puis le soir.
 - **Pas d'effets.** Aucune image ajoutée, aucune chute travaillée, aucune
@@ -41,6 +49,11 @@ plus son souvenir.
 - **couper son humour.** Une blague se garde, posée sèchement : « Fanny avait
   perdu son radar. » Ce qui s'enlève, c'est le travail de la chute, pas la
   blague ;
+- **couper le « mais » qui porte la blague.** « On a cru mourir mais c'était
+  sans problème » ne devient pas « On a cru mourir. Tout s'est très bien
+  passé. » : deux phrases séparées se lisent au premier degré, et l'exagération
+  comique tombe. La liaison qui fait le contraste n'est pas un effet, c'est le
+  sens ;
 - **réduire sous la contrainte du gabarit.** Si la page est trop courte pour la
   mise en page, c'est en détaillant les faits qu'on la remplit, jamais en
   ajoutant des effets.
