@@ -499,6 +499,46 @@ li { margin: 0; }
 .mb-note--ink-title .mb-note__title { color: var(--mb-ink); }
 .mb-note--black-title .mb-note__title { color: var(--mb-black); }
 
+/* --- Qui raconte (T317) ----------------------------------------------------
+   Le prénom de celui qui raconte, quand le voyage se raconte à plusieurs. Il
+   paraît au changement de voix, et en tête de chaque page ; le serveur décide
+   où (`services/structuring.ts`), et lui seul — le gabarit ne fait que
+   l'habiller.
+
+   **Il garde le corps du récit**, et c'est un choix. La taille est le seul
+   levier de distinction de cette main (voir `.mb-note__title` : la graisse
+   n'existe pas dans Gloria Hallelujah, et la faire calculer par Chromium
+   sortait le texte en police de type 3). Mais deux corps différents dans une
+   même boîte de ligne ne posent pas leur ligne de base au même endroit, et il
+   faut alors les remonter d'une constante mesurée. Un prénom n'a pas besoin de
+   ça : **l'encre suffit** à le distinguer du récit, qui est noir, et au même
+   corps sa ligne de base est celle du récit, sans correction.
+
+   Une ligne pleine, et la ligne vide que `.mb-note p` met derrière chaque
+   paragraphe : deux lignes en tout, exactement ce que le serveur retire de la
+   capacité de la page avant d'y verser le récit (`ATTRIBUTION_COST`). La
+   réglure n'est donc jamais rompue. */
+.mb-note__qui {
+  /* Même encre et même corps que le récit : le nom est de la même main, il
+     n'est pas d'une autre voix typographique. Ce qui le distingue est son
+     **poids d'encre**, comme un nom écrit plus légèrement en marge, et le
+     deux-points qui en fait une étiquette plutôt qu'une ligne de récit.
+
+     ⚠️ **Mesuré sur un carnet rendu, et deux pistes écartées.** L'encre seule
+     ne suffisait pas : le récit est déjà bleu, si bien qu'un prénom à la même
+     opacité se lisait comme une ligne de texte égarée. Le soulignement, lui,
+     est l'idiome de l'emphase de cette maison (`.mb-note strong`, faute de
+     graisse disponible) : le reprendre pour une étiquette mêlerait deux sens,
+     et le trait entre en concurrence avec la réglure pointillée qui passe
+     juste dessous. */
+  opacity: 0.55;
+  line-height: var(--mb-line); /* un interligne pile, comme le corps */
+  letter-spacing: 0.06em;
+}
+/* Posé par le gabarit et non par le serveur : il ne compte alors pas dans la
+   longueur du récit, que le validateur mesure sur le texte. */
+.mb-note__qui::after { content: "\00A0:"; }
+
 /* --- Bandeau de journée : ruban « jour NN » + lieu + date ------------------ */
 .mb-header {
   position: relative;
