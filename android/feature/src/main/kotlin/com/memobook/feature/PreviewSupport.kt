@@ -957,6 +957,12 @@ internal class PreviewApi(
                 is TripSettingsEdit.NotificationPreferences -> settings.copy(notifications = edit.value)
                 is TripSettingsEdit.Theme -> settings.copy(theme = edit.value)
                 is TripSettingsEdit.PublicGallery -> settings.copy(isPublicGallery = edit.value)
+                is TripSettingsEdit.RedactionMannerEdit ->
+                    settings.copy(
+                        redaction = settings.redactionSettings.copy(storedManner = edit.value.rawValue),
+                    )
+                is TripSettingsEdit.RedactionNotes ->
+                    settings.copy(redaction = settings.redactionSettings.copy(notes = edit.value))
             }
         }
 
@@ -985,6 +991,13 @@ internal class PreviewApi(
             settings.copy(customisation = customisation.applying(edit))
         }
     }
+
+    /**
+     * « Tout faire reprendre » (T292) : le double accepte et relit, puisque la
+     * route est rejouable et ne refuse qu'à qui n'est pas abonné — et le bac à
+     * sable l'est.
+     */
+    override suspend fun rewriteRedaction(tripId: String): TripSettings = SettingsBox.read()
 
     override suspend fun rewritePageTarget(tripId: String): TripSettings {
         if (!SettingsBox.read().pageTargetAllowance.rewriteAvailable) {

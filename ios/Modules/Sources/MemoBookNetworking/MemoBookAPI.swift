@@ -480,6 +480,16 @@ public protocol MemoBookAPI: Sendable {
     /// réécriture pour le même changement.
     func rewritePageTarget(tripId: String) async throws -> TripSettings
 
+    /// **Fait reprendre tout le carnet** dans la manière en cours —
+    /// `POST /v1/trips/:id/redaction/rewrite`, sans corps (T292). Le serveur
+    /// répond `202` avec les réglages relus et travaille en arrière-plan.
+    ///
+    /// Contrairement à ``rewritePageTarget(tripId:)``, **il est rejouable** :
+    /// ici le geste *est* la demande, il n'est pas la conséquence d'un réglage
+    /// touché. Il refuse (`402 redaction_manner_needs_unlimited`) à qui n'est
+    /// pas abonné sur un carnet de plus d'une étape.
+    func rewriteRedaction(tripId: String) async throws -> TripSettings
+
     /// Retire un co-voyageur du voyage, et relit les réglages.
     ///
     /// **Le propriétaire ne se retire pas** : le serveur refuse, et l'app ne le

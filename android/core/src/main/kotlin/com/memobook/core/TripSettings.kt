@@ -270,11 +270,25 @@ data class TripSettings(
      * que d'inventer un prix.
      */
     var printPricing: PrintPricing? = null,
+
+    /**
+     * **La manière d'être rédigé** du carnet, et le droit d'en changer —
+     * T292, bloc `redaction` de la route.
+     *
+     * Optionnel : un serveur plus ancien ne le sert pas, et l'écran lit alors
+     * [redactionSettings], qui rend un réglage **fermé**. C'est le refus
+     * sûr — mieux vaut une ligne qui mène au paywall qu'un réglage que le
+     * serveur refusera.
+     */
+    var redaction: RedactionSettings? = null,
 ) {
     val id: String get() = tripId
 
     /** Ce que l'écran lit : ce que le serveur a servi, ou rien de compté. */
     val pageTargetAllowance: PageTargetAllowance get() = pageTarget ?: PageTargetAllowance.unrestricted
+
+    /** Ce que l'écran lit : ce que le serveur a servi, ou un réglage fermé. */
+    val redactionSettings: RedactionSettings get() = redaction ?: RedactionSettings.closed
 
     /**
      * « @clara_prn, @ana.prn » — les co-voyageurs en bout de ligne.
@@ -320,4 +334,16 @@ sealed interface TripSettingsEdit {
     data class NotificationPreferences(val value: TripNotificationPreferences) : TripSettingsEdit
     data class Theme(val value: String) : TripSettingsEdit
     data class PublicGallery(val value: Boolean) : TripSettingsEdit
+
+    /**
+     * **La manière d'être rédigé** (T292). L'envoyer fait reprendre tout le
+     * carnet côté serveur : l'écran prévient **avant**.
+     */
+    data class RedactionMannerEdit(val value: RedactionManner) : TripSettingsEdit
+
+    /**
+     * Les indications libres du voyageur. `null` les efface, et c'est pour ça
+     * que ce cas porte un nullable plutôt qu'une chaîne vide.
+     */
+    data class RedactionNotes(val value: String?) : TripSettingsEdit
 }

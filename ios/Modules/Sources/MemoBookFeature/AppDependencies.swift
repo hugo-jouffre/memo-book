@@ -632,6 +632,9 @@ public final class AppDependencies {
             tripId: tripId,
             source: { _ in try await read() },
             persist: { [api] id, edit in try await api.updateTripSettings(id: id, edit: edit) },
+            // `POST /v1/trips/:id/redaction/rewrite` : tout faire reprendre
+            // dans la manière en cours, sans rien changer (T292).
+            rewriteRedaction: { [api] id in try await api.rewriteRedaction(tripId: id) },
             removeCompanion: { [api] id, companionId in
                 try await api.removeCompanion(tripId: id, companionId: companionId)
             },

@@ -143,6 +143,182 @@ Clara, Tom).
 
 ## 4. Journal
 
+### 28/11/2026 — Choisir sa manière d'être rédigé (T292)
+
+Hugo : « Choisir sa manière d'être rédigé, dans la personnalisation du
+carnet : plusieurs façons proposées, plus ses propres indications. Changer de
+méthode annonce que tout va être repris, et c'est réservé aux abonnés
+illimités — sauf carnet d'une seule étape. »
+
+**Trois manières, plus un champ libre** (Hugo, 28/11/2026, sur trois jeux
+proposés) :
+
+| Clé | Nom affiché | Ce qu'elle change |
+|---|---|---|
+| `spoken` *(défaut)* | Comme je parle | **Rien** — c'est la rédaction telle qu'elle est |
+| `literary` | Récit littéraire | Phrases plus amples, l'oral s'efface davantage |
+| `factual` | Journal factuel | Court, chronologique, sans effets |
+
+Les fiches sont dans `agents/redaction-manieres/`, une par manière, lues et non
+recopiées — comme `agent-transcription.md`. Ce qui part au modèle est la
+section `## Consigne` de la fiche, et elle seule : le reste est de la
+documentation pour nous.
+
+**Le contrat, et c'est la seule chose à retenir : une manière ne relâche aucune
+règle.** Elle règle le registre — longueur des phrases, ce qui survit de
+l'oral, place des images. Elle ne touche ni la fidélité, ni la frontière
+récit / encart, ni la fiche de cohérence, ni le schéma de sortie, ni ce que le
+voyageur a corrigé à la main. Une manière qui aurait besoin d'assouplir l'une
+de ces lignes n'est pas une manière : c'est une autre rédaction, et ça se
+décide dans `agent-transcription.md`, le banc à la main.
+
+⚠️ **`spoken` n'injecte rien dans le prompt**, et c'est le cœur du dispositif.
+Un carnet qui n'a jamais touché au réglage doit être rédigé **exactement**
+comme avant T292, à l'octet près — si cette manière écrivait sa propre
+consigne, même fidèle, il faudrait rejouer le banc pour prouver qu'elle ne
+change rien, alors qu'il suffit de ne rien écrire pour en être sûr. C'est aussi
+ce qui garde la ligne de base du banc intacte : le passage `avant` d'une
+comparaison **est** cette manière. Seules `literary` et `factual` demandent un
+passage.
+
+**Les indications du voyageur sont secondes, et le prompt dit leur rang.** Le
+champ libre (`Memo.redactionNotes`, 600 caractères) part sous « Ce que le
+voyageur demande en plus », suivi d'une phrase qui dit qu'une indication
+contredisant une règle **ne s'applique pas**. Sans elle, « invente ce qui
+manque » aurait été un contournement des règles par le champ libre — et c'est
+exactement la faute que T291 venait de mesurer.
+
+**Changer de manière reprend tout le carnet**, par `jobs/rewriteTrip.ts`, qui
+existait déjà pour les changements de cible de pages : une étape à la fois,
+dans l'ordre du récit, et les souvenirs corrigés à la main ne sont pas
+touchés. La reprise part **au changement**, sans drapeau à un coup, parce que
+l'app a prévenu avant — c'est là que le consentement est donné. Une manière
+réécrite à l'identique ne reprend rien.
+
+⚠️ **La manière n'entre pas dans l'empreinte du carnet** (`bookFingerprint.ts`),
+et c'est un choix : elle change le livre, mais elle le change *en réécrivant
+les souvenirs*, dont la dernière modification est déjà dans l'empreinte. L'y
+mettre aussi la ferait bouger à la seconde où le réglage est enregistré,
+pendant que la reprise tourne encore — la composition partirait sur un carnet à
+moitié repris.
+
+**Le réglage est réservé aux abonnés illimités, sauf carnet d'une seule
+étape** (`services/redactionMannerAccess.ts`, une fonction pure). La raison est
+le coût : un appel au modèle par étape déjà écrite. Sur un carnet d'une étape —
+ou vide — la reprise ne coûte qu'un appel, et un paywall y serait posé sur
+rien. Le refus est un **402** et non un 403 : ce n'est pas un droit qui manque,
+c'est un abonnement, et l'app ouvre le paywall sur ce code. ⚠️ **L'app ne
+refait pas le calcul** : la route sert `redaction.isAvailable` et sa raison, et
+l'app les lit — deux règles à tenir d'accord auraient fini par divergir.
+
+#### Le banc des deux manières (28/11/2026)
+
+Hugo : « Oui, lance le banc. » Deux passages payants, `literary` et `factual`,
+sur les neuf vocaux de Maxime. `spoken` n'en demande aucun : l'essai à blanc du
+prompt montre qu'il rend un texte **identique à l'octet** au témoin, donc le
+passage `avant-t291` de la veille *est* ce passage-là — mêmes règles
+`2a7f8ef02c`, même modèle, même effort `high`. Une passe économisée, et ce
+n'est pas une économie de confort : c'est la raison pour laquelle le défaut
+n'injecte rien.
+
+⚠️ **Et le témoin, relu deux fois sur les mêmes textes, a donné le bruit du
+relecteur — gratuitement.** C'est la mesure qui manquait à tous les bancs
+précédents :
+
+| Critère | témoin, 1<sup>re</sup> lecture | témoin, 2<sup>e</sup> lecture |
+|---|---|---|
+| intention | 4,2 | 4,1 |
+| fluidité | 4,0 | 4,1 |
+| fidélité | 3,6 | 3,6 |
+| voix | 3,7 | 3,6 |
+| français | 4,4 | 4,3 |
+
+Soit **±0,1 sur quatre critères sur cinq**, et ±5 sur le nombre de défauts
+cités (59 puis 54 pour les mêmes neuf textes). **Un écart de moins de 0,2 ne
+veut rien dire**, et il faut le dire avant de lire les tableaux qui suivent.
+Cela vaut aussi pour la veille : le −0,3 de T291 ne dépassait ce bruit que
+d'un cheveu. Son refus ne tenait pas aux notes — il tenait au fait que le
+corpus n'exerçait pas la règle, et ça, ça reste vrai.
+
+**Récit littéraire** — notes, puis ce qu'elles cachent :
+
+| Critère | témoin | `literary` |
+|---|---|---|
+| intention | 4,2 | 4,2 |
+| fluidité | 4,0 | 3,9 |
+| fidélité | 3,6 | 3,8 |
+| voix | 3,7 | **3,9** |
+| français | 4,4 | **4,0** |
+
+Défauts cités : 59 contre 56 — égal, au bruit près. Pièges ratés : 6 contre 6.
+
+Tout est dans le bruit sauf le **français, −0,4**. Et l'égalité des pièges est
+trompeuse : ce ne sont **pas les mêmes six**. La manière *répare* trois pièges
+que le témoin rate — l'autocorrection à voix haute de l'étape 12, le mot
+« chtarbés », et surtout **le cœur de l'étape 13**, cuisiner avec la famille
+grecque, que le témoin laisse disparaître. Elle en casse deux :
+
+- **« C'est the place to be, the journée, the soirée, on dirait même »**,
+  recopié tel quel. Le corpus dit « son enthousiasme, à rendre en français ».
+  Le témoin y arrivait. La manière qui promet que « l'oral s'efface davantage »
+  a fait exactement l'inverse à l'endroit où on la jugeait là-dessus ;
+- **« ce brave Kane »**, une affection ajoutée à un nom. C'est la famille de
+  dérive que T291 avait fait apparaître — pas la phrase, la famille. J'ai écrit
+  trop vite, en première lecture, que les dérives étaient absentes : les deux
+  phrases de T291 le sont, le genre de faute ne l'est pas, il s'est déplacé.
+
+Les deux sont nommés dans la fiche. **Le français reste à surveiller** : les
+tournures lourdes que le relecteur cite (« avec tant de vagues que la traversée
+en est devenue laborieuse », « où l'on s'est installés ») sont le coût d'une
+phrase ample, et −0,4 est au-dessus du bruit.
+
+**Journal factuel** :
+
+| Critère | témoin | `factual` |
+|---|---|---|
+| intention | 4,1 | 3,9 |
+| fluidité | 4,1 | **3,0** |
+| fidélité | 3,6 | 3,8 |
+| voix | 3,6 | 3,4 |
+| français | 4,3 | 4,2 |
+
+Défauts cités : 54 contre 64. Pièges ratés : 6 contre **5**.
+
+**−1,1 de fluidité, dix fois le bruit**, et le relecteur nomme la même cause
+dans sept étapes sur neuf : « staccato mécanique », « effet de liste »,
+« inventaire de corvées ». La faute est dans ma consigne, pas dans le modèle :
+« Phrases courtes, une idée par phrase. Sujet, verbe, complément » donne
+« On a pris des mezedes. C'était très bon. » — un fait, puis son appréciation,
+en deux phrases de quatre mots. Répété six fois, un paragraphe devient une
+liste de courses. Deuxième effet, plus grave : la liaison qui porte une blague
+saute. « On a cru mourir mais c'était sans problème » devient « On a cru
+mourir. Tout s'est très bien passé. », et l'exagération comique se lit au
+premier degré.
+
+**À noter pour la mise en page : « journal factuel » n'est pas une page plus
+courte.** 899 caractères de moyenne contre 854 au témoin, un paragraphe de plus,
+zéro étape hors barème. Les phrases raccourcissent, la page non.
+
+**Décidé.** Les deux fiches sont corrigées — l'élan parlé qui se transpose et
+la familiarité ajoutée pour `literary` ; le fait et son appréciation dans la
+même phrase, les longueurs qui varient et le « mais » qui porte la blague pour
+`factual`. ⚠️ **Ces corrections ne sont pas mesurées**, et celle de `factual`
+est une réécriture de son rythme, pas un ajout : offrir cette manière sans un
+second passage, c'est proposer au voyageur une page dont on sait qu'elle se
+lisait comme un inventaire. Un passage coûte 1 à 2 $.
+
+**Second passage reporté** — Hugo, 28/11/2026 : « Plus tard ». T292 part donc
+avec une consigne `factual` réécrite et non mesurée, et c'est un choix, pas un
+oubli : la manière est offerte dans l'app, et la seule chose qu'on sait de son
+rythme vient de la version d'avant correction. À relancer avant de la mettre
+devant les bêta-testeurs :
+
+```bash
+cd backend && npm run redaction:eval -- --manner factual --label t292-factuel-relu
+```
+
+puis `npm run redaction:eval -- --compare avant-t291 t292-factuel-relu --judge`.
+
 ### 28/11/2026 — Combler un oubli : mesuré, puis retiré (T291)
 
 Hugo : « La rédaction comble les oublis sans demander : un nom de lieu,
@@ -846,6 +1022,9 @@ Prime) et ajoutait des bons mots (« une sieste stratégique »).
 | 23/10/2026 | Dans l'atelier, encarts et quiz restent à l'analyse d'étape : une seule source par carnet | reco Claude |
 | 23/10/2026 | La rédaction de l'atelier a son propre fournisseur : `claude-opus-5`, comme l'app, pendant que le découpage reste sur OpenAI | Hugo |
 | 02/10/2026 | Toute modification des règles se mesure sur le banc, avant et après ; l'historique s'écrit ici, jamais dans le prompt | Hugo, reco Claude |
+| 28/11/2026 | Le voyageur choisit **comment** il est rédigé : trois manières plus ses indications, et changer reprend tout le carnet. Une manière ne relâche aucune règle, et le défaut n'injecte rien (T292) | Hugo |
+| 28/11/2026 | Les deux manières sont **mesurées** : `literary` coûte 0,4 de français et répare le cœur de l'étape 13 ; `factual` perd 1,1 de fluidité (effet de liste, 7 étapes sur 9). Les deux fiches sont corrigées, les corrections restent à mesurer (T292) | reco Claude |
+| 28/11/2026 | Le témoin relu deux fois donne le **bruit du relecteur** : ±0,1 sur quatre critères, ±5 défauts. Un écart sous 0,2 ne se lit plus comme un résultat | reco Claude |
 | 28/11/2026 | Combler un oubli reste **interdit** : la règle a été écrite et mesurée (−0,3 fluidité, −0,3 français, un piège de plus), et le corpus ne l'exerçait pas — elle n'entre pas dans le prompt (T291) | Hugo, reco Claude |
 | 02/11/2026 | La page écrite se lit et se corrige dans l'atelier **avant** la génération, pas dans le PDF | Hugo |
 | 02/11/2026 | Le texte imprimé part dans le JSON exporté (`texte`, `texte_source`), à côté des vocaux | Hugo |

@@ -96,6 +96,8 @@ enum class TripSettingsSheet {
     Theme,
     Companions,
     DailyCredit,
+    /** **La manière d'être rédigé** du carnet (T292) — voir `RedactionMannerSheet`. */
+    Redaction,
 }
 
 // MARK: - Les intentions

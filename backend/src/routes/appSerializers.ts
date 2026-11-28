@@ -1018,6 +1018,13 @@ export function serializeTripSettings(
   storyStarted = false,
   /** Ce que le carnet peut atteindre, ratio par ratio (`reachablePageRangeByRatio`). */
   reachable: Record<number, { min: number; max: number }> | null = null,
+  /**
+   * Le droit de choisir sa manière d'être rédigé (T292, `mannerAccess`) —
+   * calculé par la route, qui seule connaît l'abonnement et le nombre
+   * d'étapes. Faux par défaut : un appelant qui ne le passe pas sert un
+   * réglage fermé, ce qui est le refus sûr.
+   */
+  mannerAccess: { allowed: boolean; reason: string } = { allowed: false, reason: "needs_unlimited" },
 ) {
   const isOwner = memo.ownerAccountId === viewerAccountId;
   return {
@@ -1094,6 +1101,20 @@ export function serializeTripSettings(
     // ne garde aucune copie et, servie par un serveur plus ancien qui ne
     // l'envoie pas, elle se tait au lieu d'inventer un prix.
     printPricing: serializePrintPricing(),
+    // **La manière d'être rédigé** (T292). `manner` est la clé telle qu'elle
+    // est en base : `null` veut dire « personne n'a choisi », et l'app affiche
+    // alors « Comme je parle » avec sa pastille « par défaut » — les deux ne se
+    // distinguent qu'ici, le serveur les traite pareil (`mannerOf`).
+    //
+    // `isAvailable` dit si le réglage est ouvert, et `reason` pourquoi : l'app
+    // pâlit le réglage et mène au paywall sur `needs_unlimited`, sans
+    // recalculer la règle de son côté.
+    redaction: {
+      manner: memo.redactionManner,
+      notes: memo.redactionNotes,
+      isAvailable: mannerAccess.allowed,
+      reason: mannerAccess.reason,
+    },
     // « Supprimer la conversation » n'appartient qu'au propriétaire, comme
     // supprimer le voyage (`docs/conversation.md` § 7). L'app pâlit le lien et
     // explique ; le serveur refuse quand même (`DELETE /v1/trips/:id/chat`).

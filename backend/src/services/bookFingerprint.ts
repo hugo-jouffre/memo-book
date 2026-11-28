@@ -39,6 +39,14 @@ import type { Prisma, PrismaClient } from "@prisma/client";
  * seconde de retard. Ni les réglages qui ne touchent pas au livre
  * (notifications, rythme, lien de partage, galerie).
  *
+ * ⚠️ **Ni la manière d'être rédigé** (T292), et c'est un choix, pas un oubli.
+ * Elle change bel et bien le livre — mais elle le change *en réécrivant les
+ * souvenirs*, et leur dernière modification est déjà dans l'empreinte. L'y
+ * mettre aussi la ferait bouger **à la seconde où le réglage est enregistré**,
+ * pendant que `rewriteTrip` tourne encore : la composition partirait sur un
+ * carnet à moitié repris. En la laissant dehors, l'empreinte suit les
+ * souvenirs, donc la reprise, donc l'état réel du texte.
+ *
  * **Trop prudente plutôt que pas assez** : un « Ça me convient » sur un
  * souvenir touche sa date de modification sans changer une lettre du carnet,
  * et relance donc une composition. C'est le prix d'une empreinte qui se calcule

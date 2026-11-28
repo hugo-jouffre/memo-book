@@ -146,6 +146,7 @@ public struct TripSettingsView: View {
             case .notifications: TripNotificationsSheet(model: model)
             case .theme: TripThemeSheet(model: model)
             case .companions: TripInviteSheet(model: model)
+            case .redaction: RedactionMannerSheet(model: model)
             case .dailyCredit:
                 DailyCreditSheet(
                     model: model,
@@ -308,6 +309,16 @@ public struct TripSettingsView: View {
                     isValueLoading: isLoading,
                     action: { onIntent(.openCustomisation) }
                 )
+                // **La manière d'être rédigé**, juste sous le style (T292) :
+                // l'une dit comment le livre se dessine, l'autre comment il
+                // s'écrit. La ligne se montre à tout le monde — c'est la
+                // feuille qui pâlit ses options pour qui n'est pas abonné.
+                BrandRow(
+                    BookCopy.Settings.redaction,
+                    value: redactionLabel,
+                    isValueLoading: isLoading,
+                    action: { sheet = .redaction }
+                )
             }
 
             // **À venir** (Hugo, 08/10/2026), comme les connecteurs du
@@ -456,8 +467,22 @@ public struct TripSettingsView: View {
 
     // MARK: - Les deux interrupteurs
 
+    /// La valeur posée en bout de la ligne « Manière d'être rédigé » : la
+    /// manière en cours, suivie d'un point quand des indications s'y ajoutent —
+    /// la ligne dit ainsi qu'il y a plus à voir, sans recopier le texte.
+    private var redactionLabel: String {
+        guard let redaction = model.settings?.redaction else { return BookCopy.Settings.noValue }
+        let name: String
+        switch redaction.manner {
+        case .spoken: name = BookCopy.Settings.Redaction.spoken
+        case .literary: name = BookCopy.Settings.Redaction.literary
+        case .factual: name = BookCopy.Settings.Redaction.factual
+        }
+        return redaction.notes == nil ? name : "\(name) ·"
+    }
+
     /// Les liaisons passent par le modèle et non par `settings` : une vue ne
-    /// doit pas pouvoir poser une valeur sans qu'elle partie au serveur.
+    /// doit pas pouvoir poser une valeur sans qu'elle parte au serveur.
     /// La ligne relit le nom du modèle, et lui rend ce qu'on a tapé en sortant
     /// du champ. Voir ``TripSettingsModel/setName(_:)``.
     private var nameBinding: Binding<String> {

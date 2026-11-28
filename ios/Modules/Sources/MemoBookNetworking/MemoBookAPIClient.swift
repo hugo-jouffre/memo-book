@@ -933,6 +933,13 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "POST", path: "/v1/trips/\(tripId)/page-target/rewrite")
     }
 
+    /// **Tout faire reprendre, sans rien changer** (T292) — le bouton de
+    /// l'abonné. Rejouable, contrairement à la reprise d'un changement de
+    /// cible, qui est à un coup.
+    public func rewriteRedaction(tripId: String) async throws -> TripSettings {
+        try await send(method: "POST", path: "/v1/trips/\(tripId)/redaction/rewrite")
+    }
+
     public func removeCompanion(tripId: String, companionId: String) async throws -> TripSettings {
         try await send(method: "DELETE", path: "/v1/trips/\(tripId)/members/\(companionId)")
     }
@@ -978,6 +985,12 @@ public actor MemoBookAPIClient: MemoBookAPI {
         var freeZonesEnabled: Bool?
         var crosswordEnabled: Bool?
 
+        var redactionManner: String?
+        /// Les indications s'effacent par `null`, donc elles portent leur
+        /// propre drapeau de présence — même raison que les dates.
+        var redactionNotes: String?
+        var editsNotes = false
+
         init(_ edit: TripSettingsEdit) {
             switch edit {
             case .name(let value): name = value
@@ -990,6 +1003,13 @@ public actor MemoBookAPIClient: MemoBookAPI {
             case .notificationPreferences(let preferences): notifications = preferences
             case .theme(let value): theme = value
             case .publicGallery(let isOn): isPublicGallery = isOn
+            case .redactionManner(let manner): redactionManner = manner.rawValue
+            case .redactionNotes(let notes):
+                // Vide vaut effacé : un champ qu'on a vidé au clavier ne doit
+                // pas enregistrer une chaîne de blancs.
+                let trimmed = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+                redactionNotes = (trimmed?.isEmpty ?? true) ? nil : trimmed
+                editsNotes = true
             }
         }
 
@@ -1022,6 +1042,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
             case photoTextRatio, targetPageCount, funFactsEnabled, rulesEnabled, decorationQuota
             case fontDisplay, fontTitle, fontHand, fontFacts
             case quizEnabled, freeZonesEnabled, crosswordEnabled
+            case redactionManner, redactionNotes
         }
 
         func encode(to encoder: any Encoder) throws {
@@ -1051,6 +1072,11 @@ public actor MemoBookAPIClient: MemoBookAPI {
             try container.encodeIfPresent(quizEnabled, forKey: .quizEnabled)
             try container.encodeIfPresent(freeZonesEnabled, forKey: .freeZonesEnabled)
             try container.encodeIfPresent(crosswordEnabled, forKey: .crosswordEnabled)
+            try container.encodeIfPresent(redactionManner, forKey: .redactionManner)
+            // `null` efface les indications, et `encodeIfPresent` ne l'écrirait
+            // jamais : le drapeau distingue « je n'en parle pas » de « il n'y
+            // en a plus ».
+            if editsNotes { try container.encode(redactionNotes, forKey: .redactionNotes) }
         }
     }
 
