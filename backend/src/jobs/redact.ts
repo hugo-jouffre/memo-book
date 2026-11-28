@@ -241,6 +241,11 @@ export async function redactEntry(
         // étapes suivantes, et pour celles qu'on réécrit (`rewriteTrip.ts`).
         targetPageCount: memo.targetPageCount,
         photoTextRatio: memo.photoTextRatio,
+        // La manière d'être rédigé et les indications du voyageur (T292).
+        // Changer l'une des deux reprend tout le carnet (`rewriteTrip.ts`) :
+        // les étapes déjà écrites repassent ici avec la nouvelle manière.
+        redactionManner: memo.redactionManner,
+        redactionNotes: memo.redactionNotes,
       },
       narrator,
       entry: {

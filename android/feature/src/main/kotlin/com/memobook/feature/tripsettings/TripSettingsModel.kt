@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.memobook.core.BookCopy
 import com.memobook.core.DailyCredit
 import com.memobook.core.NarrationPace
+import com.memobook.core.RedactionManner
 import com.memobook.core.TripNotificationPreferences
 import com.memobook.core.TripSettings
 import com.memobook.core.TripSettingsEdit
@@ -65,6 +66,12 @@ class TripSettingsModel(
     private val persist: (suspend (String, TripSettingsEdit) -> TripSettings)? = null,
     private val removeCompanion: (suspend (String, String) -> TripSettings)? = null,
     private val resendInvitation: (suspend (String, String) -> Unit)? = null,
+    /**
+     * `POST /v1/trips/:id/redaction/rewrite` — « Tout faire reprendre »
+     * (T292). Absent en aperçu : le bouton ne fait alors rien, comme les
+     * autres actions de réseau.
+     */
+    private val rewriteRedaction: (suspend (String) -> TripSettings)? = null,
     delete: (suspend (String) -> Unit)? = null,
     clearConversation: (suspend (String) -> Unit)? = null,
     private val cached: CachedValue<TripSettings>? = null,
@@ -118,6 +125,8 @@ class TripSettingsModel(
         val justSaved: SavedField? = null,
         val themes: List<TripTheme> = emptyList(),
         val unreceivedCostMs: Int = 0,
+        /** Une reprise est en route — le temps que le serveur réponde `202`. */
+        val isRewritingRedaction: Boolean = false,
     ) {
         /**
          * `true` tant qu'on n'a pas de valeurs. L'écran se dessine quand même :
@@ -368,6 +377,59 @@ class TripSettingsModel(
         val current = _state.value.settings ?: return
         _state.update { it.copy(settings = current.copy(notifications = preferences)) }
         save(TripSettingsEdit.NotificationPreferences(preferences))
+    }
+
+    // MARK: - La manière d'être rédigé (T292)
+
+    /**
+     * Choisit la manière, et **reprend tout le carnet**.
+     *
+     * ⚠️ L'écran prévient **avant** d'appeler ça : le serveur ne redemande
+     * rien, il relance la rédaction de chaque étape dès que le réglage change.
+     * Une manière réécrite à l'identique ne reprend rien — c'est le serveur qui
+     * compare, pas l'app, mais on évite le voyage pour rien.
+     */
+    fun setRedactionManner(manner: RedactionManner) {
+        val current = _state.value.settings ?: return
+        val redaction = current.redactionSettings
+        if (redaction.manner == manner) return
+        _state.update {
+            it.copy(settings = current.copy(redaction = redaction.copy(storedManner = manner.rawValue)))
+        }
+        save(TripSettingsEdit.RedactionMannerEdit(manner))
+    }
+
+    /** Enregistre les indications libres. `null` ou vide les efface. */
+    fun setRedactionNotes(notes: String?) {
+        val current = _state.value.settings ?: return
+        val next = notes?.trim()?.takeIf { it.isNotEmpty() }
+        val redaction = current.redactionSettings
+        if (redaction.notes == next) return
+        _state.update { it.copy(settings = current.copy(redaction = redaction.copy(notes = next))) }
+        save(TripSettingsEdit.RedactionNotes(next))
+    }
+
+    /**
+     * **Tout faire reprendre, sans rien changer.**
+     *
+     * Rejouable, contrairement à la reprise d'un changement de cible : ici le
+     * geste *est* la demande. L'écran prévient avant, comme pour un changement
+     * de manière — c'est le même travail et le même temps.
+     */
+    fun rewriteRedaction() {
+        val call = rewriteRedaction ?: return
+        if (_state.value.isRewritingRedaction) return
+        _state.update { it.copy(isRewritingRedaction = true) }
+        viewModelScope.launch {
+            try {
+                val updated = call(tripId)
+                _state.update { it.copy(settings = updated, errorMessage = null, errorAdvice = null) }
+            } catch (error: Throwable) {
+                report(error)
+            } finally {
+                _state.update { it.copy(isRewritingRedaction = false) }
+            }
+        }
     }
 
     // MARK: - Les co-voyageurs

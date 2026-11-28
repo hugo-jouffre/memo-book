@@ -6,6 +6,7 @@ import { logModelUsage } from "./modelUsage.js";
 import { loadWritingRules } from "../lib/templates.js";
 import { EDITORIAL_LIMITS, STEP_SIZES } from "./payloadValidator.js";
 import { localDate, type LocalDate } from "./localCalendar.js";
+import { mannerBlock } from "./redactionManners.js";
 
 /**
  * Passe de rédaction — étape 2 du pipeline, entre la transcription et la mise
@@ -189,6 +190,18 @@ export interface RedactionInput {
     targetPageCount?: number | null;
     /** Le ratio photo / texte : les paliers de la cible en dépendent (`pageTarget.ts`). */
     photoTextRatio?: number | null;
+    /**
+     * La manière d'être rédigé choisie par le voyageur — T292,
+     * `services/redactionManners.ts`. `null` et une clé inconnue valent
+     * `spoken`, la manière par défaut, qui n'ajoute rien au prompt.
+     */
+    redactionManner?: string | null;
+    /**
+     * Ses indications libres. Elles entrent **après** la manière, et le prompt
+     * dit leur rang : une indication qui contredirait une règle de rédaction
+     * ne s'applique pas.
+     */
+    redactionNotes?: string | null;
   };
   /**
    * Qui raconte. Sans lui, l'écrivain prend le voyageur qui parle de lui à la
@@ -1492,6 +1505,13 @@ export function buildRedactionPrompt(input: RedactionInput): string {
       );
     }
   }
+
+  // La manière d'être rédigé se pose juste avant la matière : c'est la
+  // dernière consigne que l'écrivain lit avant la transcription. Elle est
+  // absente du prompt quand le voyageur n'a rien choisi et n'a rien écrit —
+  // le prompt est alors celui d'avant T292, à l'octet près.
+  const manner = mannerBlock({ manner: memo.redactionManner, notes: memo.redactionNotes });
+  if (manner) lines.push("", manner);
 
   lines.push("", "## L'étape à rédiger");
   if (entry.step) {

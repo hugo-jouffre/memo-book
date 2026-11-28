@@ -629,6 +629,9 @@ class MemoBookApiClient(
     override suspend fun rewritePageTarget(tripId: String): TripSettings =
         send("POST", "/v1/trips/$tripId/page-target/rewrite")
 
+    override suspend fun rewriteRedaction(tripId: String): TripSettings =
+        send("POST", "/v1/trips/$tripId/redaction/rewrite")
+
     override suspend fun removeCompanion(tripId: String, companionId: String): TripSettings =
         send("DELETE", "/v1/trips/$tripId/members/$companionId")
 
@@ -925,6 +928,12 @@ class MemoBookApiClient(
                 )
             is TripSettingsEdit.Theme -> put("theme", edit.value)
             is TripSettingsEdit.PublicGallery -> put("isPublicGallery", edit.value)
+            is TripSettingsEdit.RedactionMannerEdit -> put("redactionManner", edit.value.rawValue)
+            // `null` efface les indications : la clé s'écrit **toujours**,
+            // comme les deux dates, parce que son absence voudrait dire « je
+            // n'en parle pas » et non « il n'y en a plus ».
+            is TripSettingsEdit.RedactionNotes ->
+                put("redactionNotes", edit.value?.let { JsonPrimitive(it) } ?: JsonNull)
         }
     }
 

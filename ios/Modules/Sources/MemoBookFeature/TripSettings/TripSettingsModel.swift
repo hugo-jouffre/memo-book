@@ -31,6 +31,11 @@ public final class TripSettingsModel {
     private let source: (String) async throws -> TripSettings
     private let persist: ((String, TripSettingsEdit) async throws -> TripSettings)?
 
+    /// `POST /v1/trips/:id/redaction/rewrite` — « Tout faire reprendre »
+    /// (T292). Absent en aperçu : le bouton ne fait alors rien, comme les
+    /// autres actions de réseau.
+    private let rewriteRedactionCall: ((String) async throws -> TripSettings)?
+
     /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
     private let cached: CachedValue<TripSettings>?
 
@@ -106,6 +111,7 @@ public final class TripSettingsModel {
         tripId: String,
         source: @escaping (String) async throws -> TripSettings = { _ in .fixture },
         persist: ((String, TripSettingsEdit) async throws -> TripSettings)? = nil,
+        rewriteRedaction: ((String) async throws -> TripSettings)? = nil,
         removeCompanion: ((String, String) async throws -> TripSettings)? = nil,
         resendInvitation: ((String, String) async throws -> Void)? = nil,
         delete: ((String) async throws -> Void)? = nil,
@@ -118,6 +124,7 @@ public final class TripSettingsModel {
         self.tripId = tripId
         self.source = source
         self.persist = persist
+        self.rewriteRedactionCall = rewriteRedaction
         self.removeCompanion = removeCompanion
         self.resendInvitation = resendInvitation
         self.remove = delete
@@ -391,6 +398,59 @@ public final class TripSettingsModel {
         current.notifications = preferences
         settings = current
         save(.notificationPreferences(preferences))
+    }
+
+    // MARK: - La manière d'être rédigé (T292)
+
+    /// Choisit la manière, et **reprend tout le carnet**.
+    ///
+    /// ⚠️ L'écran prévient **avant** d'appeler ça : le serveur ne redemande
+    /// rien, il relance la rédaction de chaque étape dès que le réglage change.
+    /// Une manière réécrite à l'identique ne reprend rien — c'est le serveur
+    /// qui compare, pas l'app, mais on évite le voyage pour rien.
+    public func setRedactionManner(_ manner: RedactionManner) {
+        guard var current = settings else { return }
+        var redaction = current.redactionSettings
+        guard redaction.manner != manner else { return }
+        redaction.chosenManner = manner
+        current.redaction = redaction
+        settings = current
+        save(.redactionManner(manner))
+    }
+
+    /// Enregistre les indications libres. `nil` ou vide les efface.
+    public func setRedactionNotes(_ notes: String?) {
+        guard var current = settings else { return }
+        let trimmed = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let next = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        var redaction = current.redactionSettings
+        guard redaction.notes != next else { return }
+        redaction.notes = next
+        current.redaction = redaction
+        settings = current
+        save(.redactionNotes(next))
+    }
+
+    /// Une reprise est en route — le temps que le serveur réponde `202`.
+    public private(set) var isRewritingRedaction = false
+
+    /// **Tout faire reprendre, sans rien changer.**
+    ///
+    /// Rejouable, contrairement à la reprise d'un changement de cible : ici le
+    /// geste *est* la demande. L'écran prévient avant, comme pour un changement
+    /// de manière — c'est le même travail et le même temps.
+    public func rewriteRedaction() {
+        guard let rewriteRedactionCall, !isRewritingRedaction else { return }
+        isRewritingRedaction = true
+        Task {
+            defer { isRewritingRedaction = false }
+            do {
+                settings = try await rewriteRedactionCall(tripId)
+                clearError()
+            } catch {
+                report(error)
+            }
+        }
     }
 
     // MARK: - Les co-voyageurs

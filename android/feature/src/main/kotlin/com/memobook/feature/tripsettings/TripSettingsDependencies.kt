@@ -22,6 +22,9 @@ fun AppDependencies.tripSettingsModel(tripId: String): TripSettingsModel {
         persist = { id, edit -> api.updateTripSettings(id = id, edit = edit) },
         removeCompanion = { id, companionId -> api.removeCompanion(tripId = id, companionId = companionId) },
         resendInvitation = { id, companionId -> api.resendInvitation(tripId = id, companionId = companionId) },
+        // `POST /v1/trips/:id/redaction/rewrite` : tout faire reprendre dans
+        // la manière en cours, sans rien changer (T292).
+        rewriteRedaction = { id -> api.rewriteRedaction(tripId = id) },
         // La seule sans retour : `DELETE /v1/memos/:id`, que le serveur
         // réserve au propriétaire. L'écran demande confirmation avant.
         delete = { id -> api.deleteMemo(id = id) },

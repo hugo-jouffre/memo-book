@@ -358,6 +358,7 @@ fun TripSettingsView(
             TripSettingsSheet.Notifications -> TripNotificationsSheet(model)
             TripSettingsSheet.Theme -> TripThemeSheet(model)
             TripSettingsSheet.Companions -> TripInviteSheet(model, inviteBase)
+            TripSettingsSheet.Redaction -> RedactionMannerSheet(model)
             TripSettingsSheet.DailyCredit -> DailyCreditSheet(
                 model = model,
                 onSubscribe = {
@@ -514,6 +515,16 @@ private fun AdventureSection(
                 value = settings?.styleSummary ?: BookCopy.Settings.noValue,
                 isValueLoading = isLoading,
                 action = { onIntent(TripSettingsIntent.OpenCustomisation) },
+            )
+            // **La manière d'être rédigé**, juste sous le style (T292) : l'une
+            // dit comment le livre se dessine, l'autre comment il s'écrit. La
+            // ligne se montre à tout le monde — c'est la feuille qui pâlit ses
+            // options pour qui n'est pas abonné.
+            +BrandRow(
+                BookCopy.Settings.redaction,
+                value = redactionLabel(settings),
+                isValueLoading = isLoading,
+                action = { onSheet(TripSettingsSheet.Redaction) },
             )
         }
 

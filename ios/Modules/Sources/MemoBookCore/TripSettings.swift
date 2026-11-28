@@ -281,6 +281,18 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// que d'inventer un prix.
     public var printPricing: PrintPricing?
 
+    /// **La manière d'être rédigé** du carnet, et le droit d'en changer —
+    /// T292, bloc `redaction` de la route.
+    ///
+    /// Optionnel : un serveur plus ancien ne le sert pas, et l'écran lit alors
+    /// ``redactionSettings``, qui rend un réglage **fermé**. C'est le refus
+    /// sûr — mieux vaut une ligne qui mène au paywall qu'un réglage que le
+    /// serveur refusera.
+    public var redaction: RedactionSettings?
+
+    /// Ce que l'écran lit : ce que le serveur a servi, ou un réglage fermé.
+    public var redactionSettings: RedactionSettings { redaction ?? RedactionSettings() }
+
     public init(
         tripId: String,
         name: String,
@@ -301,7 +313,8 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         isPrintable: Bool = false,
         customisation: BookCustomisation? = nil,
         pageTarget: PageTargetAllowance? = nil,
-        printPricing: PrintPricing? = nil
+        printPricing: PrintPricing? = nil,
+        redaction: RedactionSettings? = nil
     ) {
         self.tripId = tripId
         self.name = name
@@ -323,6 +336,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         self.customisation = customisation
         self.pageTarget = pageTarget
         self.printPricing = printPricing
+        self.redaction = redaction
     }
 
     /// « @clara_prn, @ana.prn » — les co-voyageurs en bout de ligne.
@@ -362,4 +376,10 @@ public enum TripSettingsEdit: Sendable, Hashable {
     case notificationPreferences(TripNotificationPreferences)
     case theme(String)
     case publicGallery(Bool)
+    /// **La manière d'être rédigé** (T292). L'envoyer fait reprendre tout le
+    /// carnet côté serveur : l'écran prévient **avant**.
+    case redactionManner(RedactionManner)
+    /// Les indications libres du voyageur. `nil` les efface, et c'est pour ça
+    /// que ce cas porte un optionnel plutôt qu'une chaîne vide.
+    case redactionNotes(String?)
 }

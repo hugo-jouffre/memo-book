@@ -47,6 +47,78 @@ object BookCopy {
         const val publicGallery = "Partager sur la galerie de la communauté"
         const val style = "Style du carnet"
 
+        /**
+         * « Manière d'être rédigé » — la ligne qui ouvre [Redaction] (T292).
+         * Juste sous « Style du carnet » : l'une dit comment le livre se
+         * dessine, l'autre comment il s'écrit.
+         */
+        const val redaction = "Manière d’être rédigé"
+
+        /**
+         * **La manière d'être rédigé** (T292) — la feuille qui porte les trois
+         * manières, le champ d'indications, et « Tout faire reprendre ».
+         *
+         * Les clés sont dans [RedactionManner] ; les fiches qui pilotent
+         * vraiment le modèle sont dans `agents/redaction-manieres/`. Ce qui est
+         * ici est ce que le voyageur lit, et les deux n'ont pas à bouger
+         * ensemble.
+         */
+        object Redaction {
+            const val title = "Manière d’être rédigé"
+            const val subtitle =
+                "Choisis comment MemoBook écrit ton carnet. Tu peux changer d’avis : tout le carnet sera repris."
+
+            const val spoken = "Comme je parle"
+            const val spokenDetail =
+                "Le carnet garde ta façon de raconter : tes mots, ton humour, tes images."
+            const val literary = "Récit littéraire"
+            const val literaryDetail =
+                "Des phrases plus amples, moins d’oral, le souvenir raconté comme une page de livre."
+            const val factual = "Journal factuel"
+            const val factualDetail =
+                "Ce qui s’est passé, dans l’ordre, en quelques phrases. Pas d’effets de style."
+
+            /**
+             * La pastille sur la manière qu'on n'a pas choisie : c'est celle de
+             * tout le monde tant qu'on ne touche à rien.
+             */
+            const val byDefault = "Par défaut"
+
+            const val notesTitle = "Tes indications"
+            const val notesPlaceholder =
+                "« Appelle-moi Max », « pas de surnoms », « garde mes expressions »…"
+
+            /**
+             * Dit la limite **et** le rang : une indication ne passe pas devant
+             * les règles de rédaction, et le voyageur doit le savoir avant
+             * d'écrire « invente ce qui manque ».
+             */
+            const val notesHelp =
+                "Quelques mots sur la façon de t’écrire. MemoBook n’inventera jamais ce que tu n’as pas raconté, même si tu le demandes."
+
+            /**
+             * L'avertissement **avant** le changement : c'est là que le
+             * consentement est donné, le serveur ne le redemande pas.
+             */
+            object Confirm {
+                const val title = "Reprendre tout le carnet ?"
+                const val body =
+                    "Chaque étape déjà écrite sera rédigée à nouveau dans cette manière. Ce que tu as corrigé à la main ne sera pas touché. Ça prend quelques minutes."
+                const val keep = "Annuler"
+                const val go = "Reprendre le carnet"
+            }
+
+            const val rewrite = "Tout faire reprendre"
+            const val rewriteDetail = "Repasse le carnet dans la manière en cours, sans rien changer."
+
+            /**
+             * La notice sous le réglage pâli : la cause **et** la sortie, comme
+             * le demande `ios/CLAUDE.md`.
+             */
+            const val needsUnlimited =
+                "Changer de manière fait reprendre tout ton carnet, et c’est réservé à l’illimité. Passe en illimité pour choisir."
+        }
+
         const val tricountTitle = "Connecte ton Tricount"
         const val tricountMessage =
             "MemoBook pourra déduire tes étapes et t’aider à raconter des souvenirs à partir de tes dépenses"

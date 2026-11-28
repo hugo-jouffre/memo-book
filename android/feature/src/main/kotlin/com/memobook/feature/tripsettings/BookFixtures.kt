@@ -6,6 +6,7 @@ import com.memobook.core.BookPreview
 import com.memobook.core.BookPreviewStatus
 import com.memobook.core.DailyCredit
 import com.memobook.core.NarrationPace
+import com.memobook.core.RedactionSettings
 import com.memobook.core.TripSettings
 import java.time.Instant
 import java.time.LocalDate
@@ -67,6 +68,11 @@ internal val TripSettings.Companion.fixture: TripSettings
         // l'émulateur, poser ici l'URL d'un PDF de carnet.
         isPrintable = true,
         customisation = BookCustomisation.fixture,
+        // **La manière d'être rédigé** (T292) : personne n'a choisi — la
+        // pastille « Par défaut » sur « Comme je parle » —, et le réglage est
+        // **ouvert**, parce que le bac à sable est celui d'un abonné dès qu'on
+        // bascule la persona. C'est l'état où la feuille se regarde.
+        redaction = RedactionSettings(isAvailable = true, storedReason = "unlimited"),
     )
 
 /**

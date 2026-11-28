@@ -26,6 +26,14 @@ import { PHOTO_RATIOS } from "../services/photoRatio.js";
 import { stageFromDates } from "../services/tripStage.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { JOB_NAMES, type RewriteTripJob } from "../jobs/index.js";
+import { hasUnlimitedAccess } from "../services/subscriptions.js";
+import { mannerAccess } from "../services/redactionMannerAccess.js";
+import {
+  cleanNotes,
+  mannerOf,
+  REDACTION_MANNER_KEYS,
+  REDACTION_NOTES_MAX,
+} from "../services/redactionManners.js";
 import { serializeTripSettings } from "./appSerializers.js";
 import { startDateRequired } from "./home.js";
 
@@ -108,6 +116,18 @@ const updateBody = z.object({
   quizEnabled: z.boolean().optional(),
   freeZonesEnabled: z.boolean().optional(),
   crosswordEnabled: z.boolean().optional(),
+
+  /**
+   * **La manière d'être rédigé**, et les indications libres du voyageur
+   * (T292). Les deux sont gardées par `mannerAccess` : abonné illimité, ou
+   * carnet d'une seule étape.
+   *
+   * `null` remet la manière par défaut (« Comme je parle ») et efface les
+   * indications. L'énumération est close ici et non dans l'app : une clé
+   * inconnue est un refus, pas un silence.
+   */
+  redactionManner: z.enum(REDACTION_MANNER_KEYS as [string, ...string[]]).nullable().optional(),
+  redactionNotes: z.string().trim().max(REDACTION_NOTES_MAX).nullable().optional(),
 });
 
 /** Ce que `serializeTripSettings` attend du carnet, et rien de plus. */
@@ -149,15 +169,28 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
 
   // Le crédit du jour **du voyage** — partagé entre ses co-voyageurs —, vu par
   // celui qui lit : illimité s'il est abonné.
-  const [dailyCredit, storyStarted, reachable, notifications] = await Promise.all([
-    readDailyCredit(context.prisma, { memoId: memo.id, viewer: account }),
-    hasWrittenStory(context.prisma, memo.id),
-    reachablePagesOf(context, memo),
-    // Les alertes **de qui lit** : chacun a les siennes (D13, 19/10/2026).
-    readTripNotificationPreferences(context.prisma, memo.id, accountId),
-  ]);
+  const [dailyCredit, storyStarted, reachable, notifications, stepCount, isUnlimited] =
+    await Promise.all([
+      readDailyCredit(context.prisma, { memoId: memo.id, viewer: account }),
+      hasWrittenStory(context.prisma, memo.id),
+      reachablePagesOf(context, memo),
+      // Les alertes **de qui lit** : chacun a les siennes (D13, 19/10/2026).
+      readTripNotificationPreferences(context.prisma, memo.id, accountId),
+      // Le droit de choisir sa manière d'être rédigé se lit ici (T292) : l'app
+      // ne recalcule pas la règle, elle lit `redaction.isAvailable`.
+      context.prisma.memoStep.count({ where: { memoId: memo.id } }),
+      hasUnlimitedAccess(context.prisma, accountId),
+    ]);
 
-  return serializeTripSettings(memo, dailyCredit, accountId, notifications, storyStarted, reachable);
+  return serializeTripSettings(
+    memo,
+    dailyCredit,
+    accountId,
+    notifications,
+    storyStarted,
+    reachable,
+    mannerAccess({ isUnlimited, stepCount }),
+  );
 }
 
 /**
@@ -250,6 +283,45 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
         ? await presetTargetForRatio(context, id, body.photoTextRatio, nextStart, nextEnd)
         : null;
 
+    // **La manière d'être rédigé est gardée** (T292) : abonné illimité, ou
+    // carnet d'une seule étape, où la reprise ne coûte qu'un appel. Le refus
+    // est un 402 et non un 403 : ce n'est pas un droit qui manque, c'est un
+    // abonnement, et l'app sait ouvrir le paywall sur ce code.
+    //
+    // ⚠️ `mannerChanged` compare à ce qui est en base, pas à `undefined` :
+    // réécrire la même manière ne doit pas lancer une reprise payée.
+    const touchesManner =
+      body.redactionManner !== undefined || body.redactionNotes !== undefined;
+    let mannerChanged = false;
+    if (touchesManner) {
+      const [before, stepCount, isUnlimited] = await Promise.all([
+        context.prisma.memo.findUniqueOrThrow({
+          where: { id },
+          select: { redactionManner: true, redactionNotes: true },
+        }),
+        context.prisma.memoStep.count({ where: { memoId: id } }),
+        hasUnlimitedAccess(context.prisma, accountId),
+      ]);
+      const access = mannerAccess({ isUnlimited, stepCount });
+      if (!access.allowed) {
+        throw new HttpError(
+          402,
+          "Choisir sa manière d'être rédigé demande l'abonnement illimité : " +
+            "changer de manière fait reprendre tout le carnet.",
+          "redaction_manner_needs_unlimited",
+        );
+      }
+      const nextManner =
+        body.redactionManner !== undefined ? body.redactionManner : before.redactionManner;
+      const nextNotes =
+        body.redactionNotes !== undefined
+          ? cleanNotes(body.redactionNotes)
+          : before.redactionNotes;
+      mannerChanged =
+        mannerOf(nextManner) !== mannerOf(before.redactionManner) ||
+        nextNotes !== before.redactionNotes;
+    }
+
     await context.prisma.memo.update({
       where: { id },
       data: {
@@ -280,8 +352,24 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
         ...(body.crosswordEnabled !== undefined
           ? { crosswordEnabled: body.crosswordEnabled }
           : {}),
+        ...(body.redactionManner !== undefined ? { redactionManner: body.redactionManner } : {}),
+        ...(body.redactionNotes !== undefined
+          ? { redactionNotes: cleanNotes(body.redactionNotes) }
+          : {}),
       },
     });
+
+    // **Changer de manière reprend tout le carnet**, et l'app l'a annoncé
+    // avant d'envoyer (T292) : le consentement est déjà donné, on ne le
+    // redemande pas par un drapeau à un coup comme le fait la cible de pages.
+    // Les étapes corrigées à la main ne sont pas touchées — `rewriteTrip` ne
+    // les sélectionne pas.
+    //
+    // ⚠️ Une manière réécrite **à l'identique** ne reprend rien : toucher le
+    // réglage pour revenir à ce qu'il était ne doit pas coûter un passage.
+    if (mannerChanged) {
+      await context.queue.publish<RewriteTripJob>(JOB_NAMES.rewriteTrip, { memoId: id });
+    }
 
     // Les alertes ne vont pas sur le voyage : elles sont **à qui écrit**, et
     // celles de ses co-voyageurs ne bougent pas (D13, 19/10/2026).
@@ -329,6 +417,40 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
         409,
         "Les étapes déjà écrites ont déjà été réécrites pour ce changement de cible.",
         "page_target_rewrite_unavailable",
+      );
+    }
+
+    await context.queue.publish<RewriteTripJob>(JOB_NAMES.rewriteTrip, { memoId: id });
+    return reply.code(202).send(await readSettings(context, accountId, id));
+  });
+
+  /**
+   * **Tout faire reprendre, sans rien changer** (T292) : le bouton de l'abonné
+   * qui veut repasser son carnet dans la manière en cours — après une
+   * correction de ses indications, ou simplement parce que le modèle a
+   * progressé.
+   *
+   * Pas de drapeau à un coup, contrairement à la cible de pages : ici le geste
+   * **est** la demande, il n'est pas la conséquence d'un réglage touché. Il est
+   * donc rejouable, et c'est voulu.
+   *
+   * Même garde que l'écriture de la manière : abonné illimité, ou carnet d'une
+   * seule étape. Les souvenirs corrigés à la main ne sont pas touchés.
+   */
+  app.post("/v1/trips/:id/redaction/rewrite", async (request, reply) => {
+    const { id } = params.parse(request.params);
+    const accountId = accountIdOf(request);
+    await assertVisible(context, accountId, id);
+
+    const [stepCount, isUnlimited] = await Promise.all([
+      context.prisma.memoStep.count({ where: { memoId: id } }),
+      hasUnlimitedAccess(context.prisma, accountId),
+    ]);
+    if (!mannerAccess({ isUnlimited, stepCount }).allowed) {
+      throw new HttpError(
+        402,
+        "Faire reprendre tout le carnet demande l'abonnement illimité.",
+        "redaction_manner_needs_unlimited",
       );
     }
 

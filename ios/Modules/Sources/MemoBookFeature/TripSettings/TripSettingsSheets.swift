@@ -27,6 +27,9 @@ public enum TripSettingsSheet: String, Identifiable, Hashable, Sendable {
     /// Le crédit du jour du voyage, et la porte de l'illimité — voir
     /// ``DailyCreditSheet``.
     case dailyCredit
+    /// **La manière d'être rédigé** du carnet (T292) — voir
+    /// ``RedactionMannerSheet``.
+    case redaction
 
     public var id: String { rawValue }
 }
@@ -674,6 +677,7 @@ struct ClearConversationSheet: View {
             case .notifications: TripNotificationsSheet(model: model)
             case .theme: TripThemeSheet(model: model)
             case .companions: TripInviteSheet(model: model)
+            case .redaction: RedactionMannerSheet(model: model)
             case .dailyCredit:
                 DailyCreditSheet(model: model, onSubscribe: { sheet = nil }, onCancelSubscription: { sheet = nil })
             }

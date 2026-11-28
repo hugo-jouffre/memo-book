@@ -983,6 +983,14 @@ public actor PreviewAPI: MemoBookAPI {
             case .notificationPreferences(let preferences): settings.notifications = preferences
             case .theme(let value): settings.theme = value
             case .publicGallery(let isOn): settings.isPublicGallery = isOn
+            case .redactionManner(let manner):
+                var redaction = settings.redactionSettings
+                redaction.chosenManner = manner
+                settings.redaction = redaction
+            case .redactionNotes(let notes):
+                var redaction = settings.redactionSettings
+                redaction.notes = notes
+                settings.redaction = redaction
             }
         }
     }
@@ -1037,6 +1045,13 @@ public actor PreviewAPI: MemoBookAPI {
             }
             settings.customisation = customisation
         }
+    }
+
+    /// « Tout faire reprendre » (T292) : le double accepte et relit, puisque
+    /// la route est rejouable et ne refuse qu'à qui n'est pas abonné — et le
+    /// bac à sable l'est.
+    public func rewriteRedaction(tripId: String) async throws -> TripSettings {
+        await Self.settingsBox.read()
     }
 
     public func rewritePageTarget(tripId: String) async throws -> TripSettings {

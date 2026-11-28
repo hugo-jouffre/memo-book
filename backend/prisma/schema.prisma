@@ -625,6 +625,33 @@ model Memo {
   /// Style de carnet retenu (voir `agents/carnet-styles/`).
   styleKey String?
 
+  /// **La manière d'être rédigé** du carnet — T292, `agents/redaction-manieres/`.
+  ///
+  /// `spoken` (le défaut), `literary`, `factual`. Rien à voir avec `styleKey`,
+  /// qui est le style **visuel** du carnet (palette, typo, stickers) : celle-ci
+  /// règle la façon d'**écrire**, et elle entre dans le prompt de rédaction.
+  ///
+  /// ⚠️ `null` se comporte comme `spoken`, et une valeur inconnue aussi
+  /// (`mannerOf`) : une clé écrite par une version future de l'app ne doit pas
+  /// faire échouer une rédaction. Les deux ne se distinguent que dans l'app,
+  /// où l'une affiche « par défaut » et l'autre un choix fait.
+  ///
+  /// ⚠️ **Changer de manière reprend tout le carnet** : chaque étape repasse
+  /// au job `redact`, sauf celles que le voyageur a corrigées à la main, qui ne
+  /// sont plus jamais réécrites. C'est pour ça que le réglage est réservé aux
+  /// abonnés illimités — sauf carnet d'une seule étape, où la reprise ne coûte
+  /// qu'un appel.
+  redactionManner String?
+
+  /// Les indications libres du voyageur sur la façon de le rédiger — T292.
+  ///
+  /// Partent dans le prompt sous « Ce que le voyageur demande en plus », après
+  /// la manière, et **le prompt dit leur rang** : une indication qui
+  /// contredirait une règle de `agents/agent-transcription.md` ne s'applique
+  /// pas. Coupées à 600 caractères (`REDACTION_NOTES_MAX`) — au-delà, ce n'est
+  /// plus une indication, c'est un second prompt.
+  redactionNotes String?
+
   /// Fiche de cohérence du carnet — `agents/agent-transcription.md` § 2.
   /// Noms propres, appellations, temps du récit, « on » ou « nous », unités,
   /// formats. L'agent de rédaction la relit avant chaque étape et la complète
@@ -1368,8 +1395,8 @@ model Entry {
   /// modèle n'a rien rendu. Une photo sans note ne passe pas derrière les
   /// autres pour autant — elle se range sur sa netteté, comme avant
   /// (`services/photoPicking.ts`).
-  photoBeauty Int?
-  photoExposure  Float?
+  photoBeauty   Int?
+  photoExposure Float?
 
   /// Où poser le scotch, et où recadrer. Sans ces champs, le gabarit retombe
   /// sur un centrage neutre et un scotch en haut à gauche : jamais une erreur,

@@ -143,6 +143,74 @@ Clara, Tom).
 
 ## 4. Journal
 
+### 28/11/2026 — Choisir sa manière d'être rédigé (T292)
+
+Hugo : « Choisir sa manière d'être rédigé, dans la personnalisation du
+carnet : plusieurs façons proposées, plus ses propres indications. Changer de
+méthode annonce que tout va être repris, et c'est réservé aux abonnés
+illimités — sauf carnet d'une seule étape. »
+
+**Trois manières, plus un champ libre** (Hugo, 28/11/2026, sur trois jeux
+proposés) :
+
+| Clé | Nom affiché | Ce qu'elle change |
+|---|---|---|
+| `spoken` *(défaut)* | Comme je parle | **Rien** — c'est la rédaction telle qu'elle est |
+| `literary` | Récit littéraire | Phrases plus amples, l'oral s'efface davantage |
+| `factual` | Journal factuel | Court, chronologique, sans effets |
+
+Les fiches sont dans `agents/redaction-manieres/`, une par manière, lues et non
+recopiées — comme `agent-transcription.md`. Ce qui part au modèle est la
+section `## Consigne` de la fiche, et elle seule : le reste est de la
+documentation pour nous.
+
+**Le contrat, et c'est la seule chose à retenir : une manière ne relâche aucune
+règle.** Elle règle le registre — longueur des phrases, ce qui survit de
+l'oral, place des images. Elle ne touche ni la fidélité, ni la frontière
+récit / encart, ni la fiche de cohérence, ni le schéma de sortie, ni ce que le
+voyageur a corrigé à la main. Une manière qui aurait besoin d'assouplir l'une
+de ces lignes n'est pas une manière : c'est une autre rédaction, et ça se
+décide dans `agent-transcription.md`, le banc à la main.
+
+⚠️ **`spoken` n'injecte rien dans le prompt**, et c'est le cœur du dispositif.
+Un carnet qui n'a jamais touché au réglage doit être rédigé **exactement**
+comme avant T292, à l'octet près — si cette manière écrivait sa propre
+consigne, même fidèle, il faudrait rejouer le banc pour prouver qu'elle ne
+change rien, alors qu'il suffit de ne rien écrire pour en être sûr. C'est aussi
+ce qui garde la ligne de base du banc intacte : le passage `avant` d'une
+comparaison **est** cette manière. Seules `literary` et `factual` demandent un
+passage.
+
+**Les indications du voyageur sont secondes, et le prompt dit leur rang.** Le
+champ libre (`Memo.redactionNotes`, 600 caractères) part sous « Ce que le
+voyageur demande en plus », suivi d'une phrase qui dit qu'une indication
+contredisant une règle **ne s'applique pas**. Sans elle, « invente ce qui
+manque » aurait été un contournement des règles par le champ libre — et c'est
+exactement la faute que T291 venait de mesurer.
+
+**Changer de manière reprend tout le carnet**, par `jobs/rewriteTrip.ts`, qui
+existait déjà pour les changements de cible de pages : une étape à la fois,
+dans l'ordre du récit, et les souvenirs corrigés à la main ne sont pas
+touchés. La reprise part **au changement**, sans drapeau à un coup, parce que
+l'app a prévenu avant — c'est là que le consentement est donné. Une manière
+réécrite à l'identique ne reprend rien.
+
+⚠️ **La manière n'entre pas dans l'empreinte du carnet** (`bookFingerprint.ts`),
+et c'est un choix : elle change le livre, mais elle le change *en réécrivant
+les souvenirs*, dont la dernière modification est déjà dans l'empreinte. L'y
+mettre aussi la ferait bouger à la seconde où le réglage est enregistré,
+pendant que la reprise tourne encore — la composition partirait sur un carnet à
+moitié repris.
+
+**Le réglage est réservé aux abonnés illimités, sauf carnet d'une seule
+étape** (`services/redactionMannerAccess.ts`, une fonction pure). La raison est
+le coût : un appel au modèle par étape déjà écrite. Sur un carnet d'une étape —
+ou vide — la reprise ne coûte qu'un appel, et un paywall y serait posé sur
+rien. Le refus est un **402** et non un 403 : ce n'est pas un droit qui manque,
+c'est un abonnement, et l'app ouvre le paywall sur ce code. ⚠️ **L'app ne
+refait pas le calcul** : la route sert `redaction.isAvailable` et sa raison, et
+l'app les lit — deux règles à tenir d'accord auraient fini par divergir.
+
 ### 28/11/2026 — Combler un oubli : mesuré, puis retiré (T291)
 
 Hugo : « La rédaction comble les oublis sans demander : un nom de lieu,
@@ -846,6 +914,7 @@ Prime) et ajoutait des bons mots (« une sieste stratégique »).
 | 23/10/2026 | Dans l'atelier, encarts et quiz restent à l'analyse d'étape : une seule source par carnet | reco Claude |
 | 23/10/2026 | La rédaction de l'atelier a son propre fournisseur : `claude-opus-5`, comme l'app, pendant que le découpage reste sur OpenAI | Hugo |
 | 02/10/2026 | Toute modification des règles se mesure sur le banc, avant et après ; l'historique s'écrit ici, jamais dans le prompt | Hugo, reco Claude |
+| 28/11/2026 | Le voyageur choisit **comment** il est rédigé : trois manières plus ses indications, et changer reprend tout le carnet. Une manière ne relâche aucune règle, et le défaut n'injecte rien (T292) | Hugo |
 | 28/11/2026 | Combler un oubli reste **interdit** : la règle a été écrite et mesurée (−0,3 fluidité, −0,3 français, un piège de plus), et le corpus ne l'exerçait pas — elle n'entre pas dans le prompt (T291) | Hugo, reco Claude |
 | 02/11/2026 | La page écrite se lit et se corrige dans l'atelier **avant** la génération, pas dans le PDF | Hugo |
 | 02/11/2026 | Le texte imprimé part dans le JSON exporté (`texte`, `texte_source`), à côté des vocaux | Hugo |

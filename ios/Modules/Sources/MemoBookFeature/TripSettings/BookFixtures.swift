@@ -56,7 +56,18 @@ extension TripSettings {
             customisation: .fixture,
             // La grille que le serveur sert avec les réglages, pour que les
             // aperçus montrent les prix de l'onglet « Nombre de pages ».
-            printPricing: .fixture
+            printPricing: .fixture,
+            // **La manière d'être rédigé** (T292) : personne n'a choisi — la
+            // pastille « Par défaut » sur « Comme je parle » —, et le réglage
+            // est **ouvert**, parce que le bac à sable est celui d'un abonné
+            // dès qu'on bascule la persona. C'est l'état où la feuille se
+            // regarde ; le panneau de débogage rejoue le réglage fermé.
+            redaction: RedactionSettings(
+                chosenManner: nil,
+                notes: nil,
+                isAvailable: true,
+                reason: .unlimited
+            )
         )
     }
 
