@@ -30,11 +30,15 @@ describe("la manière d'être rédigé (T292)", () => {
     expect(mannerBlock({ manner: "spoken", notes: "   " })).toBeNull();
   });
 
-  it("charge la consigne des deux autres manières, à partir de « ## Consigne »", () => {
+  it("charge la consigne des deux autres manières, après « ## Consigne »", () => {
     for (const manner of ["literary", "factual"] as const) {
       const instruction = mannerInstruction(manner);
       expect(instruction).not.toBeNull();
-      expect(instruction?.startsWith("## Consigne")).toBe(true);
+      expect(instruction).toContain("Écris cette étape");
+      // Le titre de la fiche est un repère pour nous : `mannerBlock` pose le
+      // sien, et deux titres de suite pour une section n'en font pas une plus
+      // claire.
+      expect(instruction).not.toContain("## Consigne");
       // La documentation de la fiche ne part pas au modèle.
       expect(instruction).not.toContain("chargé et inséré tel quel");
       expect(instruction).not.toContain("Ce que le voyageur lit dans l'app");
@@ -49,7 +53,7 @@ describe("la manière d'être rédigé (T292)", () => {
 
   it("met les indications du voyageur après la manière, et dit leur rang", () => {
     const block = mannerBlock({ manner: "literary", notes: "Appelle-moi Max." }) ?? "";
-    const manner = block.indexOf("## Consigne");
+    const manner = block.indexOf("récit littéraire");
     const notes = block.indexOf("## Ce que le voyageur demande en plus");
     expect(manner).toBeGreaterThanOrEqual(0);
     expect(notes).toBeGreaterThan(manner);
@@ -60,7 +64,7 @@ describe("la manière d'être rédigé (T292)", () => {
   it("sert les indications seules quand la manière est celle par défaut", () => {
     const block = mannerBlock({ manner: null, notes: "Tutoie-moi." }) ?? "";
     expect(block).toContain("Tutoie-moi.");
-    expect(block).not.toContain("## Consigne");
+    expect(block).not.toContain("Écris cette étape");
   });
 
   it("coupe des indications trop longues plutôt que de les refuser", () => {

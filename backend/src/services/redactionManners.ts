@@ -59,10 +59,15 @@ export function mannerOf(stored: string | null | undefined): RedactionManner {
 const cache = new Map<RedactionManner, string>();
 
 /**
- * La consigne d'une manière, telle qu'elle part au modèle : la fiche à partir
- * de sa ligne `## Consigne`, titre compris. Ce qui précède est de la
- * documentation pour nous, et le modèle n'en a pas besoin — il n'a pas à lire
- * « ce fichier est chargé tel quel ».
+ * La consigne d'une manière, telle qu'elle part au modèle : la fiche **après**
+ * sa ligne `## Consigne`. Ce qui précède est de la documentation pour nous, et
+ * le modèle n'en a pas besoin — il n'a pas à lire « ce fichier est chargé tel
+ * quel ».
+ *
+ * ⚠️ **Le titre lui-même ne part pas**, parce que `mannerBlock` pose déjà le
+ * sien (`## Comment écrire cette étape`) : les deux de suite donnaient un
+ * prompt à deux titres pour une seule section. Le titre de la fiche est un
+ * repère pour nous, pas une phrase pour le modèle.
  *
  * Rend `null` pour `spoken`, qui n'injecte rien.
  */
@@ -98,7 +103,7 @@ export function mannerInstruction(manner: RedactionManner): string | null {
     );
   }
 
-  const instruction = raw.slice(marker.index).trim();
+  const instruction = raw.slice(marker.index + marker[0].length).trim();
   cache.set(manner, instruction);
   return instruction;
 }

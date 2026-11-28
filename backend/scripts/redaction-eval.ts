@@ -5,6 +5,9 @@
  *   npm run redaction:eval -- --label avant          rédige toutes les étapes, garde le rapport
  *   npm run redaction:eval -- --until 13             s'arrête à l'étape dont l'id contient « 13 »
  *   npm run redaction:eval -- --model claude-opus-5-5
+ *   npm run redaction:eval -- --manner literary --label litteraire
+ *                                                    rédige dans une manière (T292)
+ *   npm run redaction:eval -- --manner factual --notes "garde mes blagues"
  *   npm run redaction:eval -- --compare avant après  les deux rapports côte à côte
  *   npm run redaction:eval -- --compare avant après --judge
  *                                                    … et un relecteur qui note chaque texte
@@ -39,6 +42,11 @@ import {
   type RedactionEffort,
   type RedactionResult,
 } from "../src/services/redaction.js";
+import {
+  REDACTION_MANNER_KEYS,
+  mannerBlock,
+  type RedactionManner,
+} from "../src/services/redactionManners.js";
 import pino from "pino";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -53,6 +61,8 @@ const { values, positionals } = parseArgs({
     scene: { type: "string", default: SCENE_PATH },
     model: { type: "string", default: process.env.ANTHROPIC_REDACTION_MODEL ?? "claude-opus-5" },
     effort: { type: "string", default: process.env.ANTHROPIC_REDACTION_EFFORT ?? "high" },
+    manner: { type: "string" },
+    notes: { type: "string" },
     compare: { type: "boolean", default: false },
     judge: { type: "boolean", default: false },
     "judge-model": { type: "string", default: "claude-opus-5-5" },
@@ -120,6 +130,23 @@ interface RunReport {
    * Absent des rapports écrits avant cette date : relu comme inconnu.
    */
   effort?: string;
+  /**
+   * **La manière dont ce passage a été rédigé**, et les indications libres qui
+   * l'accompagnaient (T292).
+   *
+   * `rulesHash` ne suffit pas à dire ce qui est parti au modèle : il ne hache
+   * que les règles de rédaction, et une manière est un bloc **en plus**, chargé
+   * d'un autre fichier. Deux passages aux mêmes règles peuvent donc n'avoir
+   * rien reçu de pareil. `mannerHash` hache le bloc tel qu'il est parti,
+   * indications comprises — « — » quand rien n'est parti.
+   *
+   * Absents des rapports écrits avant le 28/11/2026 : relus comme `spoken`,
+   * ce qui est exact. La manière n'existait pas, et `spoken` n'injecte rien —
+   * c'est ce qui fait de `avant-t291` la ligne de base de ce banc-ci.
+   */
+  manner?: string;
+  notes?: string | null;
+  mannerHash?: string;
   rulesHash: string;
   date: string;
   steps: StepReport[];
@@ -128,6 +155,16 @@ interface RunReport {
 /** Ce que le rapport dit de son effort — « ? » pour un rapport d'avant le 26/11/2026. */
 function effortOf(report: RunReport): string {
   return report.effort ?? "?";
+}
+
+/**
+ * Ce que le rapport dit de sa manière — `spoken` pour un rapport d'avant le
+ * 28/11/2026, et c'est la vérité : voir le commentaire du champ.
+ */
+function maniereDe(report: RunReport): string {
+  const manner = report.manner ?? "spoken";
+  const notes = report.notes ? ` + indications \`${report.mannerHash ?? "?"}\`` : "";
+  return `${manner}${notes}`;
 }
 
 function dayOrNull(value: string | null | undefined): Date | null {
@@ -209,6 +246,24 @@ async function run(client: Anthropic): Promise<RunReport> {
   const scene = JSON.parse(await readFile(values.scene, "utf8")) as Scene;
   const redactor = new AnthropicRedactor(client, values.model, compteur, values.effort as RedactionEffort);
 
+  // La manière se refuse ici, avant le premier appel : une clé mal tapée
+  // rendrait un passage à `spoken` — le serveur, lui, le doit, parce qu'une
+  // app d'après-demain peut écrire une clé qu'il ne connaît pas encore. Un
+  // banc, non : il coûte 1 à 2 $ et on ne veut pas découvrir au rapport qu'on
+  // a mesuré le témoin deux fois.
+  const manner = (values.manner ?? "spoken") as RedactionManner;
+  if (!REDACTION_MANNER_KEYS.includes(manner)) {
+    throw new Error(
+      `Manière inconnue : « ${values.manner} ». Les manières sont ${REDACTION_MANNER_KEYS.join(", ")}.`,
+    );
+  }
+  const notes = values.notes ?? null;
+  const mannerBlockSent = mannerBlock({ manner, notes });
+  process.stderr.write(
+    `Manière : ${manner}${notes ? " + indications" : ""}` +
+      `${mannerBlockSent ? "" : " (rien n'est injecté)"}\n`,
+  );
+
   let sheet: CoherenceSheet = EMPTY_COHERENCE_SHEET;
   const previous: RedactedNeighbour[] = [];
   const titles: string[] = [];
@@ -233,6 +288,8 @@ async function run(client: Anthropic): Promise<RunReport> {
         endDate: dayOrNull(scene.memo.endDate),
         destination: scene.memo.destination ?? null,
         narrationPace: scene.memo.narrationPace ?? null,
+        redactionManner: manner,
+        redactionNotes: notes,
       },
       narrator: scene.narrator,
       entry: {
@@ -271,6 +328,11 @@ async function run(client: Anthropic): Promise<RunReport> {
     scene: scene.name,
     model: values.model,
     effort: values.effort,
+    manner,
+    notes,
+    mannerHash: mannerBlockSent
+      ? createHash("sha256").update(mannerBlockSent).digest("hex").slice(0, 10)
+      : "—",
     rulesHash: createHash("sha256").update(loadWritingRules()).digest("hex").slice(0, 10),
     date: new Date().toISOString(),
     steps,
@@ -282,6 +344,7 @@ function runToMarkdown(report: RunReport): string {
     `# ${report.scene} — ${report.label}`,
     "",
     `Modèle : \`${report.model}\` · effort \`${effortOf(report)}\` · ` +
+      `manière \`${maniereDe(report)}\` · ` +
       `règles \`${report.rulesHash}\` · ${report.date}`,
   ];
   for (const step of report.steps) {
@@ -442,8 +505,8 @@ async function compare(client: Anthropic): Promise<string> {
     // Les deux réglages en tête : une comparaison entre deux efforts ne dit
     // pas la même chose qu'une comparaison à effort égal, et c'est la première
     // chose à savoir avant de lire les notes.
-    `\`${a.label}\` : ${a.model}, effort \`${effortOf(a)}\`, règles \`${a.rulesHash}\``,
-    `\`${b.label}\` : ${b.model}, effort \`${effortOf(b)}\`, règles \`${b.rulesHash}\``,
+    `\`${a.label}\` : ${a.model}, effort \`${effortOf(a)}\`, manière \`${maniereDe(a)}\`, règles \`${a.rulesHash}\``,
+    `\`${b.label}\` : ${b.model}, effort \`${effortOf(b)}\`, manière \`${maniereDe(b)}\`, règles \`${b.rulesHash}\``,
     "",
   ];
   const verdictsA: (Verdict | null)[] = [];

@@ -1,9 +1,10 @@
 # Manière — Récit littéraire
 
 > Clé `literary`. Ce fichier est **chargé et inséré tel quel** dans le prompt de
-> rédaction, sous « Comment écrire cette étape » — à partir de la ligne
+> rédaction, sous « Comment écrire cette étape » — **après** la ligne
 > « ## Consigne » et jusqu'à la fin. Ce qui précède est de la documentation et
-> ne part pas au modèle.
+> ne part pas au modèle ; le titre « ## Consigne » non plus, puisque le prompt
+> pose déjà le sien.
 
 ## Ce que le voyageur lit dans l'app
 
