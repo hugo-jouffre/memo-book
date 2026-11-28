@@ -1,4 +1,10 @@
-import { analysePixels, type PhotoAnalysis } from "./photoAnalysis.js";
+import {
+  BLUR_REFERENCE_PX,
+  analysePixels,
+  blurOf,
+  type BlurMeasurement,
+  type PhotoAnalysis,
+} from "./photoAnalysis.js";
 
 /**
  * **Une photo est-elle au format paysage ?** — la mesure qui décide de la
@@ -61,6 +67,25 @@ export interface PhotoMeasurement {
    */
   sharpness: number;
   verdict: "ok" | "upscale" | "downgrade" | "reject";
+
+  /**
+   * **Le flou, lui, mesuré pour de vrai** (T310, 28/11/2026) : de 0 (nette) à
+   * 1 (bouillie), `null` quand la photo n'a aucun bord à juger.
+   *
+   * ⚠️ Ne pas confondre avec ``sharpness`` juste au-dessus, qui porte mal son
+   * nom : il mesure le **contraste** et ne voit pas le flou du tout — voir
+   * ``blurOf`` pour les chiffres. Les deux cohabitent le temps que ce
+   * chiffre-ci soit calibré sur un vrai lot de photos ; ``verdict`` ne s'en
+   * sert pas encore.
+   *
+   * Pris sur le bitmap **réduit à ``BLUR_REFERENCE_PX``**, parce qu'un flou se
+   * mesure en pixels : sans taille fixée, deux photos ne seraient pas
+   * comparables. Une photo plus petite que la référence est mesurée telle
+   * quelle, jamais agrandie — elle rend alors un chiffre un peu plus
+   * indulgent (0,264 à 400 px contre 0,336 à 1920 pour la même photo nette),
+   * donc elle sera ratée plutôt qu'accusée à tort.
+   */
+  blur: number | null;
 }
 
 /**
@@ -75,6 +100,7 @@ export async function measurePhoto(buffer: Buffer): Promise<PhotoMeasurement | n
   let width: number;
   let height: number;
   let analyse: PhotoAnalysis;
+  let mesureDuFlou: BlurMeasurement;
   try {
     // Import paresseux, comme `photoAnalysis` : `jimp` est lourd à charger, et
     // la plupart des requêtes n'en ont pas besoin.
@@ -84,6 +110,23 @@ export async function measurePhoto(buffer: Buffer): Promise<PhotoMeasurement | n
     height = image.bitmap.height;
     // Le bitmap est là : la netteté se mesure dans la même passe (T265).
     analyse = analysePixels(new Uint8Array(image.bitmap.data), width, height);
+    // Le flou, lui, se mesure à taille fixée (T310) : on réduit une copie, et
+    // on ne l'agrandit jamais. `resize` écrit dans l'image qu'on lui donne,
+    // d'où la copie — l'originale sert encore au-dessus.
+    const grandCote = Math.max(width, height);
+    const reduite =
+      grandCote > BLUR_REFERENCE_PX
+        ? image
+            .clone()
+            .resize(
+              width >= height ? { w: BLUR_REFERENCE_PX } : { h: BLUR_REFERENCE_PX },
+            )
+        : image;
+    mesureDuFlou = blurOf(
+      new Uint8Array(reduite.bitmap.data),
+      reduite.bitmap.width,
+      reduite.bitmap.height,
+    );
   } catch {
     return null;
   }
@@ -95,5 +138,6 @@ export async function measurePhoto(buffer: Buffer): Promise<PhotoMeasurement | n
     isLandscape: width >= height,
     sharpness: analyse.detail,
     verdict: analyse.verdict,
+    blur: mesureDuFlou.blur,
   };
 }

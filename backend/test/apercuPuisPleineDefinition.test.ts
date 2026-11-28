@@ -104,6 +104,12 @@ describe("l'aperçu léger, puis la pleine définition", () => {
     // …la netteté, non : le barème est calibré sur 2400 px.
     expect(entry.photoSharpness).toBeNull();
     expect(entry.photoVerdict).toBeNull();
+    // Et le flou encore moins (T310) : il se mesure en pixels, donc une photo
+    // réduite est floue par construction. Mesuré sur la pleine définition
+    // seulement — ce que tient `services/photoOrientation.test.ts`, sur un
+    // damier ; l'aplat de couleur d'ici n'a aucun bord à juger, donc il ne
+    // rendrait de toute façon aucun chiffre.
+    expect(entry.photoBlur).toBeNull();
   });
 
   it("une photo envoyée en entier se juge tout de suite, comme avant", async () => {

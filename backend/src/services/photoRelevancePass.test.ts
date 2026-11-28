@@ -108,12 +108,22 @@ describe("mêler la beauté et la pertinence", () => {
     expect(choisir(photos, 1)[0]).toBe("juste");
   });
 
-  /** Le verdict d'impression reste au-dessus des deux. */
-  it("ne sauve pas une photo refusée, même juste et belle", () => {
+  /**
+   * 🔴 **Ce test exigeait l'inverse jusqu'au 28/11/2026** (T310) : qu'un
+   * verdict `reject` passe au-dessus de la beauté et de la pertinence. Ce
+   * verdict mesure le **contraste**, pas le flou — il tombait donc sur les
+   * photos unies, pas sur les floues. Une photo belle *et* juste n'a plus à
+   * être écartée pour ça.
+   *
+   * La beauté reste au-dessus du flou : une photo nette d'un mur ne vaut pas
+   * une photo un peu molle d'un visage (T265). C'est le test voisin, dans
+   * ``photoBeauty.test.ts``.
+   */
+  it("ne sacrifie plus une photo juste et belle à un verdict de contraste", () => {
     const photos: Photo[] = [
-      { nom: "refusee", beauty: 95, relevance: 95, verdict: "reject" },
+      { nom: "belle-et-juste", beauty: 95, relevance: 95, verdict: "reject" },
       { nom: "ordinaire", beauty: 40, relevance: 40 },
     ];
-    expect(choisir(photos, 1)[0]).toBe("ordinaire");
+    expect(choisir(photos, 1)[0]).toBe("belle-et-juste");
   });
 });

@@ -1145,6 +1145,10 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
                         : {
                             photoSharpness: measures[index].sharpness,
                             photoVerdict: measures[index].verdict,
+                            // Jamais sur un aperçu léger : le flou se mesure
+                            // en pixels, et une photo réduite est floue par
+                            // construction (T310).
+                            photoBlur: measures[index].blur,
                           }),
                     }
                   : {}),

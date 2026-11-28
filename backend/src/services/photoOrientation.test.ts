@@ -134,4 +134,38 @@ describe("la netteté, mesurée en même temps", () => {
     expect(mesure?.verdict).toBe("ok");
     expect(mesure!.sharpness).toBeGreaterThan(aplat!.sharpness);
   });
+  /**
+   * T310 : le flou passe par le même décodage, et il est **réduit** d'abord.
+   *
+   * Le test qui compte ici est celui de la réduction : une photo de 1600 px
+   * et la même floutée doivent se distinguer *après* être ramenées à la
+   * taille de référence. Sans ça le chiffre dépendrait de la taille d'origine
+   * et aucun seuil ne pourrait s'y poser. Le comportement de la mesure
+   * elle-même est tenu par ``leFlouMesure.test.ts``.
+   */
+  it("mesure le flou sur la photo réduite, et se taît sur un aplat", async () => {
+    // Un aplat rouge : aucun bord, donc aucun jugement — et surtout pas
+    // `reject` comme le disait l'ancienne mesure.
+    const aplat = await measurePhoto(await jpeg(400, 300));
+    expect(aplat?.blur).toBeNull();
+
+    const damier = async (flouter: boolean) => {
+      const image = new Jimp({ width: 1600, height: 1200, color: 0x000000ff });
+      for (let y = 0; y < 1200; y += 1) {
+        for (let x = 0; x < 1600; x += 1) {
+          const clair = (Math.floor(x / 40) + Math.floor(y / 40)) % 2 === 0;
+          image.setPixelColor(clair ? 0xf0f0f0ff : 0x202020ff, x, y);
+        }
+      }
+      if (flouter) image.blur(8);
+      return measurePhoto(Buffer.from(await image.getBuffer("image/jpeg")));
+    };
+
+    const net = await damier(false);
+    const flou = await damier(true);
+
+    expect(net!.blur).not.toBeNull();
+    expect(net!.blur!).toBeLessThan(0.4);
+    expect(flou!.blur!).toBeGreaterThan(0.6);
+  }, 30_000);
 });

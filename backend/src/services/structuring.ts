@@ -91,6 +91,12 @@ export interface StructuringEntry {
   photoSharpness?: number | null;
   photoVerdict?: string | null;
   /**
+   * **Le flou mesuré pour de vrai** (T310, 28/11/2026) : de 0 à 1, et c'est
+   * lui qui départage deux photos sur leur netteté. Nul pour une photo
+   * d'avant cette date, ou sans aucun bord à juger.
+   */
+  photoBlur?: number | null;
+  /**
    * Ce que la photo vaut à regarder, de 0 à 100 — notée une fois par
    * `jobs/judgePhotos.ts` (T265, 23/11/2026). Nulle tant que le job ne l'a
    * pas vue ; la photo se range alors sur sa netteté, comme avant.
@@ -760,6 +766,7 @@ export function choisirLesMontrees(
     qualite.set(entry.photoUrl, {
       sharpness: entry.photoSharpness,
       verdict: entry.photoVerdict,
+      blur: entry.photoBlur,
       beauty: entry.photoBeauty,
     });
   }

@@ -1378,9 +1378,40 @@ model Entry {
   /// irrattrapable une fois le livre imprimé.
   photoVerdict PhotoVerdict?
 
-  /// Variance du laplacien, et part de pixels dans les extrêmes de
-  /// l'histogramme. Seuils à calibrer sur un lot réel.
+  /// ⚠️ **Ce n'est pas la netteté**, malgré son nom (mesuré le 28/11/2026,
+  /// T310). La ligne disait « variance du laplacien » : c'est faux.
+  /// ``photoAnalysis.detailGrid`` calcule la variance de luminance *à
+  /// l'intérieur* de neuf cases, c'est-à-dire le **contraste** — aucune
+  /// différence entre pixels voisins n'y entre. Une photo floutée au point
+  /// d'être illisible garde donc ici une valeur haute, et un ciel uni
+  /// parfaitement net tombe à zéro.
+  ///
+  /// Elle reste écrite, et ``photoPicking`` s'en sert encore pour départager
+  /// des photos du même souvenir : entre deux photos du même endroit, celle
+  /// qui a le plus de contraste est souvent la meilleure. Mais elle ne répond
+  /// pas à « cette photo est-elle floue ? » — c'est ``photoBlur`` qui le fait.
   photoSharpness Float?
+
+  /// **Le flou, mesuré pour de vrai** (T310, 28/11/2026) : de 0 (nette) à 1
+  /// (bouillie), par comparaison de l'énergie des bords avant et après un
+  /// re-flou (``photoAnalysis.blurOf``). C'est un rapport, donc ni le
+  /// contraste ni l'obscurité ne le trompent — la même photo à 40 % de
+  /// contraste rend 0,237 au lieu de 0,238, et ramenée à 12 % de lumière
+  /// 0,271 au lieu de 0,308.
+  ///
+  /// Repères mesurés : nette de 0,24 à 0,34, floutée d'un rayon de 2 pixels
+  /// de 0,61 à 0,67, bouillie au-delà de 0,84.
+  ///
+  /// `null` veut dire **pas de jugement** : un format que `jimp` ne décode
+  /// pas, une photo antérieure à la mesure, ou une image **sans aucun bord**
+  /// (un ciel uni, un mur), qui est peut-être parfaitement nette et dont
+  /// aucun pixel ne permet de le dire. On se taît plutôt que d'accuser.
+  ///
+  /// ⚠️ **Rien ne s'en sert encore.** Dire « floue » au voyageur demande un
+  /// seuil, et un seuil demande un vrai lot de photos, dont des photos
+  /// franchement bougées. La colonne se remplit d'abord ; ``photoVerdict`` ne
+  /// la lit pas.
+  photoBlur Float?
 
   /// **Ce que vaut cette photo à regarder**, de 0 à 100 (T265, 23/11/2026).
   ///
