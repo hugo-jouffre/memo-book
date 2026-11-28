@@ -20,8 +20,6 @@ import {
   ACKNOWLEDGED,
   ACKNOWLEDGED_EARLIER,
   PHOTOS_VALIDATED_BEFORE_RETURN,
-  PRECISION_NOTED,
-  REVISION_NOTED,
   REVISION_UNHEARD,
   SILENT_REVISION_RETRY,
   SILENT_VOICE_RETRY,
@@ -499,9 +497,15 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   if (!message.suggestionId && kind === "text" && disposition === "memory") {
     reply = { ...reply, beats: [], suggestionIds: [], asksRoseEpineGraine: false, callToActionId: null };
   } else if (!message.suggestionId && kind === "text" && disposition === "context") {
+    // **MEMO se tait, et la pastille parle** (T296, Hugo du 28/11/2026 :
+    // l'emoji remplace « les accusés muets »). Il disait « C'est noté, je
+    // reprends le texte avec ça. » sous chaque précision. L'écran le montrait déjà : la fiche passe en « j'écris »
+    // juste au-dessus, et le ✅ posé sur la précision dit qu'elle est prise
+    // en compte. Un accusé qui répète l'écran est la phrase qu'on a retirée
+    // des doutes le 16/11 pour la même raison.
     reply = {
       ...reply,
-      beats: composeBeats(text ?? "", [PRECISION_NOTED]),
+      beats: [],
       suggestionIds: [],
       asksRoseEpineGraine: false,
       callToActionId: null,
@@ -870,12 +874,16 @@ async function converseOralRevision(
   // Transcrite, mais vide : un silence. Sa durée revient au pot (QA D9).
   const refund =
     transcribed && !heard ? await refundSilentVoice(prisma, { messageId: message.id, memoId: message.memoId }) : null;
-  const beats = composeBeats(
-    text,
-    refund
-      ? [silentVoiceLine(refund.refundedMs), SILENT_REVISION_RETRY]
-      : [rewrites ? REVISION_NOTED : REVISION_UNHEARD],
-  );
+  // Entendue, la correction ne reçoit **aucune bulle** (T296) : « C'est noté,
+  // je corrige le texte avec ce que tu viens de me dire. » était l'autre
+  // accusé muet, et le ✅ du vocal le dit. Ce qui a raté, en
+  // revanche, se dit toujours avec des mots : un silence ne s'explique pas
+  // par un emoji.
+  const beats = refund
+    ? composeBeats(text, [silentVoiceLine(refund.refundedMs), SILENT_REVISION_RETRY])
+    : rewrites
+      ? []
+      : composeBeats(text, [REVISION_UNHEARD]);
 
   await prisma.$transaction(async (tx) => {
     for (const [index, beat] of beats.entries()) {

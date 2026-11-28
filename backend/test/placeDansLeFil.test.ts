@@ -38,14 +38,25 @@ async function createTrip(): Promise<string> {
   return response.json<{ id: string }>().id;
 }
 
-/** Un texte dit dans le fil, posé à l'instant qu'on veut. */
-async function say(memoId: string, text: string, postedAt?: string): Promise<string> {
+/** Un texte dit dans le fil, posé à l'instant qu'on veut — ou une puce. */
+async function say(
+  memoId: string,
+  text: string,
+  postedAt?: string,
+  suggestionId?: string,
+): Promise<string> {
   const id = randomUUID();
   const response = await harness.app.inject({
     method: "POST",
     url: `/v1/trips/${memoId}/chat`,
     headers: { authorization: owner.authorization },
-    payload: { id, kind: "text", text, ...(postedAt ? { postedAt } : {}) },
+    payload: {
+      id,
+      kind: "text",
+      text,
+      ...(postedAt ? { postedAt } : {}),
+      ...(suggestionId ? { suggestionId } : {}),
+    },
   });
   expect(response.statusCode).toBe(201);
   return id;
@@ -91,7 +102,11 @@ describe("la place d'une bulle dans le fil", () => {
   it("emporte la réponse de MEMO avec la question", async () => {
     const memoId = await createTrip();
     await say(memoId, "Ce que je dis maintenant.");
-    const avantHier = await say(memoId, "Ce que j'avais dit avant-hier.", "2026-11-24T09:30:00.000Z");
+    // Une puce, et non un texte libre : depuis T296, un souvenir comme une
+    // précision ne reçoit **aucune bulle** — c'est la pastille qui répond, et
+    // il n'y aurait donc plus de réponse à ranger. « Plus tard » en reçoit
+    // une, et c'est elle qui doit suivre sa question.
+    const avantHier = await say(memoId, "Plus tard", "2026-11-24T09:30:00.000Z", "later");
 
     const messages = await readThread(memoId);
     const question = messages.findIndex((message) => message.id === avantHier);

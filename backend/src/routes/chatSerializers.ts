@@ -10,6 +10,7 @@ import {
   suggestionsFor,
   type Suggestion,
 } from "../services/conversationCopy.js";
+import { reactionFor } from "../services/chatReaction.js";
 import { firstNameOf, type ChatMessageRow, type EntryWithMedia } from "../services/conversationThread.js";
 import { avatarUrlOf } from "../services/avatars.js";
 import { livedDaysOf } from "../services/livedDays.js";
@@ -163,6 +164,29 @@ export function isVisibleTo(message: Pick<ChatMessageRow, "author" | "payload">,
   return !(viewerIsUnlimited && payloadField(message.payload, "audience") === LIMITED_AUDIENCE);
 }
 
+/**
+ * **La bulle de MEMO que ce tour vient saluer d'un 👍** (T296), ou `null` —
+ * `payload.reactionTo`, écrit par la route (`routes/chat.ts`).
+ *
+ * C'est la seule chose qu'une réaction laisse en base, et elle sert deux
+ * fois : à ne pas dessiner le tour qui l'a portée, et à poser le 👍 sur la
+ * bulle visée.
+ */
+export function reactionTargetOf(payload: unknown): string | null {
+  const value = payloadField(payload, "reactionTo");
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * Les bulles de MEMO qui portent un 👍, lues sur le fil entier : une réaction
+ * vise presque toujours une bulle d'avant la page qu'on relit.
+ */
+export function reactedMessageIdsOf(rows: readonly { reactionTo: string | null }[]): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) if (row.reactionTo) ids.add(row.reactionTo);
+  return ids;
+}
+
 export function suggestionIdsOf(payload: unknown): string[] {
   const ids =
     payload && typeof payload === "object"
@@ -217,6 +241,13 @@ export interface SerializeMessageOptions {
    * alors celles qu'elle a déjà.
    */
   suggestions?: ReturnType<typeof serializeChatSuggestions>;
+
+  /**
+   * **Les bulles de MEMO sur lesquelles le voyageur a posé un 👍** (T296) —
+   * ``reactedMessageIdsOf``. Absent d'un reçu de `POST` : le 👍 vise une
+   * bulle d'avant, qui n'est pas dans ce que la requête vient d'écrire.
+   */
+  reactedMessageIds?: ReadonlySet<string>;
 }
 
 /**
@@ -405,6 +436,12 @@ function livedDatesOf(entry: EntryWithMedia): { livedFrom: string | null; livedT
  */
 export function serializeChatMessage(message: ChatMessageRow, options: SerializeMessageOptions) {
   if (!isVisibleTo(message, options.viewerIsUnlimited)) return null;
+  // **Réagir, c'est valider sans écrire** (T296) : le tour qu'une réaction
+  // envoie est une puce « Ça me convient » comme les autres — il valide le
+  // souvenir, MEMO lui répond —, mais il ne se dessine pas. Sa trace est le
+  // 👍 posé sur la bulle visée, et une bulle « Ça me convient » de plus
+  // dirait précisément ce qu'on venait d'éviter d'écrire.
+  if (reactionTargetOf(message.payload) !== null) return null;
   const body = serializeBody(
     message,
     options.publicBaseUrl,
@@ -436,6 +473,10 @@ export function serializeChatMessage(message: ChatMessageRow, options: Serialize
         })
       : null;
 
+  // L'emoji que MEMO pose sur ce tour, ou le 👍 que le voyageur a posé sur
+  // cette bulle de MEMO (T296).
+  const reaction = reactionFor(message, options.reactedMessageIds?.has(message.id) ?? false);
+
   return {
     id: message.id,
     seq: message.seq,
@@ -466,6 +507,9 @@ export function serializeChatMessage(message: ChatMessageRow, options: Serialize
     disposition: message.disposition,
     pauseMilliseconds: message.pauseMilliseconds,
     ...(callToAction ? { callToAction } : {}),
+    // La pastille de MEMO (T296), calculée et jamais stockée. Absente plutôt
+    // que nulle : la clé est neuve, et une puce n'en porte pas.
+    ...(reaction ? { reaction } : {}),
   };
 }
 
@@ -565,6 +609,12 @@ export interface SuggestionsRow {
    * aucune autre bulle ne porte `payload.suggestions`.)
    */
   suggestionIds: readonly string[];
+  /**
+   * **Le 👍 de ce tour** (T296) — la bulle de MEMO qu'il salue, ou `null`.
+   * C'est la seconde chose que le fil entier porte : une réaction vise une
+   * bulle d'avant la page qu'on relit (``reactedMessageIdsOf``).
+   */
+  reactionTo: string | null;
 }
 
 /**
@@ -588,6 +638,7 @@ export function suggestionsRowOf(message: ChatMessageRow): SuggestionsRow {
     entryId: message.entryId,
     isEntryValidated: message.entry !== null && message.entry.validatedAt !== null,
     suggestionIds: suggestionIdsOf(message.payload),
+    reactionTo: reactionTargetOf(message.payload),
   };
 }
 
@@ -667,6 +718,10 @@ export function currentSuggestionIds(
 export function serializeChatThread(options: SerializeThreadOptions) {
   const { memo, viewer, activeStep } = options;
   const memberCount = 1 + memo.members.filter((member) => member.status === "active").length;
+  // Un seul relevé du fil entier, partagé par les puces de chaque bulle (T286)
+  // et par les 👍 (T296) : les deux se lisent sur tout le fil, jamais sur une
+  // page de messages.
+  const outline = options.messages.map((row) => ({ id: row.id, ...suggestionsRowOf(row) }));
   const messageOptions: SerializeMessageOptions = {
     viewerAccountId: viewer.id,
     showsAuthors: memberCount > 1,
@@ -675,16 +730,14 @@ export function serializeChatThread(options: SerializeThreadOptions) {
     viewerIsUnlimited: options.dailyCredit.isUnlimited,
     cover: coverOf(options.memo),
     photoSizes: options.photoSizes,
+    reactedMessageIds: reactedMessageIdsOf(outline),
   };
 
   const tripContext = parseTripContext(memo.tripContext);
 
   // Une fois pour tout le fil, et non une fois par bulle : la carte se lit
   // ensuite par identifiant (T286).
-  const suggestionsByMessage = suggestionIdsByMessage(
-    options.messages.map((row) => ({ id: row.id, ...suggestionsRowOf(row) })),
-    tripContext,
-  );
+  const suggestionsByMessage = suggestionIdsByMessage(outline, tripContext);
 
   const messages = options.messages
     .map((message) =>
@@ -801,6 +854,7 @@ export function serializeChatUpdate(options: {
     viewerIsUnlimited: options.dailyCredit.isUnlimited,
     cover: coverOf(options.memo),
     photoSizes: options.photoSizes,
+    reactedMessageIds: reactedMessageIdsOf(options.allMessages),
   };
   const pageCount =
     options.memo.pageCount > 0 ? options.memo.pageCount : options.memoryCount * 2;

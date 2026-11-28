@@ -151,9 +151,6 @@ export function validationQuestion(): string {
   return VALIDATION_QUESTION;
 }
 
-/** La réponse à une précision : le texte se réécrit, la question reviendra avec lui. */
-export const PRECISION_NOTED = "C’est noté, je reprends le texte avec ça.";
-
 /**
  * **« J'ai entendu plusieurs moments »** (Hugo, 28/10/2026) — la question du
  * découpage, posée quand l'écrivain a trouvé où couper.
@@ -254,9 +251,6 @@ export const SPLIT_NOT_FOUND =
  */
 export const LISTENING_FOR_REVISION =
   "Je t’écoute : dis-moi ce qu’il faut changer ou ajouter, je corrige le texte avec.";
-
-/** La correction orale entendue : le texte se réécrit, la question reviendra avec lui. */
-export const REVISION_NOTED = "C’est noté, je corrige le texte avec ce que tu viens de me dire.";
 
 /** La correction orale qu'on n'a pas réussi à entendre. */
 export const REVISION_UNHEARD =

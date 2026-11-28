@@ -9,9 +9,7 @@ import {
   LISTENING_FOR_REVISION,
   OPENING_TEXT,
   PHOTOS_VALIDATED_BEFORE_RETURN,
-  PRECISION_NOTED,
   REDACTION_UNWRITTEN,
-  REVISION_NOTED,
   redactionKept,
   returnForPhotos,
   SPLIT_NOT_FOUND,
@@ -70,6 +68,8 @@ interface ChatMessageJson {
   authorName: string | null;
   authorInitials: string | null;
   authorAvatarUrl: string | null;
+  /** La pastille de MEMO (T296) — absente d'une bulle qui n'en porte pas. */
+  reaction?: { emoji: string; label: string };
   body:
     | { kind: "text"; text: string }
     | { kind: "voice"; voice: { id: string; duration: number; levels: number[]; remoteUrl: string | null } }
@@ -225,7 +225,14 @@ async function readThread(memoId: string, authorization = owner.authorization, s
 async function say(
   memoId: string,
   text: string,
-  extra: { id?: string; suggestionId?: string; entryId?: string; authorization?: string; platform?: string } = {},
+  extra: {
+    id?: string;
+    suggestionId?: string;
+    entryId?: string;
+    authorization?: string;
+    platform?: string;
+    reactionTo?: string;
+  } = {},
 ) {
   const id = extra.id ?? randomUUID();
   const response = await harness.app.inject({
@@ -241,6 +248,7 @@ async function say(
       text,
       ...(extra.suggestionId ? { suggestionId: extra.suggestionId } : {}),
       ...(extra.entryId ? { entryId: extra.entryId } : {}),
+      ...(extra.reactionTo ? { reactionTo: extra.reactionTo } : {}),
     },
   });
   return { id, response };
@@ -533,11 +541,15 @@ describe("parler à MEMO", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.redactedText).toContain("C'était avec Clara.");
 
-    // Un accusé, et le texte se réécrit. Déjà gardé, il n'y a rien à
-    // redemander : ni question, ni photos une seconde fois.
+    // **Aucune bulle, une pastille** (T296) : MEMO disait « C'est noté, je
+    // reprends le texte avec ça. » — un accusé que l'écran portait déjà. Le
+    // texte se réécrit, et le ✅ sur la précision dit qu'elle est prise en
+    // compte. Déjà gardé, il n'y a rien à redemander non plus.
     const after = await readThread(memo.id);
     const replies = memoBubbles(after).filter((message) => message.seq > (precision?.seq ?? 0));
-    expect(replies.map((message) => message.body)).toEqual([{ kind: "text", text: PRECISION_NOTED }]);
+    expect(replies).toEqual([]);
+    const noted = after.messages.find((message) => message.id === id);
+    expect(noted?.reaction?.emoji).toBe("✅");
   });
 
   it("reçoit un vocal : la fiche tombe tout de suite, puis passe prête", async () => {
@@ -811,10 +823,10 @@ describe("modifier à l'oral (Hugo, 12/10/2026)", () => {
     expect(heard.text).toBeTruthy();
     expect(last.entry.precisions).toEqual([{ text: heard.text, topic: ORAL_CORRECTION_TOPIC }]);
     const replies = memoBubbles(thread).filter((message) => message.seq > (correction?.seq ?? 0));
-    expect(replies.map((message) => message.body)).toEqual([
-      { kind: "text", text: REVISION_NOTED },
-      ...(await keptBubbles(memo, entry.id)),
-    ]);
+    // La correction entendue ne reçoit plus d'accusé (T296) : la pastille du
+    // vocal le dit, et seules les bulles du texte réécrit suivent.
+    expect(replies.map((message) => message.body)).toEqual(await keptBubbles(memo, entry.id));
+    expect(correction?.reaction?.emoji).toBe("✅");
     expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos", "edit-hand", "edit-voice"]);
     const rewritten = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } });
     expect(rewritten.redactionStatus).toBe("ready");
@@ -1367,6 +1379,63 @@ describe("valider", () => {
     await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept", entryId: entry.id });
     const again = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } });
     expect(again.validatedAt).toEqual(validated.validatedAt);
+  });
+
+  it("réagir d’un 👍 vaut « Ça me convient », sans écrire une bulle de plus", async () => {
+    // T296, Hugo du 28/11/2026 : « 👍 sur la question seule ». Le tour part
+    // comme la puce qu'il est — il valide, MEMO répond avec des mots —, mais
+    // il ne se dessine pas : seule la bulle visée porte le 👍.
+    const memo = await seedTrip(owner.accountId);
+    await sendVoice(memo.id);
+    const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id } });
+    const before = await readThread(memo.id);
+    const target = memoBubbles(before).at(-1)!;
+    const bubblesBefore = before.messages.length;
+
+    const { id, response } = await say(memo.id, SUGGESTIONS.accept.label, {
+      suggestionId: "accept",
+      entryId: entry.id,
+      reactionTo: target.id,
+    });
+    expect(response.statusCode).toBe(201);
+    // Le reçu ne rend aucune bulle pour ce tour-là : l'app n'a rien à poser.
+    expect(response.json<{ messages: ChatMessageJson[] }>().messages.map((m) => m.id)).not.toContain(id);
+
+    const validated = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } });
+    expect(validated.validatedAt).not.toBeNull();
+
+    const after = await readThread(memo.id);
+    expect(after.messages.find((message) => message.id === id)).toBeUndefined();
+    expect(after.messages.find((message) => message.id === target.id)?.reaction).toEqual({
+      emoji: "👍",
+      label: "Tu as validé ce texte",
+    });
+    // Ce qui porte une information se dit toujours avec des mots : l'étape de
+    // plus, et le nombre de photos (choix de Hugo, « seuls les accusés muets »).
+    expect(memoBubbles(after).slice(-2)[0]?.body).toEqual({
+      kind: "text",
+      text: "C’est enregistré. Ton carnet compte une étape de plus.",
+    });
+    // Deux bulles de MEMO en plus, et pas une du voyageur.
+    expect(after.messages.length).toBe(bubblesBefore + 2);
+  });
+
+  it("refuse un 👍 qui ne vaut pas « Ça me convient », ou qui vise une bulle du voyageur", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const { id: mine } = await say(memo.id, "On a marché jusqu’au port, il faisait doux.");
+    const thread = await readThread(memo.id);
+    const target = memoBubbles(thread).at(-1)!;
+
+    // Sans la puce : une réaction décorative, et il n'y en a pas.
+    const { response: sansPuce } = await say(memo.id, SUGGESTIONS.accept.label, { reactionTo: target.id });
+    expect(sansPuce.statusCode).toBe(400);
+
+    // Sur sa propre bulle : MEMO n'a rien demandé là.
+    const { response: surSoi } = await say(memo.id, SUGGESTIONS.accept.label, {
+      suggestionId: "accept",
+      reactionTo: mine,
+    });
+    expect(surSoi.statusCode).toBe(400);
   });
 
   it("« Ça me convient » valide le souvenir que MEMO vient de soumettre, pas une fiche plus ancienne", async () => {
